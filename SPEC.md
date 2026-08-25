@@ -34,7 +34,7 @@ Do not introduce a dependency unless it provides clear value.
 
 ## TASK-001 — Initialize repository structure
 
-Status: `[ ]`
+Status: `[x]`
 
 Create the top-level project structure.
 

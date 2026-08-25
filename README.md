@@ -1,0 +1,71 @@
+# English Learning Chat
+
+A mobile application for learning English through natural AI conversation, built as a ChatGPT-style chat experience with features designed for language learners.
+
+## Features
+
+- AI-generated conversation topics and sample conversations
+- Natural conversational practice with streaming AI responses
+- English-learning profile (CEFR levels A1–C2 + AUTO)
+- Conversation history with long-term memory via rolling summaries
+- Suggested replies and on-demand "Improve my English" corrections
+- Vocabulary saving via text selection with asynchronous enrichment
+- Anki-compatible CSV export
+- Text-to-speech (Android native)
+- Two isolated modes: authenticated **Server mode** and local **Serverless mode**
+- OpenRouter model fallback
+
+## Architecture
+
+```text
+Server mode:
+React Native → HTTPS → Django REST API → PostgreSQL / Redis / Celery → OpenRouter
+
+Serverless mode:
+React Native → Local SQLite + OpenRouter directly
+```
+
+| Directory | Purpose |
+| --- | --- |
+| `backend/` | Django 6.x REST API, Celery workers, LLM provider abstraction |
+| `mobile/` | React Native (TypeScript) application |
+| `docker/` | Docker and Docker Compose configuration for development services |
+| `docs/` | Architecture notes and documentation |
+
+## Technology Stack
+
+**Backend:** Python · Django 6.x · Django REST Framework · PostgreSQL · Redis · Celery · SSE streaming · pytest · uv · Ruff · python-decouple · Docker Compose
+
+**Frontend:** React Native (New Architecture) · TypeScript · pnpm · React Navigation · NativeWind · Reanimated · Jest · React Native Testing Library
+
+## Development
+
+The project uses an autonomous Loop Engineering workflow tracked in [`SPEC.md`](SPEC.md) (executable backlog), [`ROADMAP.md`](ROADMAP.md) (product/architecture goals), and [`STATE.md`](STATE.md) (loop execution state).
+
+### Backend
+
+```bash
+cd backend
+uv sync
+uv run python manage.py check
+uv run pytest
+uv run ruff check .
+```
+
+### Mobile
+
+```bash
+cd mobile
+pnpm install
+pnpm typecheck
+pnpm test
+```
+
+### Infrastructure
+
+Docker Compose provides `backend`, `postgres`, `redis`, and `worker` services. See `.env.example` for required environment variables; copy it to `.env` and fill in real values.
+
+```bash
+cp .env.example .env
+docker compose -f docker/docker-compose.yml up
+```

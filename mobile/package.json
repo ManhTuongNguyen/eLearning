@@ -1,0 +1,13 @@
+{
+  "name": "elearning-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "English Learning Chat — React Native mobile application",
+  "scripts": {
+    "android": "react-native run-android",
+    "typecheck": "tsc --noEmit",
+    "test": "jest"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

@@ -1,0 +1,59 @@
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Python / backend ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.uv-cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+db.sqlite3
+*.log
+
+# --- Node / mobile ---
+node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# React Native / Android
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/keystore.properties
+mobile/android/app/*.keystore
+!mobile/android/app/debug.keystore
+mobile/android/.idea/
+*.iml
+mobile/ios/Pods/
+mobile/ios/build/
+mobile/.ruby-version
+mobile/vendor/bundle/
+
+# --- Testing / tooling caches ---
+.cache/
+.eslintcache
+.jest/
+
+# --- IDE / editor ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# --- Local agent config (contains credentials) ---
+opencode.json
