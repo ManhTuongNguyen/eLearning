@@ -2,13 +2,32 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 0 — Foundation complete (TASK-007 done); next Phase 1 — Backend Core
+- **Current Phase**: Phase 1 — Backend Core (TASK-008 in progress)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-008 — Configure environment management (COMPLETED 2026-08-26)
+- settings.py now sources every documented category via python-decouple:
+  REDIS_URL, JWT_ACCESS_TOKEN_MINUTES / JWT_REFRESH_TOKEN_DAYS,
+  OPENROUTER_API_KEY / OPENROUTER_BASE_URL, LLM_PRIMARY_MODEL /
+  LLM_FALLBACK_MODELS (Csv) / LLM_REQUEST_TIMEOUT_SECONDS.
+- Production guard: `validate_production_configuration()` runs at import when
+  DJANGO_DEBUG=False and raises ImproperlyConfigured naming ALL missing
+  values (real SECRET_KEY — dev default rejected, non-empty ALLOWED_HOSTS,
+  POSTGRES_PASSWORD, OPENROUTER_API_KEY). Pure function → directly unit-testable.
+- .env.example updated: marks [REQUIRED IN PRODUCTION] variables, documents
+  DB_ENGINE and CELERY_TASK_ALWAYS_EAGER (both already consumed by settings).
+- Verified end-to-end: `DJANGO_DEBUG=False` with missing values → clear
+  aggregated error naming all three missing vars; fully specified production
+  env → `manage.py check` clean.
+- New tests backend/tests/test_env_config.py (12): validation pass/per-category/
+  aggregated/dev-secret-rejected + smoke checks for new settings.
+- All gates green via `make quality`: ruff check, ruff format, pytest 16 passed,
+  manage.py check clean. Secrets not tracked (only .env.example in git).
 
 ### TASK-007 — Configure mobile linting and testing (COMPLETED 2026-08-26)
 - Strict mode already inherited from `@react-native/typescript-config`
@@ -94,7 +113,7 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-008 — Configure environment management.
+- No open issues. Next task: TASK-009 — Create database configuration.
 - Local-only artifacts (not committed, not required by repo): `~/.jdks/jdk-21.0.12.1+1`,
   `~/Android/Sdk/cmdline-tools/latest`, system image android-35 google_apis x86_64,
   AVD `elearning`.

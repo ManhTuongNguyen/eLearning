@@ -199,7 +199,7 @@ Acceptance criteria:
 
 ## TASK-008 — Configure environment management
 
-Status: `[ ]`
+Status: `[x]`
 
 Create environment configuration using python-decouple.
 

@@ -7,14 +7,58 @@ following the naming conventions documented in the root `.env.example`.
 from pathlib import Path
 
 from decouple import Csv, config
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config("DJANGO_SECRET_KEY", default="dev-only-insecure-secret-key")
+_DEV_SECRET_KEY = "dev-only-insecure-secret-key"
 
 DEBUG = config("DJANGO_DEBUG", default=True, cast=bool)
 
+SECRET_KEY = config("DJANGO_SECRET_KEY", default=_DEV_SECRET_KEY)
+
 ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
+
+
+def validate_production_configuration(
+    *,
+    secret_key: str,
+    allowed_hosts: list[str] | tuple[str, ...],
+    database_password: str,
+    openrouter_api_key: str,
+) -> None:
+    """Fail clearly when required values are missing for production.
+
+    Called once at settings import when ``DJANGO_DEBUG=False`` so a misconfigured
+    production deployment stops immediately with an explicit message naming
+    every offending variable instead of failing later in subtle ways.
+    """
+
+    missing: list[str] = []
+    if not secret_key or secret_key == _DEV_SECRET_KEY:
+        missing.append("DJANGO_SECRET_KEY")
+    if not allowed_hosts:
+        missing.append("DJANGO_ALLOWED_HOSTS")
+    if not database_password:
+        missing.append("POSTGRES_PASSWORD")
+    if not openrouter_api_key:
+        missing.append("OPENROUTER_API_KEY")
+    if missing:
+        raise ImproperlyConfigured(
+            "Missing required production environment variables: "
+            + ", ".join(missing)
+            + ". Set them via the environment or .env file before running "
+            "with DJANGO_DEBUG=False."
+        )
+
+
+if not DEBUG:
+    validate_production_configuration(
+        secret_key=SECRET_KEY,
+        allowed_hosts=ALLOWED_HOSTS,
+        database_password=config("POSTGRES_PASSWORD", default=""),
+        openrouter_api_key=config("OPENROUTER_API_KEY", default=""),
+    )
 
 # Application definition
 
@@ -132,3 +176,26 @@ REST_FRAMEWORK = {
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://localhost:6379/1")
 CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default="redis://localhost:6379/2")
 CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cast=bool)
+
+REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
+
+# JWT authentication (consumed by the auth implementation in Phase 2)
+
+JWT_ACCESS_TOKEN_MINUTES = config("JWT_ACCESS_TOKEN_MINUTES", default=15, cast=int)
+JWT_REFRESH_TOKEN_DAYS = config("JWT_REFRESH_TOKEN_DAYS", default=7, cast=int)
+
+# OpenRouter / LLM
+#
+# The server-side OpenRouter key must never reach the mobile application.
+# Defaults exist so development works without a key; production validation
+# above requires one when DEBUG is disabled.
+
+OPENROUTER_API_KEY = config("OPENROUTER_API_KEY", default="")
+OPENROUTER_BASE_URL = config("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1")
+LLM_PRIMARY_MODEL = config("LLM_PRIMARY_MODEL", default="openai/gpt-4o-mini")
+LLM_FALLBACK_MODELS = config(
+    "LLM_FALLBACK_MODELS",
+    default="openai/gpt-4o,anthropic/claude-3.5-haiku",
+    cast=Csv(),
+)
+LLM_REQUEST_TIMEOUT_SECONDS = config("LLM_REQUEST_TIMEOUT_SECONDS", default=60, cast=int)
