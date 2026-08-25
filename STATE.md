@@ -2,13 +2,53 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5 — Conversation Backend (TASK-032 complete; next TASK-033)
+- **Current Phase**: Phase 5 — Conversation Backend (TASK-033 complete; next TASK-034)
 
 ## Current Active Task
 
-(none — TASK-032 completed; next: TASK-033 — Implement session rename,
-PATCH /api/v1/sessions/{id}/ allowing title updates only, other fields
-immutable through the endpoint, tests exist)
+(none — TASK-033 completed; next: TASK-034 — Implement session deletion,
+DELETE /api/v1/sessions/{id}/, ownership enforced, related messages deleted
+appropriately via cascade, tests exist)
+
+## Archived Tasks
+
+### TASK-033 — Implement session rename (COMPLETED 2026-08-26)
+- `PATCH /api/v1/sessions/{id}/` — SessionDetailView (generics.RetrieveAPIView)
+  gained an explicit patch() handler: GET untouched, POST/PUT/DELETE still 405
+  via dispatch. Ownership reuses get_object() over the user-scoped
+  get_queryset → foreign/nonexistent sessions are an indistinguishable 404;
+  <int:pk> keeps non-int ids off the route.
+- New SessionRenameSerializer (ModelSerializer, fields=["title"]): the ONLY
+  declared field, so topic/topic_hint/learning_level/summary/boundary/user/id/
+  created_at can never change through this endpoint regardless of payload
+  (unknown keys silently ignored by DRF). Title required + non-blank
+  (CharField blank rejection), whitespace stripped → blank-after-strip → 400,
+  max_length 255 enforced (256 → 400, 255 accepted). Numeric payloads coerced
+  to str ("42" rename works) per DRF CharField behavior documented in TASK-030.
+- Response 200 = full SessionSerializer repr (same contract as GET detail);
+  internal summary/boundary/updated_at never leak. save() bumps updated_at via
+  auto_now → renamed session moves to front of the -updated_at listing.
+- test_session_detail_messages_api.py: "patch" removed from the detail method
+  matrix (now post/put/delete) — same replacement pattern as TASK-031's GET-405.
+- Tests backend/tests/test_session_rename_api.py (20): anonymous 401 (+ row
+  unchanged), owner rename persisted + full repr field-set (+ internal-field
+  non-leak), whitespace stripping, numeric coercion, rename bumps listing
+  order (set_updated_at pinning convention from TASK-031), immutability
+  hijack matrix (topic/hint/level/summary/boundary/user/id/created_at all
+  ignored), title-only payload leaves rest alone, stranger 404 + row
+  untouched, missing pk 404, non-int pk route mismatch 404, validation matrix
+  ({}/blank/whitespace/256-char → 400 with title unchanged), 255-char
+  accepted, method matrix 405 ×3, GET still 200.
+- Gates: ruff check/format clean (79 files); pytest 463 passed +120 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/serializers.py — SessionRenameSerializer
+2. [x] conversations/views.py — patch() on SessionDetailView
+3. [x] test_session_detail_messages_api.py detail matrix updated (no PATCH)
+4. [x] backend/tests/test_session_rename_api.py written (20 tests)
+5. [x] Gates green (ruff check/format, pytest 463+120 Postgres, manage.py check)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-033
 
 ## Archived Tasks
 

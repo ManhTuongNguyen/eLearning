@@ -729,7 +729,7 @@ Acceptance criteria:
 
 ## TASK-033 — Implement session rename
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement:
 

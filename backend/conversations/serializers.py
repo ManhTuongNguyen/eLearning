@@ -30,6 +30,25 @@ class SessionSerializer(serializers.ModelSerializer):
         fields = ["id", "title", "topic", "topic_hint", "learning_level", "created_at"]
 
 
+class SessionRenameSerializer(serializers.ModelSerializer):
+    """Validates PATCH bodies for renaming a session.
+
+    Only ``title`` is declared, so every other session field is immutable
+    through this endpoint regardless of what the client sends. The title is
+    required and may not be blank after surrounding whitespace is stripped.
+    """
+
+    class Meta:
+        model = Session
+        fields = ["title"]
+
+    def validate_title(self, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Title cannot be blank.")
+        return value
+
+
 class MessageSerializer(serializers.ModelSerializer):
     """Read representation of a chat message."""
 

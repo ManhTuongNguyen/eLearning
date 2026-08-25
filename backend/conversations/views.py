@@ -14,6 +14,7 @@ from conversations.models import Session
 from conversations.serializers import (
     MessageSerializer,
     SessionCreateSerializer,
+    SessionRenameSerializer,
     SessionSerializer,
 )
 from conversations.topics import TopicGenerationService
@@ -85,11 +86,16 @@ class SessionCollectionView(generics.ListAPIView):
 
 
 class SessionDetailView(generics.RetrieveAPIView):
-    """Retrieve a single conversation session for the authenticated user.
+    """Retrieve and rename a single conversation session.
 
     The queryset is scoped to ``request.user``, so another user's session —
     or any nonexistent id — resolves to the same 404 without leaking
-    existence.
+    existence, for both GET and PATCH.
+
+    PATCH body: ``{"title": str}`` (required, non-blank after stripping).
+    Only the title can change: the rename serializer declares no other
+    fields, so any additional payload keys are silently ignored. The response
+    is the full session representation, matching GET.
     """
 
     permission_classes = [IsAuthenticated]
@@ -97,6 +103,13 @@ class SessionDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return Session.objects.filter(user=self.request.user)
+
+    def patch(self, request, *args, **kwargs) -> Response:
+        session = self.get_object()
+        serializer = SessionRenameSerializer(session, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(SessionSerializer(session).data)
 
 
 class MessageListView(generics.ListAPIView):
