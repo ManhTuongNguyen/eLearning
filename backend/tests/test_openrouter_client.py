@@ -17,7 +17,7 @@ from llm.exceptions import (
     LLMTimeoutError,
 )
 from llm.openrouter import DEFAULT_BASE_URL, OpenRouterProvider
-from llm.types import CompletionRequest, Message, StreamDelta, StreamStart
+from llm.types import CompletionRequest, Message, ModelInfo, StreamDelta, StreamStart
 
 API_KEY = "sk-test-secret-123"
 BASE_URL = "https://openrouter.example/api/v1"
@@ -54,6 +54,19 @@ def completion_body(
     if request_id is not None:
         body["id"] = request_id
     return body
+
+
+FULL_MODEL_ENTRY = {
+    "id": "vendor/model-a",
+    "name": "Vendor Model A",
+    "description": "A good model.",
+    "context_length": 128000,
+    "created": 1700000000,
+}
+
+
+def models_body(*entries: object) -> dict[str, object]:
+    return {"data": list(entries)}
 
 
 class CapturingHandler:
@@ -470,6 +483,138 @@ class StreamFailureTests(SimpleTestCase):
             list(provider.stream(simple_request()))
 
 
+class ListModelsSuccessTests(SimpleTestCase):
+    """Model discovery over mocked HTTP."""
+
+    def test_models_are_retrieved_and_normalized(self) -> None:
+        body = models_body(FULL_MODEL_ENTRY, {"id": "vendor/model-b"})
+        handler = CapturingHandler(lambda _r: httpx.Response(200, json=body))
+        provider = make_provider(handler)
+
+        models = provider.list_models()
+
+        self.assertEqual([m.id for m in models], ["vendor/model-a", "vendor/model-b"])
+        first = models[0]
+        self.assertIsInstance(first, ModelInfo)
+        self.assertEqual(first.name, "Vendor Model A")
+        self.assertEqual(first.description, "A good model.")
+        self.assertEqual(first.context_length, 128000)
+        self.assertEqual(first.created, 1700000000)
+        self.assertEqual(
+            models[1],
+            ModelInfo(id="vendor/model-b"),
+        )
+
+    def test_models_request_shape(self) -> None:
+        handler = CapturingHandler(lambda _r: httpx.Response(200, json=models_body()))
+        provider = make_provider(handler)
+
+        provider.list_models()
+
+        request = handler.last
+        self.assertEqual(request.method, "GET")
+        self.assertEqual(str(request.url), f"{BASE_URL}/models")
+        self.assertEqual(request.headers["Authorization"], f"Bearer {API_KEY}")
+
+    def test_whitespace_ids_are_stripped(self) -> None:
+        body = models_body({"id": "  vendor/padded  "})
+        provider = make_provider(lambda _r: httpx.Response(200, json=body))
+
+        models = provider.list_models()
+
+        self.assertEqual([m.id for m in models], ["vendor/padded"])
+
+    def test_malformed_entries_are_skipped(self) -> None:
+        body = models_body(
+            "not-a-dict",
+            42,
+            {},
+            {"name": "missing id"},
+            {"id": ""},
+            {"id": "   "},
+            {"id": "vendor/kept", "context_length": True},
+        )
+        provider = make_provider(lambda _r: httpx.Response(200, json=body))
+
+        models = provider.list_models()
+
+        self.assertEqual([m.id for m in models], ["vendor/kept"])
+        self.assertIsNone(models[0].context_length)
+
+    def test_empty_catalog_returns_empty_tuple(self) -> None:
+        provider = make_provider(lambda _r: httpx.Response(200, json=models_body()))
+
+        self.assertEqual(provider.list_models(), ())
+
+    def test_missing_data_list_raises_response_error(self) -> None:
+        provider = make_provider(lambda _r: httpx.Response(200, json={"object": "list"}))
+
+        with self.assertRaises(LLMResponseError):
+            provider.list_models()
+
+    def test_non_list_data_raises_response_error(self) -> None:
+        provider = make_provider(lambda _r: httpx.Response(200, json={"data": {"id": "x"}}))
+
+        with self.assertRaises(LLMResponseError):
+            provider.list_models()
+
+    def test_non_object_json_raises_response_error(self) -> None:
+        provider = make_provider(lambda _r: httpx.Response(200, content=b"[1, 2]"))
+
+        with self.assertRaises(LLMResponseError):
+            provider.list_models()
+
+
+class ListModelsFailureTests(SimpleTestCase):
+    """Discovery failures normalize exactly like completion failures."""
+
+    CASES = (
+        (400, LLMBadRequestError, False),
+        (401, LLMAuthenticationError, False),
+        (408, LLMTimeoutError, True),
+        (429, LLMAvailabilityError, True),
+        (500, LLMAvailabilityError, True),
+    )
+
+    def test_status_mapping_matrix_for_models(self) -> None:
+        for status, expected_class, retryable in self.CASES:
+            with self.subTest(status=status):
+                body = json.dumps({"error": {"message": f"boom {status}"}})
+                provider = make_provider(lambda _r, s=status, b=body: httpx.Response(s, content=b))
+
+                with self.assertRaises(LLMError) as ctx:
+                    provider.list_models()
+
+                self.assertIsInstance(ctx.exception, expected_class)
+                self.assertEqual(ctx.exception.retryable, retryable)
+                self.assertEqual(ctx.exception.provider, "openrouter")
+                self.assertIsNone(ctx.exception.model)
+                self.assertIn(f"boom {status}", str(ctx.exception))
+
+    def test_timeout_maps_to_retryable_llm_timeout(self) -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectTimeout("timed out", request=_request)
+
+        provider = make_provider(handler)
+
+        with self.assertRaises(LLMTimeoutError) as ctx:
+            provider.list_models()
+
+        self.assertTrue(ctx.exception.retryable)
+        self.assertIsNone(ctx.exception.model)
+
+    def test_transport_error_maps_to_retryable_llm_request_error(self) -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused", request=_request)
+
+        provider = make_provider(handler)
+
+        with self.assertRaises(LLMRequestError) as ctx:
+            provider.list_models()
+
+        self.assertTrue(ctx.exception.retryable)
+
+
 class SecretHygieneTests(SimpleTestCase):
     """The API key must never leak through errors, payloads, or logs."""
 
@@ -536,6 +681,20 @@ class SecretHygieneTests(SimpleTestCase):
         joined = "\n".join(logs.output)
         self.assertIn("429", joined)
         self.assertNotIn(API_KEY, joined)
+
+    def test_model_discovery_keeps_key_out_of_results_errors_and_logs(self) -> None:
+        good = make_provider(lambda _r: httpx.Response(200, json=models_body(FULL_MODEL_ENTRY)))
+        models = good.list_models()
+
+        failing = make_provider(
+            lambda _r: httpx.Response(403, content=b'{"error": {"message": "forbidden"}}')
+        )
+        with self.assertLogs("llm.openrouter", level=logging.WARNING) as logs:
+            with self.assertRaises(LLMError) as ctx:
+                failing.list_models()
+
+        rendered = f"{models!s}{models!r}{ctx.exception}\n" + "\n".join(logs.output)
+        self.assertNotIn(API_KEY, rendered)
 
 
 class SettingsWiringTests(SimpleTestCase):

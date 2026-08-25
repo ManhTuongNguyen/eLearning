@@ -28,12 +28,20 @@ from llm.exceptions import (
     LLMTimeoutError,
 )
 from llm.provider import LLMProvider
-from llm.types import CompletionRequest, CompletionResponse, StreamDelta, StreamEvent, StreamStart
+from llm.types import (
+    CompletionRequest,
+    CompletionResponse,
+    ModelInfo,
+    StreamDelta,
+    StreamEvent,
+    StreamStart,
+)
 
 logger = logging.getLogger("llm.openrouter")
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 CHAT_COMPLETIONS_PATH = "/chat/completions"
+MODELS_PATH = "/models"
 MAX_ERROR_SNIPPET_LENGTH = 300
 
 # OpenRouter HTTP status → normalized failure class.
@@ -247,6 +255,50 @@ class OpenRouterProvider(LLMProvider):
         except httpx.HTTPError as exc:
             raise self._transport_failure(exc, effective_model) from exc
 
+    def list_models(self) -> tuple[ModelInfo, ...]:
+        """Retrieve the provider's available models in normalized form."""
+        started_at = time.monotonic()
+        try:
+            response = self._client.get(MODELS_PATH, headers=self._auth_headers())
+        except httpx.TimeoutException as exc:
+            raise self._timeout_failure(None) from exc
+        except httpx.HTTPError as exc:
+            raise self._transport_failure(exc, None) from exc
+
+        if response.status_code != 200:
+            logger.warning(
+                "openrouter models listing failed status=%s duration_ms=%.0f",
+                response.status_code,
+                (time.monotonic() - started_at) * 1000,
+            )
+            raise self._http_failure(
+                response.status_code,
+                self._extract_error_message(response.text),
+                model=None,
+            )
+
+        body = self._parse_success_json(response.text, model=None)
+        entries = body.get("data")
+        if not isinstance(entries, list):
+            raise LLMResponseError("Models response contains no data list.", provider="openrouter")
+
+        models: list[ModelInfo] = []
+        skipped = 0
+        for entry in entries:
+            parsed = _parse_model_entry(entry)
+            if parsed is None:
+                skipped += 1
+                continue
+            models.append(parsed)
+
+        logger.info(
+            "openrouter models listed count=%d skipped=%d duration_ms=%.0f",
+            len(models),
+            skipped,
+            (time.monotonic() - started_at) * 1000,
+        )
+        return tuple(models)
+
     def _build_payload(self, request: CompletionRequest, *, stream: bool) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": request.model or self.default_model,
@@ -263,7 +315,7 @@ class OpenRouterProvider(LLMProvider):
             "Content-Type": "application/json",
         }
 
-    def _parse_success_json(self, raw: str, *, model: str) -> dict[str, Any]:
+    def _parse_success_json(self, raw: str, *, model: str | None) -> dict[str, Any]:
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -295,7 +347,7 @@ class OpenRouterProvider(LLMProvider):
                 return payload["message"][:MAX_ERROR_SNIPPET_LENGTH]
         return snippet or "unrecognized error body"
 
-    def _http_failure(self, status_code: int, message: str, *, model: str) -> LLMError:
+    def _http_failure(self, status_code: int, message: str, *, model: str | None) -> LLMError:
         kwargs: dict[str, Any] = {"provider": "openrouter", "model": model}
         if status_code in _AUTH_STATUSES:
             return LLMAuthenticationError(message, **kwargs)
@@ -307,7 +359,7 @@ class OpenRouterProvider(LLMProvider):
             return LLMAvailabilityError(message, **kwargs)
         return LLMResponseError(f"unexpected HTTP {status_code}: {message}", **kwargs)
 
-    def _timeout_failure(self, model: str) -> LLMTimeoutError:
+    def _timeout_failure(self, model: str | None) -> LLMTimeoutError:
         logger.warning("openrouter request timed out model=%s timeout=%.0fs", model, self.timeout)
         return LLMTimeoutError(
             f"request exceeded timeout of {self.timeout:g}s",
@@ -315,13 +367,36 @@ class OpenRouterProvider(LLMProvider):
             model=model,
         )
 
-    def _transport_failure(self, exc: Exception, model: str) -> LLMRequestError:
+    def _transport_failure(self, exc: Exception, model: str | None) -> LLMRequestError:
         logger.warning("openrouter transport failure model=%s error=%s", model, type(exc).__name__)
         return LLMRequestError(
             f"transport failure: {type(exc).__name__}",
             provider="openrouter",
             model=model,
         )
+
+
+def _int_or_none(value: Any) -> int | None:
+    """Pass through genuine ints only (bool is an int subclass but never valid here)."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _parse_model_entry(entry: Any) -> ModelInfo | None:
+    """Normalize one model-catalog entry; malformed entries yield None."""
+    if not isinstance(entry, dict):
+        return None
+    model_id = entry.get("id")
+    if not isinstance(model_id, str) or not model_id.strip():
+        return None
+    name = entry.get("name")
+    description = entry.get("description")
+    return ModelInfo(
+        id=model_id.strip(),
+        name=name if isinstance(name, str) else "",
+        description=description if isinstance(description, str) else None,
+        context_length=_int_or_none(entry.get("context_length")),
+        created=_int_or_none(entry.get("created")),
+    )
 
 
 __all__ = ["DEFAULT_BASE_URL", "OpenRouterProvider"]

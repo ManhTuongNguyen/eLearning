@@ -492,7 +492,7 @@ Acceptance criteria:
 
 ## TASK-022 — Implement OpenRouter model discovery
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement provider support for retrieving available models.
 

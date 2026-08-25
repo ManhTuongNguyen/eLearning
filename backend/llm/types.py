@@ -97,6 +97,25 @@ class StreamDelta:
             raise ValueError("StreamDelta text must not be empty.")
 
 
+@dataclass(frozen=True)
+class ModelInfo:
+    """Normalized description of one model available at a provider.
+
+    ``id`` is the stable identifier used in completion requests; the remaining
+    fields are display/metadata helpers and may be missing at any provider.
+    """
+
+    id: str
+    name: str = ""
+    description: str | None = None
+    context_length: int | None = None
+    created: int | None = None
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            raise ValueError("ModelInfo id must be a non-empty string.")
+
+
 StreamEvent = StreamStart | StreamDelta
 
 __all__ = [
@@ -105,6 +124,7 @@ __all__ = [
     "CompletionResponse",
     "Message",
     "MessageRole",
+    "ModelInfo",
     "StreamDelta",
     "StreamEvent",
     "StreamStart",

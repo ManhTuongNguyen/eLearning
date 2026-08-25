@@ -25,6 +25,7 @@ from llm.types import (
     CompletionRequest,
     CompletionResponse,
     Message,
+    ModelInfo,
     StreamDelta,
     StreamStart,
 )
@@ -153,6 +154,29 @@ class StreamEventTests(SimpleTestCase):
     def test_empty_delta_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             StreamDelta(text="")
+
+
+class ModelInfoTests(SimpleTestCase):
+    """ModelInfo normalized-shape rules."""
+
+    def test_defaults_keep_optional_metadata_empty(self) -> None:
+        model = ModelInfo(id="vendor/model")
+
+        self.assertEqual(model.name, "")
+        self.assertIsNone(model.description)
+        self.assertIsNone(model.context_length)
+        self.assertIsNone(model.created)
+
+    def test_blank_id_is_rejected(self) -> None:
+        for model_id in ("", "   "):
+            with self.assertRaises(ValueError):
+                ModelInfo(id=model_id)
+
+    def test_model_info_is_frozen(self) -> None:
+        model = ModelInfo(id="vendor/model")
+
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            model.id = "changed"
 
 
 class ProviderInterfaceTests(SimpleTestCase):

@@ -2,11 +2,41 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-021 next)
+- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-023 next)
 
 ## Current Active Task
 
-None. Ready for next loop cycle. Next task: TASK-022 — Implement OpenRouter model discovery.
+None. Ready for next loop cycle. Next task: TASK-023 — Create backend model configuration.
+
+## Archived Tasks
+
+### TASK-022 — Implement OpenRouter model discovery (COMPLETED 2026-08-26)
+- `llm/types.py`: frozen `ModelInfo(id, name="", description=None,
+  context_length=None, created=None)` — normalized provider-agnostic catalog
+  entry; blank id rejected; exported via `__all__`.
+- `llm/openrouter.py`: `OpenRouterProvider.list_models() -> tuple[ModelInfo, ...]`
+  — GET `/models` (MODELS_PATH) with the same Authorization header. Reuses
+  `_http_failure`/timeout/transport normalization with model=None (helper
+  annotations widened to `str | None`). 200 body must contain a `data` list or
+  LLMResponseError ("no data list"; non-object JSON handled by shared parser).
+  Entries parsed defensively via module-level `_parse_model_entry` +
+  `_int_or_none` (bool rejected as int subclass): non-dict entries and
+  blank/non-string ids are skipped, id stripped, missing name coerced to "".
+  Catalog order preserved; malformed entries never fail the whole listing.
+  Logging "llm.openrouter": info count/skipped/duration on success, warning
+  status on failure — never payloads or secrets.
+- Design decision: `list_models()` is an OpenRouterProvider capability method,
+  NOT on the LLMProvider ABC — completion-interface fakes/mocks elsewhere stay
+  trivial; consumers depend only on `llm.types.ModelInfo`.
+- Tests: test_openrouter_client.py +13 tests +5 subtests (request shape GET/
+  URL/auth, full+minimal normalization, order preservation, id stripping,
+  malformed-entry skipping incl. boolean context_length, empty catalog,
+  missing/non-list data, non-object JSON, status matrix for /models asserting
+  model=None, timeout+transport retryable, key absent from results/errors/
+  logs). test_llm_provider.py +3 ModelInfoTests (defaults, blank-id rejection,
+  frozen).
+- Gates: ruff check/format clean; pytest 215 passed +31 subtests (Postgres);
+  manage.py check clean.
 
 ## Archived Tasks
 
@@ -498,9 +528,9 @@ None. Ready for next loop cycle. Next task: TASK-022 — Implement OpenRouter mo
 - Headless UI driving works well: RN testIDs appear as uiautomator
   resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
   then `adb shell input tap` on bounds centers.
-- No open issues. Next task: TASK-022 — Implement OpenRouter model discovery
-  (Phase 4): GET /models on the OpenRouterProvider, normalized internal model
-  representation, external API errors handled, no secrets returned.
+- No open issues. Next task: TASK-023 — Create backend model configuration
+  (Phase 4): server-mode primary/fallback model configuration from env/
+  settings, no hard-coded model names in business logic, documented config.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist
