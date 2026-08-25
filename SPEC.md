@@ -410,7 +410,7 @@ Acceptance criteria:
 
 ## TASK-018 — Create mobile learning-level screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Create onboarding/settings UI for selecting English level.
 

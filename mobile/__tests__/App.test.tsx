@@ -3,12 +3,19 @@ import {fireEvent, render, screen, waitFor} from '@testing-library/react-native'
 
 import App from '../App';
 import * as authApi from '../src/api/auth';
+import * as profileApi from '../src/api/profile';
 import * as secureStorage from '../src/auth/secureStorage';
 
 jest.mock('../src/api/auth');
+jest.mock('../src/api/profile', () => ({
+  ...jest.requireActual('../src/api/profile'),
+  getProfile: jest.fn(),
+  updateProfile: jest.fn(),
+}));
 jest.mock('../src/auth/secureStorage');
 
 const mockedAuth = jest.mocked(authApi);
+const mockedProfile = jest.mocked(profileApi);
 const mockedStorage = jest.mocked(secureStorage);
 
 beforeEach(() => {
@@ -53,5 +60,20 @@ describe('App authentication flow', () => {
     await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());
     expect(mockedAuth.logout).toHaveBeenCalledWith(tokens);
     expect(mockedStorage.clearTokens).toHaveBeenCalled();
+  });
+
+  it('opens the learning level screen from home and returns back', async () => {
+    mockedStorage.loadTokens.mockResolvedValue({access: 'a', refresh: 'r'});
+    mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+    mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Welcome, alice/)).toBeOnTheScreen());
+
+    await fireEvent.press(screen.getByTestId('home-open-levels'));
+    expect(screen.getByTestId('level-AUTO')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByTestId('level-back'));
+    expect(screen.getByTestId('home-open-levels')).toBeOnTheScreen();
   });
 });

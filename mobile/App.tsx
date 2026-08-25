@@ -10,6 +10,7 @@ import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 import {AuthProvider, useAuth} from './src/auth/AuthContext';
 import {HomeScreen} from './src/screens/HomeScreen';
+import {LevelScreen} from './src/screens/LevelScreen';
 import {LoginScreen} from './src/screens/LoginScreen';
 import {RegisterScreen} from './src/screens/RegisterScreen';
 import {SplashScreen} from './src/screens/SplashScreen';
@@ -28,6 +29,7 @@ function App() {
 function RootNavigator() {
   const {status} = useAuth();
   const [showRegister, setShowRegister] = useState(false);
+  const [showLevels, setShowLevels] = useState(false);
 
   if (status === 'loading') {
     return <SplashScreen />;
@@ -41,7 +43,11 @@ function RootNavigator() {
     );
   }
 
-  return <HomeScreen />;
+  return showLevels ? (
+    <LevelScreen onBack={() => setShowLevels(false)} />
+  ) : (
+    <HomeScreen onOpenLevels={() => setShowLevels(true)} />
+  );
 }
 
 export default App;

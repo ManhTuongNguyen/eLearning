@@ -7,13 +7,22 @@ import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native
 
 import {useAuth} from '../auth/AuthContext';
 
-export function HomeScreen() {
+export function HomeScreen({onOpenLevels}: {onOpenLevels?: () => void}) {
   const {user, logout, busy} = useAuth();
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Welcome{user ? `, ${user.username}` : ''}</Text>
       {user ? <Text style={styles.subtitle}>{user.email}</Text> : null}
+
+      {onOpenLevels ? (
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={onOpenLevels}
+          testID="home-open-levels">
+          <Text style={styles.secondaryButtonText}>Learning level</Text>
+        </Pressable>
+      ) : null}
 
       <Pressable
         style={[styles.button, busy && styles.buttonDisabled]}
@@ -61,6 +70,19 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   buttonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    minWidth: 140,
+  },
+  secondaryButtonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',

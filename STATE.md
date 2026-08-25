@@ -2,13 +2,45 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 3 — Learning Profile (TASK-018 next)
+- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-019 next)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-018 — Create mobile learning-level screen (COMPLETED 2026-08-26)
+- `src/api/profile.ts`: EnglishLevel union ('A1'..'C2'|'AUTO'), LEVELS metadata
+  (label + short description per level), getProfile(token) → GET and
+  updateProfile(token, level) → PATCH /api/v1/profile/.
+- AuthContext: added async `getAccessToken()` that awaits initial session
+  restore before reading tokensRef. Gotcha: child effects run BEFORE parent
+  effects in React, so a screen mounted alongside a fresh provider would read
+  null mid-restore; a deferred promise resolves at the end of restore() (also
+  on unmount, so callers never hang).
+- New LevelScreen: header with back button, all 7 levels as radio rows with
+  CEFR descriptors; loads current level on mount (loading indicator), tap →
+  PATCH with busy guard (rows disabled while saving, spinner on saving row),
+  success shows "Saved." + server-confirmed selection, failure keeps last
+  confirmed selection + role="alert" error (levels stay selectable so a failed
+  GET doesn't block saving). accessibilityRole="radio" +
+  accessibilityState.checked.
+- Wiring: App.tsx authenticated branch toggles HomeScreen ↔ LevelScreen;
+  HomeScreen gained optional onOpenLevels prop rendering a blue "Learning
+  level" button (testID home-open-levels).
+- Tests: __tests__/LevelScreen.test.tsx (6): all levels listed + GET called,
+  server level preselected, PATCH persists new selection, save failure keeps
+  confirmed selection + surfaces field error, GET failure still allows saving,
+  back invokes callback. App.test.tsx (+1): home → level screen → back.
+  Gotcha: jest automock strips module constants — profile API must be mocked
+  with a factory spreading requireActual so LEVELS survives.
+- Gates: pnpm lint / typecheck clean; jest 36 passed (7 suites).
+- Live verification (existing emulator + Metro, no rebuild needed — JS-only):
+  register smoke_t18 via curl → app login → Home → Learning level: all 7 rows,
+  AUTO checked (server default) → tap B2 → checked + "Saved." → backend GET
+  /profile/ confirms {"level":"B2"} → back returns to Home. Smoke user's child
+  rows deleted first (see TASK-017 gotcha), then user; app uninstalled.
 
 ### TASK-017 — Create learning profile API (COMPLETED 2026-08-26)
 - `GET/PATCH /api/v1/profile/` in learning app: ProfileView (APIView,
@@ -351,9 +383,12 @@ None. Ready for next loop cycle.
 - Mobile emulator flow: start Metro with `CI=true pnpm exec react-native start`
   (interactive mode crashes headless) and `adb reverse tcp:8081 tcp:8081`;
   debug APK needs Metro. AVD `elearning` boots headless in ~2 min.
-- No open issues. Next task: TASK-018 — Create mobile learning-level screen
-  (Phase 3): onboarding/settings UI listing all levels, persisted selection,
-  PATCH /api/v1/profile/ in server mode, testable UI.
+- Headless UI driving works well: RN testIDs appear as uiautomator
+  resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
+  then `adb shell input tap` on bounds centers.
+- No open issues. Next task: TASK-019 — Create LLM provider interface (Phase 4):
+  application-level abstraction with non-streaming + streaming completion,
+  OpenRouter-free interface, easy to mock.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist

@@ -22,6 +22,8 @@ export interface AuthContextValue {
   user: AuthUser | null;
   error: string | null;
   busy: boolean;
+  /** Current access token for authenticated API calls once restored. */
+  getAccessToken(): Promise<string | null>;
   login(identifier: string, password: string): Promise<void>;
   register(input: RegisterInput): Promise<void>;
   logout(): Promise<void>;
@@ -35,6 +37,15 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const tokensRef = useRef<AuthTokens | null>(null);
+  const restorePromiseRef = useRef<Promise<void> | null>(null);
+  const restoreResolverRef = useRef<(() => void) | null>(null);
+  // Resolves once the initial session restore has finished, so late callers
+  // (e.g. screens mounted alongside the provider) read a settled token state.
+  if (!restorePromiseRef.current) {
+    restorePromiseRef.current = new Promise<void>(resolve => {
+      restoreResolverRef.current = resolve;
+    });
+  }
 
   const tryRefreshSession = useCallback(
     async (tokens: AuthTokens): Promise<AuthUser | null> => {
@@ -55,33 +66,38 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     let cancelled = false;
 
     async function restore() {
-      const tokens = await loadTokens();
-      if (!tokens) {
-        if (!cancelled) {
-          setStatus('unauthenticated');
-        }
-        return;
-      }
-      tokensRef.current = tokens;
       try {
-        const me = await authApi.getMe(tokens.access);
-        if (!cancelled) {
-          setUser(me);
-          setStatus('authenticated');
-        }
-      } catch {
-        // Access token expired or revoked: fall back to a single refresh.
-        const restored = await tryRefreshSession(tokens);
-        if (!cancelled) {
-          if (restored) {
-            setUser(restored);
-            setStatus('authenticated');
-          } else {
-            await clearTokens();
-            tokensRef.current = null;
+        const tokens = await loadTokens();
+        if (!tokens) {
+          if (!cancelled) {
             setStatus('unauthenticated');
           }
+          return;
         }
+        tokensRef.current = tokens;
+        try {
+          const me = await authApi.getMe(tokens.access);
+          if (!cancelled) {
+            setUser(me);
+            setStatus('authenticated');
+          }
+        } catch {
+          // Access token expired or revoked: fall back to a single refresh.
+          const restored = await tryRefreshSession(tokens);
+          if (!cancelled) {
+            if (restored) {
+              setUser(restored);
+              setStatus('authenticated');
+            } else {
+              await clearTokens();
+              tokensRef.current = null;
+              setStatus('unauthenticated');
+            }
+          }
+        }
+      } finally {
+        // Settle even on unmount so awaited callers never hang.
+        restoreResolverRef.current?.();
       }
     }
 
@@ -155,7 +171,19 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   );
 
   const value = useMemo(
-    () => ({status, user, error, busy, login, register, logout}),
+    () => ({
+      status,
+      user,
+      error,
+      busy,
+      getAccessToken: async () => {
+        await restorePromiseRef.current;
+        return tokensRef.current?.access ?? null;
+      },
+      login,
+      register,
+      logout,
+    }),
     [status, user, error, busy, login, register, logout],
   );
 
