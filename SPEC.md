@@ -427,7 +427,7 @@ Acceptance criteria:
 
 ## TASK-019 — Create LLM provider interface
 
-Status: `[ ]`
+Status: `[x]`
 
 Create an application-level abstraction for LLM providers.
 

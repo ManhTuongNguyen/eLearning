@@ -2,13 +2,44 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-019 next)
+- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-020 next)
 
 ## Current Active Task
 
-None. Ready for next loop cycle.
+None. Ready for next loop cycle. Next task: TASK-020 — Implement OpenRouter client.
 
 ## Archived Tasks
+
+### TASK-019 — Create LLM provider interface (COMPLETED 2026-08-26)
+- `backend/llm/types.py`: frozen dataclasses Message (role Literal
+  system/user/assistant + non-blank content), CompletionRequest (tuple-
+  normalized messages, optional model override, temperature validated to
+  0.0–2.0, from_texts helper), CompletionResponse (text, model, finish_reason,
+  request_id), StreamStart(model) + StreamDelta(non-empty text) with
+  StreamEvent union. No vendor specifics.
+- `backend/llm/exceptions.py`: normalized hierarchy under LLMError(message,
+  provider, model, retryable) with __str__ "provider [model]: message";
+  LLMRequestError→LLMTimeoutError + LLMAuthenticationError / LLMBadRequest /
+  LLMAvailabilityError / LLMResponseError; retryable defaults: transport/
+  timeout/availability True, auth/bad-request/response False.
+- `backend/llm/provider.py`: LLMProvider ABC with complete() and stream()
+  returning Iterator[StreamEvent]; docstring contract: first event
+  StreamStart, exhaustion = success, failures raise LLMError subclasses.
+  Zero HTTP/vendor imports (OpenRouter client is TASK-020; no factory yet —
+  DI at service construction, wiring in TASK-020/023).
+- Tests backend/tests/test_llm_provider.py (21): role/content validation,
+  frozen types, request normalization (list→tuple, empty rejected, model/
+  temperature bounds), response defaults, empty-delta rejection, ABC cannot
+  instantiate (incl. partial impl), consumer function runs against Fake +
+  Mock(spec=LLMProvider) proving mockability, incremental stream consumption
+  with delta accumulation, mid-stream LLMError propagates after deltas,
+  exception retryable-defaults matrix, and a source-level guard asserting the
+  three abstraction modules import no httpx/requests/urllib/socket/openrouter.
+- Gates: ruff check/format clean; pytest 144 passed (Postgres); manage.py
+  check clean.
+- Design note: errors are raised rather than yielded from stream(); SSE layer
+  (TASK-025) will map exceptions to error events. StreamStart carries the
+  resolved model so TASK-021 fallback attribution needs no interface change.
 
 ### TASK-018 — Create mobile learning-level screen (COMPLETED 2026-08-26)
 - `src/api/profile.ts`: EnglishLevel union ('A1'..'C2'|'AUTO'), LEVELS metadata
@@ -386,9 +417,9 @@ None. Ready for next loop cycle.
 - Headless UI driving works well: RN testIDs appear as uiautomator
   resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
   then `adb shell input tap` on bounds centers.
-- No open issues. Next task: TASK-019 — Create LLM provider interface (Phase 4):
-  application-level abstraction with non-streaming + streaming completion,
-  OpenRouter-free interface, easy to mock.
+- No open issues. Next task: TASK-020 — Implement OpenRouter client (Phase 4):
+  OpenRouterProvider implementing LLMProvider with mocked-HTTP unit tests,
+  timeouts, normalized errors, request IDs, no secret logging.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist
