@@ -2,13 +2,56 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-020 next)
+- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-021 next)
 
 ## Current Active Task
 
-None. Ready for next loop cycle. Next task: TASK-020 — Implement OpenRouter client.
+None. Ready for next loop cycle. Next task: TASK-021 — Implement model fallback.
 
 ## Archived Tasks
+
+### TASK-020 — Implement OpenRouter client (COMPLETED 2026-08-26)
+- `httpx` 0.28.1 added via uv (sync client, streaming, timeout support;
+  MockTransport gives clean mocked-HTTP tests).
+- `backend/llm/openrouter.py`: OpenRouterProvider(LLMProvider) — POST
+  /chat/completions with {model, messages, stream, temperature?}. Constructor
+  takes api_key/default_model/base_url/timeout (+ optional injected
+  httpx.Client; provider only closes clients it owns; context-manager
+  supported). `from_settings()` classmethod wires Django settings
+  (OPENROUTER_API_KEY/BASE_URL, LLM_PRIMARY_MODEL, LLM_REQUEST_TIMEOUT_SECONDS)
+  — factory/DI wiring for services stays with later tasks.
+- complete(): parses text/model/finish_reason/request_id (x-request-id header
+  preferred, body `id` fallback); malformed 200s (missing choices, non-str
+  content, bad JSON) → LLMResponseError. stream(): SSE parser ignores blank
+  lines + ": keep-alive" comments, stops at [DONE]; StreamStart emitted on
+  first chunk with the server-served model (falls back to requested model if
+  chunks lack one), empty deltas and usage-only chunks skipped; zero-chunk
+  stream → LLMResponseError.
+- Error normalization: 401/403→LLMAuthenticationError, 400/404/413/422→
+  LLMBadRequestError, 408→LLMTimeoutError, 429+5xx→LLMAvailabilityError,
+  other→LLMResponseError; httpx.TimeoutException→LLMTimeoutError,
+  other httpx.HTTPError→LLMRequestError (both retryable). Server error
+  messages extracted ({error:{message}} / {message} / raw snippet) and
+  truncated to 300 chars.
+- Secret hygiene: key lives only in the Authorization header — never in
+  payloads, exception messages, or logs. Logging via "llm.openrouter":
+  info on success (model/request_id/duration/counts), warning on failure
+  (status/type names only).
+- Tests backend/tests/test_openrouter_client.py (33 tests + 19 subtests):
+  constructor validation + client ownership, payload/header shape, model
+  override & temperature forwarding, request-id precedence, malformed-response
+  matrix, full status-mapping matrix, error-body variants (OpenRouter JSON /
+  plain text / truncation), transport failures, stream success (incremental
+  Start→Deltas, keep-alive handling, empty-delta skipping, model fallback),
+  stream failures (error status, malformed data line, unexpected SSE line,
+  empty stream, mid-stream ReadError preserving partial deltas, mid-stream
+  timeout), secret-hygiene (errors/payloads/logs never contain the key),
+  from_settings wiring.
+- Gotcha: test-injected httpx.Client MUST carry base_url when the provider
+  posts relative paths — a bare Client(transport=...) makes "/chat/completions"
+  an invalid URL inside cookie extraction.
+- Gates: ruff check/format clean; pytest 177 passed (Postgres); manage.py
+  check clean.
 
 ### TASK-019 — Create LLM provider interface (COMPLETED 2026-08-26)
 - `backend/llm/types.py`: frozen dataclasses Message (role Literal
@@ -417,9 +460,10 @@ None. Ready for next loop cycle. Next task: TASK-020 — Implement OpenRouter cl
 - Headless UI driving works well: RN testIDs appear as uiautomator
   resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
   then `adb shell input tap` on bounds centers.
-- No open issues. Next task: TASK-020 — Implement OpenRouter client (Phase 4):
-  OpenRouterProvider implementing LLMProvider with mocked-HTTP unit tests,
-  timeouts, normalized errors, request IDs, no secret logging.
+- No open issues. Next task: TASK-021 — Implement model fallback (Phase 4):
+  wrap OpenRouterProvider with primary→fallback ordering for retryable/
+  availability failures only; all-fail returns normalized error; StreamStart
+  already carries the served model for fallback attribution.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist

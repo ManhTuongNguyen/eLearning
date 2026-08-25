@@ -445,7 +445,7 @@ Acceptance criteria:
 
 ## TASK-020 — Implement OpenRouter client
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement OpenRouter integration.
 
