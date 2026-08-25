@@ -139,7 +139,7 @@ class TestSessionDetail:
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    @pytest.mark.parametrize("method", ["post", "put", "delete"])
+    @pytest.mark.parametrize("method", ["post", "put"])
     def test_unsupported_methods_on_detail_are_rejected(self, authed_api, user, method):
         session = make_session(user)
 

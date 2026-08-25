@@ -85,17 +85,20 @@ class SessionCollectionView(generics.ListAPIView):
         return Response({"detail": str(exc)}, status=code)
 
 
-class SessionDetailView(generics.RetrieveAPIView):
-    """Retrieve and rename a single conversation session.
+class SessionDetailView(generics.RetrieveDestroyAPIView):
+    """Retrieve, rename and delete a single conversation session.
 
     The queryset is scoped to ``request.user``, so another user's session —
     or any nonexistent id — resolves to the same 404 without leaking
-    existence, for both GET and PATCH.
+    existence, for GET, PATCH and DELETE alike.
 
     PATCH body: ``{"title": str}`` (required, non-blank after stripping).
     Only the title can change: the rename serializer declares no other
     fields, so any additional payload keys are silently ignored. The response
     is the full session representation, matching GET.
+
+    DELETE removes the session; its messages go with it through the
+    message FK's cascade. Success is an empty 204 response.
     """
 
     permission_classes = [IsAuthenticated]

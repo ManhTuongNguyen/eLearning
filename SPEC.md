@@ -749,7 +749,7 @@ Acceptance criteria:
 
 ## TASK-034 — Implement session deletion
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement:
 

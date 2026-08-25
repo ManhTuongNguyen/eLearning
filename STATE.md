@@ -2,13 +2,46 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5 — Conversation Backend (TASK-033 complete; next TASK-034)
+- **Current Phase**: Phase 5 — Conversation Backend (TASK-034 complete; next TASK-035)
 
 ## Current Active Task
 
-(none — TASK-033 completed; next: TASK-034 — Implement session deletion,
-DELETE /api/v1/sessions/{id}/, ownership enforced, related messages deleted
-appropriately via cascade, tests exist)
+(none — TASK-034 completed; next: TASK-035 — Create context builder,
+service constructing LLM context: system prompt + learning profile + topic +
+summary + recent messages + current user message; deterministic, old messages
+not included forever, tests verify ordering and sections)
+
+## Archived Tasks
+
+### TASK-034 — Implement session deletion (COMPLETED 2026-08-26)
+- `DELETE /api/v1/sessions/{id}/` — SessionDetailView base class changed
+  generics.RetrieveAPIView → generics.RetrieveDestroyAPIView: delete() comes
+  from DestroyModelMixin and reuses the SAME user-scoped get_queryset →
+  get_object(), so a stranger's session and a nonexistent id remain
+  indistinguishable 404s (no existence leak), consistent with GET/PATCH.
+  Success = empty 204. POST/PUT still 405 via dispatch.
+- Related messages are deleted by the Message.session FK cascade
+  (on_delete=CASCADE, TASK-027) — ORM-level collector, no extra view code;
+  sibling sessions and their messages survive untouched.
+- test_session_detail_messages_api.py detail method matrix now post/put
+  ("delete" removed); same replacement pattern as TASK-031/033.
+- test_session_rename_api.py TestMethodMatrix also dropped "delete"
+  (first pytest run caught it — DELETE on detail is legitimate since this task).
+- Tests backend/tests/test_session_delete_api.py (13): anonymous 401 (+ row
+  unchanged), owner 204 + empty body + row gone, session's messages cascaded
+  to zero rows, sibling sessions/messages survive, deleted session vanishes
+  from listing + GET-after-delete 404, stranger 404 + session AND message rows
+  untouched, missing pk 404, non-int pk route mismatch 404, repeat DELETE →
+  404 (row already gone), method matrix 405 ×2 (+ row intact), GET still 200.
+- Gates: ruff check/format clean (80 files); pytest 474 passed +120 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/views.py — SessionDetailView → RetrieveDestroyAPIView
+2. [x] test_session_detail_messages_api.py detail matrix updated (no DELETE)
+3. [x] backend/tests/test_session_delete_api.py written (13 tests)
+4. [x] Gates green (ruff check/format, pytest 474+120 Postgres, manage.py check)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-034
 
 ## Archived Tasks
 

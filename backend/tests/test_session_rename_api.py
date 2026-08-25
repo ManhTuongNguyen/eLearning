@@ -266,7 +266,7 @@ class TestValidation:
 
 
 class TestMethodMatrix:
-    @pytest.mark.parametrize("method", ["post", "put", "delete"])
+    @pytest.mark.parametrize("method", ["post", "put"])
     def test_unsupported_methods_are_rejected(self, authed_api, user, method):
         session = make_session(user)
 
