@@ -358,7 +358,7 @@ Use an appropriate secure-storage mechanism.
 
 ## TASK-016 — Create learning profile model
 
-Status: `[ ]`
+Status: `[x]`
 
 Create a profile associated with the user.
 

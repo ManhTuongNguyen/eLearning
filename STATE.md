@@ -2,13 +2,31 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 3 — Learning Profile (TASK-016 next)
+- **Current Phase**: Phase 3 — Learning Profile (TASK-017 next)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-016 — Create learning profile model (COMPLETED 2026-08-26)
+- `learning.Level` TextChoices: A1/A2/B1/B2/C1/C2 + AUTO (labels include
+  CEFR descriptors; AUTO = "let AI decide").
+- `learning.Profile`: OneToOneField(settings.AUTH_USER_MODEL, CASCADE,
+  related_name="learning_profile") + level CharField(max_length=4, choices,
+  default=AUTO). No extra fields — SPEC lists `level` only; expansion later.
+- learning/admin.py: ProfileAdmin with list_display/list_filter/search.
+- Migration learning/0001_initial created AND applied to live Postgres from
+  host (`POSTGRES_PASSWORD=change-me manage.py migrate learning`) so the
+  compose backend picks it up without rebuild.
+- New tests backend/tests/test_profile.py (12): default AUTO, all 7 levels
+  persist round-trip, __str__, duplicate-profile IntegrityError, related-name
+  access, user-delete cascade, distinct-user independence, invalid/blank
+  level + missing user via full_clean, exact choice-set assertion,
+  field-shape assertions (CharField + max_length + choices).
+- Gates: ruff check/format clean; pytest 102 passed (Postgres); manage.py
+  check clean.
 
 ### TASK-015 — Implement mobile authentication flow (COMPLETED 2026-08-26)
 - `react-native-keychain` ^10 added (pnpm); autolinked into debug APK
@@ -305,9 +323,9 @@ None. Ready for next loop cycle.
 - Mobile emulator flow: start Metro with `CI=true pnpm exec react-native start`
   (interactive mode crashes headless) and `adb reverse tcp:8081 tcp:8081`;
   debug APK needs Metro. AVD `elearning` boots headless in ~2 min.
-- No open issues. Next task: TASK-016 — Create learning profile model
-  (Phase 3): `learning.Profile` with level choice A1–C2/AUTO, one-to-one with
-  accounts.User, sensible default + validation, migrations and model tests.
+- No open issues. Next task: TASK-017 — Create learning profile API
+  (Phase 3): `GET/PATCH /api/v1/profile/`, authenticated-only, auto-create
+  profile on first GET, invalid levels rejected, API tests.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist
