@@ -101,6 +101,27 @@ supplied refresh token (simplejwt `token_blacklist`); refreshing with it then
 fails with 401. Other sessions are unaffected. Outstanding access tokens stay
 valid until their own short expiry — there is no access-token denylist.
 
+### LLM model configuration
+
+Server-mode models are configured entirely through the environment; no model
+names are hard-coded in application code.
+
+```text
+OPENROUTER_API_KEY           server-side key (required in production, never sent to clients)
+OPENROUTER_BASE_URL          OpenRouter API root (default https://openrouter.ai/api/v1)
+LLM_PRIMARY_MODEL            model tried first ("vendor/model", OpenRouter catalog id)
+LLM_FALLBACK_MODELS          comma-separated fallbacks, tried in order
+LLM_REQUEST_TIMEOUT_SECONDS  per-request HTTP timeout (> 0)
+```
+
+The ordered chain (`LLM_PRIMARY_MODEL` followed by `LLM_FALLBACK_MODELS`) is
+assembled by `backend/llm/config.py` (`load_model_configuration()`), which
+strips names and drops blank/duplicate entries. Only retryable failures
+(timeouts, transport errors, provider availability) move to the next model;
+invalid configuration raises `ImproperlyConfigured` naming the offending
+variable at startup. Valid catalog ids are listed at
+https://openrouter.ai/api/v1/models.
+
 ### Mobile
 
 ```bash

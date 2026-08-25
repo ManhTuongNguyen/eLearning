@@ -19,8 +19,7 @@ import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import replace
 
-from django.conf import settings
-
+from llm.config import load_model_configuration
 from llm.exceptions import LLMAvailabilityError, LLMError, LLMResponseError
 from llm.openrouter import OpenRouterProvider
 from llm.provider import LLMProvider
@@ -48,9 +47,15 @@ class FallbackProvider(LLMProvider):
     @classmethod
     def from_settings(cls) -> FallbackProvider:
         """Build a settings-driven OpenRouter provider with its model chain."""
+        config = load_model_configuration()
         return cls(
-            provider=OpenRouterProvider.from_settings(),
-            models=[settings.LLM_PRIMARY_MODEL, *settings.LLM_FALLBACK_MODELS],
+            provider=OpenRouterProvider(
+                api_key=config.api_key,
+                base_url=config.base_url,
+                default_model=config.primary_model,
+                timeout=config.timeout_seconds,
+            ),
+            models=config.model_chain,
         )
 
     @property

@@ -2,11 +2,47 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-023 next)
+- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-024 next)
 
 ## Current Active Task
 
-None. Ready for next loop cycle. Next task: TASK-023 — Create backend model configuration.
+None. Ready for next loop cycle. Next task: TASK-024 — Implement LLM streaming service.
+
+## Archived Tasks
+
+### TASK-023 — Create backend model configuration (COMPLETED 2026-08-26)
+- `backend/llm/config.py`: frozen `ModelConfiguration(api_key, base_url,
+  timeout_seconds, primary_model, fallback_models)` + `model_chain` property
+  (primary first) and module-level `load_model_configuration()` — the single
+  place Django settings are read for LLM concerns. Normalization: model names
+  stripped; blank/duplicate fallback entries and fallbacks equal to the
+  primary dropped (order preserved); base_url stripped + trailing "/" removed;
+  timeout cast to float. Validation raises ImproperlyConfigured naming the
+  offending variable: blank LLM_PRIMARY_MODEL, blank OPENROUTER_BASE_URL,
+  non-numeric/non-positive/non-finite LLM_REQUEST_TIMEOUT_SECONDS, missing
+  setting attributes; missing OPENROUTER_API_KEY passes through "" in dev
+  (production requirement enforced by validate_production_configuration).
+  Logging "llm.config": debug line with primary + fallback count only.
+- Refactor: `OpenRouterProvider.from_settings()` and
+  `FallbackProvider.from_settings()` now build from `load_model_configuration()`
+  — `django.conf.settings` no longer imported by any llm business module;
+  FallbackProvider constructs its inner OpenRouterProvider directly from one
+  config load (no double read). No behavior change otherwise.
+- Tests backend/tests/test_llm_config.py (18): value assembly from documented
+  settings, strip/dedupe rules incl. all-blank fallbacks → primary-only,
+  empty-key dev passthrough, per-variable ImproperlyConfigured matrix,
+  missing-setting sentinel path, provider wiring (OpenRouter default_model/
+  timeout/base_url; Fallback full chain), source-level guards asserting no
+  model-name fragments ("gpt|claude|gemini|llama|mistral|deepseek|qwen|grok")
+  and no direct `settings.LLM_*`/`settings.OPENROUTER_*` access in llm/
+  business modules, api key absent from config logs.
+- test_fallback_provider.py: from_settings wiring test updated to patch
+  `llm.fallback.load_model_configuration` + OpenRouterProvider constructor;
+  DEFAULT_BASE_URL constant added locally.
+- Docs: `.env.example` LLM section explains chain semantics/retryable-only
+  fallback/catalog id format; README gained "LLM model configuration" section.
+- Gates: ruff check/format clean; pytest 233 passed +31 subtests (Postgres);
+  manage.py check clean.
 
 ## Archived Tasks
 
@@ -528,9 +564,10 @@ None. Ready for next loop cycle. Next task: TASK-023 — Create backend model co
 - Headless UI driving works well: RN testIDs appear as uiautomator
   resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
   then `adb shell input tap` on bounds centers.
-- No open issues. Next task: TASK-023 — Create backend model configuration
-  (Phase 4): server-mode primary/fallback model configuration from env/
-  settings, no hard-coded model names in business logic, documented config.
+- No open issues. Next task: TASK-024 — Implement LLM streaming service
+  (Phase 4): application-service-layer streaming with normalized events,
+  incremental consumption, clean error termination, and no falsely-complete
+  assistant messages.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist

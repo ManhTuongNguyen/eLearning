@@ -16,8 +16,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import httpx
-from django.conf import settings
 
+from llm.config import load_model_configuration
 from llm.exceptions import (
     LLMAuthenticationError,
     LLMAvailabilityError,
@@ -83,12 +83,13 @@ class OpenRouterProvider(LLMProvider):
 
     @classmethod
     def from_settings(cls) -> OpenRouterProvider:
-        """Build a provider from Django settings (env-driven configuration)."""
+        """Build a provider from the settings-driven model configuration."""
+        config = load_model_configuration()
         return cls(
-            api_key=settings.OPENROUTER_API_KEY,
-            base_url=settings.OPENROUTER_BASE_URL,
-            default_model=settings.LLM_PRIMARY_MODEL,
-            timeout=float(settings.LLM_REQUEST_TIMEOUT_SECONDS),
+            api_key=config.api_key,
+            base_url=config.base_url,
+            default_model=config.primary_model,
+            timeout=config.timeout_seconds,
         )
 
     def close(self) -> None:

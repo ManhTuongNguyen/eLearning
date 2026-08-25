@@ -3,8 +3,9 @@
 from dataclasses import dataclass
 from unittest.mock import Mock, patch
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase
 
+from llm.config import ModelConfiguration
 from llm.exceptions import (
     LLMAuthenticationError,
     LLMAvailabilityError,
@@ -28,6 +29,8 @@ from llm.types import (
 MODEL_A = "vendor/a"
 MODEL_B = "vendor/b"
 MODEL_C = "vendor/c"
+
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
 RESPONSE_A = CompletionResponse(text="From A", model="served/a", finish_reason="stop")
 RESPONSE_B = CompletionResponse(text="From B", model="served/b")
@@ -366,15 +369,26 @@ class LifecycleAndWiringTests(SimpleTestCase):
 
         self.assertTrue(inner.closed)
 
-    @override_settings(
-        LLM_PRIMARY_MODEL="vendor/main",
-        LLM_FALLBACK_MODELS=["vendor/f1", "vendor/f2"],
-    )
     def test_from_settings_builds_openrouter_chain_from_configuration(self) -> None:
         inner = Mock(spec=LLMProvider)
-        with patch("llm.fallback.OpenRouterProvider.from_settings", return_value=inner) as factory:
+        config = ModelConfiguration(
+            api_key="sk-test",
+            base_url=DEFAULT_BASE_URL,
+            timeout_seconds=30.0,
+            primary_model="vendor/main",
+            fallback_models=("vendor/f1", "vendor/f2"),
+        )
+        with (
+            patch("llm.fallback.load_model_configuration", return_value=config),
+            patch("llm.fallback.OpenRouterProvider", return_value=inner) as factory,
+        ):
             fallback = FallbackProvider.from_settings()
 
-        factory.assert_called_once_with()
+        factory.assert_called_once_with(
+            api_key="sk-test",
+            base_url=DEFAULT_BASE_URL,
+            default_model="vendor/main",
+            timeout=30.0,
+        )
         self.assertIs(fallback.provider, inner)
         self.assertEqual(fallback.models, ("vendor/main", "vendor/f1", "vendor/f2"))

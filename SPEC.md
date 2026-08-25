@@ -507,7 +507,7 @@ Acceptance criteria:
 
 ## TASK-023 — Create backend model configuration
 
-Status: `[ ]`
+Status: `[x]`
 
 Create configuration for server-mode primary/fallback models.
 
