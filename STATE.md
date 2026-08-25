@@ -2,13 +2,39 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 2 — Authentication (TASK-014 next)
+- **Current Phase**: Phase 2 — Authentication (TASK-015 next)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-014 — Implement logout (COMPLETED 2026-08-26)
+- `rest_framework_simplejwt.token_blacklist` added to INSTALLED_APPS; its
+  bundled migrations applied to dev Postgres automatically at compose backend
+  boot (no project-level migration needed).
+- `POST /api/v1/auth/logout/` in accounts app (name "logout"), authenticated
+  via default IsAuthenticated (like MeView). Body {refresh}: LogoutSerializer
+  parses the token with RefreshToken(token) during validation — garbage,
+  wrong-type (access), expired, blank or already-blacklisted tokens all map to
+  a clean 400 field error instead of an unhandled 500 (TokenError must be
+  caught explicitly). View then calls token.blacklist() → 200 {"detail":
+  "Logged out."}.
+- Invalidation semantics: blacklisted refresh token fails /auth/refresh/ with
+  401 (simplejwt verify() checks the blacklist); other sessions' refresh
+  tokens unaffected; outstanding access tokens stay valid until their short
+  expiry (no access-token denylist — documented MVP strategy).
+- New tests backend/tests/test_logout.py (14): success + blacklist row
+  persisted, refresh rejected afterwards, access token still authenticates
+  /me, sibling session unaffected, anonymous → 401, missing/blank/garbage/
+  access-as-refresh/expired/already-blacklisted → 400, GET → 405, full
+  login→use→logout→refresh-rejected lifecycle.
+- Gates: ruff check/format clean; pytest 90 passed (Postgres) / 87+3 skips
+  (sqlite fallback); manage.py check clean.
+- Live verification (compose backend restarted for migrations): register →
+  login → refresh 200 → logout 200 → refresh 401 → anonymous logout 401.
+  Throwaway smoke user deleted afterwards.
 
 ### TASK-013 — Implement JWT authentication (COMPLETED 2026-08-26)
 - `djangorestframework-simplejwt` 5.5.1 (+ pyjwt) added via uv.
@@ -238,12 +264,17 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-014 — Implement logout (Phase 2).
-  Requires simplejwt token_blacklist app (migration) + `POST /api/v1/auth/logout/`
-  accepting a refresh token; README auth section will need updating per spec.
+- No open issues. Next task: TASK-015 — Implement mobile authentication flow
+  (Phase 2): Login/Register screens, secure token storage (NOT plain
+  AsyncStorage — use e.g. react-native-keychain / encrypted storage),
+  authenticated state surviving restart, logout wiring to the new endpoint.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
-  Compose services currently up and healthy (backend image rebuilt with simplejwt).
+  Compose services up and healthy; backend restarted with token_blacklist
+  migrations applied.
+- Note: `make quality` output can render oddly in this shell (truncated);
+  run gates individually if in doubt. README's compose path is the repo-root
+  `docker-compose.yml` (not docker/docker-compose.yml).
 - Local-only artifacts (not committed, not required by repo): `~/.jdks/jdk-21.0.12.1+1`,
   `~/Android/Sdk/cmdline-tools/latest`, system image android-35 google_apis x86_64,
   AVD `elearning`.

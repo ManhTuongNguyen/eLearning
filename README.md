@@ -88,12 +88,18 @@ explicitly opts out (`register`, `login`, `refresh`, `health`).
 ```text
 POST /api/v1/auth/register/   {username, email, password} → 201
 POST /api/v1/auth/login/      {username | email, password} → {access, refresh, user}
+POST /api/v1/auth/logout/     Bearer + {refresh} → blacklists that refresh token
 POST /api/v1/auth/refresh/    {refresh} → {access}
 GET  /api/v1/auth/me/         Bearer token → current user
 ```
 
 Login accepts either the username or the email address. Token lifetimes come
 from `JWT_ACCESS_TOKEN_MINUTES` and `JWT_REFRESH_TOKEN_DAYS` in `.env`.
+
+Logout requires an authenticated request and permanently blacklists the
+supplied refresh token (simplejwt `token_blacklist`); refreshing with it then
+fails with 401. Other sessions are unaffected. Outstanding access tokens stay
+valid until their own short expiry — there is no access-token denylist.
 
 ### Mobile
 

@@ -71,6 +71,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    # JWT refresh-token invalidation support (logout blacklisting).
+    "rest_framework_simplejwt.token_blacklist",
     # Project apps
     "accounts",
     "learning",

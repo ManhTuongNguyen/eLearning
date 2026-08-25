@@ -4,7 +4,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
-from rest_framework_simplejwt.exceptions import InvalidToken
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -52,6 +52,26 @@ class LoginSerializer(TokenObtainPairSerializer):
             "access": str(refresh.access_token),
             "user": {"id": user.pk, "username": user.get_username(), "email": user.email},
         }
+
+
+class LogoutSerializer(serializers.Serializer):
+    """Validate the refresh token submitted for invalidation at logout.
+
+    The token must parse as a well-formed, non-expired, non-blacklisted
+    refresh token; anything else is reported as a field error so the client
+    gets a predictable 400 instead of an unhandled server error. Parsing
+    here is input validation only — the actual blacklisting happens in the
+    view once the payload is trusted.
+    """
+
+    refresh = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        try:
+            attrs["refresh"] = RefreshToken(attrs["refresh"])
+        except TokenError as exc:
+            raise serializers.ValidationError({"refresh": "Invalid or expired token."}) from exc
+        return attrs
 
 
 class RegistrationSerializer(serializers.ModelSerializer):

@@ -315,7 +315,7 @@ Acceptance criteria:
 
 ## TASK-014 — Implement logout
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement logout/token invalidation according to the selected JWT strategy.
 
