@@ -2,13 +2,56 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5 — Conversation Backend (TASK-027 complete; next TASK-028)
+- **Current Phase**: Phase 5 — Conversation Backend (TASK-028 complete; next TASK-029)
 
 ## Current Active Task
 
-(none — TASK-027 completed; next: TASK-028 — Implement topic generation service)
+(none — TASK-028 completed; next: TASK-029 — Generate sample conversation)
 
 ## Archived Tasks
+
+### TASK-028 — Implement topic generation service (COMPLETED 2026-08-26)
+- `conversations/topics.py`: frozen `GeneratedTopic(title, description)` —
+  title doubles as session-title material, description carries enough
+  scenario detail for the AI tutor (ROADMAP §6). `TopicGenerationService`
+  wraps ANY LLMProvider; `generate(*, level, hint="")` validates level
+  against learning.Level.values (ValueError before any provider call),
+  builds a system+user CompletionRequest via from_texts.
+- Prompt contract: system demands ONLY one JSON object {"title",
+  "description"}; user turn echoes concrete CEFR level or asks the model to
+  infer for AUTO; hint sentence injected when non-blank after strip,
+  otherwise "gave no preference" fallback. Whitespace-only hint == empty.
+- Structured-output parsing `_parse_topic`: tolerant extraction (direct
+  json.loads → outermost brace span retry) handles fenced/prose-wrapped
+  output; rejects non-dict payloads, missing/non-string/blank title or
+  description as LLMResponseError(provider="topics", model=served model).
+  Extra JSON keys ignored. Provider LLMError failures propagate UNCHANGED
+  (retryable flags preserved); non-LLMError exceptions unmasked.
+- Logging "conversations.topics": info success line (model/chars/duration),
+  warning on unusable output with normalized error str — completion payload
+  text never logged (asserted by tests).
+- Tests backend/tests/test_topic_service.py (23 tests + 31 subtests) on a
+  FakeProvider(LLMProvider) recording requests: GeneratedTopic frozen/value-
+  equality, invalid-level matrix rejected pre-call + all 7 Level values
+  accepted, whitespace-hint normalization, empty-hint topic generation,
+  value stripping, extra-key tolerance, fenced + prose-wrapped JSON parsed,
+  request shape (exactly system+user), system prompt JSON contract, B2 echo
+  vs AUTO inference instruction, hint influence + distinct hints → distinct
+  prompts, 20-case invalid-output matrix (all → retryable=False
+  LLMResponseError attributed to "topics" with served model), provider
+  error identity passthrough (availability/auth), ValueError unmasked, log
+  hygiene (payload markers absent on success AND failure).
+- Test gotchas hit: read provider.requests[-1] not [0] after multiple calls;
+  "leaky payload" fixture must be MALFORMED JSON — valid JSON with an extra
+  marker key parses fine by design and raises nothing.
+- Gates: ruff check/format clean (72 files); pytest 357 passed +68 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/topics.py — GeneratedTopic + TopicGenerationService
+2. [x] backend/tests/test_topic_service.py written (23 tests)
+3. [x] Gates green (ruff check/format, pytest 357+68 Postgres, manage.py check)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-028
 
 ### TASK-027 — Create message model (COMPLETED 2026-08-26)
 - `conversations.Message`: FK session (CASCADE, related_name="messages"),
@@ -723,9 +766,9 @@
 - Headless UI driving works well: RN testIDs appear as uiautomator
   resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
   then `adb shell input tap` on bounds centers.
-- No open issues. Next task: TASK-028 — Implement topic generation service
-  (Phase 5): topic from learning level + optional hint, structured output,
-  invalid LLM output handled safely, LLM mocked in tests.
+- No open issues. Next task: TASK-029 — Generate sample conversation (Phase 5):
+  extend topic generation to create a short sample conversation; not persisted
+  as user chat messages; returnable through the API; tests exist.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist

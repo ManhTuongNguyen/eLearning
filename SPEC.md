@@ -613,7 +613,7 @@ Acceptance criteria:
 
 ## TASK-028 — Implement topic generation service
 
-Status: `[ ]`
+Status: `[x]`
 
 Create a service that generates a conversation topic from:
 
