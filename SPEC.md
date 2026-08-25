@@ -709,7 +709,7 @@ Acceptance criteria:
 
 ## TASK-032 — Implement session detail/messages API
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement retrieval of:
 

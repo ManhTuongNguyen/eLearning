@@ -8,4 +8,10 @@ app_name = "conversations"
 
 urlpatterns = [
     path("sessions/", views.SessionCollectionView.as_view(), name="sessions"),
+    path("sessions/<int:pk>/", views.SessionDetailView.as_view(), name="session-detail"),
+    path(
+        "sessions/<int:pk>/messages/",
+        views.MessageListView.as_view(),
+        name="session-messages",
+    ),
 ]

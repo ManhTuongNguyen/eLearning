@@ -5,12 +5,17 @@ from __future__ import annotations
 from dataclasses import asdict
 from functools import lru_cache
 
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from conversations.models import Session
-from conversations.serializers import SessionCreateSerializer, SessionSerializer
+from conversations.serializers import (
+    MessageSerializer,
+    SessionCreateSerializer,
+    SessionSerializer,
+)
 from conversations.topics import TopicGenerationService
 from learning.models import Profile
 from llm.exceptions import LLMError
@@ -79,4 +84,45 @@ class SessionCollectionView(generics.ListAPIView):
         return Response({"detail": str(exc)}, status=code)
 
 
-__all__ = ["SessionCollectionView", "get_topic_service"]
+class SessionDetailView(generics.RetrieveAPIView):
+    """Retrieve a single conversation session for the authenticated user.
+
+    The queryset is scoped to ``request.user``, so another user's session —
+    or any nonexistent id — resolves to the same 404 without leaking
+    existence.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = SessionSerializer
+
+    def get_queryset(self):
+        return Session.objects.filter(user=self.request.user)
+
+
+class MessageListView(generics.ListAPIView):
+    """List the messages of one of the authenticated user's sessions.
+
+    Ownership is enforced by resolving the session through a user-scoped
+    lookup first: foreign or missing sessions return 404 before any message
+    is serialized. Messages come back in deterministic sequence order (the
+    model's default ordering), paginated via the global DRF settings.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = MessageSerializer
+
+    def get_queryset(self):
+        session = get_object_or_404(
+            Session,
+            pk=self.kwargs["pk"],
+            user=self.request.user,
+        )
+        return session.messages.all()
+
+
+__all__ = [
+    "MessageListView",
+    "SessionCollectionView",
+    "SessionDetailView",
+    "get_topic_service",
+]

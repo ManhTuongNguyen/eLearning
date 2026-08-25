@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from conversations.models import Session
+from conversations.models import Message, Session
 
 
 class SessionCreateSerializer(serializers.Serializer):
@@ -28,3 +28,11 @@ class SessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Session
         fields = ["id", "title", "topic", "topic_hint", "learning_level", "created_at"]
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    """Read representation of a chat message."""
+
+    class Meta:
+        model = Message
+        fields = ["id", "role", "status", "content", "sequence", "created_at"]

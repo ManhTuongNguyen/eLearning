@@ -2,13 +2,57 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5 — Conversation Backend (TASK-031 complete; next TASK-032)
+- **Current Phase**: Phase 5 — Conversation Backend (TASK-032 complete; next TASK-033)
 
 ## Current Active Task
 
-(none — TASK-031 completed; next: TASK-032 — Implement session detail/messages API,
-GET /api/v1/sessions/{id}/ + GET /api/v1/sessions/{id}/messages/ with ownership
-enforced and pagination where appropriate)
+(none — TASK-032 completed; next: TASK-033 — Implement session rename,
+PATCH /api/v1/sessions/{id}/ allowing title updates only, other fields
+immutable through the endpoint, tests exist)
+
+## Archived Tasks
+
+### TASK-032 — Implement session detail/messages API (COMPLETED 2026-08-26)
+- `GET /api/v1/sessions/{id}/` — SessionDetailView (generics.RetrieveAPIView):
+  get_queryset scoped to Session.objects.filter(user=request.user), so a
+  stranger's session and a nonexistent id are indistinguishable (both 404,
+  no existence leak). Non-int pks never match the route (<int:pk> → Django
+  404).
+- `GET /api/v1/sessions/{id}/messages/` — MessageListView
+  (generics.ListAPIView): get_object_or_404(Session, pk=kwargs["pk"],
+  user=request.user) FIRST → foreign/missing sessions 404 before any message
+  serialization; then session.messages.all() ordered by Message.Meta.ordering
+  ("sequence") — single source of truth, not duplicated with order_by.
+- Pagination: global DRF defaults apply to the messages list ({count,next,
+  previous,results}); invalid pages → 404; page_size fixed at 20.
+- New MessageSerializer: id/role/status/content/sequence/created_at only —
+  session FK id never leaks. Detail view reuses SessionSerializer (summary/
+  summary_message_boundary/updated_at stay internal).
+- Unsupported methods on both endpoints (POST/PUT/PATCH/DELETE) → 405 via
+  generics.
+- Tests backend/tests/test_session_detail_messages_api.py (26): anonymous
+  401 ×2, owner detail field-set + internal-field non-leak, stranger detail
+  404 + missing pk 404 + non-int pk route mismatch 404, method matrix 405 ×2,
+  empty messages envelope, exact message fields incl. role/status/sequence,
+  out-of-order sequence insertion → sequence order returned, cross-session
+  isolation within same user, stranger's messages 404 (row still exists),
+  pagination matrix (25 msgs: page1 20+next, page2 remainder+previous,
+  sequences 1..25 across pages, invalid pages 999/abc/0 → 404, stranger
+  messages don't count toward my count).
+- Test gotchas hit: Message.append requires keyword-only role (pass it in
+  fixtures); DRF 404 detail is "No Session matches the given query." (assert
+  "detail" in data, not a literal string); <int:pk> routes cannot reverse()
+  with "abc" — hit the literal path instead.
+- Gates: ruff check/format clean (78 files); pytest 444 passed +120 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/serializers.py — MessageSerializer
+2. [x] conversations/views.py — SessionDetailView + MessageListView
+3. [x] conversations/urls.py wiring (names "session-detail"/"session-messages")
+4. [x] backend/tests/test_session_detail_messages_api.py written (26 tests)
+5. [x] Gates green (ruff check/format, pytest 444+120 Postgres, manage.py check)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-032
 
 ## Archived Tasks
 
