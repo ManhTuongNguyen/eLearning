@@ -20,6 +20,10 @@ SECRET_KEY = config("DJANGO_SECRET_KEY", default=_DEV_SECRET_KEY)
 
 ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
+if DEBUG and "10.0.2.2" not in ALLOWED_HOSTS:
+    # Android emulator alias for the host loopback interface.
+    ALLOWED_HOSTS.append("10.0.2.2")
+
 
 def validate_production_configuration(
     *,

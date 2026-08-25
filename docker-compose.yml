@@ -53,7 +53,7 @@ services:
     environment:
       # Intra-network hostnames override localhost defaults; credentials are
       # interpolated from `.env` so a single source of truth is maintained.
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,10.0.2.2}
       POSTGRES_DB: ${POSTGRES_DB:-elearning}
       POSTGRES_USER: ${POSTGRES_USER:-elearning}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
@@ -88,7 +88,7 @@ services:
       - path: .env
         required: false
     environment:
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,10.0.2.2}
       POSTGRES_DB: ${POSTGRES_DB:-elearning}
       POSTGRES_USER: ${POSTGRES_USER:-elearning}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}

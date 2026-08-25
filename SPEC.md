@@ -329,7 +329,7 @@ Acceptance criteria:
 
 ## TASK-015 — Implement mobile authentication flow
 
-Status: `[ ]`
+Status: `[x]`
 
 Create mobile authentication screens and API integration.
 

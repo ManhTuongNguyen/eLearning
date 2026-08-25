@@ -1,11 +1,57 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
+
 import App from '../App';
+import * as authApi from '../src/api/auth';
+import * as secureStorage from '../src/auth/secureStorage';
 
-describe('App', () => {
-  it('renders the welcome content', async () => {
-    const { getByText } = await render(<App />);
+jest.mock('../src/api/auth');
+jest.mock('../src/auth/secureStorage');
 
-    expect(getByText(/Welcome to React Native/i)).toBeOnTheScreen();
+const mockedAuth = jest.mocked(authApi);
+const mockedStorage = jest.mocked(secureStorage);
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockedStorage.loadTokens.mockResolvedValue(null);
+});
+
+describe('App authentication flow', () => {
+  it('shows the login screen for unauthenticated users', async () => {
+    await render(<App />);
+
+    await waitFor(() => expect(screen.getByText(/Practice English/i)).toBeOnTheScreen());
+    expect(screen.getByTestId('login-identifier')).toBeOnTheScreen();
+    expect(mockedStorage.loadTokens).toHaveBeenCalled();
+  });
+
+  it('navigates between login and register screens', async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());
+
+    await fireEvent.press(screen.getByTestId('login-switch-register'));
+    expect(screen.getByTestId('register-username')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByTestId('register-switch-login'));
+    expect(screen.getByTestId('login-identifier')).toBeOnTheScreen();
+  });
+
+  it('restores the authenticated session after restart and logs out', async () => {
+    const tokens = {access: 'a', refresh: 'r'};
+    mockedStorage.loadTokens.mockResolvedValue(tokens);
+    mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+    mockedAuth.logout.mockResolvedValue(undefined);
+
+    render(<App />);
+
+    // Session restored from secure storage survives an app restart.
+    await waitFor(() => expect(screen.getByText(/Welcome, alice/)).toBeOnTheScreen());
+    expect(screen.getByText('alice@example.com')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByTestId('home-logout'));
+
+    await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());
+    expect(mockedAuth.logout).toHaveBeenCalledWith(tokens);
+    expect(mockedStorage.clearTokens).toHaveBeenCalled();
   });
 });

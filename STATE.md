@@ -2,13 +2,51 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 2 — Authentication (TASK-015 next)
+- **Current Phase**: Phase 3 — Learning Profile (TASK-016 next)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-015 — Implement mobile authentication flow (COMPLETED 2026-08-26)
+- `react-native-keychain` ^10 added (pnpm); autolinked into debug APK
+  (`com.oblador.keychain` classes verified inside APK). Tokens are stored as a
+  JSON blob via setGenericPassword under service `com.elearningmobile.auth` —
+  never AsyncStorage.
+- New structure `mobile/src/`: `config.ts` (API_BASE_URL =
+  http://10.0.2.2:8000 emulator→host alias), `auth/tokens.ts`,
+  `auth/secureStorage.ts` (save/load/clear; corrupted/partial payloads → null),
+  `api/client.ts` (fetch wrapper + ApiError normalizing DRF `{detail}` and
+  field-error shapes; network failure → status 0 friendly message),
+  `api/auth.ts` (register/login/refresh/me/logout bindings matching backend
+  response shapes), `auth/AuthContext.tsx`.
+- AuthContext: restore-on-start via /me with single refresh-token fallback
+  (both fail → clearTokens → unauthenticated); login stores tokens + user;
+  register auto-logs-in with submitted credentials; logout is best-effort
+  server invalidation + unconditional local clear. Errors surfaced via
+  `error` state; `busy` guards double submits.
+- Screens: LoginScreen / RegisterScreen / HomeScreen (+ SplashScreen);
+  state-based switching in App.tsx RootNavigator (react-navigation deferred to
+  TASK-043). Minimal neutral styling; full theme system remains TASK-044.
+- Backend tweak needed by live testing: DisallowedHost for emulator Host
+  header → DEBUG-mode default now appends `10.0.2.2`; compose default and
+  .env.example updated too. (Production unaffected — DJANGO_ALLOWED_HOSTS must
+  be set explicitly.)
+- Jest/RNTL gotcha: RNTL v14 render() is async (screen binding) AND
+  fireEvent.* returns a promise that must be awaited or state assertions read
+  stale trees. All interactions awaited.
+- Tests: 29 passing across secureStorage(5), apiClient(5), AuthContext(8),
+  LoginScreen(3), RegisterScreen(4), App flow(3+1). Keychain mocked globally
+  in jest.setup.js with in-memory store.
+- Gates: pnpm lint/typecheck/test green; gradlew assembleDebug SUCCESS;
+  backend ruff check/format + manage.py check + pytest 90 passed.
+- Live verification on headless emulator (AVD elearning, Metro via adb
+  reverse): register smoke_t15 → auto-login Home; force-stop + relaunch →
+  session restored ("Welcome, smoke_t15"); logout → backend logged POST
+  /auth/logout/ 200 (refresh blacklisted), UI back to login; re-login via
+  username OK. Smoke user deleted, app uninstalled afterwards.
 
 ### TASK-014 — Implement logout (COMPLETED 2026-08-26)
 - `rest_framework_simplejwt.token_blacklist` added to INSTALLED_APPS; its
@@ -264,10 +302,12 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-015 — Implement mobile authentication flow
-  (Phase 2): Login/Register screens, secure token storage (NOT plain
-  AsyncStorage — use e.g. react-native-keychain / encrypted storage),
-  authenticated state surviving restart, logout wiring to the new endpoint.
+- Mobile emulator flow: start Metro with `CI=true pnpm exec react-native start`
+  (interactive mode crashes headless) and `adb reverse tcp:8081 tcp:8081`;
+  debug APK needs Metro. AVD `elearning` boots headless in ~2 min.
+- No open issues. Next task: TASK-016 — Create learning profile model
+  (Phase 3): `learning.Profile` with level choice A1–C2/AUTO, one-to-one with
+  accounts.User, sensible default + validation, migrations and model tests.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist
