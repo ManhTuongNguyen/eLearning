@@ -521,7 +521,7 @@ Acceptance criteria:
 
 ## TASK-024 — Implement LLM streaming service
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement streaming at the application service layer.
 

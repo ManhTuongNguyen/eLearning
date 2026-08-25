@@ -11,6 +11,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
+from llm.exceptions import LLMError
+
 MessageRole = Literal["system", "user", "assistant"]
 
 VALID_ROLES: frozenset[str] = frozenset({"system", "user", "assistant"})
@@ -98,6 +100,34 @@ class StreamDelta:
 
 
 @dataclass(frozen=True)
+class StreamCompleted:
+    """Terminal event emitted only after a provider stream finished normally.
+
+    ``text`` is the full accumulated assistant message; consumers must treat
+    this event as the ONLY signal that a streamed assistant message is
+    complete.
+    """
+
+    text: str
+    model: str
+    delta_count: int = 0
+
+
+@dataclass(frozen=True)
+class StreamFailed:
+    """Terminal event replacing a raised provider failure.
+
+    Emitted when the stream could not finish: ``error`` is the normalized
+    :class:`llm.exceptions.LLMError` and ``text`` carries whatever partial
+    output was produced before the failure (possibly empty). Consumers must
+    never persist partial ``text`` as a complete assistant message.
+    """
+
+    error: LLMError
+    text: str = ""
+
+
+@dataclass(frozen=True)
 class ModelInfo:
     """Normalized description of one model available at a provider.
 
@@ -118,6 +148,8 @@ class ModelInfo:
 
 StreamEvent = StreamStart | StreamDelta
 
+StreamingEvent = StreamStart | StreamDelta | StreamCompleted | StreamFailed
+
 __all__ = [
     "VALID_ROLES",
     "CompletionRequest",
@@ -125,7 +157,10 @@ __all__ = [
     "Message",
     "MessageRole",
     "ModelInfo",
+    "StreamCompleted",
     "StreamDelta",
     "StreamEvent",
+    "StreamFailed",
     "StreamStart",
+    "StreamingEvent",
 ]

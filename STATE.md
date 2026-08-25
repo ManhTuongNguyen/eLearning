@@ -2,13 +2,61 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-024 next)
+- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-025 next)
 
 ## Current Active Task
 
-None. Ready for next loop cycle. Next task: TASK-024 — Implement LLM streaming service.
+None. Ready for next loop cycle. Next task: TASK-025 — Implement SSE endpoint
+foundation (Phase 4).
 
 ## Archived Tasks
+
+### TASK-024 — Implement LLM streaming service (COMPLETED 2026-08-26)
+- `llm/types.py`: service-level terminal events `StreamCompleted(text, model,
+  delta_count)` and `StreamFailed(error: LLMError, text="")` + union
+  `StreamingEvent = StreamStart | StreamDelta | StreamCompleted | StreamFailed`.
+  Provider-level `StreamEvent` untouched. types.py now imports llm.exceptions
+  (no cycle; both transport-agnostic).
+- `llm/streaming.py`: `StreamingCompletionService(provider)` wrapping ANY
+  LLMProvider. stream(request) yields exactly one StreamStart, zero+ deltas,
+  then EXACTLY one terminal event per call: StreamCompleted only on natural
+  provider exhaustion (full joined text, server-served model from start,
+  delta count) or StreamFailed on any LLMError (error instance preserved;
+  partial text == exactly what the consumer already received). Consumer
+  contract: persist a complete assistant message ONLY on StreamCompleted —
+  failed or abandoned streams never are.
+- Normalization guards: empty stream (no events), delta-before-start,
+  duplicate start, unknown event type → LLMResponseError ("streaming"
+  provider attribution, model attached when known) surfaced as StreamFailed
+  mid-sequence after already-yielded events. Non-LLMError exceptions
+  propagate unchanged (programming bugs are not masked as stream failures).
+- Lifecycle mirrors FallbackProvider: duck-typed close() delegation +
+  context manager. Logging "llm.streaming": info completion line (model/
+  chars/deltas/duration), warning failure line (normalized error str) —
+  streamed payload text never logged.
+- Tests backend/tests/test_streaming_service.py (21 tests + 6 subtests) on a
+  ScriptedProvider recording produced events: frozen terminal events +
+  StreamingEvent union membership, identity passthrough of provider events,
+  completed.model is served (not requested/pinned) model, zero-delta success,
+  request forwarded untouched, pre-stream failure (single Failed, empty
+  partial, non-retryable auth error preserved), mid-stream failure (deltas +
+  Failed with retryable availability error + "Partial" text), contract-
+  violation matrix, incremental lazy pull (provider.produced grows one event
+  per next(); abandoned stream emits no Completed), ValueError propagation
+  with no terminal event, close/context-manager lifecycle, log hygiene
+  (model + normalized error present, SECRET-PAYLOAD absent from all logs).
+- Gates: ruff check/format clean; pytest 254 passed +37 subtests (Postgres);
+  manage.py check clean.
+- Gotcha (environment): this shell mangles multi-diagnostic ruff output into
+  an aggregated "N matches in NF" format — redirect ruff stdout to a file and
+  Read it (or use --output-format=json) to see real rule codes/positions.
+
+#### Sub-step record (all complete)
+1. [x] Terminal events in llm/types.py
+2. [x] llm/streaming.py StreamingCompletionService
+3. [x] backend/tests/test_streaming_service.py
+4. [x] Gates green (ruff check/format, pytest Postgres, manage.py check)
+5. [x] SPEC.md marked [x]; commit feat: complete TASK-024
 
 ### TASK-023 — Create backend model configuration (COMPLETED 2026-08-26)
 - `backend/llm/config.py`: frozen `ModelConfiguration(api_key, base_url,
@@ -44,7 +92,8 @@ None. Ready for next loop cycle. Next task: TASK-024 — Implement LLM streaming
 - Gates: ruff check/format clean; pytest 233 passed +31 subtests (Postgres);
   manage.py check clean.
 
-## Archived Tasks
+  Compose services up and healthy; backend restarted with token_blacklist
+  migrations applied.
 
 ### TASK-022 — Implement OpenRouter model discovery (COMPLETED 2026-08-26)
 - `llm/types.py`: frozen `ModelInfo(id, name="", description=None,
@@ -74,7 +123,8 @@ None. Ready for next loop cycle. Next task: TASK-024 — Implement LLM streaming
 - Gates: ruff check/format clean; pytest 215 passed +31 subtests (Postgres);
   manage.py check clean.
 
-## Archived Tasks
+  Gates: ruff check/format clean; pytest 215 passed +31 subtests (Postgres);
+  manage.py check clean.
 
 ### TASK-021 — Implement model fallback (COMPLETED 2026-08-26)
 - `backend/llm/fallback.py`: FallbackProvider(LLMProvider) decorating ONE inner
@@ -564,10 +614,10 @@ None. Ready for next loop cycle. Next task: TASK-024 — Implement LLM streaming
 - Headless UI driving works well: RN testIDs appear as uiautomator
   resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
   then `adb shell input tap` on bounds centers.
-- No open issues. Next task: TASK-024 — Implement LLM streaming service
-  (Phase 4): application-service-layer streaming with normalized events,
-  incremental consumption, clean error termination, and no falsely-complete
-  assistant messages.
+- No open issues. Next task: TASK-025 — Implement SSE endpoint foundation
+  (Phase 4): authenticated SSE endpoint with correct content type,
+  incremental events, defined error-event format and clean connection close;
+  natural consumer of StreamingCompletionService terminal events.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist
