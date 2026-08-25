@@ -2,20 +2,58 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5 — Conversation Backend (TASK-026 in progress)
+- **Current Phase**: Phase 5 — Conversation Backend (TASK-026 complete; next TASK-027)
 
 ## Current Active Task
 
-TASK-026 — Create conversation/session model (Phase 5).
-
-Goal: Create a session model with user, title, topic, topic_hint, learning_level,
-summary, summary_message_boundary, created_at, updated_at.
-
-Acceptance criteria (SPEC.md): Sessions belong to users; users cannot access
-another user's session; migrations and model tests exist.
-
+(none — TASK-026 completed; next: TASK-027 — Create message model)
 
 ## Archived Tasks
+
+### TASK-026 — Create conversation/session model (COMPLETED 2026-08-26)
+- `conversations.Session`: FK user (AUTH_USER_MODEL, CASCADE,
+  related_name="conversation_sessions"), title CharField(255), topic TextField,
+  topic_hint TextField(blank, default=""), learning_level CharField(4) reusing
+  learning.Level.choices default AUTO (single source of truth for CEFR levels),
+  summary TextField(blank, default="") + summary_message_boundary
+  PositiveIntegerField(default=0) for rolling-summary compaction (TASK-037/038),
+  created_at auto_now_add / updated_at auto_now. Meta ordering ("-updated_at")
+  matches session-listing requirement (TASK-031 most-recent-first).
+- conversations/admin.py SessionAdmin: list_display/filter/search on level +
+  timestamps; created_at/updated_at readonly.
+- Migration conversations/0001_initial generated AND applied to live Postgres
+  (verified via showmigrations + information_schema column dump — all 10
+  expected columns present).
+- Tests backend/tests/test_session.py (24): defaults (AUTO level, empty hint/
+  summary, boundary 0), all 7 levels persist round-trip, __str__, timestamps
+  set + updated_at advances on save, ownership via FK + related-name access,
+  user-delete cascade, cross-user independence, default ordering desc,
+  full_clean validation matrix (invalid/blank level, missing user, blank
+  title/topic), field-shape assertions for every required SPEC field.
+- Acceptance mapping: sessions belong to users (FK + cascade); users cannot
+  access another user's session (per-user FK scoping enforced at ORM level —
+  API-layer enforcement is TASK-030..034 which will filter by request.user);
+  migrations + model tests exist.
+- Gates: ruff check/format clean; pytest 302 passed +37 subtests (Postgres);
+  manage.py check clean.
+- Gotcha (environment, not code): running pytest from backend/ WITHOUT
+  POSTGRES_PASSWORD=change-me fails at DB connect (compose owns credentials) —
+  always export it for host-run gates.
+- Note: run-loop.sh has unrelated uncommitted tooling edits (loop-exit counter);
+  deliberately excluded from the task commit.
+- Found partially implemented in working tree on resume (models/admin/migration/
+  tests already written); remaining verification steps completed this run.
+
+#### Sub-step record (all complete)
+1. [x] `conversations.Session` model with required fields + ordering + __str__
+2. [x] Admin registration (SessionAdmin)
+3. [x] Migration conversations/0001_initial generated (+ applied to live PG)
+4. [x] backend/tests/test_session.py written (creation, ownership/cascade,
+       ordering, validation matrix, field-shape assertions)
+5. [x] Apply migration to live Postgres from host (was already applied;
+       verified table schema)
+6. [x] Gates green (ruff check/format, pytest 302+37 Postgres, manage.py check)
+7. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-026
 
 ### TASK-024 — Implement LLM streaming service (COMPLETED 2026-08-26)
 - `llm/types.py`: service-level terminal events `StreamCompleted(text, model,
@@ -640,10 +678,10 @@ another user's session; migrations and model tests exist.
 - Headless UI driving works well: RN testIDs appear as uiautomator
   resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
   then `adb shell input tap` on bounds centers.
-- No open issues. Next task: TASK-025 — Implement SSE endpoint foundation
-  (Phase 4): authenticated SSE endpoint with correct content type,
-  incremental events, defined error-event format and clean connection close;
-  natural consumer of StreamingCompletionService terminal events.
+- No open issues. Next task: TASK-027 — Create message model (Phase 5):
+  session FK, role user/assistant, content, sequence/order, status with
+  incomplete/failed assistant generation states, created_at; deterministic
+  ordering; failed assistant messages retryable.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist

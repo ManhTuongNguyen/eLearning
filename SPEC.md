@@ -554,7 +554,7 @@ Acceptance criteria:
 
 ## TASK-026 — Create conversation/session model
 
-Status: `[ ]`
+Status: `[x]`
 
 Create a session model containing at minimum:
 
