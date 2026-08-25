@@ -2,13 +2,25 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 0 — Foundation (TASK-006 done)
+- **Current Phase**: Phase 0 — Foundation complete (TASK-007 done); next Phase 1 — Backend Core
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-007 — Configure mobile linting and testing (COMPLETED 2026-08-26)
+- Strict mode already inherited from `@react-native/typescript-config`
+  (`strict: true`, verified via `tsc --showConfig`); no tsconfig change needed.
+- ESLint/Jest/typecheck scripts already present from RN CLI template and working.
+- Added `@testing-library/react-native@14` (dev dep) and rewrote the template's
+  react-test-renderer test as an RNTL component test (async render in v14).
+- RNCSafeAreaProvider renders no children without native metrics → added
+  `mobile/jest.setup.js` mocking `react-native-safe-area-context`; wired via
+  `setupFiles` in `jest.config.js`.
+- Enabled `env.jest` in `.eslintrc.js` so setup file passes `no-undef`.
+- All gates green: `pnpm lint`, `pnpm typecheck`, `pnpm test` (1 passed).
 
 ### TASK-006 — Initialize React Native application (COMPLETED 2026-08-26)
 - Scaffolded RN 0.81.4 bare app (CLI template) into `mobile/`; package name
@@ -82,7 +94,7 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-007 — Configure mobile linting and testing.
+- No open issues. Next task: TASK-008 — Configure environment management.
 - Local-only artifacts (not committed, not required by repo): `~/.jdks/jdk-21.0.12.1+1`,
   `~/Android/Sdk/cmdline-tools/latest`, system image android-35 google_apis x86_64,
   AVD `elearning`.

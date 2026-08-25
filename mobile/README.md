@@ -35,9 +35,17 @@ Debug builds fetch JS from Metro. For an emulator on the same machine, Metro is 
 ```bash
 pnpm typecheck      # tsc --noEmit
 pnpm lint           # eslint
-pnpm test           # jest
+pnpm test           # jest + React Native Testing Library
 pnpm android        # run-android
 ```
+
+## Quality gates
+
+- **TypeScript strict mode** is inherited from `@react-native/typescript-config` (`strict: true`); enforced via `tsc --noEmit`.
+- **ESLint** uses `@react-native/eslint-config` (`.eslintrc.js`) with Jest globals enabled.
+- **Tests** use Jest with the `react-native` preset and React Native Testing Library.
+  `jest.setup.js` mocks native-module-dependent libraries (currently `react-native-safe-area-context`)
+  so components render deterministically in the Node test environment.
 
 ## Release build
 

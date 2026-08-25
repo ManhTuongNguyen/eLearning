@@ -177,7 +177,7 @@ Acceptance criteria:
 
 ## TASK-007 — Configure mobile linting and testing
 
-Status: `[ ]`
+Status: `[x]`
 
 Configure:
 
