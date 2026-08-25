@@ -73,6 +73,16 @@ pnpm typecheck
 pnpm test
 ```
 
+Run on Android (requires JDK 17+ and `ANDROID_HOME` pointing at the Android SDK):
+
+```bash
+cd mobile
+pnpm start          # Metro, keep running
+pnpm android        # builds debug APK, installs and launches on a connected device/emulator
+```
+
+The app targets the New Architecture (`newArchEnabled=true`) and Hermes. Debug builds load JS from Metro; a production bundle is produced by `assembleRelease`. See `mobile/README.md` for details.
+
 ### Infrastructure
 
 Docker Compose provides `backend`, `postgres`, `redis`, and `worker` services. See `.env.example` for required environment variables; copy it to `.env` and fill in real values.

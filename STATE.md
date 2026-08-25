@@ -2,13 +2,31 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 0 — Foundation (TASK-005 done)
+- **Current Phase**: Phase 0 — Foundation (TASK-006 done)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-006 — Initialize React Native application (COMPLETED 2026-08-26)
+- Scaffolded RN 0.81.4 bare app (CLI template) into `mobile/`; package name
+  `elearning-mobile`, Android module `com.elearningmobile`, display name `eLearning`.
+- New Architecture confirmed: `newArchEnabled=true`, Hermes on; runtime log shows
+  `"fabric":true` when the JS bundle loads.
+- pnpm compatibility via `mobile/.npmrc` (`node-linker=hoisted`); added `typecheck` script.
+- Verified: `pnpm install` OK; `pnpm typecheck` (tsc --noEmit) clean;
+  `./gradlew assembleDebug` BUILD SUCCESSFUL (arm64-v8a+x86_64).
+- Runtime verification: no physical device available → provisioned cmdline-tools +
+  system-images;android-35;google_apis;x86_64, created AVD `elearning`, booted headless
+  emulator (KVM ACL granted), installed debug APK, launched MainActivity.
+  App rendered ("Welcome to React Native", Hermes 0.81.4); topResumedActivity confirmed.
+- Tooling note: system Java was missing and no passwordless sudo → installed portable
+  Temurin JDK 21 at `~/.jdks/jdk-21.0.12.1+1` (outside repo). RN CLI's pnpm detection is
+  broken in this env; scaffolded with default npm flag + `--skip-install`, then used pnpm.
+- READMEs updated (root Mobile section: run instructions; mobile/README.md rewritten).
+- `.gitignore` verified: node_modules, local.properties, android build outputs excluded.
 
 ### TASK-005 — Configure backend quality gates (COMPLETED 2026-08-26)
 - All 5 gates already functional from TASK-002 scaffolding: ruff lint (E,F,W,I,N,UP,B,DJ,
@@ -64,4 +82,7 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-006 — Initialize React Native application.
+- No open issues. Next task: TASK-007 — Configure mobile linting and testing.
+- Local-only artifacts (not committed, not required by repo): `~/.jdks/jdk-21.0.12.1+1`,
+  `~/Android/Sdk/cmdline-tools/latest`, system image android-35 google_apis x86_64,
+  AVD `elearning`.

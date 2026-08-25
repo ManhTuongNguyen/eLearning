@@ -154,7 +154,7 @@ Acceptance criteria:
 
 ## TASK-006 — Initialize React Native application
 
-Status: `[ ]`
+Status: `[x]`
 
 Create the React Native mobile application using TypeScript and pnpm.
 
