@@ -6,7 +6,57 @@
 
 ## Current Active Task
 
-(none — TASK-028 completed; next: TASK-029 — Generate sample conversation)
+(none — TASK-029 completed; next: TASK-030 — Create session API)
+
+## Archived Tasks
+
+### TASK-029 — Generate sample conversation (COMPLETED 2026-08-26)
+- `conversations/topics.py` extended (service class unchanged, new members):
+  `SampleTurn(role, content)` + `SampleConversation(turns)` frozen value
+  objects; roles reuse `Message.Role.USER/ASSISTANT` ("user"/"assistant") so
+  the example renders/speaks like a normal exchange and TASK-030 can serialize
+  it directly. `MIN_SAMPLE_TURNS = 2` enforced in both the parser
+  (→ LLMResponseError) and the value type (backstop ValueError).
+- `TopicGenerationService.generate_sample(*, topic, level)` — second
+  structured-JSON call keyed to an already-generated GeneratedTopic ("sample
+  belongs to the topic"): validates level against Level.values AND topic
+  isinstance pre-call (ValueError before any provider request), builds
+  system+user CompletionRequest via from_texts.
+- Prompt contract: SAMPLE_SYSTEM_PROMPT demands ONLY one JSON object
+  {"turns": [{role, content}]}, only assistant/user roles, 4–6 turns
+  alternating starting with "assistant". User prompt mirrors topic-prompt
+  level semantics (B2 echo vs AUTO infer) and injects topic title +
+  description; distinct topics → distinct prompts.
+- `_parse_sample`/`_parse_turn`: tolerant extraction via existing
+  _extract_json_object (fenced/prose-wrapped OK); rejects non-dict payload,
+  missing/non-list turns, <2 turns, non-dict turn entries, roles outside
+  {assistant,user}, missing/non-str/blank content as retryable=False
+  LLMResponseError(provider="topics", model=served). Extra keys ignored
+  top-level and per-turn; values stripped. Provider LLMError failures
+  propagate UNCHANGED; non-LLMError unmasked. Payload text never logged
+  (info success line has model/turns/duration; warning carries normalized
+  error str only).
+- Not persisted anywhere — pure in-memory display data for the "Show me an
+  example" flow (ROADMAP §7); dataclasses are API-returnable (asdict → JSON).
+- Tests backend/tests/test_topic_sample.py (30 tests): turn/conversation
+  frozen+tuple-normalization+role/content/count validation, invalid-level +
+  non-topic matrices rejected pre-call, all 7 levels accepted, happy-path
+  parse/stripping/extra-keys/fenced/prose-wrapped, request shape (system+user),
+  prompt contracts (JSON shape, role names, B2 echo vs AUTO infer, topic
+  injection, distinct prompts), 27-case invalid-output matrix (all →
+  non-retryable "topics" errors), served-model attribution, provider-error
+  identity passthrough, ValueError unmasked, JSON round-trip serializability,
+  log hygiene on success AND failure. test_topic_service.py untouched (23
+  still pass).
+- Gates: ruff check/format clean (73 files); pytest 387 passed +120 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/topics.py — SampleTurn/SampleConversation +
+       generate_sample + _parse_sample/_parse_turn + logging/__all__
+2. [x] backend/tests/test_topic_sample.py written (30 tests)
+3. [x] Gates green (ruff check/format, pytest 387+120 Postgres, manage.py check)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-029
 
 ## Archived Tasks
 
@@ -766,9 +816,11 @@
 - Headless UI driving works well: RN testIDs appear as uiautomator
   resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
   then `adb shell input tap` on bounds centers.
-- No open issues. Next task: TASK-029 — Generate sample conversation (Phase 5):
-  extend topic generation to create a short sample conversation; not persisted
-  as user chat messages; returnable through the API; tests exist.
+- No open issues. Next task: TASK-030 — Create session API (Phase 5):
+  POST /api/v1/sessions/ with optional topic hint → create session, generate
+  topic, generate sample conversation (topics.generate/generate_sample),
+  return session info; authenticated only; failures must not leave corrupt
+  sessions; tests exist.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist

@@ -635,7 +635,7 @@ Acceptance criteria:
 
 ## TASK-029 — Generate sample conversation
 
-Status: `[ ]`
+Status: `[x]`
 
 Extend topic generation to create a short sample conversation.
 
