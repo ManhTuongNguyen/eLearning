@@ -139,6 +139,12 @@ else:
         }
     }
 
+# Authentication
+#
+# The custom user model must be declared before any migration references it.
+
+AUTH_USER_MODEL = "accounts.User"
+
 # Transaction policy: Django's default autocommit mode with opt-in
 # ``transaction.atomic()`` blocks in application services. ATOMIC_REQUESTS
 # stays off so long-running LLM streaming responses do not hold open

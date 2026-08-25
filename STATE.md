@@ -10,6 +10,31 @@ None. Ready for next loop cycle.
 
 ## Archived Tasks
 
+### TASK-011 — Create user model (COMPLETED 2026-08-26)
+- `accounts.User(AbstractUser)` with unique non-blank email override; username
+  stays USERNAME_FIELD → login can accept either identifier later. Stock
+  AbstractUser password hashing retained (no custom manager needed).
+- `AUTH_USER_MODEL = "accounts.User"` set in settings.py BEFORE any dependent
+  migration existed (accounts had no models/migrations until now).
+- accounts/0001_initial generated and applied against live Postgres.
+  Gotcha: dev DB already had pre-AUTH_USER_MODEL admin/auth migrations →
+  InconsistentMigrationHistory. Dev DB had zero data, so schema was dropped
+  (`DROP SCHEMA public CASCADE`) and re-migrated fresh — mirrors clean checkout.
+- User registered in Django admin via stock UserAdmin passthrough.
+- ruff: added `extend-exclude = ["**/migrations"]` to backend/pyproject.toml —
+  Django-generated migrations trip E501/format; standard exclusion.
+- Fixed TASK-009 test fallout in tests/test_database.py: isolation probe's raw
+  SQL referenced legacy table name `auth_user` → now uses
+  `get_user_model()._meta.db_table`; all create_user calls now pass unique
+  emails (unique constraint rejects duplicate "" emails).
+- New tests backend/tests/test_user.py (10): creation round-trip, hashing
+  (never plaintext), email domain normalization, superuser flags, duplicate
+  username/email IntegrityErrors, missing-email full_clean rejection,
+  AUTH_USER_MODEL wiring + USERNAME_FIELD.
+- Gates: ruff check/format clean; pytest 38 passed (Postgres) / 35+3 skips
+  (sqlite fallback); manage.py check clean; compose backend restarted healthy,
+  live /api/v1/health/ → 200.
+
 ### TASK-010 — Add API health endpoint (COMPLETED 2026-08-26)
 - `GET /api/v1/health/` implemented in backend/config/views.py (DRF api_view,
   AllowAny) + wired in config/urls.py with name "health"; no new app needed.
@@ -155,7 +180,10 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-011 — Create user model (Phase 2 start).
+- No open issues. Next task: TASK-012 — Implement registration API (Phase 2).
+- Dev DB was rebuilt from scratch this cycle (custom user model introduced);
+  compose services restarted and healthy. Host-side `make quality` still needs
+  `POSTGRES_PASSWORD=change-me` (or root .env).
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services currently up and healthy.

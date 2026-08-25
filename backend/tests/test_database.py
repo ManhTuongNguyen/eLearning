@@ -42,7 +42,7 @@ class TestDatabaseConfiguration:
             pytest.skip("DB_ENGINE=sqlite3 local-development override is active")
         user_model = get_user_model()
         probe = "isolation-probe"
-        user_model.objects.create_user(username=probe, password="x")
+        user_model.objects.create_user(username=probe, email=f"{probe}@example.com", password="x")
         with psycopg.connect(
             dbname=env_config("POSTGRES_DB", default="elearning"),
             user=env_config("POSTGRES_USER", default="elearning"),
@@ -52,7 +52,8 @@ class TestDatabaseConfiguration:
             connect_timeout=5,
         ) as dev_connection:
             (count,) = dev_connection.execute(
-                "SELECT COUNT(*) FROM auth_user WHERE username = %s", (probe,)
+                f"SELECT COUNT(*) FROM {user_model._meta.db_table} WHERE username = %s",
+                (probe,),
             ).fetchone()
         assert count == 0
 
@@ -63,24 +64,34 @@ class TestTransactionBehavior:
     def test_committed_writes_persist(self) -> None:
         user_model = get_user_model()
         with transaction.atomic():
-            user_model.objects.create_user(username="committed", password="x")
+            user_model.objects.create_user(
+                username="committed", email="committed@example.com", password="x"
+            )
         assert user_model.objects.filter(username="committed").exists()
 
     def test_exception_inside_atomic_block_rolls_back_all_writes(self) -> None:
         user_model = get_user_model()
         with pytest.raises(RuntimeError):
             with transaction.atomic():
-                user_model.objects.create_user(username="rolled-back", password="x")
+                user_model.objects.create_user(
+                    username="rolled-back", email="rolled-back@example.com", password="x"
+                )
                 raise RuntimeError("boom")
         assert not user_model.objects.filter(username="rolled-back").exists()
 
     def test_inner_block_failure_discards_only_inner_writes(self) -> None:
         user_model = get_user_model()
         with transaction.atomic():
-            user_model.objects.create_user(username="outer-kept", password="x")
+            user_model.objects.create_user(
+                username="outer-kept", email="outer-kept@example.com", password="x"
+            )
             with pytest.raises(RuntimeError):
                 with transaction.atomic():
-                    user_model.objects.create_user(username="inner-discarded", password="x")
+                    user_model.objects.create_user(
+                        username="inner-discarded",
+                        email="inner-discarded@example.com",
+                        password="x",
+                    )
                     raise RuntimeError("boom")
         assert user_model.objects.filter(username="outer-kept").exists()
         assert not user_model.objects.filter(username="inner-discarded").exists()

@@ -262,7 +262,7 @@ Acceptance criteria:
 
 ## TASK-011 — Create user model
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement the application user model.
 

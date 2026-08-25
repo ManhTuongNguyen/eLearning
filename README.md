@@ -72,6 +72,13 @@ Or all at once, CI-style, from the repository root:
 make quality
 ```
 
+### User model
+
+Authentication uses a custom user model (`AUTH_USER_MODEL = "accounts.User"`,
+`accounts.User` extending Django's `AbstractUser`). Both `username` and `email`
+are unique; passwords use Django's standard hashing. The setting was introduced
+before any dependent migrations existed, so no data migration is required.
+
 ### Mobile
 
 ```bash
