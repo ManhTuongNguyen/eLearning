@@ -47,9 +47,21 @@ The project uses an autonomous Loop Engineering workflow tracked in [`SPEC.md`](
 ```bash
 cd backend
 uv sync
-uv run python manage.py check
-uv run pytest
-uv run ruff check .
+```
+
+Quality gates (run individually):
+
+```bash
+uv run ruff check .             # lint
+uv run ruff format --check .    # formatting check (apply: uv run ruff format .)
+uv run pytest                   # tests (pytest + pytest-django)
+uv run python manage.py check   # Django system checks
+```
+
+Or all at once, CI-style, from the repository root:
+
+```bash
+make quality
 ```
 
 ### Mobile

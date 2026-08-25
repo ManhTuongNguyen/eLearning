@@ -134,7 +134,7 @@ Acceptance criteria:
 
 ## TASK-005 — Configure backend quality gates
 
-Status: `[ ]`
+Status: `[x]`
 
 Configure:
 

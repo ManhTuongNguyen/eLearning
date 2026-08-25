@@ -2,13 +2,22 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 0 — Foundation (TASK-004 done)
+- **Current Phase**: Phase 0 — Foundation (TASK-005 done)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-005 — Configure backend quality gates (COMPLETED 2026-08-26)
+- All 5 gates already functional from TASK-002 scaffolding: ruff lint (E,F,W,I,N,UP,B,DJ,
+  line-length 100), ruff format (44 files clean), pytest+pytest-django (4 passed),
+  `manage.py check` (0 issues).
+- Added root `Makefile` with CI-oriented aggregate target `make quality`
+  chaining backend-lint / backend-format-check / backend-test / backend-check.
+- README "Backend" section now documents every gate plus `make quality`.
+- Verified clean-checkout flow: `uv sync` → all 4 gates green via `make quality`.
 
 ### TASK-004 — Create Django application boundaries (COMPLETED 2026-08-26)
 - Scaffolded 5 apps via `manage.py startapp`: `accounts`, `learning`,
@@ -55,4 +64,4 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-004 — Create Django application boundaries.
+- No open issues. Next task: TASK-006 — Initialize React Native application.
