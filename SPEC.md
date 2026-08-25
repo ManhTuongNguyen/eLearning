@@ -299,7 +299,7 @@ Acceptance criteria:
 
 ## TASK-013 — Implement JWT authentication
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement access/refresh token authentication.
 

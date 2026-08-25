@@ -1,10 +1,57 @@
 """API serializers for the accounts app."""
 
+from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
+from rest_framework_simplejwt.exceptions import InvalidToken
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import User
+
+
+class LoginSerializer(TokenObtainPairSerializer):
+    """Validate login input and issue access/refresh tokens.
+
+    The user model keeps ``username`` as USERNAME_FIELD, but the roadmap
+    requires email-or-username login. Authentication is attempted with the
+    submitted identifier directly; when it looks like an email address and
+    did not match a username, the account is resolved by email (case
+    insensitively, matching the normalized storage) and retried by its
+    username. Failure modes are indistinguishable to the caller.
+    """
+
+    default_error_messages = {
+        "no_active_account": "No active account found with the given credentials."
+    }
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        identifier = attrs.get(self.username_field, "")
+        password = attrs.get("password", "")
+
+        user = authenticate(request=request, username=identifier, password=password)
+        if user is None and "@" in identifier:
+            matched = User.objects.filter(email__iexact=identifier).first()
+            if matched is not None:
+                user = authenticate(
+                    request=request,
+                    username=matched.get_username(),
+                    password=password,
+                )
+
+        if user is None:
+            # InvalidToken (not ValidationError) so failures are HTTP 401.
+            raise InvalidToken(self.error_messages["no_active_account"])
+
+        refresh = RefreshToken.for_user(user)
+
+        return {
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "user": {"id": user.pk, "username": user.get_username(), "email": user.email},
+        }
 
 
 class RegistrationSerializer(serializers.ModelSerializer):

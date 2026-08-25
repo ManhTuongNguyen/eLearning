@@ -2,13 +2,43 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 2 — Authentication (TASK-013 next)
+- **Current Phase**: Phase 2 — Authentication (TASK-014 next)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-013 — Implement JWT authentication (COMPLETED 2026-08-26)
+- `djangorestframework-simplejwt` 5.5.1 (+ pyjwt) added via uv.
+- settings.py: SIMPLE_JWT with ACCESS_TOKEN_LIFETIME / REFRESH_TOKEN_LIFETIME
+  derived from existing env vars (JWT_ACCESS_TOKEN_MINUTES=15,
+  JWT_REFRESH_TOKEN_DAYS=7). DRF DEFAULT_AUTHENTICATION_CLASSES →
+  JWTAuthentication; DEFAULT_PERMISSION_CLASSES → IsAuthenticated (secure by
+  default; register/login/refresh/health opt out via AllowAny, which they
+  already declared).
+- Endpoints in accounts app: `POST /api/v1/auth/login/` (LoginView),
+  `POST /api/v1/auth/refresh/` (TokenRefreshView), `GET /api/v1/auth/me/`
+  (MeView, IsAuthenticated → current user id/username/email).
+- LoginSerializer subclasses TokenObtainPairSerializer: authenticate with the
+  submitted identifier as username first; if it contains "@" and failed, resolve
+  account by case-insensitive email and retry with its username. Returns
+  {access, refresh, user}. Gotcha: raising ValidationError yields HTTP 400 for
+  bad credentials; must raise InvalidToken to get proper 401 + Bearer header.
+- No blacklist app yet — token invalidation is TASK-014 (logout).
+- New tests backend/tests/test_auth.py (15): login via username/mixed-case
+  email, tokens authenticate /me, no password echo; wrong password/unknown/
+  inactive → 401; missing fields → 400; refresh happy path + garbage token +
+  access-token-as-refresh → 401; expired AccessToken (set_exp backdated) → 401;
+  tampered signature → 401; anonymous /me → 401 with WWW-Authenticate: Bearer
+  (realm suffix asserted via startswith); public endpoints stay open;
+  SIMPLE_JWT lifetimes derive from env settings.
+- Gates: ruff check/format clean; pytest 76 passed (Postgres) / 73+3 skips
+  (sqlite fallback); manage.py check clean.
+- Live verification (rebuilt compose backend image for new dep): register 201 →
+  login (username AND mixed-case email) → /me 200 with access, 401 without →
+  refresh issues working new access. Throwaway smoke user deleted afterwards.
 
 ### TASK-012 — Implement registration API (COMPLETED 2026-08-26)
 - `POST /api/v1/auth/register/` via accounts app: `RegistrationSerializer`
@@ -208,12 +238,12 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-013 — Implement JWT authentication (Phase 2).
-  Settings already expose JWT_ACCESS_TOKEN_MINUTES / JWT_REFRESH_TOKEN_DAYS;
-  a JWT library (e.g. djangorestframework-simplejwt) will need to be added.
+- No open issues. Next task: TASK-014 — Implement logout (Phase 2).
+  Requires simplejwt token_blacklist app (migration) + `POST /api/v1/auth/logout/`
+  accepting a refresh token; README auth section will need updating per spec.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
-  Compose services currently up and healthy.
+  Compose services currently up and healthy (backend image rebuilt with simplejwt).
 - Local-only artifacts (not committed, not required by repo): `~/.jdks/jdk-21.0.12.1+1`,
   `~/Android/Sdk/cmdline-tools/latest`, system image android-35 google_apis x86_64,
   AVD `elearning`.

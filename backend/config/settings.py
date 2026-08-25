@@ -4,6 +4,7 @@ Configuration is sourced from environment variables via python-decouple,
 following the naming conventions documented in the root `.env.example`.
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 from decouple import Csv, config
@@ -178,8 +179,18 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Django REST Framework
+#
+# Authentication defaults to JWT; permissions default to deny-unauthenticated
+# so every new endpoint is protected unless it explicitly opts out with
+# AllowAny (registration, login, refresh, health).
 
 REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
 }
@@ -195,10 +206,16 @@ CELERY_TASK_ALWAYS_EAGER = config("CELERY_TASK_ALWAYS_EAGER", default=False, cas
 
 REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
 
-# JWT authentication (consumed by the auth implementation in Phase 2)
+# JWT authentication (djangorestframework-simplejwt)
 
 JWT_ACCESS_TOKEN_MINUTES = config("JWT_ACCESS_TOKEN_MINUTES", default=15, cast=int)
 JWT_REFRESH_TOKEN_DAYS = config("JWT_REFRESH_TOKEN_DAYS", default=7, cast=int)
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=JWT_ACCESS_TOKEN_MINUTES),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=JWT_REFRESH_TOKEN_DAYS),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
 
 # OpenRouter / LLM
 #

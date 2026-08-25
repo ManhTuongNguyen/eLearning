@@ -79,6 +79,22 @@ Authentication uses a custom user model (`AUTH_USER_MODEL = "accounts.User"`,
 are unique; passwords use Django's standard hashing. The setting was introduced
 before any dependent migrations existed, so no data migration is required.
 
+### Authentication API
+
+JWT-based authentication via `djangorestframework-simplejwt`. DRF defaults are
+deny-unauthenticated: every endpoint requires a bearer token unless it
+explicitly opts out (`register`, `login`, `refresh`, `health`).
+
+```text
+POST /api/v1/auth/register/   {username, email, password} → 201
+POST /api/v1/auth/login/      {username | email, password} → {access, refresh, user}
+POST /api/v1/auth/refresh/    {refresh} → {access}
+GET  /api/v1/auth/me/         Bearer token → current user
+```
+
+Login accepts either the username or the email address. Token lifetimes come
+from `JWT_ACCESS_TOKEN_MINUTES` and `JWT_REFRESH_TOKEN_DAYS` in `.env`.
+
 ### Mobile
 
 ```bash
