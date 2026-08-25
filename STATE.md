@@ -2,13 +2,23 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 0 — Foundation (TASK-003 done)
+- **Current Phase**: Phase 0 — Foundation (TASK-004 done)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-004 — Create Django application boundaries (COMPLETED 2026-08-26)
+- Scaffolded 5 apps via `manage.py startapp`: `accounts`, `learning`,
+  `conversations`, `vocabulary`, `llm` under `backend/`.
+- Each `apps.py` carries a docstring stating its responsibility
+  (identity/auth, learning profile, sessions/messages, vocabulary+enrichment,
+  LLM provider abstraction) plus `verbose_name`; standard BigAutoField PK.
+- All 5 registered in `INSTALLED_APPS`.
+- startapp's unused-import placeholders cleaned via `ruff --fix` + format.
+- Verified: `manage.py check` clean, pytest 4 passed, ruff check + format clean.
 
 ### TASK-003 — Configure Docker Compose backend infrastructure (COMPLETED 2026-08-26)
 - Added `celery[redis]>=5.4` dep; created `backend/config/celery.py` wired via

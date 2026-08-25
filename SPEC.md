@@ -110,7 +110,7 @@ Acceptance criteria:
 
 ## TASK-004 — Create Django application boundaries
 
-Status: `[ ]`
+Status: `[x]`
 
 Create initial Django apps/modules for:
 
