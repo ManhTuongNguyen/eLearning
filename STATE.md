@@ -4,11 +4,41 @@
 - **Last Run Timestamp**: 2026-08-26
 - **Current Phase**: Phase 1 — Backend Core (TASK-008 in progress)
 
+## Metadata
+- **Last Run Timestamp**: 2026-08-26
+- **Current Phase**: Phase 1 — Backend Core (TASK-009 in progress)
+
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-009 — Create database configuration (COMPLETED 2026-08-26)
+- PostgreSQL confirmed as primary engine from host AND inside Docker
+  (postgres:17-alpine, healthy). Host access needs POSTGRES_PASSWORD matching
+  compose default when no root .env exists (compose interpolates change-me).
+- Migrations verified against real Postgres: `manage.py migrate --plan` → no
+  pending operations (container applies them at boot).
+- settings.py postgres branch now declares explicit TEST database
+  (POSTGRES_TEST_DB, default test_elearning) so pytest never touches the dev DB;
+  documented transaction policy comment (ATOMIC_REQUESTS stays off — long LLM
+  streams must not hold open transactions).
+- New backend/tests/test_database.py (7 tests): postgres vendor assertion,
+  isolated test-DB naming, transaction support, commit persistence, atomic
+  rollback discards writes, savepoint rollback keeps outer writes, and a
+  behavioral isolation probe — row written in test is invisible via a direct
+  psycopg connection to the dev database.
+- Gotcha: pytest-django mutates connection.settings_dict globally, so comparing
+  NAME before/after setup reads identical values; isolation asserted via
+  decouple-sourced dev name + cross-connection probe instead.
+- Teardown verified: only `elearning` remains after pytest (test DB dropped);
+  dev auth_user count unchanged (0).
+- sqlite fallback intact for Docker-less local runs (DB_ENGINE=sqlite3):
+  20 passed / 3 postgres-specific skips.
+- .env.example documents POSTGRES_TEST_DB; README explains isolated test DB +
+  sqlite fallback. All gates green via `POSTGRES_PASSWORD=... make quality`
+  (ruff check/format, pytest 23 passed, manage.py check).
 
 ### TASK-008 — Configure environment management (COMPLETED 2026-08-26)
 - settings.py now sources every documented category via python-decouple:
@@ -113,7 +143,9 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-009 — Create database configuration.
+- No open issues. Next task: TASK-010 — Add API health endpoint.
+- Running `make quality` against Postgres from the host requires
+  `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
 - Local-only artifacts (not committed, not required by repo): `~/.jdks/jdk-21.0.12.1+1`,
   `~/Android/Sdk/cmdline-tools/latest`, system image android-35 google_apis x86_64,
   AVD `elearning`.

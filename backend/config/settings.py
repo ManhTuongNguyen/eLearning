@@ -131,8 +131,18 @@ else:
             "PASSWORD": config("POSTGRES_PASSWORD", default=""),
             "HOST": config("POSTGRES_HOST", default="localhost"),
             "PORT": config("POSTGRES_PORT", default="5432", cast=int),
+            # Test runs never touch the development database; pytest-django
+            # creates and destroys this dedicated database per session.
+            "TEST": {
+                "NAME": config("POSTGRES_TEST_DB", default="test_elearning"),
+            },
         }
     }
+
+# Transaction policy: Django's default autocommit mode with opt-in
+# ``transaction.atomic()`` blocks in application services. ATOMIC_REQUESTS
+# stays off so long-running LLM streaming responses do not hold open
+# transactions against PostgreSQL.
 
 # Password validation
 

@@ -225,7 +225,7 @@ Acceptance criteria:
 
 ## TASK-009 — Create database configuration
 
-Status: `[ ]`
+Status: `[x]`
 
 Configure PostgreSQL as the primary Django database.
 

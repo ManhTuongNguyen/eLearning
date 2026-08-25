@@ -58,6 +58,14 @@ uv run pytest                   # tests (pytest + pytest-django)
 uv run python manage.py check   # Django system checks
 ```
 
+Tests run against an isolated PostgreSQL database (`test_elearning`, see
+`POSTGRES_TEST_DB`); it is created and destroyed per run and never touches the
+development database. Without Docker services available, fall back to SQLite:
+
+```bash
+DB_ENGINE=sqlite3 uv run pytest
+```
+
 Or all at once, CI-style, from the repository root:
 
 ```bash
