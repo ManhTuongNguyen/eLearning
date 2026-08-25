@@ -240,7 +240,7 @@ Acceptance criteria:
 
 ## TASK-010 — Add API health endpoint
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement:
 

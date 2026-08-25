@@ -2,17 +2,29 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 1 — Backend Core (TASK-008 in progress)
-
-## Metadata
-- **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 1 — Backend Core (TASK-009 in progress)
+- **Current Phase**: Phase 1 — Backend Core (TASK-010 in progress)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-010 — Add API health endpoint (COMPLETED 2026-08-26)
+- `GET /api/v1/health/` implemented in backend/config/views.py (DRF api_view,
+  AllowAny) + wired in config/urls.py with name "health"; no new app needed.
+- Payload: {status, components{database}, time ISO8601 UTC}; DB probe is
+  SELECT 1 via connection.cursor(); any probe exception → component
+  "unavailable" and HTTP 503, all healthy → 200.
+- Secret hygiene: response contains only statuses — never SECRET_KEY,
+  POSTGRES_PASSWORD, or OPENROUTER_API_KEY (asserted by test).
+- Redis/Celery probes deferred until those app-level integrations exist;
+  compose healthchecks already cover infra. `components` dict keeps it
+  extensible.
+- New tests backend/tests/test_health.py (5): 200+payload, recent tz-aware
+  timestamp, secret-leak guard, 405 on POST, 503 on patched probe failure.
+- Gates: ruff check/format clean, pytest 28 passed (Postgres-backed),
+  manage.py check clean; live curl against compose backend → 200 healthy.
 
 ### TASK-009 — Create database configuration (COMPLETED 2026-08-26)
 - PostgreSQL confirmed as primary engine from host AND inside Docker
@@ -143,9 +155,10 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-010 — Add API health endpoint.
+- No open issues. Next task: TASK-011 — Create user model (Phase 2 start).
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
+  Compose services currently up and healthy.
 - Local-only artifacts (not committed, not required by repo): `~/.jdks/jdk-21.0.12.1+1`,
   `~/Android/Sdk/cmdline-tools/latest`, system image android-35 google_apis x86_64,
   AVD `elearning`.
