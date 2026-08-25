@@ -8,6 +8,7 @@ dependencies = [
     "djangorestframework>=3.16",
     "psycopg[binary]>=3.2",
     "python-decouple>=3.8",
+    "celery[redis]>=5.4",
 ]
 
 [dependency-groups]

@@ -1,0 +1,10 @@
+# Keep Docker build context small.
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+db.sqlite3
+tests/
+htmlcov/
+.coverage

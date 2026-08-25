@@ -89,7 +89,7 @@ Acceptance criteria:
 
 ## TASK-003 — Configure Docker Compose backend infrastructure
 
-Status: `[ ]`
+Status: `[x]`
 
 Create Docker Compose services for:
 

@@ -2,13 +2,29 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 0 — Foundation
+- **Current Phase**: Phase 0 — Foundation (TASK-003 done)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-003 — Configure Docker Compose backend infrastructure (COMPLETED 2026-08-26)
+- Added `celery[redis]>=5.4` dep; created `backend/config/celery.py` wired via
+  `config/__init__.py`; Celery settings (`CELERY_BROKER_URL`,
+  `CELERY_RESULT_BACKEND`, `CELERY_TASK_ALWAYS_EAGER`) added to settings.py.
+- Created `docker/backend/Dockerfile` (uv base image, python3.14-slim,
+  venv at `/opt/venv` so dev bind-mount can't shadow it) + `backend/.dockerignore`.
+- Root `docker-compose.yml`: `postgres` (pg_isready HC), `redis` (redis-cli ping HC),
+  `backend` (migrate+runserver, HTTP HC on /admin/login/), `worker` (celery worker).
+  Env via root `.env` (env_file, required:false) + `${VAR:-default}` interpolation;
+  intra-network hostnames injected as service env overrides. Named volumes for data.
+- Verified clean-slate: all 4 services up, 3 healthy; migrations applied against
+  Postgres; HTTP 200; `celery inspect ping` → pong.
+- Gotchas hit & fixed: POSTGRES_HOST must match compose service name (`postgres`,
+  not `db`); credentials must be interpolated into backend/worker env too.
+- pytest 4 passed; ruff check + format clean.
 
 ### TASK-001 — Initialize repository structure (COMPLETED 2026-08-26)
 - All sub-steps completed: folder structure, .gitignore/.env.example, README.md.
@@ -29,4 +45,4 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-003 — Configure Docker Compose backend infrastructure.
+- No open issues. Next task: TASK-004 — Create Django application boundaries.
