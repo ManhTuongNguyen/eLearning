@@ -3,7 +3,12 @@ name = "elearning-backend"
 version = "0.1.0"
 description = "English Learning Chat — Django backend"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "django>=6.0,<7.0",
+    "djangorestframework>=3.16",
+    "psycopg[binary]>=3.2",
+    "python-decouple>=3.8",
+]
 
 [dependency-groups]
 dev = [

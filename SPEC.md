@@ -63,7 +63,7 @@ Acceptance criteria:
 
 ## TASK-002 — Initialize Django project
 
-Status: `[ ]`
+Status: `[x]`
 
 Create the Django 6.x backend using uv.
 
