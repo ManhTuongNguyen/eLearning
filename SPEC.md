@@ -580,7 +580,7 @@ Acceptance criteria:
 
 ## TASK-027 — Create message model
 
-Status: `[ ]`
+Status: `[x]`
 
 Create message model with:
 

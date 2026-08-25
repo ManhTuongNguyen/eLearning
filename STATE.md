@@ -2,13 +2,58 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5 — Conversation Backend (TASK-026 complete; next TASK-027)
+- **Current Phase**: Phase 5 — Conversation Backend (TASK-027 complete; next TASK-028)
 
 ## Current Active Task
 
-(none — TASK-026 completed; next: TASK-027 — Create message model)
+(none — TASK-027 completed; next: TASK-028 — Implement topic generation service)
 
 ## Archived Tasks
+
+### TASK-027 — Create message model (COMPLETED 2026-08-26)
+- `conversations.Message`: FK session (CASCADE, related_name="messages"),
+  role CharField(16) TextChoices user/assistant, status CharField(16)
+  TextChoices pending/complete/failed (default PENDING = assistant
+  generation-in-progress state), content TextField(blank, default="" — blank
+  valid only for pending assistant rows), sequence PositiveIntegerField,
+  created_at auto_now_add. Meta ordering ("sequence",) → deterministic.
+- Integrity: UniqueConstraint (session, sequence) named
+  conversations_message_unique_session_sequence (per-session deterministic
+  ordering, DB-enforced); CheckConstraint condition=NOT(role=user AND
+  status!=complete) named conversations_message_user_role_complete as DB
+  backstop + model.clean() ValidationError on "status" for form-level parity.
+  Django 6 gotchas: Meta.constraints cannot reference sibling nested classes
+  by bare name at class-body scope (used literals "user"/"complete");
+  CheckConstraint kwarg is `condition=` (`check=` removed in Django 6).
+- Domain helpers: `Message.append(session, *, role, content="", status=None)`
+  classmethod allocates Max(sequence)+1 and defaults status COMPLETE for
+  user / PENDING for assistant (TASK-040/041 will build on this);
+  `is_retryable` property True only for assistant+failed (MVP retry rule).
+- conversations/admin.py MessageAdmin: list_display/filter/search +
+  created_at readonly.
+- Migration conversations/0002_message generated AND applied to live
+  Postgres (verified via \d: unique + check constraints present).
+- Tests backend/tests/test_message.py (32): append defaults per role,
+  all 3 statuses round-trip, __str__, created_at, session related-name +
+  session/user cascade, same sequence across distinct sessions allowed,
+  Meta ordering deterministic with out-of-order insertion, monotonic
+  sequence allocation, duplicate (session, sequence) → IntegrityError,
+  is_retryable matrix (unsaved instances), failed→pending→complete retry
+  lifecycle, ORM insert of incomplete user message → IntegrityError,
+  full_clean validation matrix (invalid role/status, missing session,
+  non-complete user status error, blank content OK for pending assistant),
+  field-shape assertions incl. ordering.
+- Gates: ruff check/format clean; pytest 334 passed +37 subtests (Postgres);
+  manage.py check clean. Pre-existing InsecureKeyLengthWarning noise from
+  short JWT test secrets (test_auth/test_logout) — unrelated to this task.
+
+#### Sub-step record (all complete)
+1. [x] `conversations.Message` model + constraints + helpers
+2. [x] Admin registration (MessageAdmin)
+3. [x] Migration conversations/0002_message (+ applied to live PG, schema verified)
+4. [x] backend/tests/test_message.py written (32 tests)
+5. [x] Gates green (ruff check/format, pytest 334+37 Postgres, manage.py check)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-027
 
 ### TASK-026 — Create conversation/session model (COMPLETED 2026-08-26)
 - `conversations.Session`: FK user (AUTH_USER_MODEL, CASCADE,
@@ -678,10 +723,9 @@
 - Headless UI driving works well: RN testIDs appear as uiautomator
   resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
   then `adb shell input tap` on bounds centers.
-- No open issues. Next task: TASK-027 — Create message model (Phase 5):
-  session FK, role user/assistant, content, sequence/order, status with
-  incomplete/failed assistant generation states, created_at; deterministic
-  ordering; failed assistant messages retryable.
+- No open issues. Next task: TASK-028 — Implement topic generation service
+  (Phase 5): topic from learning level + optional hint, structured output,
+  invalid LLM output handled safely, LLM mocked in tests.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist
