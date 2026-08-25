@@ -2,11 +2,62 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5 — Conversation Backend (TASK-028 complete; next TASK-029)
+- **Current Phase**: Phase 5 — Conversation Backend (TASK-030 complete; next TASK-031)
 
 ## Current Active Task
 
-(none — TASK-029 completed; next: TASK-030 — Create session API)
+(none — TASK-030 completed; next: TASK-031 — Create session listing API,
+GET /api/v1/sessions/ with pagination + most-recently-updated-first)
+
+## Archived Tasks
+
+### TASK-030 — Create session API (COMPLETED 2026-08-26)
+- `POST /api/v1/sessions/` in conversations app: SessionCreateView (APIView,
+  IsAuthenticated) + SessionCreateSerializer (optional topic_hint; blank/
+  whitespace → ""; DRF CharField coerces numbers to strings) +
+  SessionSerializer (ModelSerializer: id/title/topic/topic_hint/
+  learning_level/created_at).
+- Atomicity by ordering: level read from learning Profile
+  (get_or_create, lazy-provisioned like ProfileView) → topic generated →
+  sample generated → SINGLE Session.objects.create at the end. Provider
+  failures therefore cannot leave corrupt/empty sessions (nothing is written
+  before both LLM calls succeed). Session.title = GeneratedTopic.title;
+  Session.topic = GeneratedTopic.description.
+- Response 201: session fields + sample_conversation {turns:[{role,content}]}
+  via dataclasses.asdict (in-memory display data, not persisted as messages).
+- Errors: LLMError.retryable → 503 else 502 with {"detail": normalized
+  str(exc)} (secret-safe by construction); non-LLMError unmasked.
+- Service seam get_topic_service() + lru_cache'd _settings_topic_service()
+  mirroring llm.views.get_streaming_service; tests monkeypatch the seam.
+- Wiring: conversations/urls.py (app_name "conversations", name "sessions") →
+  included under /api/v1/ in config/urls.py. GET on sessions/ → 405 until
+  TASK-031 adds listing.
+- Tests backend/tests/test_session_api.py (16): anonymous 401 (+ nothing
+  persisted), happy path (owner/title/topic/hint/payload incl. sample turns),
+  generate/sample call shapes (level from profile AUTO default + B2 profile,
+  sample receives the SAME GeneratedTopic instance), empty body → hint "",
+  whitespace-only hint normalization, numeric-hint coercion ("42"), unknown
+  payload fields ignored (title/user hijack no-op), distinct hints → distinct
+  calls, failure atomicity matrix (retryable topic error → 503 + count 0 +
+  no sample call; non-retryable → 502; sample failure AFTER successful topic
+  → still zero sessions; base LLMError retryable=True → 503), GET → 405,
+  get_topic_service cached identity (override_settings API key for real
+  construction).
+- Test gotchas hit: asdict turns come back as a TUPLE in response.data
+  (compare via list(...)); DRF CharField casts int payloads to str rather
+  than rejecting; the real settings seam requires OPENROUTER_API_KEY to be
+  non-empty (provider constructor rejects "") — use override_settings in the
+  caching test.
+- Gates: ruff check/format clean (76 files); pytest 403 passed +120 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/serializers.py — SessionCreateSerializer + SessionSerializer
+2. [x] conversations/views.py — SessionCreateView + get_topic_service seam
+3. [x] conversations/urls.py + config/urls.py wiring (name "sessions")
+4. [x] backend/tests/test_session_api.py written (16 tests)
+5. [x] Gates green (ruff check/format, pytest 403+120 Postgres, manage.py check)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-030
 
 ## Archived Tasks
 

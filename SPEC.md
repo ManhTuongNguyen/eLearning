@@ -650,7 +650,7 @@ Acceptance criteria:
 
 ## TASK-030 — Create session API
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement session creation.
 
