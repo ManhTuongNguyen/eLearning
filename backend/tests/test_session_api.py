@@ -231,8 +231,9 @@ class TestFailureAtomicity:
 
 
 class TestMethodRestrictions:
-    def test_get_is_not_allowed_yet(self, authed_api):
-        response = authed_api.get(SESSIONS_URL)
+    @pytest.mark.parametrize("method", ["put", "patch", "delete"])
+    def test_unsupported_methods_are_rejected(self, authed_api, method):
+        response = getattr(authed_api, method)(SESSIONS_URL, {}, format="json")
 
         assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 

@@ -685,7 +685,7 @@ Acceptance criteria:
 
 ## TASK-031 — Create session listing API
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement:
 

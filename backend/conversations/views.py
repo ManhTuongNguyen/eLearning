@@ -5,10 +5,9 @@ from __future__ import annotations
 from dataclasses import asdict
 from functools import lru_cache
 
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from conversations.models import Session
 from conversations.serializers import SessionCreateSerializer, SessionSerializer
@@ -28,11 +27,15 @@ def get_topic_service() -> TopicGenerationService:
     return _settings_topic_service()
 
 
-class SessionCreateView(APIView):
-    """Create a conversation session for the authenticated user.
+class SessionCollectionView(generics.ListAPIView):
+    """List and create conversation sessions for the authenticated user.
 
-    Body: ``{"topic_hint"?: str}``. The learner's English level comes from
-    their learning profile (provisioned on first access). The flow is:
+    GET returns the caller's sessions only, paginated via the global DRF
+    pagination settings, most recently updated first (the model's default
+    ordering).
+
+    POST body: ``{"topic_hint"?: str}``. The learner's English level comes
+    from their learning profile (provisioned on first access). The flow is:
 
     1. Generate a topic from level + hint.
     2. Generate the sample conversation for that topic.
@@ -43,8 +46,12 @@ class SessionCreateView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    serializer_class = SessionSerializer
 
-    def post(self, request) -> Response:
+    def get_queryset(self):
+        return Session.objects.filter(user=self.request.user)
+
+    def post(self, request, *args, **kwargs) -> Response:
         serializer = SessionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         hint = serializer.to_hint()
@@ -72,4 +79,4 @@ class SessionCreateView(APIView):
         return Response({"detail": str(exc)}, status=code)
 
 
-__all__ = ["SessionCreateView", "get_topic_service"]
+__all__ = ["SessionCollectionView", "get_topic_service"]

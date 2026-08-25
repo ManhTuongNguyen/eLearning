@@ -7,5 +7,5 @@ from conversations import views
 app_name = "conversations"
 
 urlpatterns = [
-    path("sessions/", views.SessionCreateView.as_view(), name="sessions"),
+    path("sessions/", views.SessionCollectionView.as_view(), name="sessions"),
 ]

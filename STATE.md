@@ -2,14 +2,56 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5 — Conversation Backend (TASK-030 complete; next TASK-031)
+- **Current Phase**: Phase 5 — Conversation Backend (TASK-031 complete; next TASK-032)
 
 ## Current Active Task
 
-(none — TASK-030 completed; next: TASK-031 — Create session listing API,
-GET /api/v1/sessions/ with pagination + most-recently-updated-first)
+(none — TASK-031 completed; next: TASK-032 — Implement session detail/messages API,
+GET /api/v1/sessions/{id}/ + GET /api/v1/sessions/{id}/messages/ with ownership
+enforced and pagination where appropriate)
 
 ## Archived Tasks
+
+### TASK-031 — Create session listing API (COMPLETED 2026-08-26)
+- `GET /api/v1/sessions/` added to the conversations collection view:
+  SessionCreateView (APIView) refactored into SessionCollectionView
+  (generics.ListAPIView) — GET lists via ListModelMixin, POST keeps the
+  TASK-030 creation flow verbatim (custom post() override; generics' create
+  machinery unused). URL name "sessions" unchanged.
+- User-specific: get_queryset filters Session.objects.filter(user=request.user);
+  no other user's rows can appear regardless of query params.
+- Ordering: relies on Session.Meta.ordering ("-updated_at") — single source of
+  truth for most-recently-updated-first (model ordering was designed for this
+  in TASK-026); asserted by tests rather than duplicated with order_by.
+- Pagination: global DRF defaults (PageNumberPagination, PAGE_SIZE=20) apply
+  through GenericAPIView.pagination_class → {count,next,previous,results}
+  envelope; invalid page → 404; page_size not client-tunable (default
+  PageNumberPagination).
+- Serializer unchanged (SessionSerializer: id/title/topic/topic_hint/
+  learning_level/created_at) — internal summary/boundary/updated_at fields
+  never leak through listing payloads (asserted).
+- Tests backend/tests/test_session_list_api.py (14): anonymous 401, empty-list
+  envelope, exact serializer field set (+ no summary/updated_at leakage),
+  cross-user scoping incl. stranger's newest row excluded, most-recently-
+  updated-first via pinned updated_at (.update() bypasses auto_now), update
+  bumps session to front, 25-session pagination matrix (first page 20+next,
+  second page remainder+previous, order preserved across pages, invalid pages
+  999/abc/0 → 404, stranger sessions don't count toward my pages).
+- test_session_api.py: obsolete "GET is 405" test replaced by parametrized
+  PUT/PATCH/DELETE → 405 (GET now legitimately lists).
+- Test gotcha hit: my first cross-page ordering expectation was inverted —
+  offsets grow with index so Session 00 (now - smallest offset) is the MOST
+  recent and comes first; the endpoint was right, the assertion wasn't.
+- Gates: ruff check/format clean (77 files); pytest 418 passed +120 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/views.py — SessionCollectionView (ListAPIView) + user-scoped get_queryset
+2. [x] conversations/urls.py rewired to SessionCollectionView (name unchanged)
+3. [x] backend/tests/test_session_list_api.py written (14 tests)
+4. [x] test_session_api.py GET-405 test replaced (PUT/PATCH/DELETE 405)
+5. [x] Gates green (ruff check/format, pytest 418+120 Postgres, manage.py check)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-031
 
 ### TASK-030 — Create session API (COMPLETED 2026-08-26)
 - `POST /api/v1/sessions/` in conversations app: SessionCreateView (APIView,
