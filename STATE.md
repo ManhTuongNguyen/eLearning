@@ -6,9 +6,47 @@
 
 ## Current Active Task
 
-None. Ready for next loop cycle. Next task: TASK-021 — Implement model fallback.
+None. Ready for next loop cycle. Next task: TASK-022 — Implement OpenRouter model discovery.
 
 ## Archived Tasks
+
+### TASK-021 — Implement model fallback (COMPLETED 2026-08-26)
+- `backend/llm/fallback.py`: FallbackProvider(LLMProvider) decorating ONE inner
+  provider with an ordered model chain (primary first). complete() retries the
+  next chain entry only on `LLMError.retryable` failures (transport/timeout/
+  availability); auth/bad-request/response errors raise immediately (a
+  different model cannot fix them). All-fail → aggregate LLMAvailabilityError
+  "all N configured model(s) failed: <model>: <msg>; ..." chained from the
+  last error, retryable=True so callers above may still retry.
+- stream(): falls back ONLY while probing for the first event (`next()` opens
+  the HTTP request + status check in OpenRouterProvider's lazy generator).
+  Once any event is emitted the attempt is committed — mid-stream failures
+  propagate unchanged (restarting would duplicate already-consumed text).
+  StopIteration during probe → LLMResponseError (contract violation,
+  non-retryable).
+- Explicit `request.model` pin replaces the whole chain for a single attempt
+  (pinned intent wins); a pinned retryable failure still normalizes into the
+  aggregate availability error. Chain models are stripped/validated non-blank;
+  request shape (messages/temperature) preserved per attempt via
+  dataclasses.replace.
+- Lifecycle: close() delegates to inner provider when it offers one (duck-
+  typed; no-op otherwise), context-manager supported; from_settings() builds
+  OpenRouterProvider.from_settings() with chain [LLM_PRIMARY_MODEL,
+  *LLM_FALLBACK_MODELS]. Logging via "llm.fallback": warning per failed
+  attempt/exhaustion, info on fallback success (never logs payloads).
+- Tests backend/tests/test_fallback_provider.py (23 tests + 7 subtests) on
+  scripted fakes (no HTTP): construction validation/stripping, primary
+  passthrough, retryable-class matrix triggers fallback, non-retryable matrix
+  aborts with identical exception instance, 3-model ordering, all-fail
+  aggregate content + __cause__, single-model normalization, request-shape
+  preservation, pin bypass (complete+stream), stream probe fallback /
+  mid-stream no-fallback / non-retryable probe / aggregate, close delegation +
+  context manager + close-less inner, from_settings wiring.
+- Gotchas: test-side walrus-in-dict-literal SyntaxError fixed by hoisting
+  RESPONSE_C; pinned single-attempt exhaustion raises the aggregate error too
+  (consistent rule: any exhausted chain → normalized availability error).
+- Gates: ruff check/format clean; pytest 200 passed (Postgres); manage.py
+  check clean.
 
 ### TASK-020 — Implement OpenRouter client (COMPLETED 2026-08-26)
 - `httpx` 0.28.1 added via uv (sync client, streaming, timeout support;
@@ -460,10 +498,9 @@ None. Ready for next loop cycle. Next task: TASK-021 — Implement model fallbac
 - Headless UI driving works well: RN testIDs appear as uiautomator
   resource-id; dump via `adb shell uiautomator dump /sdcard/ui.xml` + pull,
   then `adb shell input tap` on bounds centers.
-- No open issues. Next task: TASK-021 — Implement model fallback (Phase 4):
-  wrap OpenRouterProvider with primary→fallback ordering for retryable/
-  availability failures only; all-fail returns normalized error; StreamStart
-  already carries the served model for fallback attribution.
+- No open issues. Next task: TASK-022 — Implement OpenRouter model discovery
+  (Phase 4): GET /models on the OpenRouterProvider, normalized internal model
+  representation, external API errors handled, no secrets returned.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist

@@ -468,7 +468,7 @@ Acceptance criteria:
 
 ## TASK-021 — Implement model fallback
 
-Status: `[ ]`
+Status: `[x]`
 
 Support:
 
