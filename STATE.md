@@ -2,14 +2,53 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5 — Conversation Backend (TASK-034 complete; next TASK-035)
+- **Current Phase**: Phase 5A — Conversation Context (TASK-035 complete; next TASK-036)
 
 ## Current Active Task
 
-(none — TASK-034 completed; next: TASK-035 — Create context builder,
-service constructing LLM context: system prompt + learning profile + topic +
-summary + recent messages + current user message; deterministic, old messages
-not included forever, tests verify ordering and sections)
+(none — TASK-035 completed; next: TASK-036 — Implement recent-message window,
+configurable recent-message selection, recommended default 20; only the
+configured window included, ordering correct, current user message handled
+correctly)
+
+## Archived Tasks
+
+### TASK-035 — Create context builder (COMPLETED 2026-08-26)
+- `conversations/context.py`: `ContextBuilder.build(*, level, topic, summary="",
+  recent_messages=(), current_message)` → one deterministic CompletionRequest:
+  single system message (identity + level line + topic title/scenario +
+  optional rolling-summary block, fixed section order) + given history turns
+  verbatim in chronological order + stripped current user message LAST.
+- Bounded by construction: the builder consumes ONLY the window it is handed —
+  window selection is the caller's concern (TASK-036), compaction TASK-037/038 —
+  so old messages can never silently re-enter the context. Pure assembly: no
+  DB access, no provider call, no payload logging.
+- Validation (all ValueError pre-assembly): unknown level vs Level.values;
+  topic must be GeneratedTopic (isinstance, mirrors generate_sample); blank/
+  whitespace current_message rejected; history roles restricted to
+  {user, assistant} ("system"/"tool" injection rejected) with non-blank
+  content enforced via llm.types.Message inside from_texts.
+- No model pin / temperature on the request (provider default resolves).
+- Tests backend/tests/test_context_builder.py (31 tests + 17 subtests):
+  exact message skeleton + verbatim history order, current-message-last +
+  stripping, no model/temperature pins, exactly-one-system-at-front, empty
+  history → system+user only, list input accepted, history ending with user
+  not merged with current message; system-prompt sections present and ordered
+  identity→level→topic→summary, blank/whitespace summary omits block,
+  summary/topic survive without history; all 7 levels accepted, AUTO infer
+  line vs concrete lines, distinct prompts per level, Z9/""/"b2" rejected;
+  non-topic/blank-current/system-history/tool-role/blank-content matrices →
+  ValueError; determinism (equal requests) + different-window changes only
+  that section; bounded-history test (40-turn transcript, last-4 window,
+  turns 1/36 absent).
+- Gates: ruff check/format clean (81 files); pytest 505 passed +137 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/context.py — ContextBuilder.build + validation
+2. [x] backend/tests/test_context_builder.py written (31 tests)
+3. [x] Gates green (ruff check/format, pytest 505+137 Postgres, manage.py check)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-035
 
 ## Archived Tasks
 

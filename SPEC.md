@@ -769,7 +769,7 @@ Acceptance criteria:
 
 ## TASK-035 — Create context builder
 
-Status: `[ ]`
+Status: `[x]`
 
 Create a service that constructs the LLM context:
 
