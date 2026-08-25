@@ -390,7 +390,7 @@ Acceptance criteria:
 
 ## TASK-017 — Create learning profile API
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement:
 

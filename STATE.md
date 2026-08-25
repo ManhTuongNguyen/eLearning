@@ -2,13 +2,41 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 3 — Learning Profile (TASK-017 next)
+- **Current Phase**: Phase 3 — Learning Profile (TASK-018 next)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-017 — Create learning profile API (COMPLETED 2026-08-26)
+- `GET/PATCH /api/v1/profile/` in learning app: ProfileView (APIView,
+  IsAuthenticated) + ProfileSerializer (ModelSerializer, fields=["level"];
+  choices-generated field rejects anything outside A1..C2/AUTO — wrong case
+  and blank included → clean DRF 400).
+- Lazy provisioning: both GET and PATCH run
+  `Profile.objects.get_or_create(user=request.user)`, so a fresh user can
+  read their profile immediately; model default AUTO applies until updated.
+  PATCH on missing profile creates then validates.
+- Unknown payload fields ignored (only "level" declared → "user" tampering
+  is a no-op); POST/PUT/DELETE → 405.
+- learning/urls.py (`app_name="learning"`, name "profile") included under
+  `/api/v1/` in config/urls.py.
+- New tests backend/tests/test_profile_api.py (21): anonymous GET/PATCH → 401,
+  GET auto-provisions AUTO + no duplicates across reads, persisted level
+  returned, PATCH updates+persists, all 7 documented levels accepted,
+  invalid/wrong-case/blank → 400 with level unchanged, unknown fields
+  ignored, cross-user isolation, unsupported methods → 405.
+- Gates: ruff check/format clean; pytest 123 passed (Postgres); manage.py
+  check clean.
+- Live verification (bind-mounted compose backend, no rebuild): register →
+  GET {"level":"AUTO"} 200 → PATCH B2 200 → PATCH Z9 400 choice error → GET
+  B2 → anonymous 401. Smoke user deleted afterwards.
+- Gotcha (expected Django behavior, not a bug): DB-level FKs are plain
+  DEFERRABLE constraints — CASCADE lives in the ORM collector, so raw-SQL
+  user deletes must remove child rows (learning_profile,
+  token_blacklist_outstandingtoken) first.
 
 ### TASK-016 — Create learning profile model (COMPLETED 2026-08-26)
 - `learning.Level` TextChoices: A1/A2/B1/B2/C1/C2 + AUTO (labels include
@@ -323,9 +351,9 @@ None. Ready for next loop cycle.
 - Mobile emulator flow: start Metro with `CI=true pnpm exec react-native start`
   (interactive mode crashes headless) and `adb reverse tcp:8081 tcp:8081`;
   debug APK needs Metro. AVD `elearning` boots headless in ~2 min.
-- No open issues. Next task: TASK-017 — Create learning profile API
-  (Phase 3): `GET/PATCH /api/v1/profile/`, authenticated-only, auto-create
-  profile on first GET, invalid levels rejected, API tests.
+- No open issues. Next task: TASK-018 — Create mobile learning-level screen
+  (Phase 3): onboarding/settings UI listing all levels, persisted selection,
+  PATCH /api/v1/profile/ in server mode, testable UI.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services up and healthy; backend restarted with token_blacklist
