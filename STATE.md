@@ -2,13 +2,41 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 1 — Backend Core (TASK-010 in progress)
+- **Current Phase**: Phase 2 — Authentication (TASK-013 next)
 
 ## Current Active Task
 
 None. Ready for next loop cycle.
 
 ## Archived Tasks
+
+### TASK-012 — Implement registration API (COMPLETED 2026-08-26)
+- `POST /api/v1/auth/register/` via accounts app: `RegistrationSerializer`
+  (ModelSerializer on accounts.User; fields id/username/email/password) +
+  `RegistrationView` (DRF CreateAPIView, AllowAny). Wired through
+  accounts/urls.py (`app_name = "accounts"`, name "register") included under
+  `/api/v1/` in config/urls.py. 201 on success; DRF field errors → 400.
+- Password handling: write_only CharField with trim_whitespace=False (no silent
+  mutation); Django `validate_password` runs in serializer.validate() against a
+  candidate unsaved User built from submitted username/email so
+  UserAttributeSimilarityValidator compares against both identifiers before any
+  DB write; creation via `create_user` (hashes password, normalizes email
+  domain). Password never appears in responses or error payloads.
+- Gotcha: similarity validator uses SequenceMatcher quick_ratio ≥ 0.7 —
+  "alice123456789"-style long passwords pass; test uses near-identical
+  "WalterWhite!" vs username "walterwhite".
+- Uniqueness enforced at API layer by model unique=True → UniqueValidator
+  (duplicate username/email → clean 400, no IntegrityError leak).
+- New tests backend/tests/test_registration.py (17): happy path 201 (+ no
+  password in payload), persistence + check_password, hashed storage,
+  email domain normalization, duplicate username/email, missing required
+  fields (parametrized), invalid email format, short/common/numeric-only/
+  similar-to-username passwords, no user created on validation failure,
+  GET → 405, unauthenticated access allowed.
+- Gates: ruff check/format clean; pytest 55 passed (Postgres) / 52+3 skips
+  (sqlite fallback); manage.py check clean.
+- Live verification (compose backend): valid POST → 201 {id, username, email};
+  duplicate POST → 400 field error; throwaway smoke user deleted afterwards.
 
 ### TASK-011 — Create user model (COMPLETED 2026-08-26)
 - `accounts.User(AbstractUser)` with unique non-blank email override; username
@@ -180,10 +208,9 @@ None. Ready for next loop cycle.
 - Note: Postgres-backed runserver boot requires TASK-003 Docker services.
 
 ## Execution Logs & Recovery Notes
-- No open issues. Next task: TASK-012 — Implement registration API (Phase 2).
-- Dev DB was rebuilt from scratch this cycle (custom user model introduced);
-  compose services restarted and healthy. Host-side `make quality` still needs
-  `POSTGRES_PASSWORD=change-me` (or root .env).
+- No open issues. Next task: TASK-013 — Implement JWT authentication (Phase 2).
+  Settings already expose JWT_ACCESS_TOKEN_MINUTES / JWT_REFRESH_TOKEN_DAYS;
+  a JWT library (e.g. djangorestframework-simplejwt) will need to be added.
 - Running `make quality` against Postgres from the host requires
   `POSTGRES_PASSWORD=change-me` (or a root .env) since compose owns credentials.
   Compose services currently up and healthy.

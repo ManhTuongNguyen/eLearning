@@ -283,7 +283,7 @@ Acceptance criteria:
 
 ## TASK-012 — Implement registration API
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement user registration.
 
