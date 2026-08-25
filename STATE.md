@@ -2,12 +2,18 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 4 — LLM Infrastructure (TASK-025 next)
+- **Current Phase**: Phase 5 — Conversation Backend (TASK-026 in progress)
 
 ## Current Active Task
 
-None. Ready for next loop cycle. Next task: TASK-025 — Implement SSE endpoint
-foundation (Phase 4).
+TASK-026 — Create conversation/session model (Phase 5).
+
+Goal: Create a session model with user, title, topic, topic_hint, learning_level,
+summary, summary_message_boundary, created_at, updated_at.
+
+Acceptance criteria (SPEC.md): Sessions belong to users; users cannot access
+another user's session; migrations and model tests exist.
+
 
 ## Archived Tasks
 
@@ -57,6 +63,26 @@ foundation (Phase 4).
 3. [x] backend/tests/test_streaming_service.py
 4. [x] Gates green (ruff check/format, pytest Postgres, manage.py check)
 5. [x] SPEC.md marked [x]; commit feat: complete TASK-024
+
+### TASK-025 — Implement SSE endpoint foundation (COMPLETED 2026-08-26)
+- `llm/sse.py`: `encode_sse_event()`, `iter_sse_frames()`, `sse_streaming_response()` —
+  encodes `StreamStart`/`StreamDelta`/`StreamCompleted`/`StreamFailed` into SSE frames
+  (`event:` + single-line JSON `data:` + blank separator) with `text/event-stream`,
+  `Cache-Control: no-cache`, `X-Accel-Buffering: no`.
+- `llm/views.py`: `LLMStreamView` (DRF `APIView`) handling authenticated POST
+  `/api/v1/llm/stream/`. `StreamRequestSerializer` validates `{messages, temperature?}`
+  with no client-side model pin; uses `get_streaming_service()` seam (lru_cache'd
+  `StreamingCompletionService(FallbackProvider.from_settings())`) for testability.
+- `llm/urls.py` + `config/urls.py`: route `POST /api/v1/llm/stream/` → `LLMStreamView`.
+- `backend/tests/test_sse_endpoint.py` (24 tests): anonymous → 401, GET → 405,
+  validation matrix (missing/empty/invalid messages, temperature bounds),
+  transport headers on success+failure, success frame sequence (start→delta*→completed)
+  with clean connection close, zero-delta completion, request forwarded without model pin,
+  incremental lazy delivery (provider.produced grows per `next()`), pre-stream failure
+  → single error frame, mid-stream failure → deltas + single error frame (no partial
+  duplication in error payload), non-LLMError exceptions propagate unchanged.
+- Gates: ruff check/format clean; pytest 278 passed +42 subtests (Postgres);
+  manage.py check clean.
 
 ### TASK-023 — Create backend model configuration (COMPLETED 2026-08-26)
 - `backend/llm/config.py`: frozen `ModelConfiguration(api_key, base_url,

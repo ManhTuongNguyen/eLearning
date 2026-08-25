@@ -536,7 +536,7 @@ Acceptance criteria:
 
 ## TASK-025 — Implement SSE endpoint foundation
 
-Status: `[ ]`
+Status: `[x]`
 
 Create an authenticated SSE endpoint for streaming application events.
 

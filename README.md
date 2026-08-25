@@ -101,6 +101,27 @@ supplied refresh token (simplejwt `token_blacklist`); refreshing with it then
 fails with 401. Other sessions are unaffected. Outstanding access tokens stay
 valid until their own short expiry — there is no access-token denylist.
 
+### LLM streaming API
+
+```text
+POST /api/v1/llm/stream/      Bearer + {messages: [{role, content}], temperature?} → text/event-stream
+```
+
+Streams the completion as Server-Sent Events. Frames map onto the normalized
+application events; every stream ends with exactly one terminal frame:
+
+```text
+event: start       data: {"model": "..."}
+event: delta       data: {"text": "..."}
+event: completed   data: {"text": "...", "model": "...", "delta_count": N}
+event: error       data: {"error": "...", "retryable": true|false}
+```
+
+The server-side model chain (primary model plus configured fallbacks) always
+decides which model serves a request — clients cannot pin a model. Responses
+carry `Cache-Control: no-cache` and `X-Accel-Buffering: no` so intermediaries
+do not buffer the stream.
+
 ### LLM model configuration
 
 Server-mode models are configured entirely through the environment; no model
