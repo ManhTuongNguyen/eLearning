@@ -2,16 +2,58 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5A — Conversation Context (TASK-035 complete; next TASK-036)
+- **Current Phase**: Phase 5A — Conversation Context (TASK-036 complete; next TASK-037)
 
 ## Current Active Task
 
-(none — TASK-035 completed; next: TASK-036 — Implement recent-message window,
-configurable recent-message selection, recommended default 20; only the
-configured window included, ordering correct, current user message handled
-correctly)
+(none — TASK-036 completed; next: TASK-037 — Implement conversation
+summarizer: input = previous summary + messages leaving the recent window,
+output = new summary; must NOT process the whole conversation every time;
+existing summary incorporated, only newly archived messages summarized,
+input boundaries tested, LLM calls mockable)
 
 ## Archived Tasks
+
+### TASK-036 — Implement recent-message window (COMPLETED 2026-08-26)
+- `conversations/window.py` (pure, no DB/provider): `DEFAULT_RECENT_MESSAGE_WINDOW
+  = 20`; `recent_message_window()` resolves settings.CONTEXT_RECENT_MESSAGE_WINDOW
+  (getattr falls back to the default when the attribute is absent); 
+  `select_recent_messages(messages, *, limit=None)` → tuple of at most N tail
+  turns in original chronological order, verbatim, any single-pass iterable.
+- Configurability: explicit `limit=` kwarg wins; else Django setting (new:
+  config/settings.py CONTEXT_RECENT_MESSAGE_WINDOW via decouple cast=int,
+  default 20; .env.example comment expanded). Error split: explicit-limit
+  misuse → ValueError (programmer error, mirrors ContextBuilder); invalid
+  configured setting → ImproperlyConfigured naming CONTEXT_RECENT_MESSAGE_WINDOW
+  (mirrors llm/config.py TASK-023). Validation rejects non-int/bool/<1 — the
+  <1 guard also blocks Python's seq[-0:] == whole-sequence footgun.
+- Current-user-message contract (acceptance): the window NEVER contains it;
+  callers pass it separately to ContextBuilder as current_message so it stays
+  last, stripped, unduplicated regardless of window size (composition tests).
+- Tests backend/tests/test_window.py (24 tests + 13 subtests): default pinned
+  to 20; setting read + attribute-absent fallback + boundary(1)/large accepted;
+  invalid configured matrix (0/-3/"20"/"many"/None/2.5/True) names the
+  variable; tail selection exact+ordered, archived head never leaks (exact
+  membership — substring "turn 2" ⊂ "turn 21" gotcha hit and fixed), exactly-
+  limit / under-limit / empty / generator inputs, verbatim passthrough, tuple
+  result, invalid-explicit-limit matrix, limit=None resolves configuration,
+  configured-0 rejected; composition with ContextBuilder on a 40-turn
+  transcript @window 20: 22 messages (system + last 20 verbatim roles/contents
+  + current last), head 1–20 absent, current stripped/unduplicated, window=1
+  still keeps current message, short conversation fully included.
+- Gotcha: assertNotIn("turn N", joined-text) false-positives on turn-number
+  prefixes ("turn 2" inside "turn 21") — assert against content lists instead.
+- Gates: ruff check/format clean (84 files); pytest 529 passed +150 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/window.py — recent_message_window + select_recent_messages
+2. [x] config/settings.py CONTEXT_RECENT_MESSAGE_WINDOW (+ .env.example comment)
+3. [x] backend/tests/test_window.py written (24 tests)
+4. [x] Gates green (ruff check/format, pytest 529+150 Postgres, manage.py check)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-036
+
+### Archived Tasks
 
 ### TASK-035 — Create context builder (COMPLETED 2026-08-26)
 - `conversations/context.py`: `ContextBuilder.build(*, level, topic, summary="",

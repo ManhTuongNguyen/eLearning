@@ -238,3 +238,8 @@ LLM_FALLBACK_MODELS = config(
     cast=Csv(),
 )
 LLM_REQUEST_TIMEOUT_SECONDS = config("LLM_REQUEST_TIMEOUT_SECONDS", default=60, cast=int)
+
+# Conversation context assembly (ROADMAP section 5): the number of most
+# recent messages handed to the model with each chat turn; older turns leave
+# the window and belong to the rolling summary instead.
+CONTEXT_RECENT_MESSAGE_WINDOW = config("CONTEXT_RECENT_MESSAGE_WINDOW", default=20, cast=int)

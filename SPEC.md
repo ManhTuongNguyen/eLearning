@@ -792,7 +792,7 @@ Acceptance criteria:
 
 ## TASK-036 — Implement recent-message window
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement configurable recent-message selection.
 
