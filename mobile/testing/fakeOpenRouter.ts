@@ -47,11 +47,17 @@ export class FakeOpenRouterClient implements OpenRouterClient {
   readonly completeRequests: CompletionRequest[] = [];
   /** Every streaming request, in call order. */
   readonly streamRequests: CompletionRequest[] = [];
-  readonly modelsCalls = 0;
+  /** Number of listModels() invocations, in call order. */
+  private modelsCallCount = 0;
 
   private completeOutcomes: Array<CompletionResult | OpenRouterError> = [];
   private streamOutcomes: StreamScript[] = [];
   private modelsOutcomes: Array<ModelInfo[] | OpenRouterError> = [];
+
+  /** Total listModels() calls recorded so far. */
+  get modelsCalls(): number {
+    return this.modelsCallCount;
+  }
 
   /** Script the next complete() results/errors; empty tail uses defaults. */
   enqueueComplete(...outcomes: ReadonlyArray<CompletionResult | OpenRouterError>): this {
@@ -114,6 +120,7 @@ export class FakeOpenRouterClient implements OpenRouterClient {
   }
 
   async listModels(): Promise<ModelInfo[]> {
+    this.modelsCallCount += 1;
     const outcome = this.modelsOutcomes.shift();
     if (outcome instanceof OpenRouterError) {
       throw outcome;

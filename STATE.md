@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 13 TASK-083 complete (next: TASK-084 — Implement serverless model discovery)
+- **Current Phase**: Phase 13 TASK-084 complete (next: TASK-085 — Implement serverless topic generation)
 
 ## Current Active Task
 

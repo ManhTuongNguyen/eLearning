@@ -1744,7 +1744,7 @@ Acceptance criteria:
 
 ## TASK-084 — Implement serverless model discovery
 
-Status: `[ ]`
+Status: `[x]`
 
 Retrieve available models directly from OpenRouter.
 
