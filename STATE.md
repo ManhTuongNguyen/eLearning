@@ -2,13 +2,97 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 7 TASK-048 complete (next: TASK-049 — SSE mobile
-  client)
+- **Current Phase**: Phase 7 TASK-049 complete (next: TASK-050 — smooth
+  streaming UX)
 
 ## Current Active Task
 
-(none — TASK-048 completed; next: TASK-049 — Implement SSE mobile client,
-second task of Phase 7 Mobile Chat.)
+(none — TASK-049 completed; next: TASK-050 — Implement smooth streaming UX,
+third task of Phase 7 Mobile Chat.)
+
+## Archived Tasks
+
+### TASK-049 — Implement SSE mobile client (COMPLETED 2026-08-26)
+- `src/api/chatStream.ts` — typed SSE consumption speaking the backend
+  llm/sse.py protocol verbatim (start {model} / delta {text} / completed
+  {text,model,delta_count} / error {error,retryable} frames, each
+  `event:` line + single-line JSON `data:` + blank separator).
+  - Pure parsing exported for exhaustive unit testing: parseSseFrame
+    (event/data field extraction, multi-data-line join, comment-only →
+    null, missing event → 'message') and decodeChatStreamFrame (strict
+    typed union mapping; junk JSON/malformed fields/unknown event names →
+    null; delta_count fallback 0; retryable only when === true).
+  - Transport: XMLHttpRequest, NOT fetch — RN's fetch buffers whole bodies,
+    XHR progress events expose accumulating responseText as bytes arrive.
+    POST {text} JSON to /api/v1/sessions/{id}/messages/stream/ with Accept:
+    text/event-stream + Bearer header.
+  - Incremental framing: cursor over responseText + pending tail buffer;
+    frames split on \n\n survive arbitrary chunk boundaries; CRLF
+    tolerated. After a terminal frame further frames are ignored.
+  - Terminal contract: exactly one outcome per stream — completed/error
+    application event, or onError transport failure (HTTP non-2xx →
+    normalizeApiError from client.ts on the DRF JSON body; network drop →
+    ApiError(0); clean close without terminal frame → explicit early-close
+    error). abort() suppresses every callback permanently (unmount-safe).
+- `client.ts`: module-local normalizeError exported as normalizeApiError
+  (reused by chatStream for non-SSE rejections; no duplication).
+- `ChatScreen.tsx` send path replaces the TASK-048 optimistic seam:
+  - Send appends optimistic user echo + pending assistant placeholder
+    (stable synthetic ids echoId=-Date.now(), replyId=echoId-1; sequences
+    continue chronologically) then starts the turn with the latest-ref
+    token. Placeholder renders an ActivityIndicator until first delta;
+    deltas append into the growing bubble via targeted id map.
+  - completed finalizes content authoritatively then silently reloads the
+    first page (refreshMessages: never flips the loading spinner, guarded
+    against stale-session races via sessionIdRef) swapping synthetic rows
+    for persisted ones.
+  - Error frames AND transport failures share failTurn: drop optimistic
+    rows, show chat-stream-error banner (role=alert above composer), best-
+    effort server resync (committed user row / failed assistant row
+    reappears; retry control is TASK-054). Banner cleared on next send and
+    session/reload changes.
+  - Streaming disables send (double-send guard in handleSend + disabled
+    state); load-effect cleanup aborts the in-flight stream on unmount and
+    session switches so no turn outlives its UI.
+- __tests__/chatStream.test.ts (17): FakeXHR double with scripted
+  emit/respond/networkFail driving accumulating responseText; request shape
+  (POST URL/body/Accept/Bearer); incremental delivery order; multi-frame
+  chunks; split-boundary reassembly incl. straddled completed frame; error
+  frame typing; 400 DRF field errors + 401 detail → normalized ApiError;
+  network failure ApiError(0); clean-close-without-terminal; abort
+  suppression + idempotent second abort; stray post-terminal frames
+  ignored.
+- __tests__/ChatScreen.test.tsx extended (+6): optimistic pair + exact
+  stream call args (token/sessionId/text); incremental delta growth then
+  completion swap to persisted ids (listMessages twice); empty pending
+  bubble before first delta (no text children); error frame banner +
+  server-truth resync (failed row visible, send re-enabled); transport
+  failure friendly message; unmount aborts stream exactly once; send
+  blocked during streaming (accessibilityState + call count stays 1).
+- Test gotchas hit:
+  - First draft of streamChatTurn forgot xhr.send() entirely — the
+    request-shape test caught it immediately (body undefined).
+  - A "clean" 200 close that delivered only non-terminal frames MUST
+    surface an error (protocol violation): initial test expected [] and
+    was wrong, not the implementation.
+  - jest.stubGlobal lacks type declarations in this tsconfig — stubbed via
+    globalThis.XMLHttpRequest assignment + restore instead.
+  - no-void lint rule rejects `void promise()` fire-and-forget — plain
+    call expressions pass (calls are not unused expressions).
+- Acceptance: chunks append incrementally ✓; assistant message appears
+  while streaming (placeholder + deltas) ✓; completion handled
+  (finalize + canonical swap) ✓; error events displayed (SSE frames and
+  transport failures) ✓; connection cleanup on leaving screen (abort +
+  callback suppression) ✓.
+- Gates: pnpm typecheck clean; eslint clean; jest 13 suites 116/116 passed.
+
+#### Sub-step record (all complete)
+1. [x] src/api/chatStream.ts — parser + decoder + XHR stream client
+2. [x] ChatScreen.tsx — streaming send path, banner, abort cleanup
+3. [x] __tests__/chatStream.test.ts written (17 tests)
+4. [x] __tests__/ChatScreen.test.tsx extended (+6 streaming tests)
+5. [x] Gates green (pnpm typecheck, pnpm lint, jest 116/116 across 13 suites)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-049
 
 ## Archived Tasks
 

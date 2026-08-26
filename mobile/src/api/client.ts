@@ -43,7 +43,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   const payload = await readPayload(response);
   if (!response.ok) {
-    throw normalizeError(response.status, payload);
+    throw normalizeApiError(response.status, payload);
   }
   return payload as T;
 }
@@ -56,7 +56,8 @@ async function readPayload(response: Response): Promise<unknown> {
   }
 }
 
-function normalizeError(status: number, payload: unknown): ApiError {
+/** Build the normalized ApiError for a failed HTTP response payload. */
+export function normalizeApiError(status: number, payload: unknown): ApiError {
   if (payload !== null && typeof payload === 'object') {
     const fields: Record<string, string[]> = {};
     let detail: string | null = null;

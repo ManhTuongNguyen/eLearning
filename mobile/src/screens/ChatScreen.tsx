@@ -1,13 +1,15 @@
 /**
- * Main conversation screen (SPEC TASK-048): chronological message list,
+ * Main conversation screen (SPEC TASK-048/049): chronological message list,
  * composer with send button, loading/error states and keyboard handling.
  *
  * The screen loads an existing conversation through its `sessionId` route
  * param; without one it shows an empty state until a conversation is opened
- * or created (TASK-051). Sending currently appends the user message locally
- * (optimistic echo) — the streaming round-trip over
- * POST /api/v1/sessions/{id}/messages/stream/ lands with the SSE client in
- * TASK-049, which replaces this seam.
+ * or created (TASK-051). Sending posts the turn to
+ * POST /api/v1/sessions/{id}/messages/stream/ and consumes the SSE reply:
+ * the assistant bubble grows with each delta, completion finalizes it and a
+ * silent reload swaps optimistic rows for persisted ones. Error frames and
+ * transport failures surface in an inline banner; leaving the screen aborts
+ * the stream.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -22,6 +24,8 @@ import {
   View,
 } from 'react-native';
 
+import type {ChatStreamEvent, ChatStreamHandle} from '../api/chatStream';
+import {streamChatTurn} from '../api/chatStream';
 import type {ChatMessage} from '../api/sessions';
 import {listMessages} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
@@ -179,6 +183,13 @@ function createStyles(c: ThemeColors) {
       fontSize: 15,
       fontWeight: '600',
     },
+    streamErrorBanner: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      backgroundColor: c.surface,
+    },
   });
 }
 
@@ -193,6 +204,8 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [streaming, setStreaming] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
   // Latest-ref seam: the load effect keys on (session, reload) only, so an
   // auth-state transition never refetches the conversation behind the user's
@@ -202,15 +215,59 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     getAccessTokenRef.current = getAccessToken;
   }, [getAccessToken]);
 
+  // In-flight turn tracking: the abort handle plus the synthetic id of the
+  // assistant bubble currently receiving deltas.
+  const streamHandleRef = useRef<ChatStreamHandle | null>(null);
+  const streamingAssistantIdRef = useRef<number | null>(null);
+  const sessionIdRef = useRef(sessionId);
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
   const resetMessages = useCallback(() => {
     setMessages(prev => (prev.length > 0 ? [] : prev));
+  }, []);
+
+  /** Cancel any in-flight turn; safe to call when nothing is running. */
+  const endTurn = useCallback(() => {
+    streamHandleRef.current?.abort();
+    streamHandleRef.current = null;
+    streamingAssistantIdRef.current = null;
+    setStreaming(false);
+  }, []);
+
+  /**
+   * Silent canonical refresh after a turn settles: replaces optimistic rows
+   * (synthetic negative ids) with the persisted ones. Never flips the
+   * loading spinner; failures keep whatever is already rendered.
+   */
+  const refreshMessages = useCallback(async () => {
+    const sid = sessionIdRef.current;
+    if (sid === undefined) {
+      return;
+    }
+    try {
+      const token = await getAccessTokenRef.current();
+      if (!token || sessionIdRef.current !== sid) {
+        return;
+      }
+      const page = await listMessages(token, sid);
+      if (sessionIdRef.current !== sid) {
+        return;
+      }
+      setMessages([...page.results].sort(bySequence));
+    } catch {
+      // Best-effort sync; turn-level errors already have a visible banner.
+    }
   }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     setError(null);
+    setStreamError(null);
     resetMessages();
+    endTurn();
     if (sessionId === undefined) {
       setLoading(false);
       return;
@@ -240,50 +297,176 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       }
     })();
 
+    // Leaving the screen or switching sessions also aborts an in-flight
+    // stream so no turn outlives its UI.
     return () => {
       cancelled = true;
+      endTurn();
     };
-  }, [sessionId, reloadKey, resetMessages]);
+  }, [sessionId, reloadKey, resetMessages, endTurn]);
+
+  /** Append one streamed chunk to the assistant bubble for this turn. */
+  const appendDelta = useCallback((delta: string) => {
+    const targetId = streamingAssistantIdRef.current;
+    if (targetId === null) {
+      return;
+    }
+    setMessages(prev =>
+      prev.map(message =>
+        message.id === targetId
+          ? {...message, content: message.content + delta}
+          : message,
+      ),
+    );
+  }, []);
+
+  /**
+   * Turn failed: drop optimistic rows, surface the reason and re-sync with
+   * the server (a committed user row / failed assistant row reappears; the
+   * retry control itself is TASK-054).
+   */
+  const failTurn = useCallback(
+    (message: string) => {
+      streamHandleRef.current = null;
+      streamingAssistantIdRef.current = null;
+      setStreaming(false);
+      setStreamError(message);
+      setMessages(prev => (prev.some(m => m.id < 0) ? prev.filter(m => m.id > 0) : prev));
+      refreshMessages();
+    },
+    [refreshMessages],
+  );
+
+  const completeTurn = useCallback(
+    (text: string) => {
+      const targetId = streamingAssistantIdRef.current;
+      setMessages(prev =>
+        targetId === null
+          ? prev
+          : prev.map(message =>
+              message.id === targetId
+                ? {...message, status: 'complete', content: text}
+                : message,
+            ),
+      );
+      streamHandleRef.current = null;
+      streamingAssistantIdRef.current = null;
+      setStreaming(false);
+      // Swap the optimistic echo pair for the persisted rows (real ids).
+      refreshMessages();
+    },
+    [refreshMessages],
+  );
+
+  const startTurn = useCallback(
+    (sid: number, text: string) => {
+      (async () => {
+        let token: string | null = null;
+        try {
+          token = await getAccessTokenRef.current();
+        } catch {
+          token = null;
+        }
+        if (sessionIdRef.current !== sid) {
+          return;
+        }
+        if (!token) {
+          failTurn('You need to sign in again to send messages.');
+          return;
+        }
+        const handleEvent = (event: ChatStreamEvent): void => {
+          switch (event.type) {
+            case 'start':
+              break;
+            case 'delta':
+              appendDelta(event.text);
+              break;
+            case 'completed':
+              completeTurn(event.text);
+              break;
+            case 'error':
+              failTurn(event.message);
+              break;
+          }
+        };
+        streamHandleRef.current = streamChatTurn({
+          token,
+          sessionId: sid,
+          text,
+          onEvent: handleEvent,
+          onError: err => {
+            failTurn(toErrorMessage(err));
+          },
+        });
+      })();
+    },
+    [appendDelta, completeTurn, failTurn],
+  );
 
   const handleSend = useCallback(() => {
     const text = draft.trim();
-    if (!text) {
+    if (!text || sessionId === undefined || streaming) {
       return;
     }
     setDraft('');
+    setStreamError(null);
+
+    // Optimistic local echo + pending assistant bubble with stable
+    // synthetic ids; sequences continue chronologically past the last row.
+    const echoId = -Date.now();
+    const replyId = echoId - 1;
+    streamingAssistantIdRef.current = replyId;
     setMessages(prev => {
       const last = prev.length > 0 ? prev[prev.length - 1] : null;
-      const localEcho: ChatMessage = {
-        id: -Date.now(),
+      const baseSequence = last ? last.sequence + 1 : 1;
+      const now = new Date().toISOString();
+      const userEcho: ChatMessage = {
+        id: echoId,
         role: 'user',
         status: 'complete',
         content: text,
-        sequence: last ? last.sequence + 1 : 1,
-        created_at: new Date().toISOString(),
+        sequence: baseSequence,
+        created_at: now,
       };
-      return [...prev, localEcho];
+      const placeholder: ChatMessage = {
+        id: replyId,
+        role: 'assistant',
+        status: 'pending',
+        content: '',
+        sequence: baseSequence + 1,
+        created_at: now,
+      };
+      return [...prev, userEcho, placeholder];
     });
-    // TASK-049 will drive the assistant reply from here via the SSE stream.
-  }, [draft]);
 
-  const canSend = draft.trim().length > 0;
+    setStreaming(true);
+    startTurn(sessionId, text);
+  }, [draft, sessionId, streaming, startTurn]);
+
+  const canSend = draft.trim().length > 0 && !streaming;
 
   const renderMessage = useCallback(
     ({item}: {item: ChatMessage}) => {
       const isUser = item.role === 'user';
+      const waiting =
+        item.status === 'pending' && item.role === 'assistant' && item.content === '';
       return (
         <View style={[styles.row, isUser && styles.rowUser]}>
           <View
             style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
             testID={`chat-message-${item.id}`}>
-            <Text style={[styles.content, isUser ? styles.contentUser : styles.contentAssistant]}>
-              {item.content}
-            </Text>
+            {waiting ? (
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            ) : (
+              <Text style={[styles.content, isUser ? styles.contentUser : styles.contentAssistant]}>
+                {item.content}
+              </Text>
+            )}
           </View>
         </View>
       );
     },
-    [styles],
+    [styles, colors.textMuted],
   );
 
   return (
@@ -345,6 +528,13 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             }
             testID="chat-list"
           />
+          {streamError !== null ? (
+            <View style={styles.streamErrorBanner}>
+              <Text role="alert" style={styles.error} testID="chat-stream-error">
+                {streamError}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.composer} testID="chat-composer">
             <TextInput
               style={styles.input}

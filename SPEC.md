@@ -1066,7 +1066,7 @@ Acceptance criteria:
 
 ## TASK-049 — Implement SSE mobile client
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement typed SSE consumption for chat streaming.
 
