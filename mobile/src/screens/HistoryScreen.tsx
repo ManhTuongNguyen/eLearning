@@ -8,7 +8,10 @@
  * are already visible — pagination errors surface as a banner above the list.
  * Each row also offers an inline rename editor: saving PATCHes the title and
  * swaps the authoritative response into local state immediately, while
- * failures keep the editor open for another attempt.
+ * failures keep the editor open for another attempt. Rows likewise offer a
+ * deletion flow: the entry control swaps THAT row into an inline confirmation
+ * step, and a confirmed DELETE removes the session from local state
+ * immediately — failures keep the confirmation open with an explanation.
  */
 import React, {
   useCallback,
@@ -28,7 +31,7 @@ import {
 } from 'react-native';
 
 import type {Session} from '../api/sessions';
-import {listSessions, renameSession} from '../api/sessions';
+import {deleteSession, listSessions, renameSession} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {MainStackParamList} from '../navigation/types';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -117,8 +120,24 @@ function createStyles(c: ThemeColors) {
       fontSize: 13,
       fontWeight: '600',
       color: c.accent,
-      marginTop: 10,
       alignSelf: 'flex-start',
+    },
+    rowActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      marginTop: 10,
+    },
+    deleteLink: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.danger,
+      alignSelf: 'flex-start',
+    },
+    confirmText: {
+      fontSize: 14,
+      color: c.textPrimary,
+      marginBottom: 12,
     },
     editor: {
       gap: 10,
@@ -164,6 +183,17 @@ function createStyles(c: ThemeColors) {
       fontSize: 14,
       fontWeight: '600',
     },
+    deleteButton: {
+      backgroundColor: c.danger,
+      borderRadius: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 18,
+    },
+    deleteButtonText: {
+      color: c.onPrimary,
+      fontSize: 14,
+      fontWeight: '600',
+    },
     loadMore: {
       alignSelf: 'center',
       borderWidth: 1,
@@ -201,6 +231,8 @@ export function HistoryScreen({navigation}: Props) {
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [savingRename, setSavingRename] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // AuthContext's value object is recreated on every auth-state change, so
   // the load effect reads the token through a latest ref instead of taking
@@ -219,6 +251,8 @@ export function HistoryScreen({navigation}: Props) {
     setRenamingId(null);
     setDraftTitle('');
     setSavingRename(false);
+    setDeletingId(null);
+    setDeleting(false);
     (async () => {
       try {
         const token = await getAccessTokenRef.current();
@@ -272,6 +306,7 @@ export function HistoryScreen({navigation}: Props) {
   /** Open the inline editor pre-filled with the current title. */
   const startRename = useCallback((session: Session) => {
     setError(null);
+    setDeletingId(null);
     setRenamingId(session.id);
     setDraftTitle(session.title);
   }, []);
@@ -316,6 +351,49 @@ export function HistoryScreen({navigation}: Props) {
     }
   }, [draftTitle, renamingId, savingRename]);
 
+  /** Swap THAT row into the inline confirmation step. */
+  const startDelete = useCallback((session: Session) => {
+    setError(null);
+    setRenamingId(null);
+    setDraftTitle('');
+    setDeletingId(session.id);
+  }, []);
+
+  const cancelDelete = useCallback(() => {
+    if (deleting) {
+      return;
+    }
+    setDeletingId(null);
+  }, [deleting]);
+
+  /**
+   * DELETE the session after confirmation and drop it from local state —
+   * the row disappears immediately without refetching the list. Failures
+   * keep the confirmation open with a banner for another attempt.
+   */
+  const handleDeleteConfirm = useCallback(async () => {
+    const sessionId = deletingId;
+    if (sessionId === null || deleting) {
+      return;
+    }
+    setDeleting(true);
+    // A fresh attempt supersedes any previous failure message.
+    setError(null);
+    try {
+      const token = await getAccessTokenRef.current();
+      if (!token) {
+        throw new Error('You need to sign in again to see your history.');
+      }
+      await deleteSession(token, sessionId);
+      setSessions(prev => prev.filter(session => session.id !== sessionId));
+      setDeletingId(null);
+    } catch (err) {
+      setError(toErrorMessage(err));
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleting, deletingId]);
+
   return (
     <View style={styles.container} testID="history-screen">
       <View style={styles.header}>
@@ -358,7 +436,7 @@ export function HistoryScreen({navigation}: Props) {
         <FlatList
           data={sessions}
           keyExtractor={item => String(item.id)}
-          extraData={[renamingId, draftTitle, savingRename]}
+          extraData={[renamingId, draftTitle, savingRename, deletingId, deleting]}
           renderItem={({item}) =>
             renamingId === item.id ? (
               <View style={[styles.row, styles.editor]} testID={`history-editor-${item.id}`}>
@@ -403,6 +481,40 @@ export function HistoryScreen({navigation}: Props) {
                   </Pressable>
                 </View>
               </View>
+            ) : deletingId === item.id ? (
+              <View style={styles.row} testID={`history-confirm-${item.id}`}>
+                <Text style={styles.confirmText}>
+                  Delete “{item.title}”? This cannot be undone.
+                </Text>
+                <View style={styles.editorActions}>
+                  <Pressable
+                    style={[styles.deleteButton, deleting && styles.buttonDisabled]}
+                    disabled={deleting}
+                    onPress={() => {
+                      handleDeleteConfirm();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Confirm deleting ${item.title}`}
+                    accessibilityState={{disabled: deleting}}
+                    testID="history-delete-confirm">
+                    <Text style={styles.deleteButtonText}>
+                      {deleting ? 'Deleting…' : 'Delete'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.cancelButton, deleting && styles.buttonDisabled]}
+                    disabled={deleting}
+                    onPress={() => {
+                      cancelDelete();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Keep this conversation"
+                    accessibilityState={{disabled: deleting}}
+                    testID="history-delete-cancel">
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </Pressable>
+                </View>
+              </View>
             ) : (
               <Pressable
                 style={styles.row}
@@ -418,15 +530,26 @@ export function HistoryScreen({navigation}: Props) {
                     {item.topic}
                   </Text>
                 ) : null}
-                <Pressable
-                  onPress={() => {
-                    startRename(item);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Rename conversation ${item.title}`}
-                  testID={`history-rename-${item.id}`}>
-                  <Text style={styles.renameLink}>Rename</Text>
-                </Pressable>
+                <View style={styles.rowActions}>
+                  <Pressable
+                    onPress={() => {
+                      startRename(item);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Rename conversation ${item.title}`}
+                    testID={`history-rename-${item.id}`}>
+                    <Text style={styles.renameLink}>Rename</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      startDelete(item);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete conversation ${item.title}`}
+                    testID={`history-delete-${item.id}`}>
+                    <Text style={styles.deleteLink}>Delete</Text>
+                  </Pressable>
+                </View>
               </Pressable>
             )
           }

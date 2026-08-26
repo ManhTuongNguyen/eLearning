@@ -1,9 +1,12 @@
 /**
- * History screen tests (SPEC TASK-055): sessions render most-recent-first
- * exactly as delivered, pagination appends further pages through a guarded
- * Load-more control, tapping a session opens its conversation in chat, and
- * loading/empty/error states are all explicit — including retry after a
- * failed first page and failures that never destroy already-visible rows.
+ * History screen tests (SPEC TASK-055/056/057): sessions render
+ * most-recent-first exactly as delivered, pagination appends further pages
+ * through a guarded Load-more control, tapping a session opens its
+ * conversation in chat, and loading/empty/error states are all explicit —
+ * including retry after a failed first page and failures that never destroy
+ * already-visible rows. Rows also offer an inline rename editor and an
+ * inline deletion confirmation; both update local state immediately on
+ * success and keep their editors open with a banner on failure.
  */
 import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
@@ -400,5 +403,140 @@ describe('HistoryScreen rename (TASK-056)', () => {
     resolveRename(makeSession({id: 3, title: 'Concerts'}));
     await waitFor(() => expect(screen.queryByTestId('history-rename-input')).toBeNull());
     expect(screen.getByText('Concerts')).toBeOnTheScreen();
+  });
+});
+
+describe('HistoryScreen delete (TASK-057)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
+    mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+    mockedSessions.listMessages.mockResolvedValue(emptyMessagesPage());
+    mockedSessions.getSession.mockResolvedValue(makeSession());
+  });
+
+  it('asks for confirmation, then removes the session immediately without refetching', async () => {
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 42, title: 'Traveling'}), makeSession({id: 43, title: 'Cooking'})]),
+    );
+    mockedSessions.deleteSession.mockResolvedValue(undefined);
+    await renderHistory();
+    await screen.findByTestId('history-item-42');
+
+    await fireEvent.press(screen.getByTestId('history-delete-42'));
+
+    expect(await screen.findByTestId('history-confirm-42')).toBeOnTheScreen();
+    expect(screen.getByTestId('history-delete-confirm')).toBeOnTheScreen();
+    expect(screen.getByTestId('history-delete-cancel')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByTestId('history-delete-confirm'));
+
+    await waitFor(() =>
+      expect(mockedSessions.deleteSession).toHaveBeenCalledWith('token-a', 42),
+    );
+    // The row vanishes from the list right away; the other row survives.
+    await waitFor(() => expect(renderedItemIds()).toEqual([43]));
+    expect(screen.queryByTestId('history-confirm-42')).toBeNull();
+    expect(screen.queryByTestId('form-error')).toBeNull();
+    // Immediate local update — the list was NOT reloaded.
+    expect(mockedSessions.listSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the conversation and makes no API call when confirmation is cancelled', async () => {
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 7, title: 'Cooking'})]),
+    );
+    await renderHistory();
+    await screen.findByTestId('history-item-7');
+
+    await fireEvent.press(screen.getByTestId('history-delete-7'));
+    expect(await screen.findByTestId('history-confirm-7')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByTestId('history-delete-cancel'));
+
+    expect(await screen.findByTestId('history-item-7')).toBeOnTheScreen();
+    expect(screen.getByText('Cooking')).toBeOnTheScreen();
+    expect(screen.queryByTestId('history-confirm-7')).toBeNull();
+    expect(mockedSessions.deleteSession).not.toHaveBeenCalled();
+  });
+
+  it('explains failures, keeps the confirmation open, and succeeds on retry', async () => {
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 9, title: 'Movies'})]),
+    );
+    mockedSessions.deleteSession
+      .mockRejectedValueOnce(new ApiError(500, 'Boom'))
+      .mockResolvedValueOnce(undefined);
+    await renderHistory();
+    await screen.findByTestId('history-item-9');
+
+    await fireEvent.press(screen.getByTestId('history-delete-9'));
+    await screen.findByTestId('history-confirm-9');
+    await fireEvent.press(screen.getByTestId('history-delete-confirm'));
+
+    expect(await screen.findByTestId('form-error')).toHaveTextContent(
+      'The server is unreachable right now. Please try again later.',
+    );
+    // The failed conversation keeps its confirmation open for another try
+    // (the row renders as the confirm variant until deletion succeeds).
+    expect(screen.getByTestId('history-confirm-9')).toBeOnTheScreen();
+    expect(screen.queryByTestId('history-item-9')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('history-delete-confirm'));
+
+    await waitFor(() => expect(mockedSessions.deleteSession).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('history-confirm-9')).toBeNull());
+    expect(screen.queryByTestId('history-item-9')).toBeNull();
+    expect(screen.queryByTestId('form-error')).toBeNull();
+  });
+
+  it('guards Confirm against double-fires while a delete request is in flight', async () => {
+    let resolveDelete: () => void = () => {};
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 3, title: 'Music'})]),
+    );
+    mockedSessions.deleteSession.mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          resolveDelete = resolve;
+        }),
+    );
+    await renderHistory();
+    await screen.findByTestId('history-item-3');
+
+    await fireEvent.press(screen.getByTestId('history-delete-3'));
+    await screen.findByTestId('history-confirm-3');
+    await fireEvent.press(screen.getByTestId('history-delete-confirm'));
+
+    const confirm = await screen.findByTestId('history-delete-confirm');
+    expect(confirm).toBeDisabled();
+    expect(confirm).toHaveTextContent('Deleting…');
+    expect(screen.getByTestId('history-delete-cancel')).toBeDisabled();
+
+    // Second press while deleting must not fire another request.
+    await fireEvent.press(confirm);
+    expect(mockedSessions.deleteSession).toHaveBeenCalledTimes(1);
+
+    resolveDelete();
+    // history-item-3 is already absent while the confirm step is open —
+    // completion is observable only through the confirm card disappearing.
+    await waitFor(() => expect(screen.queryByTestId('history-confirm-3')).toBeNull());
+    expect(screen.queryByTestId('history-item-3')).toBeNull();
+  });
+
+  it('returns to the empty state when the last conversation is deleted', async () => {
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 5, title: 'Weekend plans'})]),
+    );
+    mockedSessions.deleteSession.mockResolvedValue(undefined);
+    await renderHistory();
+    await screen.findByTestId('history-item-5');
+
+    await fireEvent.press(screen.getByTestId('history-delete-5'));
+    await fireEvent.press(await screen.findByTestId('history-delete-confirm'));
+
+    expect(await screen.findByTestId('history-empty')).toBeOnTheScreen();
+    expect(screen.queryAllByTestId(/^history-item-/)).toHaveLength(0);
+    expect(mockedSessions.deleteSession).toHaveBeenCalledWith('token-a', 5);
   });
 });

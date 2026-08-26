@@ -1204,7 +1204,7 @@ Acceptance criteria:
 
 ## TASK-057 — Implement session deletion UI
 
-Status: `[ ]`
+Status: `[x]`
 
 Allow users to delete sessions.
 

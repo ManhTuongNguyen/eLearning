@@ -2,11 +2,70 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 8 TASK-056 complete (next: TASK-057 — session deletion UI)
+- **Current Phase**: Phase 8 TASK-057 complete (next: TASK-058 — suggestion service, Phase 9)
 
 ## Current Active Task
 
-(none — TASK-056 completed; next: TASK-057 — Implement session deletion UI.)
+(none — TASK-057 completed; next: TASK-058 — Implement suggestion service.)
+
+## Archived Tasks
+
+### TASK-057 — Implement session deletion UI (COMPLETED 2026-08-26)
+- `HistoryScreen.tsx` inline deletion (Phase 8 scope; reused the existing
+  TASK-045 `deleteSession` binding — no new API surface):
+  - Per-row Delete entry control (`history-delete-{id}`, role button, label
+    "Delete conversation {title}") beside Rename in a rowActions flex row;
+    pressing clears any banner, CLOSES any open rename editor, and swaps
+    THAT row to an inline confirm variant (`history-confirm-{id}`): warning
+    text ("Delete “{title}”? This cannot be undone.") + destructive Confirm
+    (`history-delete-confirm`, danger background) + Cancel
+    (`history-delete-cancel`), all role buttons with labels and
+    accessibilityState.disabled.
+  - handleDeleteConfirm: guarded on deletingId/deleting → token via
+    latest-ref seam (sign-out → friendly error) → deleteSession(token, id)
+    → local filter removal. ZERO refetch: row disappears immediately
+    (pinned by listSessions call-count test); deleting the last session
+    flips the screen back to history-empty.
+  - Failure: banner via shared form-error + toErrorMessage mapping; confirm
+    STAYS OPEN for another attempt (the failed conversation keeps rendering
+    as its confirm variant). Retry success clears the banner.
+  - Guards: deleting disables Confirm AND Cancel (double-fire + cancel-race,
+    mirroring rename); Cancel discards with zero API calls; reload effect
+    resets delete state; startRename/startDelete are mutually exclusive;
+    extraData gained [deletingId, deleting] so FlatList rows re-render into/
+    out of the confirm variant.
+- __tests__/HistoryScreen.test.tsx (+5 → new describe block, suite now 19):
+  happy path (confirm shown → DELETE asserted with exact args 'token-a'/id →
+  row gone immediately, sibling survives, no refetch); cancel discards
+  (row + title restored, no deleteSession call); failure keeps confirm +
+  banner then second Confirm succeeds and banner clears (failed conversation
+  stays listed as its confirm variant until deletion succeeds);
+  deferred-promise double-fire guard (Deleting… + both controls disabled
+  mid-flight, second press fires nothing, resolve removes the card);
+  last-session deletion returns to history-empty.
+- Test gotchas hit:
+  - The confirmed row renders AS `history-confirm-{id}` — asserting
+    `history-item-{id}` still present after a FAILED delete is wrong (the
+    item variant is gone while the session is not). First draft aborted on
+    this and its mid-test abort POISONED later tests in the file (same
+    un-awaited-async-corruption family as prior RNTL gotchas).
+  - Post-resolution waits must target the CONFIRM CARD disappearing:
+    waiting for `history-item-{id}` to vanish is vacuous — it left when the
+    confirm step OPENED, so waitFor passed before the request completed and
+    the follow-up assertion raced mid-flight state.
+- Acceptance: confirmation is shown ✓ (inline confirm step pinned by
+  tests); session disappears after successful deletion ✓ (local filter
+  removal, zero-refetch pinned); errors are handled ✓ (banner + editable
+  retry + cleanup).
+- Gates: pnpm typecheck clean; eslint clean; jest 17 suites 189/189 passed.
+
+#### Sub-step record (all complete)
+1. [x] HistoryScreen.tsx — per-row Delete entry, inline confirm step,
+       guarded handleDeleteConfirm through deleteSession, immediate local
+       removal, error banner reuse, rename/delete mutual exclusion
+2. [x] __tests__/HistoryScreen.test.tsx — delete tests (+5)
+3. [x] Gates green (pnpm typecheck, pnpm lint, jest 189/189 across 17 suites)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-057
 
 ## Archived Tasks
 
