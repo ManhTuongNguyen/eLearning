@@ -19,4 +19,9 @@ urlpatterns = [
         views.MessageStreamView.as_view(),
         name="session-message-stream",
     ),
+    path(
+        "sessions/<int:pk>/messages/<int:message_pk>/retry/",
+        views.MessageRetryView.as_view(),
+        name="session-message-retry",
+    ),
 ]

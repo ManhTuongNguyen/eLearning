@@ -12,8 +12,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from conversations.chat import UserMessageService, finalize_turn
-from conversations.models import Session
+from conversations.chat import RetryService, UserMessageService, finalize_turn
+from conversations.models import Message, Session
 from conversations.serializers import (
     MessageSerializer,
     SessionCreateSerializer,
@@ -46,6 +46,16 @@ def _settings_user_message_service() -> UserMessageService:
 def get_user_message_service() -> UserMessageService:
     """Return the process-wide user-message service (test seam)."""
     return _settings_user_message_service()
+
+
+@lru_cache(maxsize=1)
+def _settings_retry_service() -> RetryService:
+    return RetryService()
+
+
+def get_retry_service() -> RetryService:
+    """Return the process-wide retry service (test seam)."""
+    return _settings_retry_service()
 
 
 class SessionCollectionView(generics.ListAPIView):
@@ -210,12 +220,54 @@ class MessageStreamView(APIView):
         return sse_streaming_response(events)
 
 
+class MessageRetryView(APIView):
+    """Retry one failed assistant generation, streaming the new attempt.
+
+    POST without a body. The flow mirrors :class:`MessageStreamView`, but no
+    message is created: ``RetryService.prepare_retry`` re-arms the FAILED
+    assistant row in place (back to ``pending``, blank content) and rebuilds
+    the original turn's LLM request from the unchanged user prompt, then
+    ``finalize_turn`` persists the outcome onto that same row — complete on
+    success, failed (retryable again) on provider failure.
+
+    Rules enforced by the service under a row lock:
+
+    - Only assistant rows in the ``failed`` state are retryable; targeting a
+      successful, pending, or user message is a 409 Conflict.
+    - Foreign or nonexistent sessions and messages are indistinguishable
+      404s — no existence leak.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs) -> object:
+        try:
+            prepared = get_retry_service().prepare_retry(
+                session_id=kwargs["pk"],
+                message_id=kwargs["message_pk"],
+                user=request.user,
+            )
+        except Session.DoesNotExist:
+            raise Http404("No Session matches the given query.") from None
+        except Message.DoesNotExist:
+            raise Http404("No Message matches the given query.") from None
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+        events = finalize_turn(
+            prepared.assistant_message,
+            llm_views.get_streaming_service().stream(prepared.request),
+        )
+        return sse_streaming_response(events)
+
+
 __all__ = [
     "ChatMessageSerializer",
     "MessageListView",
+    "MessageRetryView",
     "MessageStreamView",
     "SessionCollectionView",
     "SessionDetailView",
+    "get_retry_service",
     "get_topic_service",
     "get_user_message_service",
 ]

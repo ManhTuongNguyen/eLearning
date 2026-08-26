@@ -932,7 +932,7 @@ Acceptance criteria:
 
 ## TASK-042 — Implement failed-generation retry
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement retry for failed assistant generation.
 

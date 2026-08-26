@@ -2,15 +2,85 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5B chat write+stream side done (TASK-041 complete;
-  next TASK-042, failed-generation retry endpoint)
+- **Current Phase**: Phase 5B complete (TASK-042 done; next: TASK-043,
+  mobile application navigation — first Phase 6 task)
 
 ## Current Active Task
 
-(none — TASK-041 completed; next: TASK-042 — Implement failed-generation
-retry: POST retry for failed assistant rows only, no user-message
-duplication, replace/retry the failed row safely, successful messages not
-retryable through this MVP endpoint)
+(none — TASK-042 completed; next: TASK-043 — Create application navigation:
+Auth stack + Main stack [Chat, History, Settings]; unauthenticated users see
+auth screens, authenticated users see the main app, testable navigation state)
+
+## Archived Tasks
+
+### TASK-042 — Implement failed-generation retry (COMPLETED 2026-08-26)
+- `conversations/chat.py`:
+  - Context assembly extracted into module-level `_build_turn_request(
+    builder, session, *, before_sequence, current_text)` — the exact rules
+    create_turn always had (complete rows past summary boundary and before
+    `before_sequence`, chronological, windowed tail; topic reconstructed as
+    GeneratedTopic(title, description); current text last). Behavior of
+    UserMessageService.create_turn unchanged.
+  - `RetryService(context_builder=None)` — constructor injection mirroring
+    UserMessageService. `prepare_retry(*, session_id, message_id, user) ->
+    PreparedTurn` inside ONE transaction.atomic: Session row select_for_update
+    (serializes concurrent turns/retries per session) → message re-fetched
+    THROUGH session.messages with select_for_update so foreign/missing
+    messages are an indistinguishable Message.DoesNotExist → `_validate_
+    retryable` under the lock → IN-PLACE reset (same pk + sequence,
+    status=pending, content="", save update_fields ["status","content"]) →
+    request rebuilt from the ORIGINAL prompt (user row = last role=user with
+    sequence < failed.sequence; history cutoff at that row's sequence) →
+    on_commit(schedule_session_summary_update) exactly like create_turn.
+    ValueError ("Only failed assistant messages can be retried." / "no user
+    message to retry") for complete/pending/user targets and orphaned failed
+    rows. Second concurrent caller re-reads post-commit state under the lock
+    and finds the row no longer failed → 409.
+- `conversations/views.py`: get_retry_service() lru_cache seam +
+  `MessageRetryView(APIView, IsAuthenticated)` POST without body:
+  Session.DoesNotExist / Message.DoesNotExist → Http404 (indistinguishable
+  no-leak), ValueError → 409 {"detail"}, then finalize_turn(assistant_row,
+  llm seam stream) → sse_streaming_response — SAME SSE protocol as TASK-041,
+  one streaming consumption path for mobile.
+- `conversations/urls.py` — sessions/<int:pk>/messages/<int:message_pk>/retry/,
+  name "session-message-retry".
+- Tests backend/tests/test_retry_api.py (29 tests): anonymous 401 + zero
+  changes; method matrix get/put/patch/delete 405; stranger-session/
+  missing-session/foreign-message-in-own-session/missing-message 404s with
+  zero provider calls + rows untouched; non-int pk route mismatches ×2;
+  MVP-rule matrix — complete target 409 exact detail + content intact,
+  pending target 409, user-message target 409, orphaned failed row (no
+  preceding user prompt) 409; success frame protocol identical shapes incl.
+  forwarded request roles [system,user,assistant,user] with verbatim earlier
+  turn + original prompt last + no model/temperature pins; in-place replace
+  (count still 2, same pks/sequences, user row untouched — NO duplication);
+  lazy incremental delivery tracked against provider.produced; persistence-
+  before-terminal-frame ordering; zero-delta completion → empty complete
+  row; SSE transport headers; mid-conversation retry keeps later turns
+  untouched AND excludes them from the rebuilt context; pre-stream failure →
+  single error frame retryable False + row failed again (blank, is_retryable)
+  + user row intact; mid-stream failure → deltas then error frame retryable
+  True; partial output never persisted (marker absent, exact (sequence,
+  role, status)); fail→retry→success lifecycle (two requests, count stays 2);
+  seam cached identity; log hygiene (user text AND streamed markers absent
+  across success+failure runs); summary schedule drained exactly once AFTER
+  commit carrying session pk.
+- Test gotchas hit: a scripted provider must be REINSTALLED between two
+  retries in one test (stale script replays the old outcome); after a
+  successful retry the same row is complete → further attempts are 409 by
+  design (log-hygiene test needed its own second failed row).
+- Gates: ruff check/format clean (94 files); pytest 696 passed +202 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/chat.py — shared _build_turn_request + RetryService.
+       prepare_retry (+ logging)
+2. [x] conversations/views.py — get_retry_service seam + MessageRetryView
+       (DoesNotExist→404, ValueError→409)
+3. [x] conversations/urls.py — session-message-retry route
+4. [x] backend/tests/test_retry_api.py written (29 tests)
+5. [x] Gates green (ruff check/format, pytest 696+202 Postgres, manage.py check)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-042
 
 ## Archived Tasks
 

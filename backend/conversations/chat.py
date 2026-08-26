@@ -1,4 +1,4 @@
-"""Application-service layer for creating user chat turns (TASK-040).
+"""Application-service layer for creating and retrying chat turns.
 
 This module owns the write side of the chat flow: when a learner sends a
 message the service
@@ -11,6 +11,11 @@ message the service
    rolling summary), and
 4. creates the assistant generation state — a ``pending`` message row the
    streaming endpoint (TASK-041) fills in and finalizes.
+
+:class:`~conversations.chat.RetryService` (TASK-042) replays step 2–4 for a
+FAILED assistant row only: the row is reset in place (same primary key, same
+sequence position), the original user message is reused verbatim, and the
+context is rebuilt exactly as it was for the interrupted turn.
 
 Both message rows are persisted inside ONE transaction together with the
 context assembly: if anything fails, the conversation is left exactly as it
@@ -81,7 +86,12 @@ class UserMessageService:
             session = Session.objects.select_for_update().get(pk=session_id, user=user)
             user_message = Message.append(session, role=Message.Role.USER, content=stripped)
             assistant_message = Message.append(session, role=Message.Role.ASSISTANT)
-            request = self._build_request(session, user_message)
+            request = _build_turn_request(
+                self._context_builder,
+                session,
+                before_sequence=user_message.sequence,
+                current_text=user_message.content,
+            )
             transaction.on_commit(lambda: schedule_session_summary_update(session.pk))
         logger.info(
             "chat turn created session=%s user_message=%s assistant_message=%s in %.2fs",
@@ -96,29 +106,107 @@ class UserMessageService:
             request=request,
         )
 
-    def _build_request(self, session: Session, user_message: Message) -> CompletionRequest:
-        """Assemble the LLM request from persisted session state.
 
-        History is every complete message past the summary boundary and
-        before the current turn, chronological; the window selects its tail.
+def _build_turn_request(
+    context_builder: ContextBuilder,
+    session: Session,
+    *,
+    before_sequence: int,
+    current_text: str,
+) -> CompletionRequest:
+    """Assemble the LLM request for one turn from persisted session state.
+
+    History is every complete message past the summary boundary and before
+    ``before_sequence``, chronological; the window selects its tail and
+    ``current_text`` becomes the final user message.
+    """
+    history = (
+        session.messages.filter(
+            status=Message.Status.COMPLETE,
+            sequence__gt=session.summary_message_boundary,
+            sequence__lt=before_sequence,
+        )
+        .order_by("sequence")
+        .values_list("role", "content")
+    )
+    topic = GeneratedTopic(title=session.title, description=session.topic)
+    return context_builder.build(
+        level=session.learning_level,
+        topic=topic,
+        summary=session.summary,
+        recent_messages=select_recent_messages(history),
+        current_message=current_text,
+    )
+
+
+class RetryService:
+    """Re-run one failed assistant generation in place.
+
+    The failed row is reset to ``pending`` (same primary key, same sequence
+    position) instead of being replaced by a new message, so retrying never
+    duplicates the user prompt and never reorders the conversation. The row
+    lock plus the session-level ``select_for_update`` serialize concurrent
+    retries: a second caller re-reads the row after the first one committed
+    and finds it no longer failed.
+    """
+
+    def __init__(self, context_builder: ContextBuilder | None = None) -> None:
+        self._context_builder = context_builder or ContextBuilder()
+
+    def prepare_retry(self, *, session_id: int, message_id: int, user) -> PreparedTurn:
+        """Validate and arm a retry of one failed assistant message.
+
+        Raises ``Session.DoesNotExist`` when the session does not exist or
+        belongs to another user, ``Message.DoesNotExist`` when the message
+        does not exist or belongs to another session (both indistinguishable
+        404s upstream), and ``ValueError`` when the target is not a failed
+        assistant message — successful, pending, and user messages are not
+        retryable through this MVP flow. On success the row is committed as
+        ``pending`` again and the returned :class:`PreparedTurn` carries the
+        original user message, the reset assistant row, and the rebuilt
+        :class:`CompletionRequest`.
         """
-        history = (
-            session.messages.filter(
-                status=Message.Status.COMPLETE,
-                sequence__gt=session.summary_message_boundary,
-                sequence__lt=user_message.sequence,
+        began = time.monotonic()
+        with transaction.atomic():
+            session = Session.objects.select_for_update().get(pk=session_id, user=user)
+            assistant_message = session.messages.select_for_update().get(pk=message_id)
+            user_message = self._validate_retryable(session, assistant_message)
+            assistant_message.status = Message.Status.PENDING
+            assistant_message.content = ""
+            assistant_message.save(update_fields=["status", "content"])
+            request = _build_turn_request(
+                self._context_builder,
+                session,
+                before_sequence=user_message.sequence,
+                current_text=user_message.content,
             )
-            .order_by("sequence")
-            .values_list("role", "content")
+            transaction.on_commit(lambda: schedule_session_summary_update(session.pk))
+        logger.info(
+            "chat retry prepared session=%s user_message=%s assistant_message=%s in %.2fs",
+            session.pk,
+            user_message.pk,
+            assistant_message.pk,
+            time.monotonic() - began,
         )
-        topic = GeneratedTopic(title=session.title, description=session.topic)
-        return self._context_builder.build(
-            level=session.learning_level,
-            topic=topic,
-            summary=session.summary,
-            recent_messages=select_recent_messages(history),
-            current_message=user_message.content,
+        return PreparedTurn(
+            user_message=user_message,
+            assistant_message=assistant_message,
+            request=request,
         )
+
+    @staticmethod
+    def _validate_retryable(session: Session, message: Message) -> Message:
+        """Return the user message that prompted ``message`` or raise ValueError."""
+        if not message.is_retryable:
+            raise ValueError("Only failed assistant messages can be retried.")
+        user_message = (
+            session.messages.filter(role=Message.Role.USER, sequence__lt=message.sequence)
+            .order_by("-sequence")
+            .first()
+        )
+        if user_message is None:
+            raise ValueError("Failed assistant message has no user message to retry.")
+        return user_message
 
 
 def finalize_turn(
@@ -171,4 +259,4 @@ def _validate_text(text: str) -> str:
     return stripped
 
 
-__all__ = ["PreparedTurn", "UserMessageService", "finalize_turn"]
+__all__ = ["PreparedTurn", "RetryService", "UserMessageService", "finalize_turn"]
