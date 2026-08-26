@@ -1760,7 +1760,7 @@ Acceptance criteria:
 
 ## TASK-085 — Implement serverless topic generation
 
-Status: `[ ]`
+Status: `[x]`
 
 Use direct OpenRouter to generate topics.
 
