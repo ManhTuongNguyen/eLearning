@@ -1,11 +1,14 @@
 /**
- * History screen (SPEC TASK-055): the authenticated user's past sessions.
+ * History screen (SPEC TASK-055/056): the authenticated user's past sessions.
  * The backend already returns sessions most-recently-updated first, so pages
  * render in delivery order. The first page loads on mount (and on retry);
  * further pages append through a "Load more" control while the DRF envelope
  * reports a next page. Tapping a session opens its conversation; loading,
  * empty and error states are all explicit. Failures never destroy rows that
  * are already visible — pagination errors surface as a banner above the list.
+ * Each row also offers an inline rename editor: saving PATCHes the title and
+ * swaps the authoritative response into local state immediately, while
+ * failures keep the editor open for another attempt.
  */
 import React, {
   useCallback,
@@ -20,11 +23,12 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
 import type {Session} from '../api/sessions';
-import {listSessions} from '../api/sessions';
+import {listSessions, renameSession} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {MainStackParamList} from '../navigation/types';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -109,6 +113,57 @@ function createStyles(c: ThemeColors) {
       color: c.textSecondary,
       marginTop: 4,
     },
+    renameLink: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.accent,
+      marginTop: 10,
+      alignSelf: 'flex-start',
+    },
+    editor: {
+      gap: 10,
+    },
+    editorInput: {
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      fontSize: 15,
+      color: c.textPrimary,
+      backgroundColor: c.background,
+    },
+    editorActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    saveButton: {
+      backgroundColor: c.primary,
+      borderRadius: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 18,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    saveButtonText: {
+      color: c.onPrimary,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    cancelButton: {
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      borderRadius: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 18,
+    },
+    cancelButtonText: {
+      color: c.textPrimary,
+      fontSize: 14,
+      fontWeight: '600',
+    },
     loadMore: {
       alignSelf: 'center',
       borderWidth: 1,
@@ -143,6 +198,9 @@ export function HistoryScreen({navigation}: Props) {
   const [hasMore, setHasMore] = useState(false);
   const [loadedPages, setLoadedPages] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [savingRename, setSavingRename] = useState(false);
 
   // AuthContext's value object is recreated on every auth-state change, so
   // the load effect reads the token through a latest ref instead of taking
@@ -158,6 +216,9 @@ export function HistoryScreen({navigation}: Props) {
     setHasMore(false);
     setLoadedPages(0);
     setLoading(true);
+    setRenamingId(null);
+    setDraftTitle('');
+    setSavingRename(false);
     (async () => {
       try {
         const token = await getAccessTokenRef.current();
@@ -208,6 +269,53 @@ export function HistoryScreen({navigation}: Props) {
     }
   }, [hasMore, loadedPages, loading, loadingMore]);
 
+  /** Open the inline editor pre-filled with the current title. */
+  const startRename = useCallback((session: Session) => {
+    setError(null);
+    setRenamingId(session.id);
+    setDraftTitle(session.title);
+  }, []);
+
+  const cancelRename = useCallback(() => {
+    if (savingRename) {
+      return;
+    }
+    setRenamingId(null);
+    setDraftTitle('');
+  }, [savingRename]);
+
+  /**
+   * PATCH the new title and swap the authoritative response into local
+   * state — the row updates immediately without refetching the list.
+   * Failures keep the editor open with the draft intact for another try.
+   */
+  const handleRenameSave = useCallback(async () => {
+    const sessionId = renamingId;
+    const trimmed = draftTitle.trim();
+    if (sessionId === null || savingRename || trimmed === '') {
+      return;
+    }
+    setSavingRename(true);
+    // A fresh attempt supersedes any previous failure message.
+    setError(null);
+    try {
+      const token = await getAccessTokenRef.current();
+      if (!token) {
+        throw new Error('You need to sign in again to see your history.');
+      }
+      const updated = await renameSession(token, sessionId, trimmed);
+      setSessions(prev =>
+        prev.map(session => (session.id === updated.id ? {...session, ...updated} : session)),
+      );
+      setRenamingId(null);
+      setDraftTitle('');
+    } catch (err) {
+      setError(toErrorMessage(err));
+    } finally {
+      setSavingRename(false);
+    }
+  }, [draftTitle, renamingId, savingRename]);
+
   return (
     <View style={styles.container} testID="history-screen">
       <View style={styles.header}>
@@ -250,23 +358,78 @@ export function HistoryScreen({navigation}: Props) {
         <FlatList
           data={sessions}
           keyExtractor={item => String(item.id)}
-          renderItem={({item}) => (
-            <Pressable
-              style={styles.row}
-              onPress={() => {
-                navigation.navigate('Chat', {sessionId: item.id});
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Open conversation ${item.title}`}
-              testID={`history-item-${item.id}`}>
-              <Text style={styles.rowTitle}>{item.title}</Text>
-              {item.topic ? (
-                <Text style={styles.rowTopic} numberOfLines={1}>
-                  {item.topic}
-                </Text>
-              ) : null}
-            </Pressable>
-          )}
+          extraData={[renamingId, draftTitle, savingRename]}
+          renderItem={({item}) =>
+            renamingId === item.id ? (
+              <View style={[styles.row, styles.editor]} testID={`history-editor-${item.id}`}>
+                <TextInput
+                  style={styles.editorInput}
+                  value={draftTitle}
+                  onChangeText={setDraftTitle}
+                  editable={!savingRename}
+                  autoFocus
+                  accessibilityLabel="Conversation name"
+                  testID="history-rename-input"
+                />
+                <View style={styles.editorActions}>
+                  <Pressable
+                    style={[
+                      styles.saveButton,
+                      (savingRename || draftTitle.trim() === '') && styles.buttonDisabled,
+                    ]}
+                    disabled={savingRename || draftTitle.trim() === ''}
+                    onPress={() => {
+                      handleRenameSave();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Save conversation name"
+                    accessibilityState={{disabled: savingRename || draftTitle.trim() === ''}}
+                    testID="history-rename-save">
+                    <Text style={styles.saveButtonText}>
+                      {savingRename ? 'Saving…' : 'Save'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.cancelButton, savingRename && styles.buttonDisabled]}
+                    disabled={savingRename}
+                    onPress={() => {
+                      cancelRename();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel renaming"
+                    accessibilityState={{disabled: savingRename}}
+                    testID="history-rename-cancel">
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.row}
+                onPress={() => {
+                  navigation.navigate('Chat', {sessionId: item.id});
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Open conversation ${item.title}`}
+                testID={`history-item-${item.id}`}>
+                <Text style={styles.rowTitle}>{item.title}</Text>
+                {item.topic ? (
+                  <Text style={styles.rowTopic} numberOfLines={1}>
+                    {item.topic}
+                  </Text>
+                ) : null}
+                <Pressable
+                  onPress={() => {
+                    startRename(item);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Rename conversation ${item.title}`}
+                  testID={`history-rename-${item.id}`}>
+                  <Text style={styles.renameLink}>Rename</Text>
+                </Pressable>
+              </Pressable>
+            )
+          }
           ListFooterComponent={
             hasMore ? (
               <Pressable

@@ -1190,7 +1190,7 @@ Acceptance criteria:
 
 ## TASK-056 — Implement session rename UI
 
-Status: `[ ]`
+Status: `[x]`
 
 Allow users to rename conversations.
 

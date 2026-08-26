@@ -2,11 +2,66 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 8 TASK-055 complete (next: TASK-056 — session rename UI)
+- **Current Phase**: Phase 8 TASK-056 complete (next: TASK-057 — session deletion UI)
 
 ## Current Active Task
 
-(none — TASK-055 completed; next: TASK-056 — Implement session rename UI.)
+(none — TASK-056 completed; next: TASK-057 — Implement session deletion UI.)
+
+## Archived Tasks
+
+### TASK-056 — Implement session rename UI (COMPLETED 2026-08-26)
+- `HistoryScreen.tsx` inline rename (Phase 8 scope; reused the existing
+  TASK-045 `renameSession` PATCH binding — no new API surface):
+  - Per-row Rename entry control (`history-rename-{id}`, role button, label
+    "Rename conversation {title}") nested in the row; pressing clears any
+    banner and swaps THAT row to an editor variant
+    (`history-editor-{id}`): TextInput (`history-rename-input`, prefilled,
+    label "Conversation name") + Save (`history-rename-save`) / Cancel
+    (`history-rename-cancel`), both role buttons with labels and
+    accessibilityState.disabled.
+  - handleRenameSave: guarded on renamingId/savingRename/blank-trim → token
+    via latest-ref seam (sign-out → friendly error) → renameSession(token,
+    id, trimmed) → authoritative Session response swapped into local state
+    via map ({...session, ...updated}) → editor closes. ZERO refetch: UI
+    updates immediately (pinned by listSessions call-count test).
+  - Failure: banner via shared form-error + toErrorMessage mapping; editor
+    STAYS OPEN with draft intact for another attempt. Stale-banner bug found
+    by the first test run: a successful retry left the previous failure
+    message visible — fixed by clearing error at attempt start (ChatScreen
+    "banner cleared on next send" convention).
+  - Guards: saving disables Save AND Cancel (double-fire + cancel-race);
+    blank/whitespace draft disables Save (accessibilityState); Cancel
+    discards with zero API calls; reload effect resets all rename state;
+    FlatList gained extraData=[renamingId, draftTitle, savingRename] —
+    without it rows never re-render into/out of the editor (classic FlatList
+    memoization trap).
+- __tests__/HistoryScreen.test.tsx (+5 → new describe block, suite now 14):
+  happy path (prefilled input → PATCH args verbatim 'token-a'/id/'Trips in
+  Europe' → row shows response title immediately, editor gone, no refetch);
+  cancel discards (original title, no renameSession call); failure keeps
+  editor + banner then second Save succeeds and banner clears; blank-draft
+  disabled matrix (non-blank enabled ⇄ whitespace disabled ⇄ typed enabled,
+  no call fired while disabled); deferred-promise double-fire guard (Save
+  shows Saving… + disabled mid-flight, Cancel disabled too, second press
+  fires nothing, resolve closes editor and swaps title).
+- Test gotchas hit:
+  - The retry-success assertion caught the stale-banner component bug before
+    any harness issue — write the post-success queryByTestId('form-error')
+    even when you think nothing sets error on that path.
+
+- Acceptance: rename is persisted ✓ (PATCH asserted with exact args); UI
+  updates immediately after success ✓ (authoritative swap, zero-refetch
+  pinned); failure is handled ✓ (banner + editable retry + cleanup).
+- Gates: pnpm typecheck clean; eslint clean; jest 17 suites 184/184 passed.
+
+#### Sub-step record (all complete)
+1. [x] HistoryScreen.tsx — per-row rename entry, inline editor, guarded
+       handleRenameSave through renameSession, immediate setSessions update,
+       error banner reuse, reload-effect resets rename state
+2. [x] __tests__/HistoryScreen.test.tsx — rename tests (+5)
+3. [x] Gates green (pnpm typecheck, pnpm lint, jest 184/184 across 17 suites)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-056
 
 ## Archived Tasks
 

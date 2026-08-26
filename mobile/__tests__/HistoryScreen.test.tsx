@@ -263,3 +263,142 @@ describe('HistoryScreen', () => {
     await waitFor(() => expect(screen.getByTestId('chat-no-session')).toBeOnTheScreen());
   });
 });
+
+describe('HistoryScreen rename (TASK-056)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
+    mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+    mockedSessions.listMessages.mockResolvedValue(emptyMessagesPage());
+    mockedSessions.getSession.mockResolvedValue(makeSession());
+  });
+
+  it('persists the new title and reflects it immediately without refetching the list', async () => {
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 42, title: 'Traveling'})]),
+    );
+    mockedSessions.renameSession.mockResolvedValue(makeSession({id: 42, title: 'Trips abroad'}));
+    await renderHistory();
+    await screen.findByTestId('history-item-42');
+
+    await fireEvent.press(screen.getByTestId('history-rename-42'));
+
+    const input = await screen.findByTestId('history-rename-input');
+    expect(input.props.value).toBe('Traveling');
+
+    await fireEvent.changeText(input, 'Trips in Europe');
+    await fireEvent.press(screen.getByTestId('history-rename-save'));
+
+    await waitFor(() =>
+      expect(mockedSessions.renameSession).toHaveBeenCalledWith('token-a', 42, 'Trips in Europe'),
+    );
+    // The row swaps to the authoritative response; the editor closes.
+    expect(await screen.findByText('Trips abroad')).toBeOnTheScreen();
+    expect(screen.queryByTestId('history-rename-input')).toBeNull();
+    expect(screen.queryByTestId('form-error')).toBeNull();
+    // Immediate local update — the list was NOT reloaded.
+    expect(mockedSessions.listSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards the edit and keeps the original title when cancelled', async () => {
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 7, title: 'Cooking'})]),
+    );
+    await renderHistory();
+    await screen.findByTestId('history-item-7');
+
+    await fireEvent.press(screen.getByTestId('history-rename-7'));
+    const input = await screen.findByTestId('history-rename-input');
+    await fireEvent.changeText(input, 'Baking');
+
+    await fireEvent.press(screen.getByTestId('history-rename-cancel'));
+
+    expect(await screen.findByTestId('history-item-7')).toBeOnTheScreen();
+    expect(screen.getByText('Cooking')).toBeOnTheScreen();
+    expect(screen.queryByTestId('history-rename-input')).toBeNull();
+    expect(mockedSessions.renameSession).not.toHaveBeenCalled();
+  });
+
+  it('explains failures, keeps the editor open, and succeeds on retry', async () => {
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 9, title: 'Movies'})]),
+    );
+    mockedSessions.renameSession
+      .mockRejectedValueOnce(new ApiError(500, 'Boom'))
+      .mockResolvedValueOnce(makeSession({id: 9, title: 'Films'}));
+    await renderHistory();
+    await screen.findByTestId('history-item-9');
+
+    await fireEvent.press(screen.getByTestId('history-rename-9'));
+    const input = await screen.findByTestId('history-rename-input');
+    await fireEvent.changeText(input, 'Films');
+    await fireEvent.press(screen.getByTestId('history-rename-save'));
+
+    expect(await screen.findByTestId('form-error')).toHaveTextContent(
+      'The server is unreachable right now. Please try again later.',
+    );
+    // Editor stays open with the draft intact for another attempt.
+    const retryInput = await screen.findByTestId('history-rename-input');
+    expect(retryInput.props.value).toBe('Films');
+
+    await fireEvent.press(screen.getByTestId('history-rename-save'));
+
+    await waitFor(() => expect(mockedSessions.renameSession).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Films')).toBeOnTheScreen();
+    expect(screen.queryByTestId('form-error')).toBeNull();
+    expect(screen.queryByTestId('history-rename-input')).toBeNull();
+  });
+
+  it('disables Save while the name is blank and re-enables it once text exists', async () => {
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 5, title: 'Weekend plans'})]),
+    );
+    await renderHistory();
+    await screen.findByTestId('history-item-5');
+
+    await fireEvent.press(screen.getByTestId('history-rename-5'));
+
+    const input = await screen.findByTestId('history-rename-input');
+    expect(await screen.findByTestId('history-rename-save')).toBeEnabled();
+
+    await fireEvent.changeText(input, '   ');
+    expect(screen.getByTestId('history-rename-save')).toBeDisabled();
+
+    await fireEvent.changeText(input, 'New plan');
+    expect(screen.getByTestId('history-rename-save')).toBeEnabled();
+    expect(mockedSessions.renameSession).not.toHaveBeenCalled();
+  });
+
+  it('guards Save against double-fires while a rename request is in flight', async () => {
+    let resolveRename: (session: Session) => void = () => {};
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 3, title: 'Music'})]),
+    );
+    mockedSessions.renameSession.mockImplementationOnce(
+      () =>
+        new Promise<Session>(resolve => {
+          resolveRename = resolve;
+        }),
+    );
+    await renderHistory();
+    await screen.findByTestId('history-item-3');
+
+    await fireEvent.press(screen.getByTestId('history-rename-3'));
+    const input = await screen.findByTestId('history-rename-input');
+    await fireEvent.changeText(input, 'Concerts');
+
+    await fireEvent.press(screen.getByTestId('history-rename-save'));
+
+    const save = await screen.findByTestId('history-rename-save');
+    expect(save).toBeDisabled();
+    expect(save).toHaveTextContent('Saving…');
+    expect(screen.getByTestId('history-rename-cancel')).toBeDisabled();
+
+    await fireEvent.press(save);
+    expect(mockedSessions.renameSession).toHaveBeenCalledTimes(1);
+
+    resolveRename(makeSession({id: 3, title: 'Concerts'}));
+    await waitFor(() => expect(screen.queryByTestId('history-rename-input')).toBeNull());
+    expect(screen.getByText('Concerts')).toBeOnTheScreen();
+  });
+});
