@@ -1331,7 +1331,7 @@ Acceptance criteria:
 
 ## TASK-063 — Implement improvement API
 
-Status: `[ ]`
+Status: `[x]`
 
 Create endpoint for improving a user message.
 

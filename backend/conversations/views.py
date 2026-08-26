@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from conversations.chat import RetryService, UserMessageService, finalize_turn
+from conversations.improvement import ImprovementService
 from conversations.models import Message, Session
 from conversations.serializers import (
     MessageSerializer,
@@ -48,6 +49,16 @@ def _settings_suggestion_service() -> SuggestionService:
 def get_suggestion_service() -> SuggestionService:
     """Return the process-wide settings-driven suggestion service (test seam)."""
     return _settings_suggestion_service()
+
+
+@lru_cache(maxsize=1)
+def _settings_improvement_service() -> ImprovementService:
+    return ImprovementService(provider=FallbackProvider.from_settings())
+
+
+def get_improvement_service() -> ImprovementService:
+    """Return the process-wide settings-driven improvement service (test seam)."""
+    return _settings_improvement_service()
 
 
 @lru_cache(maxsize=1)
@@ -334,14 +345,67 @@ class MessageSuggestionsView(APIView):
         return Response({"replies": list(suggestions.replies)})
 
 
+class MessageImprovementView(APIView):
+    """Improve one user-authored message on explicit request (TASK-063).
+
+    POST without a body. The target message is resolved through a user-scoped
+    session lookup first, so foreign or nonexistent sessions and messages are
+    indistinguishable 404s — no existence leak. Only the learner's own words
+    can be corrected: assistant rows (in any generation state) and any
+    blank-content row are a 409 Conflict rejected before any LLM work.
+
+    Inputs to :class:`conversations.improvement.ImprovementService` come from
+    persisted state only — the session's learning level plus the message
+    content verbatim. The endpoint is read-only: nothing is persisted, no
+    summary maintenance is scheduled, and the stored message is never
+    modified — ``original`` in the response is composed from the stored row,
+    never from a model echo.
+
+    Success body: ``{"original": str, "improved": str, "explanation": str}``.
+    Provider failures map to 503 when retryable, 502 otherwise.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs) -> Response:
+        try:
+            session = Session.objects.get(pk=kwargs["pk"], user=request.user)
+        except Session.DoesNotExist:
+            raise Http404("No Session matches the given query.") from None
+        try:
+            message = session.messages.get(pk=kwargs["message_pk"])
+        except Message.DoesNotExist:
+            raise Http404("No Message matches the given query.") from None
+        if message.role != Message.Role.USER or not message.content.strip():
+            return Response(
+                {"detail": "Improvement requires a non-empty user message."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        try:
+            improvement = get_improvement_service().improve(
+                level=session.learning_level,
+                original_message=message.content,
+            )
+        except LLMError as exc:
+            code = (
+                status.HTTP_503_SERVICE_UNAVAILABLE
+                if exc.retryable
+                else status.HTTP_502_BAD_GATEWAY
+            )
+            return Response({"detail": str(exc)}, status=code)
+        return Response(asdict(improvement))
+
+
 __all__ = [
     "ChatMessageSerializer",
+    "MessageImprovementView",
     "MessageListView",
     "MessageRetryView",
     "MessageStreamView",
     "MessageSuggestionsView",
     "SessionCollectionView",
     "SessionDetailView",
+    "get_improvement_service",
     "get_retry_service",
     "get_suggestion_service",
     "get_topic_service",

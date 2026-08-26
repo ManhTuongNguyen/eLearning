@@ -2,11 +2,71 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 9B TASK-062 complete (next: TASK-063 — improvement API)
+- **Current Phase**: Phase 9B TASK-063 complete (next: TASK-064 — improvement result UI)
 
 ## Current Active Task
 
-(none — TASK-062 completed; next: TASK-063 — Implement improvement API.)
+(none — TASK-063 completed; next: TASK-064 — Implement improvement result UI.)
+
+## Archived Tasks
+
+### TASK-063 — Implement improvement API (COMPLETED 2026-08-26)
+- `conversations/views.py`:
+  - `get_improvement_service()` seam (`_settings_improvement_service`
+    lru_cache) wrapping `ImprovementService(provider=FallbackProvider
+    .from_settings())` — same settings-driven pattern as topic/suggestion
+    services.
+  - `MessageImprovementView` — POST
+    `/api/v1/sessions/{pk}/messages/{message_pk}/improve/`, no body:
+    user-scoped `Session.objects.get(pk, user)` then
+    `session.messages.get(pk)` → foreign/missing session AND foreign/
+    missing message are indistinguishable 404s (no existence leak);
+    ONLY user messages are improvable — assistant rows in ANY generation
+    state (complete/pending/failed) and any blank-content row → 409
+    Conflict with ZERO provider calls; inputs from persisted state only
+    (`level=session.learning_level`, stored content verbatim); LLMError →
+    503 retryable / 502 permanent (SessionCollectionView mapping); success
+    body `asdict(improvement)` = `{original, improved, explanation}` where
+    original is the STRIPPED STORED text — a misbehaving completion's own
+    "original" key can never override the learner's words. READ-ONLY:
+    nothing persisted, no on_commit scheduling, stored row untouched.
+- `conversations/urls.py` — `session-message-improve` route beside suggestions.
+- `backend/tests/test_improvement_api.py` (27 tests): auth (401 zero-call,
+  405 matrix); ownership/routing 404s (stranger session, missing session,
+  foreign message in own session, missing message, non-int pks — each with
+  zero provider calls); only-user-message matrix (complete/pending/failed
+  assistant + blank user targets → 409 verbatim detail, data untouched);
+  success (three-field JSON contract with stripped fields, [system,user]
+  request shape, model echo + extra "original" key never replace stored
+  text, prompt pins: B2 CEFR echo + quoted message vs AUTO infer-level
+  wording, distinct prompts per distinct messages, repeated calls
+  independent); failures (availability → 503 detail verbatim, auth → 502,
+  LLMResponseError → 502); purity (row snapshot unchanged, on_commit
+  callbacks untouched); wiring seam cached under OPENROUTER_API_KEY
+  override_settings; log hygiene (no message/improved/explanation text at
+  DEBUG).
+- Test gotchas hit:
+  - First draft of the echo-guard test double-encoded the payload
+    (correction_payload already returns a JSON string wrapped again in
+    json.dumps) which would 502 instead of proving the guard — replaced
+    with an explicit extra-"original"-key fixture that exercises BOTH
+    extra-key tolerance and stored-text precedence in one response.
+- Gates: uv run ruff check clean; ruff format --check clean (100 files);
+  manage.py check clean; full pytest DB_ENGINE=sqlite3 → 798 passed /
+  3 skipped / 293 subtests (bare pytest still hits the PRE-EXISTING local
+  Postgres auth issue; README sqlite3 fallback used).
+- Acceptance: only user messages can use this action ✓ (assistant matrix
+  pinned at every status); ownership is enforced ✓ (user-scoped lookups,
+  indistinguishable 404s); existing message is not modified ✓ (snapshot +
+  on_commit purity test, original composed from stored row); API tests
+  exist ✓ (27).
+
+#### Sub-step record (all complete)
+1. [x] conversations/views.py — MessageImprovementView + service seam
+2. [x] conversations/urls.py — improve route
+3. [x] backend/tests/test_improvement_api.py (27 tests)
+4. [x] Gates green (ruff check/format; manage.py check; sqlite3 pytest 798)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-063
 
 ## Archived Tasks
 

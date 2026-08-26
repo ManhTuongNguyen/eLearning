@@ -29,4 +29,9 @@ urlpatterns = [
         views.MessageSuggestionsView.as_view(),
         name="session-message-suggestions",
     ),
+    path(
+        "sessions/<int:pk>/messages/<int:message_pk>/improve/",
+        views.MessageImprovementView.as_view(),
+        name="session-message-improve",
+    ),
 ]
