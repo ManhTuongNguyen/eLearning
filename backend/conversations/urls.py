@@ -14,4 +14,9 @@ urlpatterns = [
         views.MessageListView.as_view(),
         name="session-messages",
     ),
+    path(
+        "sessions/<int:pk>/messages/stream/",
+        views.MessageStreamView.as_view(),
+        name="session-message-stream",
+    ),
 ]

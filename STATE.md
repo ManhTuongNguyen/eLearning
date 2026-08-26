@@ -2,16 +2,84 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5B chat write-side done (TASK-040 complete; next
-  TASK-041, streaming chat endpoint)
+- **Current Phase**: Phase 5B chat write+stream side done (TASK-041 complete;
+  next TASK-042, failed-generation retry endpoint)
 
 ## Current Active Task
 
-(none — TASK-040 completed; next: TASK-041 — Implement POST
-/api/v1/sessions/{id}/messages/stream/: auth + ownership, save user message,
-build context, start LLM stream, SSE text chunks, persist final assistant
-message onto the pending row, emit completion event; failed generation must
-be retryable)
+(none — TASK-041 completed; next: TASK-042 — Implement failed-generation
+retry: POST retry for failed assistant rows only, no user-message
+duplication, replace/retry the failed row safely, successful messages not
+retryable through this MVP endpoint)
+
+## Archived Tasks
+
+### TASK-041 — Implement streaming chat endpoint (COMPLETED 2026-08-26)
+- `conversations/chat.py` — `finalize_turn(assistant_message, events)`
+  generator wrapping any StreamingEvent iterator: yields every upstream event
+  verbatim (client sees chunks incrementally); on the terminal event it
+  updates the pending row FIRST and only then yields downstream, so a client
+  observing `completed` can rely on the message being committed.
+  StreamCompleted → content=text + status=complete (save update_fields
+  [content,status]); StreamFailed → status=failed with blank content (partial
+  output NEVER persisted as complete; is_retryable True); abandoned streams
+  stay pending. Logging "conversations.chat": info completion line (pk +
+  char count), warning failure line (pk + normalized error str); message text
+  never logged.
+- `conversations/views.py`:
+  - `ChatMessageSerializer` — body {"text"}: required CharField, stripped in
+    validate_text, blank-after-strip → 400 BEFORE any write/provider call.
+    Unknown payload keys ignored (role/status/model hijacks no-op); DRF
+    numeric coercion applies ("42" rename precedent). No temperature/model
+    pins — PreparedTurn.request decides what reaches the LLM.
+  - `get_user_message_service()` lru_cache seam mirroring get_topic_service;
+    default builds real UserMessageService (real ContextBuilder, no provider).
+  - `MessageStreamView(APIView, IsAuthenticated)` POST flow:
+    serializer → UserMessageService.create_turn (transactional user+pending
+    rows + context) → Session.DoesNotExist → Http404("No Session matches the
+    given query.") so foreign/missing sessions are an indistinguishable 404
+    (DRF preserves args in detail; non-int pks never match <int:pk>) →
+    finalize_turn(assistant_row, llm stream events via llm.views seam called
+    through module attribute so tests patch llm.views.get_streaming_service
+    exactly like TASK-025) → sse_streaming_response. Provider failures leave
+    the committed user turn + history intact; failed row retryable (TASK-042).
+- `conversations/urls.py` — sessions/<int:pk>/messages/stream/, name
+  "session-message-stream".
+- Tests backend/tests/test_chat_stream_api.py (25 tests): anonymous 401 +
+  zero writes; method matrix get/put/patch/delete 405; stranger/missing/
+  non-int pk 404s with zero writes + no provider call; invalid-text matrix
+  ({}/blank/whitespace) 400 before writes; numeric coercion ("42"); unknown
+  fields ignored; success frame protocol (start/deltas/completed shapes,
+  forwarded request model=None temperature=None system-first current-last);
+  both rows persisted sequences 1/2 with exact statuses/contents; lazy
+  incremental delivery tracked against provider.produced; persistence-before-
+  terminal-frame ordering (row complete at the moment completed frame is
+  pulled); zero-delta completion → empty complete row; SSE transport headers;
+  summary schedule drained exactly once AFTER commit carrying session pk;
+  pre-stream auth failure → single error frame retryable False + failed
+  retryable row + intact user row; mid-stream availability failure → deltas
+  then error frame retryable True; partial output never persisted (marker
+  absent from DB, exact (sequence, role, status) shape [complete, failed]);
+  seam cached identity; log hygiene (user text AND streamed text markers
+  absent across success+failure runs).
+- Test gotchas hit:
+  - pytest-django wraps tests in a transaction so create_turn's on_commit
+    callback never auto-fires — drain connection.run_on_commit manually and
+    invoke (same pattern as TASK-039/040).
+  - summary_schedule monkeypatch MUST be active for every authenticated
+    request path (create_turn schedules unconditionally) — folded into the
+    chat_api fixture chain instead of per-test params.
+- Gates: ruff check/format clean (93 files); pytest 667 passed +202 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/chat.py — finalize_turn wrapper generator
+2. [x] conversations/views.py — ChatMessageSerializer + seam +
+       MessageStreamView
+3. [x] conversations/urls.py — session-message-stream route
+4. [x] backend/tests/test_chat_stream_api.py written (25 tests)
+5. [x] Gates green (ruff check/format, pytest 667+202 Postgres, manage.py check)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-041
 
 ## Archived Tasks
 

@@ -902,7 +902,7 @@ Acceptance criteria:
 
 ## TASK-041 — Implement streaming chat endpoint
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement:
 

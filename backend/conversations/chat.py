@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from django.db import transaction
@@ -40,7 +41,7 @@ from conversations.models import Message, Session
 from conversations.tasks import schedule_session_summary_update
 from conversations.topics import GeneratedTopic
 from conversations.window import select_recent_messages
-from llm.types import CompletionRequest
+from llm.types import CompletionRequest, StreamCompleted, StreamFailed, StreamingEvent
 
 logger = logging.getLogger("conversations.chat")
 
@@ -120,6 +121,46 @@ class UserMessageService:
         )
 
 
+def finalize_turn(
+    assistant_message: Message,
+    events: Iterator[StreamingEvent],
+) -> Iterator[StreamingEvent]:
+    """Wrap a stream event iterator, persisting the outcome onto the pending row.
+
+    Every upstream event is yielded verbatim so clients receive text chunks
+    incrementally. When the terminal event arrives, the pending assistant row
+    created by :meth:`UserMessageService.create_turn` is updated FIRST and
+    only then yielded downstream — a client observing ``completed`` can rely
+    on the full message already being committed:
+
+    - ``StreamCompleted`` fills the content and marks the row ``complete``.
+    - ``StreamFailed`` marks the row ``failed`` (retryable per the MVP retry
+      rule); partial output is never persisted as a complete message and the
+      already-committed user message plus history stay untouched.
+    - An abandoned stream (client disconnect, consumer stops early) leaves
+      the row ``pending``; nothing is written for events never consumed.
+    """
+    for event in events:
+        if isinstance(event, StreamCompleted):
+            assistant_message.content = event.text
+            assistant_message.status = Message.Status.COMPLETE
+            assistant_message.save(update_fields=["content", "status"])
+            logger.info(
+                "assistant message %s completed (%d char(s))",
+                assistant_message.pk,
+                len(event.text),
+            )
+        elif isinstance(event, StreamFailed):
+            assistant_message.status = Message.Status.FAILED
+            assistant_message.save(update_fields=["status"])
+            logger.warning(
+                "assistant message %s failed (retryable): %s",
+                assistant_message.pk,
+                event.error,
+            )
+        yield event
+
+
 def _validate_text(text: str) -> str:
     """Reject non-string or blank input; return the stripped text."""
     if not isinstance(text, str):
@@ -130,4 +171,4 @@ def _validate_text(text: str) -> str:
     return stripped
 
 
-__all__ = ["PreparedTurn", "UserMessageService"]
+__all__ = ["PreparedTurn", "UserMessageService", "finalize_turn"]

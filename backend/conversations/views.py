@@ -5,11 +5,14 @@ from __future__ import annotations
 from dataclasses import asdict
 from functools import lru_cache
 
+from django.http import Http404
 from django.shortcuts import get_object_or_404
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
+from conversations.chat import UserMessageService, finalize_turn
 from conversations.models import Session
 from conversations.serializers import (
     MessageSerializer,
@@ -19,8 +22,10 @@ from conversations.serializers import (
 )
 from conversations.topics import TopicGenerationService
 from learning.models import Profile
+from llm import views as llm_views
 from llm.exceptions import LLMError
 from llm.fallback import FallbackProvider
+from llm.sse import sse_streaming_response
 
 
 @lru_cache(maxsize=1)
@@ -31,6 +36,16 @@ def _settings_topic_service() -> TopicGenerationService:
 def get_topic_service() -> TopicGenerationService:
     """Return the process-wide settings-driven topic service (test seam)."""
     return _settings_topic_service()
+
+
+@lru_cache(maxsize=1)
+def _settings_user_message_service() -> UserMessageService:
+    return UserMessageService()
+
+
+def get_user_message_service() -> UserMessageService:
+    """Return the process-wide user-message service (test seam)."""
+    return _settings_user_message_service()
 
 
 class SessionCollectionView(generics.ListAPIView):
@@ -136,9 +151,71 @@ class MessageListView(generics.ListAPIView):
         return session.messages.all()
 
 
+class ChatMessageSerializer(serializers.Serializer):
+    """Validates the POST body of the chat streaming endpoint.
+
+    The only accepted field is ``text``; it is stripped and must not be blank
+    after stripping, so invalid input is rejected with a 400 before anything
+    is written. No model/temperature overrides exist — the context request
+    assembled by :class:`conversations.chat.UserMessageService` decides what
+    is sent to the LLM.
+    """
+
+    text = serializers.CharField()
+
+    def validate_text(self, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise serializers.ValidationError("text must not be empty.")
+        return stripped
+
+
+class MessageStreamView(APIView):
+    """Stream one chat turn as Server-Sent Events.
+
+    POST body: ``{"text": str}``. The flow:
+
+    1. Store the user message plus its pending assistant row atomically and
+       build the turn's LLM context (``UserMessageService.create_turn``).
+    2. Start the LLM stream for that context.
+    3. Forward the normalized events through the SSE transport; text chunks
+       reach the client incrementally.
+    4. Persist the outcome onto the pending assistant row before the terminal
+       frame is emitted (``finalize_turn``): complete on success, failed
+       (retryable) on provider failure.
+
+    Foreign or nonexistent sessions are an indistinguishable 404 — no
+    existence leak. Provider failures do not corrupt the conversation: the
+    user message stays committed and the failed assistant row can be retried
+    later (TASK-042).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs) -> object:
+        serializer = ChatMessageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            prepared = get_user_message_service().create_turn(
+                session_id=kwargs["pk"],
+                user=request.user,
+                text=serializer.validated_data["text"],
+            )
+        except Session.DoesNotExist:
+            raise Http404("No Session matches the given query.") from None
+        events = finalize_turn(
+            prepared.assistant_message,
+            llm_views.get_streaming_service().stream(prepared.request),
+        )
+        return sse_streaming_response(events)
+
+
 __all__ = [
+    "ChatMessageSerializer",
     "MessageListView",
+    "MessageStreamView",
     "SessionCollectionView",
     "SessionDetailView",
     "get_topic_service",
+    "get_user_message_service",
 ]
