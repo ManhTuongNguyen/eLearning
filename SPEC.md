@@ -1362,7 +1362,7 @@ Acceptance criteria:
 
 ## TASK-065 — Create vocabulary model
 
-Status: `[ ]`
+Status: `[x]`
 
 Create vocabulary item model.
 

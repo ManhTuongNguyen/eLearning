@@ -2,11 +2,61 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 9B TASK-064 complete (next: TASK-065 — vocabulary model)
+- **Current Phase**: Phase 10 TASK-065 complete (next: TASK-066 — vocabulary save API)
 
 ## Current Active Task
 
-(none — TASK-064 completed; next: TASK-065 — Create vocabulary model.)
+(none — TASK-065 completed; next: TASK-066 — Implement vocabulary save API.)
+
+## Archived Tasks
+
+### TASK-065 — Create vocabulary model (COMPLETED 2026-08-26)
+- `backend/vocabulary/models.py` — `VocabularyItem` following the
+  Session/Message conventions (docstring citing ROADMAP "Vocabulary", nested
+  TextChoices, FKs to settings.AUTH_USER_MODEL):
+  - `user` FK CASCADE related_name="vocabulary_items" (ownership enforced);
+    `expression` TextField verbatim selection — words AND phrases with no
+    arbitrary length cap; `normalized_expression` TextField as the trimmed/
+    lowercase dedupe key.
+  - DESIGN DECISION: NO hard unique constraint on (user,
+    normalized_expression) yet — duplicate policy is TASK-066's "duplicate
+    behavior is deterministic" call; the model ships a composite
+    `(user, normalized_expression)` index instead so lookups are cheap and
+    TASK-066 can choose upsert vs 409 without a migration rewrite.
+  - Enrichment payload (`definition`, `translation`, `pronunciation`
+    CharField(255), `part_of_speech` CharField(64), `example`) all blank/
+    default "" — filled asynchronously by TASK-068; `status`
+    pending/complete/failed defaulting to pending ("must support enrichment
+    states"); `is_pending`/`is_enriched` convenience properties.
+  - `source_message`/`source_session` nullable FKs on_delete=SET_NULL —
+    deleting a conversation or message NEVER deletes saved vocabulary; only
+    the source pointer is nulled. created_at auto_now_add / updated_at
+    auto_now; Meta ordering newest-first (`-created_at`, matching the
+    planned vocabulary screen).
+- `backend/vocabulary/migrations/0001_initial.py` generated.
+- `backend/tests/test_vocabulary_model.py` (34 tests): creation defaults +
+  enrichment round-trip incl. unicode pronunciation; single-word and
+  multi-word-phrase verbatim expressions; is_pending/is_enriched matrix;
+  str/timestamps; ownership (related name, cascade, per-user isolation);
+  source links + session-delete/message-delete survival with SET_NULL;
+  newest-first ordering + composite-index presence; full_clean rejection of
+  blank expression / blank normalized / missing user / invalid status;
+  field-shape assertions for every column.
+- Gates: uv run ruff check clean; ruff format --check clean (101 files);
+  manage.py check clean; full pytest DB_ENGINE=sqlite3 → 832 passed /
+  3 skipped / 293 subtests (+34 new; bare pytest still hits the
+  PRE-EXISTING local Postgres auth issue; README sqlite3 fallback used).
+- Acceptance: user ownership is enforced ✓ (FK cascade + isolation tests);
+  expression can represent words and phrases ✓ (TextField + verbatim word/
+  phrase round-trips); tests exist ✓ (34).
+
+#### Sub-step record (all complete)
+1. [x] backend/vocabulary/models.py — VocabularyItem + Status choices +
+       Meta ordering/index
+2. [x] Migration generated (vocabulary/migrations/0001_initial.py)
+3. [x] backend/tests/test_vocabulary_model.py (34 tests)
+4. [x] Gates green (ruff check/format; manage.py check; sqlite3 pytest 832)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-065
 
 ## Archived Tasks
 
