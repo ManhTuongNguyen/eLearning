@@ -1566,7 +1566,7 @@ Acceptance criteria:
 
 ## TASK-074 — Implement vocabulary export API
 
-Status: `[ ]`
+Status: `[x]`
 
 Create:
 

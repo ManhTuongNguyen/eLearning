@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from django.db import transaction
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from conversations.models import Message
+from vocabulary.csv_export import build_anki_csv
 from vocabulary.models import VocabularyItem
 from vocabulary.serializers import VocabularyItemSerializer, VocabularySaveSerializer
 from vocabulary.tasks import schedule_vocabulary_enrichment
@@ -91,4 +93,31 @@ class VocabularySaveView(generics.ListAPIView):
             raise Http404("No Message matches the given query.") from None
 
 
-__all__ = ["VocabularySaveView"]
+EXPORT_FILENAME = "anki-vocabulary.csv"
+
+
+class VocabularyExportView(APIView):
+    """Download the caller's vocabulary as an Anki-importable CSV (TASK-074).
+
+    GET returns the authenticated user's saved expressions — and only theirs —
+    rendered by :func:`~vocabulary.csv_export.build_anki_csv` (TASK-073) in the
+    model's default newest-first order. Pending or failed enrichment items are
+    included as cards with empty Back/Example/Pronunciation cells.
+
+    The response is served as an attachment (``text/csv`` with a
+    ``Content-Disposition`` filename) so mobile share/save workflows receive a
+    ready-to-import file instead of inline text. CSV generation is pure string
+    work over one queryset, so no pagination is applied: exports are meant to
+    be complete.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs) -> HttpResponse:
+        items = VocabularyItem.objects.filter(user=request.user)
+        response = HttpResponse(build_anki_csv(items), content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{EXPORT_FILENAME}"'
+        return response
+
+
+__all__ = ["VocabularySaveView", "VocabularyExportView"]

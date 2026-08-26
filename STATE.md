@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 11 TASK-073 complete (next: TASK-074 — Vocabulary export API)
+- **Current Phase**: Phase 11 TASK-074 complete (next: TASK-075 — Mobile export flow)
 
 ## Current Active Task
 
