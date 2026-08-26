@@ -7,8 +7,10 @@
  * commits, scroll stick/detach transitions, ghost-delta suppression), the
  * TASK-052 collapsible topic header, the TASK-053 sample-conversation
  * overlay entry, the TASK-054 failed-response retry control, the
- * TASK-060 message long-press menu and the TASK-061 suggested-replies
- * chips (tap-to-insert, never auto-send, loading/error states).
+ * TASK-060 message long-press menu, the TASK-061 suggested-replies
+ * chips (tap-to-insert, never auto-send, loading/error states) and the
+ * TASK-064 improvement sheet (loading/error/result round-trip, Copy
+ * improved text, untouched original bubble).
  */
 import React from 'react';
 import {View} from 'react-native';
@@ -34,6 +36,7 @@ import {ApiError} from '../src/api/client';
 import * as sessionsApi from '../src/api/sessions';
 import type {
   ChatMessage,
+  MessageImprovement,
   MessageSuggestions,
   Paginated,
   SampleTurn,
@@ -166,6 +169,11 @@ beforeEach(() => {
   mockedSessions.getSession.mockResolvedValue(makeSession());
   mockedSessions.getMessageSuggestions.mockResolvedValue({
     replies: ['Default reply one', 'Default reply two', 'Default reply three'],
+  });
+  mockedSessions.improveMessage.mockResolvedValue({
+    original: 'Default original',
+    improved: 'Default improved',
+    explanation: 'Default explanation',
   });
   turns = [];
   mockedStream.mockImplementation(options => {
@@ -1238,6 +1246,205 @@ describe('ChatScreen', () => {
       await waitFor(() =>
         expect(screen.getByText('My own message')).toBeOnTheScreen(),
       );
+    });
+  });
+
+  describe('improvement UI (TASK-064)', () => {
+    const IMPROVEMENT: MessageImprovement = {
+      original: 'I go to store yesterday.',
+      improved: 'I went to the store yesterday.',
+      explanation: 'Use the past tense "went" and add the article "the".',
+    };
+
+    function renderOneConversation() {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([
+          makeMessage({
+            id: 801,
+            role: 'user',
+            sequence: 1,
+            content: 'I go to store yesterday.',
+          }),
+          makeMessage({
+            id: 802,
+            role: 'assistant',
+            sequence: 2,
+            content: 'Nice! What did you buy?',
+          }),
+        ]),
+      );
+      return renderChat({sessionId: 5});
+    }
+
+    /** Long-press the user row and pick Improve my English from its menu. */
+    async function requestImprovementForUserMessage(): Promise<void> {
+      await fireEvent(screen.getByTestId('chat-message-801'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-improve-english'));
+    }
+
+    async function expectResultShown(): Promise<void> {
+      // Wait on a result-only element: the sheet root is shared by every
+      // round-trip state, so waiting on it would not prove completion.
+      const original = await screen.findByTestId('chat-improvement-original');
+      expect(within(original).getByText(IMPROVEMENT.original)).toBeTruthy();
+      expect(
+        within(screen.getByTestId('chat-improvement-improved')).getByText(
+          IMPROVEMENT.improved,
+        ),
+      ).toBeTruthy();
+      expect(
+        within(screen.getByTestId('chat-improvement-explanation')).getByText(
+          IMPROVEMENT.explanation,
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByTestId('chat-improvement-loading')).toBeNull();
+      expect(screen.queryByTestId('chat-improvement-error')).toBeNull();
+    }
+
+    it('renders no improvement sheet until the menu action requests one', async () => {
+      await renderOneConversation();
+      await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
+
+      expect(screen.queryByTestId('chat-improvement-modal')).toBeNull();
+      expect(mockedSessions.improveMessage).not.toHaveBeenCalled();
+    });
+
+    it('requests an improvement for the selected message and shows a loading state first', async () => {
+      await renderOneConversation();
+      await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
+      let resolve!: (value: MessageImprovement) => void;
+      mockedSessions.improveMessage.mockReturnValueOnce(
+        new Promise<MessageImprovement>(res => {
+          resolve = res;
+        }),
+      );
+
+      await requestImprovementForUserMessage();
+
+      // The menu dismissed and the read-only endpoint was asked for exactly
+      // this conversation + message with the current token.
+      expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
+      expect(mockedSessions.improveMessage).toHaveBeenCalledWith('token-a', 5, 801);
+      expect(mockedStream).not.toHaveBeenCalled();
+      expect(screen.getByTestId('chat-improvement-loading')).toBeOnTheScreen();
+
+      resolve(IMPROVEMENT);
+      await expectResultShown();
+    });
+
+    it('leaves the original chat bubble unchanged while showing the result', async () => {
+      mockedSessions.improveMessage.mockResolvedValueOnce(IMPROVEMENT);
+      await renderOneConversation();
+      await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
+      await requestImprovementForUserMessage();
+      await expectResultShown();
+
+      // The conversation itself is untouched: same rows, original text
+      // still rendered verbatim in its bubble.
+      expect(messageTestIds()).toEqual(['chat-message-801', 'chat-message-802']);
+      expect(
+        within(screen.getByTestId('chat-message-801')).getByText(IMPROVEMENT.original),
+      ).toBeTruthy();
+    });
+
+    it('copies the improved version without altering it or the original bubble', async () => {
+      mockedSessions.improveMessage.mockResolvedValueOnce(IMPROVEMENT);
+      await renderOneConversation();
+      await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
+      await requestImprovementForUserMessage();
+      await expectResultShown();
+
+      await fireEvent.press(screen.getByTestId('chat-improvement-copy'));
+
+      expect(mockedCopy).toHaveBeenCalledTimes(1);
+      expect(mockedCopy).toHaveBeenCalledWith(IMPROVEMENT.improved);
+      // The result stays available for re-copying; nothing was dismissed
+      // by copying.
+      expect(screen.getByTestId('chat-improvement-modal')).toBeOnTheScreen();
+    });
+
+    it('surfaces improvement failures as an error state and recovers on retry', async () => {
+      await renderOneConversation();
+      await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
+      mockedSessions.improveMessage
+        .mockRejectedValueOnce(new ApiError(503, 'Provider temporarily unavailable.'))
+        .mockResolvedValueOnce(IMPROVEMENT);
+
+      await requestImprovementForUserMessage();
+
+      const banner = await screen.findByTestId('chat-improvement-error');
+      expect(banner).toHaveTextContent(/server is unreachable right now/i);
+      expect(screen.queryByTestId('chat-improvement-original')).toBeNull();
+      expect(mockedCopy).not.toHaveBeenCalled();
+
+      await requestImprovementForUserMessage();
+
+      await expectResultShown();
+      expect(screen.queryByTestId('chat-improvement-error')).toBeNull();
+    });
+
+    it('dismisses through the Close control and stays closed when a late response lands', async () => {
+      await renderOneConversation();
+      await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
+      let resolve!: (value: MessageImprovement) => void;
+      mockedSessions.improveMessage.mockReturnValueOnce(
+        new Promise<MessageImprovement>(res => {
+          resolve = res;
+        }),
+      );
+
+      await requestImprovementForUserMessage();
+      expect(screen.getByTestId('chat-improvement-loading')).toBeOnTheScreen();
+
+      await fireEvent.press(screen.getByTestId('chat-improvement-close'));
+
+      expect(screen.queryByTestId('chat-improvement-modal')).toBeNull();
+      // The response arriving after dismissal must not reopen the sheet —
+      // the explicit close invalidates the in-flight request.
+      resolve(IMPROVEMENT);
+      await act(async () => {});
+      expect(screen.queryByTestId('chat-improvement-modal')).toBeNull();
+      expect(screen.queryByTestId('chat-improvement-loading')).toBeNull();
+    });
+
+    it('replaces the shown result when another message requests a new improvement', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([
+          makeMessage({
+            id: 801,
+            role: 'user',
+            sequence: 1,
+            content: 'I go to store yesterday.',
+          }),
+          makeMessage({
+            id: 803,
+            role: 'user',
+            sequence: 2,
+            content: "She don't like it.",
+          }),
+        ]),
+      );
+      mockedSessions.improveMessage
+        .mockResolvedValueOnce(IMPROVEMENT)
+        .mockResolvedValueOnce({
+          original: "She don't like it.",
+          improved: "She doesn't like it.",
+          explanation: 'Third-person singular subjects take "does not" in the present tense.',
+        });
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
+
+      await requestImprovementForUserMessage();
+      await expectResultShown();
+
+      await fireEvent(screen.getByTestId('chat-message-803'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-improve-english'));
+
+      const original = await screen.findByTestId('chat-improvement-original');
+      expect(within(original).getByText("She don't like it.")).toBeTruthy();
+      // The previous result is fully replaced, not appended.
+      expect(within(original).queryByText(IMPROVEMENT.improved)).toBeNull();
+      expect(mockedSessions.improveMessage).toHaveBeenLastCalledWith('token-a', 5, 803);
     });
   });
 });

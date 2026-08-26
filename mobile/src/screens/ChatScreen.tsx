@@ -26,12 +26,16 @@
  * replacement attempt from POST .../messages/{id}/retry/ into the same
  * bubble through the shared turn pipeline. Long-pressing a message row with
  * real text (TASK-060) opens the contextual actions menu — Copy runs
- * immediately via the clipboard seam and Suggest replies (TASK-061) calls
+ * immediately via the clipboard seam, Suggest replies (TASK-061) calls
  * the read-only suggestions endpoint and presents the three replies as
- * chips above the composer; tapping a chip inserts its text into the draft
- * without sending. Loading and error states cover the generation
- * round-trip, and the strip clears on send/session change while
- * improvement/speech selection stays a seam for their upcoming tasks.
+ * chips above the composer (tapping a chip inserts its text into the draft
+ * without sending), and Improve my English (TASK-064) calls the read-only
+ * improvement endpoint and presents the outcome in a bottom sheet —
+ * original vs. suggested rewrite plus a short explanation, with a Copy
+ * action for the improved text. Loading and error states cover both
+ * generation round-trips; the suggestion strip clears on send and both it
+ * and the improvement sheet clear on session change, while speech selection
+ * stays a seam for its upcoming task.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -49,13 +53,14 @@ import type {NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
 
 import type {ChatStreamEvent, ChatStreamHandle} from '../api/chatStream';
 import {streamChatTurn, streamRetryTurn} from '../api/chatStream';
-import type {ChatMessage, MessageSuggestions, Session} from '../api/sessions';
-import {getMessageSuggestions, getSession, listMessages} from '../api/sessions';
+import type {ChatMessage, MessageImprovement, MessageSuggestions, Session} from '../api/sessions';
+import {getMessageSuggestions, getSession, improveMessage, listMessages} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {ChatScreenProps} from '../navigation/types';
 import {copyText} from '../utils/clipboard';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
+import {ImprovementSheet} from './ImprovementSheet';
 import {MessageActionsMenu} from './MessageActionsMenu';
 import type {MessageAction} from './MessageActionsMenu';
 import {SampleConversationModal} from './SampleConversationModal';
@@ -366,6 +371,14 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   } | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  // TASK-064: the improvement result currently displayed (tied to its
+  // source message), plus loading/error for the generation round-trip. The
+  // sheet is visible exactly while one of these three states is active.
+  const [improvement, setImprovement] = useState<MessageImprovement & {
+    messageId: number;
+  } | null>(null);
+  const [improvementLoading, setImprovementLoading] = useState(false);
+  const [improvementError, setImprovementError] = useState<string | null>(null);
 
   // Latest-ref seam: the load effect keys on (session, reload) only, so an
   // auth-state transition never refetches the conversation behind the user's
@@ -385,8 +398,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   }, [sessionId]);
 
   // TASK-061: monotonically increasing request id; responses apply only
-  // when both the session and no newer request superseded them.
+  // when both the session and no newer request superseded them. TASK-064
+  // shares the pattern (own counter) so dismissing its sheet can also
+  // invalidate an in-flight request.
   const suggestionsRequestRef = useRef(0);
+  const improvementRequestRef = useRef(0);
 
   // TASK-050: delta commits run through a DeltaBuffer so token bursts cause
   // at most one message-list update per tick instead of one per SSE event.
@@ -469,6 +485,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setSuggestions(null);
     setSuggestionsLoading(false);
     setSuggestionsError(null);
+    improvementRequestRef.current += 1;
+    setImprovement(null);
+    setImprovementLoading(false);
+    setImprovementError(null);
     nearBottomRef.current = true;
     setDetachedFromBottom(false);
     endTurn();
@@ -705,6 +725,65 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   }, []);
 
   /**
+   * TASK-064: improve one selected user message through the read-only
+   * improvement endpoint. The result lands in a bottom sheet that shows
+   * the original verbatim, the suggested rewrite and a short explanation;
+   * nothing about the stored message changes. Stale responses (session
+   * switched, newer request started, or the sheet explicitly dismissed)
+   * are dropped instead of reopening stale UI.
+   */
+  const startImprovement = useCallback((sid: number, messageId: number) => {
+    const requestId = ++improvementRequestRef.current;
+    setImprovement(null);
+    setImprovementError(null);
+    setImprovementLoading(true);
+    (async () => {
+      try {
+        let token: string | null = null;
+        try {
+          token = await getAccessTokenRef.current();
+        } catch {
+          token = null;
+        }
+        if (
+          !token ||
+          sessionIdRef.current !== sid ||
+          improvementRequestRef.current !== requestId
+        ) {
+          return;
+        }
+        const result = await improveMessage(token, sid, messageId);
+        if (
+          sessionIdRef.current !== sid ||
+          improvementRequestRef.current !== requestId
+        ) {
+          return;
+        }
+        setImprovement({...result, messageId});
+      } catch (err) {
+        if (
+          sessionIdRef.current === sid &&
+          improvementRequestRef.current === requestId
+        ) {
+          setImprovementError(toErrorMessage(err));
+        }
+      } finally {
+        if (improvementRequestRef.current === requestId) {
+          setImprovementLoading(false);
+        }
+      }
+    })();
+  }, []);
+
+  /** Sheet dismissal also invalidates any in-flight improvement request. */
+  const closeImprovement = useCallback(() => {
+    improvementRequestRef.current += 1;
+    setImprovement(null);
+    setImprovementError(null);
+    setImprovementLoading(false);
+  }, []);
+
+  /**
    * Retry one failed assistant row (TASK-054): the backend re-arms that
    * exact row in place, so locally it becomes the streaming target — same
    * pending spinner, same buffered deltas — and completion flips it to
@@ -776,12 +855,13 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const canSend = draft.trim().length > 0 && !streaming;
 
   /**
-   * TASK-060 menu selection. Copy runs through the clipboard seam and
-   * Suggest replies generates three candidate messages (TASK-061) that the
-   * user can tap into the composer; improvement (TASK-064) and speech
-   * (TASK-078) remain deliberate seams for their upcoming tasks, exactly
-   * like the TASK-048 composer send preceded its wire call. Every selection
-   * dismisses the menu.
+   * TASK-060 menu selection. Copy runs through the clipboard seam, Suggest
+   * replies generates three candidate messages (TASK-061) that the user can
+   * tap into the composer and Improve my English (TASK-064) opens the
+   * improvement sheet for that message; speech (TASK-078) remains a
+   * deliberate seam for its upcoming task, exactly like the TASK-048
+   * composer send preceded its wire call. Every selection dismisses the
+   * menu.
    */
   const handleMenuAction = useCallback(
     (action: MessageAction) => {
@@ -794,9 +874,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         copyText(message.content);
       } else if (action === 'suggest-replies') {
         startSuggestions(sessionId, message.id);
+      } else if (action === 'improve-english') {
+        startImprovement(sessionId, message.id);
       }
     },
-    [menuMessage, sessionId, startSuggestions],
+    [menuMessage, sessionId, startImprovement, startSuggestions],
   );
 
   /** Follow the conversation tail; no-op when the list is not mounted. */
@@ -1088,6 +1170,15 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             onClose={() => {
               setExampleVisible(false);
             }}
+          />
+          <ImprovementSheet
+            visible={
+              improvementLoading || improvementError !== null || improvement !== null
+            }
+            loading={improvementLoading}
+            error={improvementError}
+            result={improvement}
+            onClose={closeImprovement}
           />
           <MessageActionsMenu
             visible={menuMessage !== null}

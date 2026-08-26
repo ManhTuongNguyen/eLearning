@@ -127,3 +127,28 @@ export function getMessageSuggestions(
     {method: 'POST', body: {}, token},
   );
 }
+
+/** Grammar/wording improvement for one user message (TASK-063 contract). */
+export interface MessageImprovement {
+  original: string;
+  improved: string;
+  explanation: string;
+}
+
+/**
+ * POST /api/v1/sessions/{sid}/messages/{mid}/improve/ (TASK-063). Read-only
+ * generation: the stored message is never modified server-side and `original`
+ * is composed from the persisted row. Invalid targets (assistant rows or
+ * blank messages) are 409; foreign/nonexistent ids are 404; provider
+ * failures 503/502 — all normalized by apiRequest.
+ */
+export function improveMessage(
+  token: string,
+  sessionId: number,
+  messageId: number,
+): Promise<MessageImprovement> {
+  return apiRequest<MessageImprovement>(
+    `/api/v1/sessions/${sessionId}/messages/${messageId}/improve/`,
+    {method: 'POST', body: {}, token},
+  );
+}

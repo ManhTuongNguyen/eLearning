@@ -3,6 +3,7 @@ import {
   deleteSession,
   getMessageSuggestions,
   getSession,
+  improveMessage,
   listMessages,
   listSessions,
   renameSession,
@@ -218,6 +219,44 @@ describe('sessions api bindings', () => {
       name: 'ApiError',
       status: 409,
       message: 'Suggestions require a completed, non-empty message.',
+    });
+  });
+
+  it('requests an improvement for a message with an empty POST body (TASK-063)', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(200, {
+        original: 'I go to store yesterday.',
+        improved: 'I went to the store yesterday.',
+        explanation: 'Use the past tense "went" and add the article "the".',
+      }),
+    );
+
+    const result = await improveMessage('tok', 9, 44);
+
+    expect(result).toEqual({
+      original: 'I go to store yesterday.',
+      improved: 'I went to the store yesterday.',
+      explanation: 'Use the past tense "went" and add the article "the".',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://10.0.2.2:8000/api/v1/sessions/9/messages/44/improve/',
+      expect.objectContaining({
+        method: 'POST',
+        body: '{}',
+        headers: expect.objectContaining({Authorization: 'Bearer tok'}),
+      }),
+    );
+  });
+
+  it('normalizes improvement endpoint failures into ApiError with the DRF detail', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(409, {detail: 'Improvement requires a non-empty user message.'}),
+    );
+
+    await expect(improveMessage('tok', 9, 44)).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 409,
+      message: 'Improvement requires a non-empty user message.',
     });
   });
 });
