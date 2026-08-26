@@ -1441,7 +1441,7 @@ Acceptance criteria:
 
 ## TASK-068 — Implement vocabulary enrichment
 
-Status: `[ ]`
+Status: `[x]`
 
 Celery task enriches vocabulary using the LLM.
 

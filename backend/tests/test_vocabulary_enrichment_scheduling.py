@@ -1,11 +1,11 @@
 """Tests for post-commit enrichment scheduling (vocabulary.tasks, TASK-067).
 
-Covers the registered task's identity, the placeholder body contract that
-TASK-068 replaces, the ``schedule_vocabulary_enrichment`` commit-hook
-semantics (nothing enqueued before COMMIT, exactly one enqueue after,
-rolled-back transactions never enqueue) and the save-view wiring: new
-schedules enqueue once post-commit while duplicates, validation failures
-and source-message 404s schedule nothing.
+Covers the registered task's identity and the ``schedule_vocabulary_enrichment``
+commit-hook semantics (nothing enqueued before COMMIT, exactly one enqueue
+after, rolled-back transactions never enqueue) plus the save-view wiring: new
+schedules enqueue once post-commit while duplicates, validation failures and
+source-message 404s schedule nothing. The enrichment body itself is covered by
+``tests/test_vocabulary_enrichment.py``.
 """
 
 import pytest
@@ -86,15 +86,8 @@ class EnrichVocabularyItemConfiguration(SimpleTestCase):
         assert enrich_vocabulary_item.name == "vocabulary.enrich_vocabulary_item"
 
 
-@pytest.mark.django_db
-class TestEnrichVocabularyItemBody:
-    def test_placeholder_body_is_a_graceful_no_op(self, item):
-        result = enrich_vocabulary_item.apply(args=[item.pk])
-
-        assert result.state == "SUCCESS"
-        assert result.result is False
-        item.refresh_from_db()
-        assert item.is_pending
+# The enrichment body's behavior (success, retry, failure status) is covered
+# in tests/test_vocabulary_enrichment.py.
 
 
 # ---------------------------------------------------------------------------

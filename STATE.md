@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 10 TASK-067 complete (next: TASK-068 — vocabulary enrichment task)
+- **Current Phase**: Phase 10 TASK-068 complete (next: TASK-069 — mobile text selection flow)
 
 ## Current Active Task
 
