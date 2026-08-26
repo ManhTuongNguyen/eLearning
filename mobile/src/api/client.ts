@@ -1,5 +1,6 @@
 /** HTTP client for the backend API with normalized error handling. */
 
+import {assertServerApiAllowed} from '../mode/runtime';
 import {API_BASE_URL} from '../config';
 
 /** Normalized API failure carrying the HTTP status and DRF field errors. */
@@ -22,6 +23,10 @@ export interface RequestOptions {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  // Serverless mode never talks to backend endpoints (SPEC TASK-080): the
+  // gate fires before any request is opened so local data cannot leak out.
+  assertServerApiAllowed();
+
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'application/json',

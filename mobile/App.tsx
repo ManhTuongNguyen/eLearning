@@ -6,7 +6,9 @@
  * an auth stack for unauthenticated users and a main stack (Chat, History,
  * Settings) for authenticated ones. Theming per SPEC TASK-044: the provider
  * resolves light/dark/system and both the status bar and the navigation
- * container follow the resolved scheme.
+ * container follow the resolved scheme. Application mode per SPEC TASK-080:
+ * ModeProvider restores SERVER/SERVERLESS before screens mount and its
+ * runtime gate blocks backend traffic while serverless.
  */
 import {NavigationContainer} from '@react-navigation/native';
 import React from 'react';
@@ -14,6 +16,7 @@ import {StatusBar} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 import {AuthProvider} from './src/auth/AuthContext';
+import {ModeProvider} from './src/mode/ModeContext';
 import {RootNavigator} from './src/navigation/RootNavigator';
 import {navigationThemeFor} from './src/theme/navigationTheme';
 import {ThemeProvider, useTheme} from './src/theme/ThemeContext';
@@ -36,13 +39,15 @@ function ThemedChrome({children}: {children: React.ReactNode}) {
 function App() {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <ThemedChrome>
-            <RootNavigator />
-          </ThemedChrome>
-        </AuthProvider>
-      </ThemeProvider>
+      <ModeProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <ThemedChrome>
+              <RootNavigator />
+            </ThemedChrome>
+          </AuthProvider>
+        </ThemeProvider>
+      </ModeProvider>
     </SafeAreaProvider>
   );
 }

@@ -47,6 +47,22 @@ pnpm android        # run-android
   `jest.setup.js` mocks native-module-dependent libraries (currently `react-native-safe-area-context`)
   so components render deterministically in the Node test environment.
 
+## Application modes
+
+The app runs in exactly one of two explicit modes (SPEC Phase 13):
+
+- **Server mode** (default) — authenticated; conversations go through the Django backend.
+- **Serverless mode** — data stays on-device and AI requests go directly to OpenRouter.
+
+State lives in `src/mode/`:
+
+- `types.ts` — the `ApplicationMode` union (`'server' | 'serverless'`) plus deterministic parsing of untrusted values.
+- `modeStorage.ts` — persists the selection in AsyncStorage so it survives app restarts; missing/corrupt values fall back to server mode.
+- `ModeContext.tsx` — restores the mode at startup and switches deterministically via `useApplicationMode()`.
+- `runtime.ts` — process-wide mode holder and the server-API gate: while serverless, `apiRequest` (REST) and SSE streaming fail fast with `ServerApiBlockedError` without opening a connection, so serverless-local data can never be sent to server APIs.
+
+The two modes are intentionally isolated; switching never merges or synchronizes their data (ROADMAP §15).
+
 ## Release build
 
 ```bash

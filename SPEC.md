@@ -1658,7 +1658,7 @@ Acceptance criteria:
 
 ## TASK-080 — Define application mode state
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement:
 

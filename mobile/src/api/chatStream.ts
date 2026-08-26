@@ -22,6 +22,7 @@
  * returned by streamChatTurn/streamRetryTurn aborts the underlying request;
  * leaving a chat screen must call it so no turn outlives its UI.
  */
+import {assertServerApiAllowed} from '../mode/runtime';
 import {API_BASE_URL} from '../config';
 import {ApiError, normalizeApiError} from './client';
 
@@ -159,6 +160,19 @@ interface ConsumeStreamOptions {
  * protocol, so only the URL and request body differ.
  */
 function consumeSseStream(options: ConsumeStreamOptions): ChatStreamHandle {
+  // Serverless mode streams directly from OpenRouter instead (SPEC
+  // TASK-080): fail the turn without opening any backend connection.
+  try {
+    assertServerApiAllowed();
+  } catch (err) {
+    options.onError(err);
+    return {
+      abort() {
+        // Nothing is in flight; aborting a blocked turn is a no-op.
+      },
+    };
+  }
+
   // aborted: user cancel — suppress every callback from now on.
   // finished: the stream reached its single terminal outcome.
   let aborted = false;

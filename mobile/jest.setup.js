@@ -82,6 +82,38 @@ jest.mock('react-native-share', () => ({
 }));
 
 /**
+ * In-memory AsyncStorage mock (mode flag persistence, SPEC TASK-080).
+ *
+ * Like the keychain store below, the backing Map lives OUTSIDE the mock
+ * factory so it survives jest.resetModules(), mirroring device storage
+ * across an application restart. __resetAsyncStorageStore() clears it
+ * between tests.
+ */
+const mockAsyncStorageStore = new Map();
+
+jest.mock('@react-native-async-storage/async-storage', () => {
+  const store = mockAsyncStorageStore;
+
+  return {
+    __esModule: true,
+    default: {
+      setItem: jest.fn(async (key, value) => {
+        store.set(String(key), String(value));
+        return null;
+      }),
+      getItem: jest.fn(async key => (store.has(String(key)) ? store.get(String(key)) : null)),
+      removeItem: jest.fn(async key => {
+        store.delete(String(key));
+        return null;
+      }),
+      __resetAsyncStorageStore: () => {
+        store.clear();
+      },
+    },
+  };
+});
+
+/**
  * In-memory react-native-keychain mock so tests exercise the same code paths
  * as secure device storage without native modules.
  *
