@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 10 TASK-072 complete (next: TASK-073 — Anki CSV export service)
+- **Current Phase**: Phase 11 TASK-073 complete (next: TASK-074 — Vocabulary export API)
 
 ## Current Active Task
 

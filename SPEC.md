@@ -1542,7 +1542,7 @@ Acceptance criteria:
 
 ## TASK-073 — Implement CSV export service
 
-Status: `[ ]`
+Status: `[x]`
 
 Generate generic Anki-compatible CSV.
 
