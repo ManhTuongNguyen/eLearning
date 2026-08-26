@@ -72,6 +72,15 @@ class VocabularyItem(models.Model):
     def __str__(self) -> str:
         return f"{self.user.username}: {self.expression}"
 
+    @staticmethod
+    def normalize_expression(expression: str) -> str:
+        """Return the trimmed lowercase dedupe key for an expression.
+
+        Single definition of duplicate identity (TASK-066): the API, the
+        list endpoint and enrichment all compare items through this key.
+        """
+        return expression.strip().lower()
+
     @property
     def is_pending(self) -> bool:
         """True while enrichment has not produced a result yet."""

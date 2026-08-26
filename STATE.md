@@ -2,11 +2,86 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 10 TASK-065 complete (next: TASK-066 — vocabulary save API)
+- **Current Phase**: Phase 10 TASK-066 complete (next: TASK-067 — post-commit enrichment scheduling)
 
 ## Current Active Task
 
-(none — TASK-065 completed; next: TASK-066 — Implement vocabulary save API.)
+(none — TASK-066 completed; next: TASK-067 — Implement post-commit enrichment
+task scheduling via transaction.on_commit, NOT a post_save signal.)
+
+## Archived Tasks
+
+### TASK-066 — Implement vocabulary save API (COMPLETED 2026-08-26)
+- `backend/vocabulary/models.py` — added
+  `VocabularyItem.normalize_expression()` staticmethod: the single definition
+  of duplicate identity (trim + lowercase), reusable by the list endpoint and
+  enrichment task. Pure python — no migration.
+- DESIGN DECISIONS (incl. the duplicate policy TASK-065 deferred):
+  - Endpoint `POST /api/v1/vocabulary/` (`vocabulary:vocabulary-save`); the
+    TASK-071 list endpoint will share the collection route.
+  - Body `{"expression": str, "source_message_id"?: int}`. Expression stored
+    VERBATIM after strip (words AND phrases; numeric payloads coerce to text
+    per established DRF convention). Source message resolved USER-SCOPED
+    (`session__user=request.user`) → foreign/missing is an indistinguishable
+    404 BEFORE any write; source FKs = message + its session; absent → nulls.
+    Ownership check deliberately PRECEDES the dedupe lookup (no silent 200
+    leak path).
+  - DUPLICATES: deterministic IDEMPOTENT save keyed on
+    `(user, normalize_expression)`. Hit → **200 with the existing row
+    UNCHANGED** (never resets pending→complete enrichment progress, never
+    wipes fields, never re-points source, never duplicates rows); miss →
+    **201 + new pending row**. Re-saving a word is never an error, matching
+    ROADMAP's immediate-save + success-toast flow.
+  - IMMEDIACY: zero LLM / zero Celery on the save path — response is one
+    insert away; status starts `pending`; on_commit scheduling is TASK-067.
+- New files: `vocabulary/serializers.py` (VocabularySaveSerializer with
+  strip/non-blank expression + positive-int optional source id;
+  VocabularyItemSerializer read shape incl. normalized_expression/status/
+  source pks), `vocabulary/views.py` (VocabularySaveView),
+  `vocabulary/urls.py`, config/urls.py include.
+- `backend/tests/test_vocabulary_save_api.py` (32 tests): auth (401 writes
+  nothing; 405 matrix); validation matrix (missing/blank/whitespace/list
+  expression + 0/negative/"abc"/1.5/null source ids → 400, zero rows;
+  numeric coercion pinned as valid per repo convention; unknown fields
+  cannot flip status); source ownership (foreign/missing → indistinguishable
+  404s, dedupe-shortcut never bypasses it); success contract (exact
+  RESPONSE_FIELDS set, verbatim word + punctuated multi-word phrase,
+  normalized trim+lower keeps punctuation "to bite the bullet!", pending
+  status, empty enrichment fields, source links = message + session, no-
+  source → nulls); duplicates (same-expression re-save 200 same id count 1;
+  case/whitespace-insensitive match keeps ORIGINAL verbatim expression;
+  enriched row untouched by re-save from another message; distinct users →
+  two independent 201 rows); purity/immediacy (run_on_commit untouched,
+  django_assert_max_num_queries(10), reverse URL == documented path).
+- Test gotchas hit:
+  - DRF CharField COERCES ints to strings ("42") — repo precedent
+    test_session_rename_api/test_session_api pin this as correct; asserting
+    400 for {"expression": 42} was wrong.
+  - normalize is strip+lower ONLY: punctuation survives ("To bite the
+    bullet!" → "to bite the bullet!") — first draft dropped the "!".
+  - Two fixtures force_authenticating the SAME APIClient instance leave the
+    client authenticated as the LAST user for both names — stranger_api must
+    build its own client.
+- Gates: uv run ruff check clean; ruff format --check clean (104 files);
+  manage.py check clean; full pytest DB_ENGINE=sqlite3 → 864 passed /
+  3 skipped / 293 subtests (+32 new; bare pytest still hits the PRE-EXISTING
+  local Postgres auth issue; README sqlite3 fallback used).
+- Acceptance: user can save a word/phrase ✓ (verbatim round-trips);
+  duplicate behavior is deterministic ✓ (idempotent matrix pinned); API
+  returns quickly without waiting for enrichment ✓ (no provider/Celery work,
+  bounded queries, pending status); tests exist ✓ (32).
+
+#### Sub-step record (all complete)
+1. [x] vocabulary/models.py — normalize_expression() static helper
+2. [x] vocabulary/serializers.py — VocabularySaveSerializer +
+       VocabularyItemSerializer
+3. [x] vocabulary/views.py — VocabularySaveView (immediate pending save,
+       idempotent duplicates, user-scoped source resolution)
+4. [x] vocabulary/urls.py (+ config/urls.py include) — mounted
+       POST /api/v1/vocabulary/
+5. [x] backend/tests/test_vocabulary_save_api.py (32 tests)
+6. [x] Gates green (ruff check/format; manage.py check; sqlite3 pytest 864)
+7. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-066
 
 ## Archived Tasks
 

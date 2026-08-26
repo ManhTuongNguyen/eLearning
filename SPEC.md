@@ -1396,7 +1396,7 @@ Acceptance criteria:
 
 ## TASK-066 — Implement vocabulary save API
 
-Status: `[ ]`
+Status: `[x]`
 
 Create vocabulary save endpoint.
 
