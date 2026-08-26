@@ -1291,7 +1291,7 @@ Acceptance criteria:
 
 ## TASK-061 — Implement suggestion UI
 
-Status: `[ ]`
+Status: `[x]`
 
 Display three suggestions.
 

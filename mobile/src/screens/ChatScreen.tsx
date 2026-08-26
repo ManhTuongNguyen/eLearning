@@ -26,8 +26,12 @@
  * replacement attempt from POST .../messages/{id}/retry/ into the same
  * bubble through the shared turn pipeline. Long-pressing a message row with
  * real text (TASK-060) opens the contextual actions menu — Copy runs
- * immediately via the clipboard seam while suggestion/improvement/speech
- * selection stays a seam for their upcoming tasks.
+ * immediately via the clipboard seam and Suggest replies (TASK-061) calls
+ * the read-only suggestions endpoint and presents the three replies as
+ * chips above the composer; tapping a chip inserts its text into the draft
+ * without sending. Loading and error states cover the generation
+ * round-trip, and the strip clears on send/session change while
+ * improvement/speech selection stays a seam for their upcoming tasks.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -45,8 +49,8 @@ import type {NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
 
 import type {ChatStreamEvent, ChatStreamHandle} from '../api/chatStream';
 import {streamChatTurn, streamRetryTurn} from '../api/chatStream';
-import type {ChatMessage, Session} from '../api/sessions';
-import {getSession, listMessages} from '../api/sessions';
+import type {ChatMessage, MessageSuggestions, Session} from '../api/sessions';
+import {getMessageSuggestions, getSession, listMessages} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {ChatScreenProps} from '../navigation/types';
 import {copyText} from '../utils/clipboard';
@@ -301,6 +305,35 @@ function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.accent,
     },
+    suggestionsBar: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      backgroundColor: c.surface,
+    },
+    suggestionsLoading: {
+      alignItems: 'center',
+    },
+    suggestionsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    suggestionChip: {
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      borderRadius: 14,
+      backgroundColor: c.background,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      maxWidth: '100%',
+    },
+    suggestionText: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.textPrimary,
+    },
   });
 }
 
@@ -326,6 +359,13 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const [streamError, setStreamError] = useState<string | null>(null);
   // TASK-060: the message whose long-press menu is open; null when closed.
   const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null);
+  // TASK-061: the suggestion set currently displayed (tied to its source
+  // message), plus loading/error for the generation round-trip.
+  const [suggestions, setSuggestions] = useState<MessageSuggestions & {
+    messageId: number;
+  } | null>(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
 
   // Latest-ref seam: the load effect keys on (session, reload) only, so an
   // auth-state transition never refetches the conversation behind the user's
@@ -343,6 +383,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  // TASK-061: monotonically increasing request id; responses apply only
+  // when both the session and no newer request superseded them.
+  const suggestionsRequestRef = useRef(0);
 
   // TASK-050: delta commits run through a DeltaBuffer so token bursts cause
   // at most one message-list update per tick instead of one per SSE event.
@@ -421,6 +465,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setTopicExpanded(false);
     setExampleVisible(false);
     setMenuMessage(null);
+    suggestionsRequestRef.current += 1;
+    setSuggestions(null);
+    setSuggestionsLoading(false);
+    setSuggestionsError(null);
     nearBottomRef.current = true;
     setDetachedFromBottom(false);
     endTurn();
@@ -607,6 +655,56 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   );
 
   /**
+   * TASK-061: generate three suggested replies for one selected message
+   * through the read-only suggestions endpoint. Nothing auto-sends — the
+   * replies land as chips above the composer and tapping one merely fills
+   * the draft. Stale responses (session switched or a newer request
+   * started) are dropped instead of overwriting newer state.
+   */
+  const startSuggestions = useCallback((sid: number, messageId: number) => {
+    const requestId = ++suggestionsRequestRef.current;
+    setSuggestions(null);
+    setSuggestionsError(null);
+    setSuggestionsLoading(true);
+    (async () => {
+      try {
+        let token: string | null = null;
+        try {
+          token = await getAccessTokenRef.current();
+        } catch {
+          token = null;
+        }
+        if (
+          !token ||
+          sessionIdRef.current !== sid ||
+          suggestionsRequestRef.current !== requestId
+        ) {
+          return;
+        }
+        const result = await getMessageSuggestions(token, sid, messageId);
+        if (
+          sessionIdRef.current !== sid ||
+          suggestionsRequestRef.current !== requestId
+        ) {
+          return;
+        }
+        setSuggestions({...result, messageId});
+      } catch (err) {
+        if (
+          sessionIdRef.current === sid &&
+          suggestionsRequestRef.current === requestId
+        ) {
+          setSuggestionsError(toErrorMessage(err));
+        }
+      } finally {
+        if (suggestionsRequestRef.current === requestId) {
+          setSuggestionsLoading(false);
+        }
+      }
+    })();
+  }, []);
+
+  /**
    * Retry one failed assistant row (TASK-054): the backend re-arms that
    * exact row in place, so locally it becomes the streaming target — same
    * pending spinner, same buffered deltas — and completion flips it to
@@ -638,6 +736,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     }
     setDraft('');
     setStreamError(null);
+    // Stale suggestion chips would offer replies to a conversation that has
+    // moved on; sending dismisses them along with any leftover error state.
+    setSuggestions(null);
+    setSuggestionsError(null);
 
     // Optimistic local echo + pending assistant bubble with stable
     // synthetic ids; sequences continue chronologically past the last row.
@@ -674,24 +776,27 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const canSend = draft.trim().length > 0 && !streaming;
 
   /**
-   * TASK-060 menu selection. Copy works today through the clipboard seam;
-   * the remaining actions are deliberate seams for their own upcoming
-   * tasks (suggestions → TASK-061, improvement → TASK-064, speech →
-   * TASK-078), exactly like the TASK-048 composer send preceded its wire
-   * call. Every selection dismisses the menu.
+   * TASK-060 menu selection. Copy runs through the clipboard seam and
+   * Suggest replies generates three candidate messages (TASK-061) that the
+   * user can tap into the composer; improvement (TASK-064) and speech
+   * (TASK-078) remain deliberate seams for their upcoming tasks, exactly
+   * like the TASK-048 composer send preceded its wire call. Every selection
+   * dismisses the menu.
    */
   const handleMenuAction = useCallback(
     (action: MessageAction) => {
       const message = menuMessage;
       setMenuMessage(null);
-      if (!message) {
+      if (!message || sessionId === undefined) {
         return;
       }
       if (action === 'copy') {
         copyText(message.content);
+      } else if (action === 'suggest-replies') {
+        startSuggestions(sessionId, message.id);
       }
     },
-    [menuMessage],
+    [menuMessage, sessionId, startSuggestions],
   );
 
   /** Follow the conversation tail; no-op when the list is not mounted. */
@@ -925,6 +1030,38 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
               <Text role="alert" style={styles.error} testID="chat-stream-error">
                 {streamError}
               </Text>
+            </View>
+          ) : null}
+          {suggestionsLoading ? (
+            <View style={[styles.suggestionsBar, styles.suggestionsLoading]} testID="chat-suggestions-loading">
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            </View>
+          ) : suggestionsError !== null ? (
+            <View style={styles.suggestionsBar}>
+              <Text role="alert" style={styles.error} testID="chat-suggestions-error">
+                {suggestionsError}
+              </Text>
+            </View>
+          ) : suggestions !== null ? (
+            <View style={[styles.suggestionsBar, styles.suggestionsRow]} testID="chat-suggestions">
+              {suggestions.replies.map((reply, index) => (
+                <Pressable
+                  key={`${suggestions.messageId}-${index}`}
+                  style={styles.suggestionChip}
+                  onPress={() => {
+                    // Insertion only — a suggestion is a draft, never an
+                    // automatic send (ROADMAP §8).
+                    setDraft(reply);
+                    setSuggestions(null);
+                  }}
+                  testID={`chat-suggestion-${index}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Insert suggested reply ${index + 1}`}>
+                  <Text numberOfLines={3} style={styles.suggestionText}>
+                    {reply}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
           ) : null}
           <View style={styles.composer} testID="chat-composer">

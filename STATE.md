@@ -2,11 +2,76 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 9 TASK-060 complete (next: TASK-061 — suggestion UI)
+- **Current Phase**: Phase 9 TASK-061 complete (next: TASK-062 — improvement service)
 
 ## Current Active Task
 
-(none — TASK-060 completed; next: TASK-061 — Implement suggestion UI.)
+(none — TASK-061 completed; next: TASK-062 — Implement improvement service.)
+
+## Archived Tasks
+
+### TASK-061 — Implement suggestion UI (COMPLETED 2026-08-26)
+- `src/api/sessions.ts`: `MessageSuggestions {replies: string[]}` +
+  `getMessageSuggestions(token, sessionId, messageId)` POST binding to
+  `/api/v1/sessions/{sid}/messages/{mid}/suggestions/` with body {} and
+  Bearer header (TASK-059 contract); apiRequest normalizes 404/409/503/
+  502 into ApiError verbatim.
+- `ChatScreen.tsx`:
+  - State triple: `suggestions` ({messageId} + replies, null = hidden),
+    `suggestionsLoading`, `suggestionsError`; plus
+    `suggestionsRequestRef` monotonic request counter.
+  - `startSuggestions(sid, messageId)` async-IIFE seam (onPress-safe void
+    return): latest-ref token → fetchSuggestions → chips. Stale-response
+    guards check BOTH sessionIdRef AND the request counter, so switching
+    sessions or firing a newer selection never lets an older response
+    land; the counter also arbitrates the loading flag in finally.
+  - handleMenuAction 'suggest-replies' → startSuggestions (menu closes
+    first); copy/improve/speak behavior unchanged.
+  - Chip strip above the composer (below stream-error banner):
+    loading spinner (`chat-suggestions-loading`) → error text role=alert
+    (`chat-suggestions-error`) → three Pressable chips
+    (`chat-suggestion-{0|1|2}`, role button, label "Insert suggested
+    reply n+1"). Tapping sets the composer draft to the reply VERBATIM and
+    dismisses the strip — insertion never sends (ROADMAP §8).
+  - Clearing semantics: handleSend drops chips + error ("stale chips would
+    offer replies to a conversation that has moved on"); load effect
+    resets all triple state on session/reload change AND bumps the
+    request counter to orphan any in-flight generation.
+- Tests (+8 → 18 suites 212/212):
+  - __tests__/sessionsApi.test.ts (+2): URL/method/body {}/Bearer +
+    replies passthrough; 409 detail → ApiError(status/message).
+  - __tests__/ChatScreen.test.tsx (+6 describe block): default-closed
+    (no strip/loading/error, zero calls); select → exact args ('token-a',
+    5, msgId) + deferred loading state → menu gone, no stream call,
+    exactly three ordered verbatim chips; tap inserts into composer
+    WITHOUT sending (mockedStream never called, turns empty), dismisses
+    strip, Send re-enables; failure banner (/unreachable/ via 5xx
+    mapping) then second selection succeeds and clears it; new selection
+    replaces displayed chips (LastCalledWith the other message id);
+    sending clears the strip while the turn renders.
+  - beforeEach now defaults getMessageSuggestions to a resolved triple
+    (the TASK-060 "dismisses without copying" test presses the action and
+    must not hit an undefined mock).
+- Test gotchas hit:
+  - First draft of two tests relied on the beforeEach DEFAULT replies but
+    asserted REPLIES — chips rendered 'Default reply one…' and getByText
+    failed. Pin mockResolvedValueOnce({replies: REPLIES}) per test that
+    asserts chip content; defaults are for tests that don't look at chips.
+- Acceptance: suggestions can be tapped ✓ (role-button chips pinned);
+  tapping inserts text into the composer ✓ (draft value verbatim);
+  suggestions do not automatically send ✓ (zero stream calls pinned);
+  loading/error states exist ✓ (deferred-promise spinner, 5xx banner +
+  recovery path).
+- Gates: pnpm typecheck clean; eslint clean; jest 18 suites 212/212.
+
+#### Sub-step record (all complete)
+1. [x] src/api/sessions.ts — MessageSuggestions + getMessageSuggestions
+2. [x] ChatScreen.tsx — suggestion state triple + startSuggestions +
+       chip strip + tap-to-insert + clear/reset semantics
+3. [x] __tests__/sessionsApi.test.ts — binding tests (+2)
+4. [x] __tests__/ChatScreen.test.tsx — suggestion UI block (+6)
+5. [x] Gates green (pnpm typecheck, pnpm lint, jest 212/212 across 18 suites)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-061
 
 ## Archived Tasks
 

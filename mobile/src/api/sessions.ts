@@ -105,3 +105,25 @@ export function listMessages(
     {token},
   );
 }
+
+/** Three candidate replies for one selected message (TASK-059 contract). */
+export interface MessageSuggestions {
+  replies: string[];
+}
+
+/**
+ * POST /api/v1/sessions/{sid}/messages/{mid}/suggestions/ (TASK-061).
+ * Read-only generation: nothing persists server-side. Invalid targets
+ * (non-complete or blank messages) are 409; provider failures 503/502 —
+ * all normalized by apiRequest.
+ */
+export function getMessageSuggestions(
+  token: string,
+  sessionId: number,
+  messageId: number,
+): Promise<MessageSuggestions> {
+  return apiRequest<MessageSuggestions>(
+    `/api/v1/sessions/${sessionId}/messages/${messageId}/suggestions/`,
+    {method: 'POST', body: {}, token},
+  );
+}

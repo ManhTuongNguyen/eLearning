@@ -1,6 +1,7 @@
 import {
   createSession,
   deleteSession,
+  getMessageSuggestions,
   getSession,
   listMessages,
   listSessions,
@@ -188,5 +189,35 @@ describe('sessions api bindings', () => {
       'http://10.0.2.2:8000/api/v1/sessions/9/messages/',
       expect.objectContaining({method: 'GET'}),
     );
+  });
+
+  it('requests suggestions for a message with an empty POST body (TASK-061)', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(200, {replies: ['First reply', 'Second reply', 'Third reply']}),
+    );
+
+    const result = await getMessageSuggestions('tok', 9, 44);
+
+    expect(result.replies).toEqual(['First reply', 'Second reply', 'Third reply']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://10.0.2.2:8000/api/v1/sessions/9/messages/44/suggestions/',
+      expect.objectContaining({
+        method: 'POST',
+        body: '{}',
+        headers: expect.objectContaining({Authorization: 'Bearer tok'}),
+      }),
+    );
+  });
+
+  it('normalizes suggestion endpoint failures into ApiError with the DRF detail', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(409, {detail: 'Suggestions require a completed, non-empty message.'}),
+    );
+
+    await expect(getMessageSuggestions('tok', 9, 44)).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 409,
+      message: 'Suggestions require a completed, non-empty message.',
+    });
   });
 });
