@@ -1,11 +1,12 @@
 /**
- * Chat screen tests (SPEC TASK-048/049/050/052): message list ordering,
+ * Chat screen tests (SPEC TASK-048/049/050/052/053): message list ordering,
  * composer/send interaction, loading/empty/error states and the
  * keyboard-avoiding shell — plus the SSE streaming round-trip: incremental
  * assistant deltas, completion swap-in, error frames, transport failures and
  * abort-on-exit, the TASK-050 smooth-streaming behavior (coalesced delta
- * commits, scroll stick/detach transitions, ghost-delta suppression) and the
- * TASK-052 collapsible topic header.
+ * commits, scroll stick/detach transitions, ghost-delta suppression), the
+ * TASK-052 collapsible topic header and the TASK-053 sample-conversation
+ * overlay entry.
  */
 import React from 'react';
 import {View} from 'react-native';
@@ -25,7 +26,7 @@ import {streamChatTurn} from '../src/api/chatStream';
 import * as authApi from '../src/api/auth';
 import {ApiError} from '../src/api/client';
 import * as sessionsApi from '../src/api/sessions';
-import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
+import type {ChatMessage, Paginated, SampleTurn, Session} from '../src/api/sessions';
 import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
@@ -73,6 +74,10 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     created_at: '2026-08-26T10:00:00Z',
     ...overrides,
   };
+}
+
+function makeSampleTurn(overrides: Partial<SampleTurn> = {}): SampleTurn {
+  return {role: 'assistant', content: 'Example line', ...overrides};
 }
 
 function emptyPage(): Paginated<ChatMessage> {
@@ -688,5 +693,57 @@ describe('ChatScreen', () => {
     await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
     expect(screen.queryByTestId('form-error')).toBeNull();
     expect(screen.queryByTestId('chat-topic')).toBeNull();
+  });
+
+  it('hides the example entry when no sample turns were provided (TASK-053)', async () => {
+    mockedSessions.listMessages.mockResolvedValue(emptyPage());
+
+    await renderChat({sessionId: 5});
+
+    await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
+    expect(screen.queryByTestId('chat-show-example')).toBeNull();
+  });
+
+  it('hides the example entry for an explicitly empty turn list', async () => {
+    mockedSessions.listMessages.mockResolvedValue(emptyPage());
+
+    await renderChat({sessionId: 5, sampleTurns: []});
+
+    await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
+    expect(screen.queryByTestId('chat-show-example')).toBeNull();
+  });
+
+  it('opens the sample overlay from "Show me an example" separate from chat history', async () => {
+    mockedSessions.listMessages.mockResolvedValue(
+      pageOf([makeMessage({id: 201, role: 'user', sequence: 1, content: 'Hello'})]),
+    );
+    await renderChat({
+      sessionId: 5,
+      sampleTurns: [
+        makeSampleTurn({role: 'assistant', content: 'Coach greeting example'}),
+        makeSampleTurn({role: 'user', content: 'Learner reply example'}),
+      ],
+    });
+    await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
+
+    // The entry point is visible, but none of the example text leaks into
+    // the conversation tree before it is opened.
+    expect(screen.getByTestId('chat-show-example')).toBeOnTheScreen();
+    expect(screen.queryByText('Coach greeting example')).toBeNull();
+    expect(messageTestIds()).toEqual(['chat-message-201']);
+
+    // Opening presents both lines inside the overlay; the history is
+    // untouched underneath.
+    await fireEvent.press(screen.getByTestId('chat-show-example'));
+    const overlay = screen.getByTestId('sample-modal');
+    expect(within(overlay).getByText('Coach greeting example')).toBeOnTheScreen();
+    expect(within(overlay).getByText('Learner reply example')).toBeOnTheScreen();
+    expect(messageTestIds()).toEqual(['chat-message-201']);
+
+    // Dismissing via Close removes the overlay entirely.
+    await fireEvent.press(screen.getByTestId('sample-close'));
+    expect(screen.queryByTestId('sample-modal')).toBeNull();
+    expect(screen.queryByText('Coach greeting example')).toBeNull();
+    expect(screen.getByTestId('composer-input')).toBeOnTheScreen();
   });
 });

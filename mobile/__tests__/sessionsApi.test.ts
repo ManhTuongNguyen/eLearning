@@ -89,6 +89,34 @@ describe('sessions api bindings', () => {
     );
   });
 
+  it('surfaces the generated sample conversation from the creation response', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(201, {
+        id: 12,
+        title: 'Travel',
+        topic: 'Talking about trips',
+        topic_hint: '',
+        learning_level: 'B1',
+        created_at: '2026-08-26T10:00:00Z',
+        sample_conversation: {
+          turns: [
+            {role: 'assistant', content: 'Where would you like to go?'},
+            {role: 'user', content: 'Somewhere sunny.'},
+          ],
+        },
+      }),
+    );
+
+    const created = await createSession('tok');
+
+    // TASK-053 depends on this envelope surviving the typed binding.
+    expect(created.sample_conversation?.turns).toHaveLength(2);
+    expect(created.sample_conversation?.turns[0]).toMatchObject({
+      role: 'assistant',
+      content: 'Where would you like to go?',
+    });
+  });
+
   it('fetches a single session by id', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')

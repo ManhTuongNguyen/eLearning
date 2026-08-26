@@ -4,6 +4,8 @@
  * and "Let AI choose a topic" which always sends an empty hint. Both create
  * the session through POST /api/v1/sessions/ and land in Chat; a blank
  * Start behaves exactly like the auto action, so empty input works too.
+ * The creation response carries the generated sample conversation (TASK-053),
+ * which is handed to Chat as a route param since no endpoint can refetch it.
  * Creation shows a spinner and disables both buttons; failures surface in
  * an inline banner and leave the form ready to retry.
  */
@@ -139,7 +141,10 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
           throw new Error('You need to sign in again to start a conversation.');
         }
         const session = await createSession(token, rawHint.trim());
-        navigation.replace('Chat', {sessionId: session.id});
+        navigation.replace('Chat', {
+          sessionId: session.id,
+          sampleTurns: session.sample_conversation?.turns,
+        });
       } catch (err) {
         setError(toErrorMessage(err));
       } finally {

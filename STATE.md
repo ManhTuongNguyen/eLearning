@@ -2,12 +2,96 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 7 TASK-052 complete (next: TASK-053 — sample conversation UI)
+- **Current Phase**: Phase 7 TASK-053 complete (next: TASK-054 — failed-response retry UI)
 
 ## Current Active Task
 
-(none — TASK-052 completed; next: TASK-053 — Implement sample conversation
-UI, sixth task of Phase 7 Mobile Chat.)
+(none — TASK-053 completed; next: TASK-054 — Implement failed-response retry
+UI, seventh task of Phase 7 Mobile Chat.)
+
+## Archived Tasks
+
+### TASK-053 — Implement sample conversation UI (COMPLETED 2026-08-26)
+- `src/api/sessions.ts`: new `SampleTurn {role: MessageRole; content: string}`
+  + `SampleConversation {turns}` mirroring the backend asdict() envelope;
+  `CreatedSession extends Session {sample_conversation?}` — the sample exists
+  ONLY in the POST /api/v1/sessions/ response (no GET endpoint), so
+  `createSession` now returns `Promise<CreatedSession>`.
+- `src/navigation/types.ts`: Chat route params gain optional `sampleTurns:
+  SampleTurn[]`; sessions opened any other way have none → entry hidden.
+- `src/tts/textToSpeech.ts` (new): minimal `TextToSpeechEngine` seam
+  ({speak(text): Promise<void>, stop()}) + `stubSpeechEngine` no-op. Real
+  Android-native engine is Phase 12 (TASK-076/077) and swaps in behind the
+  seam without touching this UI; playback-state tracking lives with the
+  caller by contract.
+- `src/screens/SampleConversationModal.tsx` (new, first Modal in the app):
+  - Full-screen RN `<Modal animationType="slide">`, gated to render nothing
+    when closed; container carries accessibilityViewIsModal.
+  - Header "Example conversation" + Close (sample-close, role=button,
+    label Close example conversation); note line states the example "never
+    becomes part of your chat history" (testID sample-note).
+  - Turns rendered chat-style (assistant surface-left / user primary-right)
+    with uppercase AI/You captions, per-turn testIDs sample-turn-{n}.
+  - Per-line TTS control sample-tts-{n}: Play ⇄ Stop toggle driven by
+    speakingIndex state; accessibilityRole button, dynamic label Play/Stop
+    example line n+1, accessibilityState.busy. Starting another line stops
+    the active one first (guarded so a first press issues NO stop call);
+    explicit stop ignores late natural completion via functional setState.
+    Closing (visible→false effect) AND unmount both halt the engine.
+  - Engine injectable for tests (`speech` prop, defaults to the stub).
+- `ChatScreen.tsx`: `hasSample = route.params?.sampleTurns non-empty`;
+  accent strip under the topic bar (chat-show-example, role=button, label
+  "Show me an example") opens `exampleVisible`; modal mounted at the end of
+  the in-conversation branch with onClose resetting it. Load effect closes a
+  stale overlay on session/reload change like topicExpanded.
+- `NewConversationScreen.tsx`: handleCreate passes
+  `sampleTurns: created.sample_conversation?.turns` into replace('Chat', …)
+  since the sample cannot be refetched later.
+- Tests (+15 → 16 suites 160/160):
+  - __tests__/SampleConversationModal.test.tsx (9): ordered turns + role
+    captions + separation note; closed renders nothing; Close-button and
+    Android-back (props.onRequestClose invoked) dismissal; play speaks the
+    exact line through the injected engine and flips busy/label until the
+    deferred promise resolves; repress stops immediately and a late release
+    does not resurrect state; switching lines stops the previous one (stop
+    called exactly once, correct two speak texts); closing mid-speech halts
+    engine and unmounts content; unmount cleanup silences too.
+  - __tests__/ChatScreen.test.tsx (+3): entry hidden without params / with
+    empty turns; open → overlay shows both lines while messageTestIds stay
+    untouched and example text absent from tree before opening → Close
+    removes it fully.
+  - __tests__/NewConversationScreen.test.tsx (+2): creation response WITH
+    sample_conversation → chat shows chat-show-example and the overlay
+    presents those turns; WITHOUT it → chat opens, entry absent.
+  - __tests__/sessionsApi.test.ts (+1): sample_conversation envelope
+    survives the typed createSession binding.
+- Test gotchas hit:
+  - First draft asserted stopMock not called after a FIRST play press, but
+    the component stopped the engine unconditionally before speaking —
+    fixed the component instead (stop only when something is active): more
+    precise seam behavior, tests then passed unchanged.
+  - A weak "close halts engine" test (parent never flipped visible) was
+    replaced with an act-wrapped rerender visible=false — the real path.
+- Acceptance: example separate from actual chat history (modal-only, pinned)
+  ✓; supports TTS controls (per-line Play/Stop through the speech seam) ✓;
+  modal accessible and dismissible (roles/labels/busy states, Close +
+  Android-back) ✓.
+- Gates: pnpm typecheck clean; eslint clean; jest 16 suites 160/160 passed.
+
+#### Sub-step record (all complete)
+1. [x] sessions.ts — SampleTurn/SampleConversation/CreatedSession types;
+       createSession returns CreatedSession
+2. [x] navigation/types.ts — Chat route params gain optional sampleTurns
+3. [x] src/tts/textToSpeech.ts — TextToSpeechEngine seam + stub engine
+       (real engine is TASK-076/077)
+4. [x] SampleConversationModal.tsx — accessible/dismissible RN Modal,
+       per-turn Play/Stop via injected engine, role-labeled bubbles
+5. [x] ChatScreen.tsx — chat-show-example entry (only when turns present) +
+       modal mount; NewConversationScreen carries sampleTurns into replace()
+6. [x] Tests: SampleConversationModal.test.tsx (9), ChatScreen.test.tsx (+3),
+       NewConversationScreen.test.tsx (+2), sessionsApi.test.ts (+1)
+7. [x] Gates green (pnpm typecheck, pnpm lint, jest 160/160 across 16 suites)
+8. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-053
 
 ## Archived Tasks
 

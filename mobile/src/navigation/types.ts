@@ -1,6 +1,8 @@
 /** Route parameter lists for the application navigators (SPEC TASK-043). */
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
+import type {SampleTurn} from '../api/sessions';
+
 /** Stack shown to unauthenticated users. */
 export type AuthStackParamList = {
   Login: undefined;
@@ -9,8 +11,14 @@ export type AuthStackParamList = {
 
 /** Stack shown to authenticated users. */
 export type MainStackParamList = {
-  /** Active conversation; absent until a session is opened/created. */
-  Chat: {sessionId?: number} | undefined;
+  /**
+   * Active conversation; absent until a session is opened/created.
+   * `sampleTurns` carries the generated example conversation from session
+   * creation (SPEC TASK-053) — it exists only in the creation response, so
+   * it is handed over as a param instead of refetched. Absent for sessions
+   * opened any other way, which hides the example entry point.
+   */
+  Chat: {sessionId?: number; sampleTurns?: SampleTurn[]} | undefined;
   /** New-conversation form (optional topic hint) — SPEC TASK-051. */
   NewConversation: undefined;
   History: undefined;

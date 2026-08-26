@@ -2,17 +2,30 @@
  * New conversation screen tests (SPEC TASK-051): optional topic hint, Start,
  * Let-AI-choose, empty-input behavior, navigation into Chat with the created
  * session id, loading/disabled state while creating, error banner + retry
- * readiness, and the cancel/back dismissal.
+ * readiness, and the cancel/back dismissal. Also covers the TASK-053 hand-
+ * off: the creation response's sample conversation rides into Chat as a
+ * route param and powers the example overlay.
  */
 import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react-native';
 
 import * as authApi from '../src/api/auth';
 import {ApiError} from '../src/api/client';
 import * as sessionsApi from '../src/api/sessions';
-import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
+import type {
+  ChatMessage,
+  CreatedSession,
+  Paginated,
+  SampleTurn,
+  Session,
+} from '../src/api/sessions';
 import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
@@ -38,6 +51,17 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     created_at: '2026-08-26T10:00:00Z',
     ...overrides,
   };
+}
+
+function makeCreatedSession(
+  sampleTurns?: SampleTurn[],
+  overrides: Partial<Session> = {},
+): CreatedSession {
+  const session: CreatedSession = makeSession(overrides);
+  if (sampleTurns !== undefined) {
+    session.sample_conversation = {turns: sampleTurns};
+  }
+  return session;
 }
 
 function emptyMessagesPage(): Paginated<ChatMessage> {
@@ -191,5 +215,43 @@ describe('NewConversationScreen', () => {
     await fireEvent.press(screen.getByTestId('new-conversation-back'));
 
     await waitFor(() => expect(screen.getByTestId('chat-no-session')).toBeOnTheScreen());
+  });
+
+  it('hands the generated sample conversation to chat for the example overlay (TASK-053)', async () => {
+    mockedSessions.createSession.mockResolvedValue(
+      makeCreatedSession([
+        {role: 'assistant', content: 'Welcome aboard, traveler!'},
+        {role: 'user', content: 'Thanks! Where should we go?'},
+      ]),
+    );
+    await renderScreen();
+    await screen.findByTestId('new-conversation-screen');
+
+    await fireEvent.press(screen.getByTestId('new-conversation-auto'));
+
+    // The created conversation opens and exposes the example entry point.
+    await screen.findByTestId('chat-screen');
+    await waitFor(() =>
+      expect(screen.getByTestId('chat-show-example')).toBeOnTheScreen(),
+    );
+
+    // The example overlay presents the creation-response turns.
+    await fireEvent.press(screen.getByTestId('chat-show-example'));
+    expect(screen.getByText('Welcome aboard, traveler!')).toBeOnTheScreen();
+    expect(screen.getByText('Thanks! Where should we go?')).toBeOnTheScreen();
+  });
+
+  it('opens chat without the example entry when creation carries no sample', async () => {
+    mockedSessions.createSession.mockResolvedValue(makeCreatedSession(undefined, {id: 7}));
+    await renderScreen();
+    await screen.findByTestId('new-conversation-screen');
+
+    await fireEvent.press(screen.getByTestId('new-conversation-start'));
+
+    await screen.findByTestId('chat-screen');
+    await waitFor(() =>
+      expect(mockedSessions.listMessages).toHaveBeenCalledWith('token-a', 7),
+    );
+    expect(screen.queryByTestId('chat-show-example')).toBeNull();
   });
 });

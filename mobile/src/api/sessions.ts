@@ -27,6 +27,26 @@ export interface ChatMessage {
   created_at: string;
 }
 
+/** One turn of the generated example conversation (backend SampleTurn). */
+export interface SampleTurn {
+  role: MessageRole;
+  content: string;
+}
+
+/** Generated sample conversation carried by the creation response. */
+export interface SampleConversation {
+  turns: SampleTurn[];
+}
+
+/**
+ * POST /api/v1/sessions/ response: the session fields plus the freshly
+ * generated sample conversation (ROADMAP §7). The sample exists only in this
+ * response — no GET endpoint exposes it — so consumers must capture it here.
+ */
+export interface CreatedSession extends Session {
+  sample_conversation?: SampleConversation;
+}
+
 /** DRF page-number pagination envelope. */
 export interface Paginated<T> {
   count: number;
@@ -43,8 +63,8 @@ export function listSessions(token: string, page?: number): Promise<Paginated<Se
   return apiRequest<Paginated<Session>>(`/api/v1/sessions/${pageQuery(page)}`, {token});
 }
 
-export function createSession(token: string, topicHint = ''): Promise<Session> {
-  return apiRequest<Session>('/api/v1/sessions/', {
+export function createSession(token: string, topicHint = ''): Promise<CreatedSession> {
+  return apiRequest<CreatedSession>('/api/v1/sessions/', {
     method: 'POST',
     body: topicHint ? {topic_hint: topicHint} : {},
     token,

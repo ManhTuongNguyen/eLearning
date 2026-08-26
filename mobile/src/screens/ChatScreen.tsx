@@ -1,5 +1,5 @@
 /**
- * Main conversation screen (SPEC TASK-048/049/050/052): chronological
+ * Main conversation screen (SPEC TASK-048/049/050/052/053): chronological
  * message list, composer with send button, loading/error states and keyboard
  * handling.
  *
@@ -16,7 +16,11 @@
  * pill offers the way back down. A compact collapsible topic bar (TASK-052)
  * sits under the header once the session detail loads — one line of the
  * session title by default, full topic description on demand; a failed
- * detail fetch only hides the bar, never the conversation.
+ * detail fetch only hides the bar, never the conversation. When the route
+ * carries sample turns from session creation, a "Show me an example" link
+ * (TASK-053) opens the generated sample conversation in a dismissible modal
+ * that stays fully separate from the chat history and exposes per-line TTS
+ * controls through the speech seam.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -40,6 +44,7 @@ import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {ChatScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
+import {SampleConversationModal} from './SampleConversationModal';
 import {
   DeltaBuffer,
   isNearBottom,
@@ -251,11 +256,27 @@ function createStyles(c: ThemeColors) {
       fontSize: 13,
       fontWeight: '600',
     },
+    exampleBar: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      backgroundColor: c.surface,
+    },
+    exampleLink: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.accent,
+    },
   });
 }
 
 export function ChatScreen({route, navigation}: ChatScreenProps) {
   const sessionId = route.params?.sessionId;
+  // Sample turns exist only in the session-creation response, so they ride
+  // in as a route param (TASK-053); sessions opened any other way have none.
+  const sampleTurns = route.params?.sampleTurns;
+  const hasSample = sampleTurns !== undefined && sampleTurns.length > 0;
   const {getAccessToken} = useAuth();
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -265,6 +286,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [topicExpanded, setTopicExpanded] = useState(false);
+  const [exampleVisible, setExampleVisible] = useState(false);
   const [draft, setDraft] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [streaming, setStreaming] = useState(false);
@@ -362,6 +384,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     resetMessages();
     setSession(null);
     setTopicExpanded(false);
+    setExampleVisible(false);
     nearBottomRef.current = true;
     setDetachedFromBottom(false);
     endTurn();
@@ -706,6 +729,18 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
               </Text>
             </Pressable>
           ) : null}
+          {hasSample ? (
+            <Pressable
+              style={styles.exampleBar}
+              onPress={() => {
+                setExampleVisible(true);
+              }}
+              testID="chat-show-example"
+              accessibilityRole="button"
+              accessibilityLabel="Show me an example">
+              <Text style={styles.exampleLink}>Show me an example</Text>
+            </Pressable>
+          ) : null}
           <View style={styles.listArea}>
             <FlatList
               ref={listRef}
@@ -760,6 +795,13 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
               <Text style={styles.sendText}>Send</Text>
             </Pressable>
           </View>
+          <SampleConversationModal
+            visible={exampleVisible && hasSample}
+            turns={sampleTurns ?? []}
+            onClose={() => {
+              setExampleVisible(false);
+            }}
+          />
         </>
       )}
     </KeyboardAvoidingView>

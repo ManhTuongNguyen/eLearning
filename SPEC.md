@@ -1139,7 +1139,7 @@ Acceptance criteria:
 
 ## TASK-053 — Implement sample conversation UI
 
-Status: `[ ]`
+Status: `[x]`
 
 Add:
 
