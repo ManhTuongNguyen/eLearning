@@ -1601,7 +1601,7 @@ Acceptance criteria:
 
 ## TASK-076 — Create TTS abstraction
 
-Status: `[ ]`
+Status: `[x]`
 
 Create a frontend TTS interface independent of the Android implementation.
 

@@ -23,7 +23,7 @@ import type {SampleTurn} from '../api/sessions';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 import type {TextToSpeechEngine} from '../tts/textToSpeech';
-import {stubSpeechEngine} from '../tts/textToSpeech';
+import {getSpeechEngine} from '../tts/textToSpeech';
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -129,7 +129,7 @@ interface SampleConversationModalProps {
   turns: SampleTurn[];
   /** Dismissal callback (Close button and Android back). */
   onClose: () => void;
-  /** TTS seam; defaults to the Phase-12-pending stub engine. */
+  /** TTS seam; defaults to the active engine from the registry. */
   speech?: TextToSpeechEngine;
 }
 
@@ -137,7 +137,7 @@ export function SampleConversationModal({
   visible,
   turns,
   onClose,
-  speech = stubSpeechEngine,
+  speech = getSpeechEngine(),
 }: SampleConversationModalProps) {
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
