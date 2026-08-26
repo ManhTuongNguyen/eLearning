@@ -243,3 +243,9 @@ LLM_REQUEST_TIMEOUT_SECONDS = config("LLM_REQUEST_TIMEOUT_SECONDS", default=60, 
 # recent messages handed to the model with each chat turn; older turns leave
 # the window and belong to the rolling summary instead.
 CONTEXT_RECENT_MESSAGE_WINDOW = config("CONTEXT_RECENT_MESSAGE_WINDOW", default=20, cast=int)
+
+# Rolling summaries are refreshed only after this many unsummarized messages
+# have accumulated beyond the recent window (batched — never per message).
+CONTEXT_SUMMARY_TRIGGER_THRESHOLD = config(
+    "CONTEXT_SUMMARY_TRIGGER_THRESHOLD", default=40, cast=int
+)

@@ -843,7 +843,7 @@ Acceptance criteria:
 
 ## TASK-038 — Implement summary trigger
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement configurable summary thresholds.
 

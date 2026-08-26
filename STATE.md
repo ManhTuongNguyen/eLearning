@@ -2,15 +2,78 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5A — Conversation Context (TASK-037 complete; next TASK-038)
+- **Current Phase**: Phase 5A — Conversation Context (TASK-038 complete; next TASK-039)
 
 ## Current Active Task
 
-(none — TASK-037 completed; next: TASK-038 — Implement summary trigger:
-configurable thresholds; never summarize after every user message; trigger
-only when the configured context threshold is crossed; persist the summary
-boundary; repeated requests must not re-summarize the same messages; tests
-cover boundary behavior)
+(none — TASK-038 completed; next: TASK-039 — Implement asynchronous summary
+update: move session-summary maintenance into a Celery task so the chat
+request does not wait for it; conversation remains usable when summarization
+fails; failed jobs retry; no duplicate summary ranges; tests cover task
+behavior)
+
+## Archived Tasks
+
+### TASK-038 — Implement summary trigger (COMPLETED 2026-08-26)
+- `conversations/trigger.py`, two layers:
+  - Pure planner `archive_range(total_messages, *, boundary, window=None,
+    threshold=None) -> tuple[int,int] | None`: end = total - window; fires iff
+    (end - boundary) >= threshold → inclusive (boundary+1, end). One rule gives
+    both batching AND idempotency: short conversations (< window+threshold)
+    never fire; after compaction the pending count resets to 0 so immediate
+    repeats are a no-op. Explicit window/threshold misuse → ValueError;
+    total/boundary validated non-negative ints (bool rejected), boundary >
+    total rejected. ROADMAP §5 cadence reproduced exactly (B=0,N=60 → 1-40;
+    B=40,N=100 → 41-80).
+  - DB-facing `SessionSummaryTrigger(provider)` — `update(session) -> bool`
+    wraps ConversationSummarizer (constructor injection). transaction.atomic +
+    select_for_update re-fetch by pk: the plan is recomputed against the LOCKED
+    row's boundary, so concurrent/repeat callers see fresh state and cannot
+    double-summarize. Batch filtered to status=complete + non-blank content
+    (pending/failed assistant rows carry no summarizable content and the
+    summarizer rejects blanks); empty filtered batch still advances the
+    boundary with NO provider call. Persists summary + summary_message_boundary
+    together via save(update_fields=[...]); provider failure rolls back BOTH
+    (session untouched, same range retried next time).
+- Setting CONTEXT_SUMMARY_TRIGGER_THRESHOLD (default 40 — value already
+  documented in .env.example from TASK-036 prep) via decouple cast=int;
+  `summary_threshold()` resolves getattr-fallback + ImproperlyConfigured
+  naming the variable (mirrors recent_message_window). Default ratio: compact
+  one 40-message batch per crossing once the conversation exceeds 60 messages.
+- Logging "conversations.trigger": info on success (session id/range/count/
+  duration), debug no-op line; payloads never logged.
+- Wiring deliberately NOT in views yet: chat flow integration is TASK-040/041,
+  async Celery migration TASK-039.
+- Tests backend/tests/test_summary_trigger.py (32 tests + 29 subtests):
+  config default pinned 40 / read / attribute-absent fallback / boundary(1) /
+  large accepted / invalid-configured matrix names variable; planner exact-
+  crossing matrix (59→None, 60→(1,40)), repeat-no-op, next-batch, ROADMAP
+  example walk, ≤window silent, boundary==total silent, explicit-kwargs win,
+  invalid window/threshold/total/boundary matrices, determinism; DB tests:
+  short-conversation no-op without provider call, exact-crossing persists
+  summary+boundary with verbatim ordered labeled lines (turns 1-40 only,
+  window turns absent), first-compaction header omitted, immediate repeat
+  no-op (1 request total), second batch rolls SUMMARY_ONE forward as
+  previous_summary with turns 41-80, failed-assistant row skipped from input
+  but covered by boundary, provider failure leaves session untouched + retry
+  hits identical range, unusable output propagates without persisting,
+  all-blank range advances boundary sans call, DB-row refetch (stale instance
+  + .update(summary="pre-existing") proves locked row is source),
+  log hygiene (no turn text / summary text in any record).
+- Test gotchas hit: fill fixture must offset content labels from sequence
+  numbers when appending twice (seq 61 carries "turn 1" otherwise false-positive
+  diffs); first batch needs WINDOW+THRESHOLD messages to cross the trigger
+  point (THRESHOLD alone never fires at defaults).
+- Gates: ruff check/format clean (88 files); pytest 589 passed +202 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/trigger.py — summary_threshold + archive_range +
+       SessionSummaryTrigger.update
+2. [x] config/settings.py CONTEXT_SUMMARY_TRIGGER_THRESHOLD (+ .env.example comment)
+3. [x] backend/tests/test_summary_trigger.py written (32 tests)
+4. [x] Gates green (ruff check/format, pytest 589+202 Postgres, manage.py check)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-038
 
 ## Archived Tasks
 
