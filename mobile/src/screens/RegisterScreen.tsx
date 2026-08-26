@@ -1,5 +1,5 @@
 /** Registration screen creating an account via the backend API. */
-import React, {useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,9 +13,78 @@ import {
 
 import {useAuth} from '../auth/AuthContext';
 import type {RegisterScreenProps} from '../navigation/types';
+import type {ThemeColors} from '../theme/colors';
+import {useTheme} from '../theme/ThemeContext';
+
+function createStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: 'center',
+      backgroundColor: c.background,
+      padding: 24,
+    },
+    form: {
+      gap: 12,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: c.textPrimary,
+      textAlign: 'center',
+    },
+    subtitle: {
+      fontSize: 14,
+      color: c.textSecondary,
+      textAlign: 'center',
+      marginBottom: 16,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      borderRadius: 10,
+      backgroundColor: c.surface,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: c.textPrimary,
+    },
+    error: {
+      color: c.errorText,
+      fontSize: 13,
+    },
+    button: {
+      backgroundColor: c.primary,
+      borderRadius: 10,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    buttonText: {
+      color: c.onPrimary,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    switchText: {
+      textAlign: 'center',
+      color: c.textSecondary,
+      marginTop: 12,
+      fontSize: 14,
+    },
+    switchLink: {
+      color: c.accent,
+      fontWeight: '600',
+    },
+  });
+}
 
 export function RegisterScreen({navigation}: RegisterScreenProps) {
   const {register, busy, error} = useAuth();
+  const {colors} = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +98,8 @@ export function RegisterScreen({navigation}: RegisterScreenProps) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'android' ? undefined : 'padding'}>
+      behavior={Platform.OS === 'android' ? undefined : 'padding'}
+      testID="register-screen">
       <View style={styles.form}>
         <Text style={styles.title}>Create account</Text>
         <Text style={styles.subtitle}>Start practicing English today.</Text>
@@ -37,6 +107,7 @@ export function RegisterScreen({navigation}: RegisterScreenProps) {
         <TextInput
           style={styles.input}
           placeholder="Username"
+          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           value={username}
@@ -46,6 +117,7 @@ export function RegisterScreen({navigation}: RegisterScreenProps) {
         <TextInput
           style={styles.input}
           placeholder="Email"
+          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
@@ -56,6 +128,7 @@ export function RegisterScreen({navigation}: RegisterScreenProps) {
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor={colors.textMuted}
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -80,7 +153,7 @@ export function RegisterScreen({navigation}: RegisterScreenProps) {
           }}
           testID="register-submit">
           {busy ? (
-            <ActivityIndicator color="#ffffff" />
+            <ActivityIndicator color={colors.onPrimary} />
           ) : (
             <Text style={styles.buttonText}>Register</Text>
           )}
@@ -97,66 +170,3 @@ export function RegisterScreen({navigation}: RegisterScreenProps) {
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
-    padding: 24,
-  },
-  form: {
-    gap: 12,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#4b5563',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 10,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#111827',
-  },
-  error: {
-    color: '#b91c1c',
-    fontSize: 13,
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  switchText: {
-    textAlign: 'center',
-    color: '#4b5563',
-    marginTop: 12,
-    fontSize: 14,
-  },
-  switchLink: {
-    color: '#2563eb',
-    fontWeight: '600',
-  },
-});

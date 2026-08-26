@@ -973,7 +973,7 @@ Acceptance criteria:
 
 ## TASK-044 — Implement theme system
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement:
 

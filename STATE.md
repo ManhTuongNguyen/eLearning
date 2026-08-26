@@ -2,14 +2,95 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 6 TASK-043 complete (next: TASK-044 — theme
-  system, light/dark/system)
+- **Current Phase**: Phase 6 TASK-044 complete (next: TASK-045 — mobile API
+  client)
 
 ## Current Active Task
 
-(none — TASK-043 completed; next: TASK-044 — Implement theme system:
-light/dark/system themes with neutral design; switchable, respects system
-preference, screens use theme tokens instead of hard-coded colors)
+(none — TASK-044 completed; next: TASK-045 — Create mobile API client:
+typed client with TypeScript types, auth headers, error normalization, JSON
+handling; no `any` for normal API models, consistent API errors, unit tests.
+NOTE: a partial typed client already exists in src/api/{client,auth,profile}.ts
+from earlier tasks — TASK-045 should audit/extend it rather than duplicate.)
+
+#### Sub-step record (all complete)
+1. [x] src/theme/colors.ts (ThemeColors type + light/dark neutral palettes),
+       src/theme/system.ts (useSystemColorScheme seam), ThemeContext.tsx
+       (ThemeProvider/useTheme/setMode), navigationTheme.ts
+2. [x] App.tsx wiring (ThemeProvider outermost, nav theme mapping, StatusBar)
+3. [x] Converted Login/Register/Chat/History/Splash/Settings/Level to tokens;
+       added Theme section (Light/Dark/System radios) to SettingsScreen;
+       added root testIDs login-screen/register-screen/level-screen
+4. [x] __tests__/theme.test.tsx written (15 tests)
+5. [x] Gates green (pnpm typecheck clean, eslint clean, jest 9 suites
+       57/57 passed incl. updated harnesses)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-044
+
+## Archived Tasks
+
+### TASK-044 — Implement theme system (COMPLETED 2026-08-26)
+- React Context token system (`src/theme/`), deliberately NOT NativeWind:
+  no new dependency (SPEC rule), screens already StyleSheet-based, and all
+  three acceptance criteria are met by context + palette swap. Revisit
+  NativeWind only if a later phase demands utility-class styling.
+- `src/theme/colors.ts` — ThemeColors interface + light/dark neutral palettes
+  (Tailwind-derived slate/gray scale + blue primary). Tokens: background,
+  surface, border, borderStrong, textPrimary/textSecondary/textMuted,
+  primary, onPrimary, accent (+accentSoft wash for selected rows), danger,
+  errorText, success. Colors exist ONLY here (grep-verified).
+- `src/theme/system.ts` — useSystemColorScheme() seam over RN's
+  useColorScheme so tests can simulate OS preference changes (mirrors the
+  backend lru_cache seam conventions).
+- `src/theme/ThemeContext.tsx` — ThemeMode = 'system'|'light'|'dark'
+  (default 'system'); resolvedScheme falls back to 'light' when OS reports
+  null; colors identity flips only when resolution flips (useMemo'd).
+  useTheme() throws "useTheme must be used within a ThemeProvider".
+- `src/theme/navigationTheme.ts` — maps palette onto NavigationContainer
+  theme (primary/background/card/text/border/notification) so future stack
+  chrome stays consistent.
+- App.tsx: SafeAreaProvider > ThemeProvider > AuthProvider > ThemedChrome
+  (StatusBar barStyle from resolved scheme + backgroundColor token;
+  NavigationContainer themed) > RootNavigator.
+- All 7 screens converted to `createStyles(colors)` + useMemo pattern; inputs
+  gained placeholderTextColor=textMuted; SettingsScreen gained a Theme section
+  (Light/Dark/System radio chips, accessibilityRole=radio +
+  accessibilityState.checked, testIDs settings-theme-light/dark/system);
+  root testIDs login-screen/register-screen/level-screen added alongside
+  existing chat-screen/history-screen/settings-screen/splash.
+- Mode persistence intentionally deferred: not an acceptance criterion and
+  AsyncStorage is not a project dependency; revisit at local-storage /
+  Phase 14 Settings work.
+- Tests __tests__/theme.test.tsx (15): system default resolves via mocked OS
+  scheme; dark OS while system; explicit light/dark override OS; return to
+  system re-follows OS; live OS change tracked while in system mode and
+  IGNORED while pinned; null OS → light fallback; palettes expose identical
+  token sets with non-empty values; useTheme outside provider rejects with
+  helpful message; Settings switcher shows all three modes with System
+  checked by default, Dark/Light selection moves checked state AND re-themes
+  a sibling probe; Login + Chat container backgrounds equal palette values
+  and flip on set-dark (screens-consume-tokens proof).
+- Existing harnesses updated to wrap trees in ThemeProvider (navigation,
+  Login, Register, Level suites) mirroring App.tsx order; App.test unchanged
+  (renders real App).
+- Test gotchas hit:
+  - babel-plugin-jest-hoist rejects ANY identifier inside the jest.mock
+    factory — including type-annotation parameter names (`next` in
+    Set<(next) => void>). Fix: declare mock state in module-scope vars
+    prefixed `mock` (whitelisted escape hatch), keep factory annotations to
+    literal unions only.
+  - RNTL v14 exports an ASYNC act: calling act(() => ...) without await
+    corrupts subsequent renders (empty trees, "did not throw") for the REST
+    OF THE FILE — must be await act(async () => ...).
+  - RNTL v14 render() rejects (does not throw synchronously) when the tree
+    errors: assert via await expect(render(<Orphan/>)).rejects.toThrow(...).
+
+#### Sub-step record (all complete)
+1. [x] Theme module files created
+2. [x] App.tsx wiring
+3. [x] Screen conversions + Settings theme section
+4. [x] theme.test.tsx written (15 tests)
+5. [x] Gates green (typecheck, lint, 57 jest tests across 9 suites)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-044
 
 ## Archived Tasks
 

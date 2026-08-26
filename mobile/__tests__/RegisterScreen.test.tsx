@@ -10,6 +10,7 @@ import * as secureStorage from '../src/auth/secureStorage';
 import type {AuthStackParamList} from '../src/navigation/types';
 import {LoginScreen} from '../src/screens/LoginScreen';
 import {RegisterScreen} from '../src/screens/RegisterScreen';
+import {ThemeProvider} from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/auth/secureStorage');
@@ -20,14 +21,16 @@ const mockedStorage = jest.mocked(secureStorage);
 function renderScreen() {
   const Stack = createNativeStackNavigator<AuthStackParamList>();
   return render(
-    <AuthProvider>
-      <NavigationContainer>
-        <Stack.Navigator initialRouteName="Register" screenOptions={{headerShown: false}}>
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </AuthProvider>,
+    <ThemeProvider>
+      <AuthProvider>
+        <NavigationContainer>
+          <Stack.Navigator initialRouteName="Register" screenOptions={{headerShown: false}}>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </AuthProvider>
+    </ThemeProvider>,
   );
 }
 

@@ -1,5 +1,5 @@
 /** Login screen: username-or-email + password against the backend API. */
-import React, {useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,9 +13,78 @@ import {
 
 import {useAuth} from '../auth/AuthContext';
 import type {LoginScreenProps} from '../navigation/types';
+import type {ThemeColors} from '../theme/colors';
+import {useTheme} from '../theme/ThemeContext';
+
+function createStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: 'center',
+      backgroundColor: c.background,
+      padding: 24,
+    },
+    form: {
+      gap: 12,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: c.textPrimary,
+      textAlign: 'center',
+    },
+    subtitle: {
+      fontSize: 14,
+      color: c.textSecondary,
+      textAlign: 'center',
+      marginBottom: 16,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      borderRadius: 10,
+      backgroundColor: c.surface,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: c.textPrimary,
+    },
+    error: {
+      color: c.errorText,
+      fontSize: 13,
+    },
+    button: {
+      backgroundColor: c.primary,
+      borderRadius: 10,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    buttonText: {
+      color: c.onPrimary,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    switchText: {
+      textAlign: 'center',
+      color: c.textSecondary,
+      marginTop: 12,
+      fontSize: 14,
+    },
+    switchLink: {
+      color: c.accent,
+      fontWeight: '600',
+    },
+  });
+}
 
 export function LoginScreen({navigation}: LoginScreenProps) {
   const {login, busy, error} = useAuth();
+  const {colors} = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
 
@@ -24,7 +93,8 @@ export function LoginScreen({navigation}: LoginScreenProps) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'android' ? undefined : 'padding'}>
+      behavior={Platform.OS === 'android' ? undefined : 'padding'}
+      testID="login-screen">
       <View style={styles.form}>
         <Text style={styles.title}>eLearning</Text>
         <Text style={styles.subtitle}>Practice English through conversation.</Text>
@@ -32,6 +102,7 @@ export function LoginScreen({navigation}: LoginScreenProps) {
         <TextInput
           style={styles.input}
           placeholder="Username or email"
+          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
@@ -42,6 +113,7 @@ export function LoginScreen({navigation}: LoginScreenProps) {
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor={colors.textMuted}
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -60,7 +132,7 @@ export function LoginScreen({navigation}: LoginScreenProps) {
           onPress={() => {login(identifier.trim(), password);}}
           testID="login-submit">
           {busy ? (
-            <ActivityIndicator color="#ffffff" />
+            <ActivityIndicator color={colors.onPrimary} />
           ) : (
             <Text style={styles.buttonText}>Log in</Text>
           )}
@@ -77,66 +149,3 @@ export function LoginScreen({navigation}: LoginScreenProps) {
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
-    padding: 24,
-  },
-  form: {
-    gap: 12,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#4b5563',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 10,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#111827',
-  },
-  error: {
-    color: '#b91c1c',
-    fontSize: 13,
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  switchText: {
-    textAlign: 'center',
-    color: '#4b5563',
-    marginTop: 12,
-    fontSize: 14,
-  },
-  switchLink: {
-    color: '#2563eb',
-    fontWeight: '600',
-  },
-});

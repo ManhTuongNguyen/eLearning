@@ -10,6 +10,7 @@ import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
 import {LevelScreen} from '../src/screens/LevelScreen';
+import {ThemeProvider} from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/profile', () => ({
@@ -28,21 +29,23 @@ function renderScreen() {
   const Stack = createNativeStackNavigator<MainStackParamList>();
 
   render(
-    <AuthProvider>
-      <NavigationContainer
-        ref={ref}
-        initialState={{
-          index: 1,
-          routes: [{name: 'Chat'}, {name: 'Level'}],
-        }}>
-        <Stack.Navigator screenOptions={{headerShown: false}}>
-          <Stack.Screen name="Chat">{() => null}</Stack.Screen>
-          <Stack.Screen name="History">{() => null}</Stack.Screen>
-          <Stack.Screen name="Settings">{() => null}</Stack.Screen>
-          <Stack.Screen name="Level" component={LevelScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </AuthProvider>,
+    <ThemeProvider>
+      <AuthProvider>
+        <NavigationContainer
+          ref={ref}
+          initialState={{
+            index: 1,
+            routes: [{name: 'Chat'}, {name: 'Level'}],
+          }}>
+          <Stack.Navigator screenOptions={{headerShown: false}}>
+            <Stack.Screen name="Chat">{() => null}</Stack.Screen>
+            <Stack.Screen name="History">{() => null}</Stack.Screen>
+            <Stack.Screen name="Settings">{() => null}</Stack.Screen>
+            <Stack.Screen name="Level" component={LevelScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </AuthProvider>
+    </ThemeProvider>,
   );
 
   return {

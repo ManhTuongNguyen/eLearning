@@ -13,6 +13,7 @@ import * as secureStorage from '../src/auth/secureStorage';
 import type {AuthTokens} from '../src/auth/tokens';
 import {RootNavigator} from '../src/navigation/RootNavigator';
 import type {AuthStackParamList, MainStackParamList} from '../src/navigation/types';
+import {ThemeProvider} from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/auth/secureStorage');
@@ -34,11 +35,13 @@ async function renderRoot() {
   };
 
   await render(
-    <AuthProvider>
-      <NavigationContainer ref={ref}>
-        <RootNavigator />
-      </NavigationContainer>
-    </AuthProvider>,
+    <ThemeProvider>
+      <AuthProvider>
+        <NavigationContainer ref={ref}>
+          <RootNavigator />
+        </NavigationContainer>
+      </AuthProvider>
+    </ThemeProvider>,
   );
 
   return {focusedRouteName};

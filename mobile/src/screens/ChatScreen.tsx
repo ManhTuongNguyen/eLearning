@@ -2,18 +2,62 @@
  * Placeholder chat screen (TASK-043). The real conversation UI with streaming
  * arrives in Phase 7; this screen anchors the Chat route of the main stack.
  */
-import React from 'react';
+import React, {useMemo} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
 import type {MainStackParamList} from '../navigation/types';
+import type {ThemeColors} from '../theme/colors';
+import {useTheme} from '../theme/ThemeContext';
 
 type Props = {
   navigation: NativeStackNavigationProp<MainStackParamList, 'Chat'>;
 };
 
+function createStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.background,
+      padding: 24,
+      gap: 8,
+    },
+    title: {
+      fontSize: 26,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: c.textSecondary,
+      textAlign: 'center',
+      marginBottom: 16,
+    },
+    links: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    link: {
+      backgroundColor: c.primary,
+      borderRadius: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+    },
+    linkText: {
+      color: c.onPrimary,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+  });
+}
+
 export function ChatScreen({navigation}: Props) {
+  const {colors} = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container} testID="chat-screen">
       <Text style={styles.title}>Chat</Text>
@@ -38,40 +82,3 @@ export function ChatScreen({navigation}: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
-    padding: 24,
-    gap: 8,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#4b5563',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  links: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  link: {
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  linkText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

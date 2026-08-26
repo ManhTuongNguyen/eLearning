@@ -3,7 +3,7 @@
  * CEFR level plus AUTO. The current level is loaded from the server profile
  * and each selection is persisted immediately via PATCH /api/v1/profile/.
  */
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -17,9 +17,112 @@ import {getProfile, LEVELS, updateProfile} from '../api/profile';
 import type {EnglishLevel, LevelOption} from '../api/profile';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {LevelScreenProps} from '../navigation/types';
+import type {ThemeColors} from '../theme/colors';
+import {useTheme} from '../theme/ThemeContext';
+
+function createStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+      paddingHorizontal: 24,
+      paddingTop: 60,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    backText: {
+      fontSize: 16,
+      color: c.accent,
+      fontWeight: '600',
+    },
+    headerSpacer: {
+      width: 48,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    subtitle: {
+      marginTop: 8,
+      marginBottom: 12,
+      fontSize: 14,
+      color: c.textSecondary,
+    },
+    loading: {
+      marginVertical: 8,
+    },
+    error: {
+      color: c.errorText,
+      fontSize: 14,
+      marginVertical: 8,
+    },
+    saved: {
+      color: c.success,
+      fontSize: 14,
+      marginVertical: 8,
+      fontWeight: '600',
+    },
+    list: {
+      paddingBottom: 24,
+      gap: 10,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: c.surface,
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    rowSelected: {
+      borderColor: c.primary,
+      backgroundColor: c.accentSoft,
+    },
+    rowPressed: {
+      opacity: 0.8,
+    },
+    rowText: {
+      flex: 1,
+      paddingRight: 12,
+      gap: 2,
+    },
+    rowLabel: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: c.textPrimary,
+    },
+    rowLabelSelected: {
+      color: c.accent,
+    },
+    rowDescription: {
+      fontSize: 13,
+      color: c.textMuted,
+    },
+    radio: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 2,
+      borderColor: c.borderStrong,
+    },
+    radioSelected: {
+      borderColor: c.primary,
+      backgroundColor: c.primary,
+    },
+  });
+}
 
 export function LevelScreen({navigation}: LevelScreenProps) {
   const {getAccessToken} = useAuth();
+  const {colors} = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [selected, setSelected] = useState<EnglishLevel | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<EnglishLevel | null>(null);
@@ -87,7 +190,7 @@ export function LevelScreen({navigation}: LevelScreenProps) {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="level-screen">
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
@@ -148,100 +251,3 @@ export function LevelScreen({navigation}: LevelScreenProps) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f6f8',
-    paddingHorizontal: 24,
-    paddingTop: 60,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backText: {
-    fontSize: 16,
-    color: '#2563eb',
-    fontWeight: '600',
-  },
-  headerSpacer: {
-    width: 48,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  subtitle: {
-    marginTop: 8,
-    marginBottom: 12,
-    fontSize: 14,
-    color: '#4b5563',
-  },
-  loading: {
-    marginVertical: 8,
-  },
-  error: {
-    color: '#b91c1c',
-    fontSize: 14,
-    marginVertical: 8,
-  },
-  saved: {
-    color: '#15803d',
-    fontSize: 14,
-    marginVertical: 8,
-    fontWeight: '600',
-  },
-  list: {
-    paddingBottom: 24,
-    gap: 10,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
-    borderColor: '#e5e7eb',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  rowSelected: {
-    borderColor: '#2563eb',
-    backgroundColor: '#eff6ff',
-  },
-  rowPressed: {
-    opacity: 0.8,
-  },
-  rowText: {
-    flex: 1,
-    paddingRight: 12,
-    gap: 2,
-  },
-  rowLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  rowLabelSelected: {
-    color: '#1d4ed8',
-  },
-  rowDescription: {
-    fontSize: 13,
-    color: '#6b7280',
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#9ca3af',
-  },
-  radioSelected: {
-    borderColor: '#2563eb',
-    backgroundColor: '#2563eb',
-  },
-});
