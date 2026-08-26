@@ -2,11 +2,70 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 8 TASK-057 complete (next: TASK-058 — suggestion service, Phase 9)
+- **Current Phase**: Phase 9 TASK-058 complete (next: TASK-059 — suggestion API)
 
 ## Current Active Task
 
-(none — TASK-057 completed; next: TASK-058 — Implement suggestion service.)
+(none — TASK-058 completed; next: TASK-059 — Implement suggestion API.)
+
+## Archived Tasks
+
+### TASK-058 — Implement suggestion service (COMPLETED 2026-08-26)
+- `backend/conversations/suggestions.py` (new) — `SuggestionService` +
+  frozen `Suggestions` value object following the established
+  topics.py/summarizer.py conventions (provider-injected `complete()`
+  only — suggestions never stream; strict-JSON system prompt demanding
+  exactly three replies; `_extract_json_object` fence/prose tolerance;
+  malformed completions → `LLMResponseError(provider="suggestions",
+  model=served)`; payload text never logged — INFO logs model/count/
+  duration, WARNING logs normalized error only).
+  - Inputs validated before ANY provider call (ValueError, zero requests):
+    level ∈ Level.values, topic is GeneratedTopic, non-blank string
+    selected_message, history pairs with roles in HISTORY_ROLES (reused
+    from conversations.context) and non-blank content. Empty history is
+    legal (selected message may open the conversation).
+  - User prompt composition: suggestion instruction + level line
+    (AUTO → "keep broadly accessible"; concrete CEFR echoed verbatim) +
+    topic title/scenario + "Learner:/Tutor:" transcript of the supplied
+    window + explicit long-pressed-message marker ("write exactly three
+    replies that the learner could send next" — suggestions are USER-side
+    candidate messages per ROADMAP §8 composer-fill semantics).
+  - Output validation: `replies` list of EXACTLY 3 entries, each a
+    non-empty string stripped on ingest; near-duplicates rejected at
+    parse time case-insensitively (ROADMAP "meaningfully different");
+    wrong-count/blanks/non-strings all LLMResponseError. Extra JSON keys
+    ignored. Purity: nothing persisted, no DB access.
+- `backend/tests/test_suggestion_service.py` (28 tests + subtests, all
+  SimpleTestCase/mock-provider): frozen/comparing value object + count &
+  blank invariants; input-validation matrix asserting ZERO provider calls
+  (bad level/topic/selected/history incl. system role & malformed pairs);
+  happy paths (verbatim stripped replies, [system,user] request shape,
+  prompt composition pins — topic fields, concrete-level echo vs AUTO,
+  Learner/Tutor transcript, selected-message marking, distinct prompts
+  per distinct histories, fenced + prose-wrapped + extra-keys tolerance);
+  invalid-output matrix (23 shapes: prose/list/scalars/truncated/missing
+  key/wrong counts/blanks/nulls/numeric/exact dups/case-only dups/garbage
+  → retryable=False provider="suggestions", served model attached);
+  provider-failure passthrough (availability identical instance +
+  retryable, auth error, non-LLM unmasked); logging hygiene (success log
+  names model but no reply text; failure warning carries no payload).
+- Gates: uv run ruff check clean; ruff format --check clean; full pytest
+  DB_ENGINE=sqlite3 → 721 passed / 3 skipped / 250 subtests (bare `uv run
+  pytest` errors are the PRE-EXISTING local Postgres auth issue — README's
+  documented sqlite3 fallback used).
+- Acceptance: exactly three suggestions returned ✓ (count pinned at parse
+  + value-object layers); suggestions relevant ✓ (selected message +
+  context-up-to-it + topic + profile all compose the prompt, test-pinned);
+  LLM output validated ✓ (exhaustive invalid-output matrix); tests mock
+  the LLM ✓ (FakeProvider seam, zero network).
+
+#### Sub-step record (all complete)
+1. [x] STATE.md breakdown written
+2. [x] backend/conversations/suggestions.py — SuggestionService +
+       Suggestions value object
+3. [x] backend/tests/test_suggestion_service.py (28 tests)
+4. [x] Gates green (ruff check/format; sqlite3 pytest 721 passed)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-058
 
 ## Archived Tasks
 

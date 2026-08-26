@@ -1220,7 +1220,7 @@ Acceptance criteria:
 
 ## TASK-058 — Implement suggestion service
 
-Status: `[ ]`
+Status: `[x]`
 
 Create backend service that generates exactly three replies.
 
