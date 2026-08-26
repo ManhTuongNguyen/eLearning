@@ -25,6 +25,8 @@ export type MainStackParamList = {
   Settings: undefined;
   /** Learning-level editor pushed from Settings (SPEC TASK-018). */
   Level: undefined;
+  /** Saved-expression list pushed from Settings (SPEC TASK-072). */
+  Vocabulary: undefined;
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -39,5 +41,7 @@ export type NewConversationScreenProps = NativeStackScreenProps<
 >;
 
 export type LevelScreenProps = NativeStackScreenProps<MainStackParamList, 'Level'>;
+
+export type VocabularyScreenProps = NativeStackScreenProps<MainStackParamList, 'Vocabulary'>;
 
 export type SettingsScreenProps = NativeStackScreenProps<MainStackParamList, 'Settings'>;

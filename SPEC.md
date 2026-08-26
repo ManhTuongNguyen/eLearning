@@ -1526,7 +1526,7 @@ Acceptance criteria:
 
 ## TASK-072 — Implement vocabulary screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Create mobile vocabulary screen.
 

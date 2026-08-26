@@ -11,14 +11,17 @@ import * as authApi from '../src/api/auth';
 import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {AuthTokens} from '../src/auth/tokens';
+import * as vocabularyApi from '../src/api/vocabulary';
 import {RootNavigator} from '../src/navigation/RootNavigator';
 import type {AuthStackParamList, MainStackParamList} from '../src/navigation/types';
 import {ThemeProvider} from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
+jest.mock('../src/api/vocabulary');
 jest.mock('../src/auth/secureStorage');
 
 const mockedAuth = jest.mocked(authApi);
+const mockedVocabulary = jest.mocked(vocabularyApi);
 const mockedStorage = jest.mocked(secureStorage);
 
 type RootParamList = AuthStackParamList & MainStackParamList;
@@ -58,6 +61,12 @@ async function renderAuthenticated(tokens?: AuthTokens) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedStorage.loadTokens.mockResolvedValue(null);
+  mockedVocabulary.listVocabulary.mockResolvedValue({
+    count: 0,
+    next: null,
+    previous: null,
+    results: [],
+  });
 });
 
 describe('root switch', () => {
@@ -124,6 +133,27 @@ describe('main stack navigation', () => {
     expect(focusedRouteName()).toBe('Level');
 
     await fireEvent.press(screen.getByTestId('level-back'));
+
+    await waitFor(() => expect(focusedRouteName()).toBe('Settings'));
+    expect(screen.getByTestId('settings-screen')).toBeOnTheScreen();
+  });
+
+  it('opens the saved vocabulary list from Settings and returns after closing (TASK-072)', async () => {
+    const {focusedRouteName} = await renderAuthenticated();
+    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+
+    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByTestId('settings-open-vocabulary'));
+
+    expect(await screen.findByTestId('vocabulary-empty')).toBeOnTheScreen();
+    expect(focusedRouteName()).toBe('Vocabulary');
+    await waitFor(() =>
+      expect(mockedVocabulary.listVocabulary).toHaveBeenCalledWith('token-a', 1),
+    );
+
+    await fireEvent.press(screen.getByTestId('vocabulary-back'));
 
     await waitFor(() => expect(focusedRouteName()).toBe('Settings'));
     expect(screen.getByTestId('settings-screen')).toBeOnTheScreen();

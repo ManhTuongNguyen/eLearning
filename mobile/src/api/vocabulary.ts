@@ -1,6 +1,7 @@
-/** Vocabulary endpoint bindings (SPEC TASK-066/070). */
+/** Vocabulary endpoint bindings (SPEC TASK-066/070/071/072). */
 
 import {apiRequest} from './client';
+import type {Paginated} from './sessions';
 
 /** Enrichment lifecycle of a saved expression (backend VocabularyItem.Status). */
 export type VocabularyStatus = 'pending' | 'complete' | 'failed';
@@ -42,4 +43,17 @@ export function saveVocabulary(
         : {expression, source_message_id: sourceMessageId},
     token,
   });
+}
+
+/**
+ * GET /api/v1/vocabulary/ (TASK-071): the caller's saved expressions, newest
+ * first, as a DRF paginated envelope. `status` exposes the asynchronous
+ * enrichment lifecycle (`pending` → `complete` | `failed`) so the list
+ * screen can show progress without refetching.
+ */
+export function listVocabulary(token: string, page?: number): Promise<Paginated<VocabularyItem>> {
+  return apiRequest<Paginated<VocabularyItem>>(
+    `/api/v1/vocabulary/${page === undefined ? '' : `?page=${page}`}`,
+    {token},
+  );
 }

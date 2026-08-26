@@ -1,7 +1,7 @@
 /**
  * Settings screen (TASK-043): hosts account actions for the authenticated
- * user — learning-level entry (SPEC TASK-018), theme selection (SPEC
- * TASK-044) and logout (SPEC TASK-015).
+ * user — learning-level entry (SPEC TASK-018), saved vocabulary (SPEC
+ * TASK-072), theme selection (SPEC TASK-044) and logout (SPEC TASK-015).
  */
 import React, {useMemo} from 'react';
 import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native';
@@ -151,6 +151,13 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
         onPress={() => navigation.navigate('Level')}
         testID="settings-open-level">
         <Text style={styles.secondaryButtonText}>Learning level</Text>
+      </Pressable>
+
+      <Pressable
+        style={styles.secondaryButton}
+        onPress={() => navigation.navigate('Vocabulary')}
+        testID="settings-open-vocabulary">
+        <Text style={styles.secondaryButtonText}>Vocabulary</Text>
       </Pressable>
 
       <Pressable
