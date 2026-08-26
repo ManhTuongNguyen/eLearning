@@ -20,7 +20,9 @@ from conversations.serializers import (
     SessionRenameSerializer,
     SessionSerializer,
 )
-from conversations.topics import TopicGenerationService
+from conversations.suggestions import SuggestionService
+from conversations.topics import GeneratedTopic, TopicGenerationService
+from conversations.window import select_recent_messages
 from learning.models import Profile
 from llm import views as llm_views
 from llm.exceptions import LLMError
@@ -36,6 +38,16 @@ def _settings_topic_service() -> TopicGenerationService:
 def get_topic_service() -> TopicGenerationService:
     """Return the process-wide settings-driven topic service (test seam)."""
     return _settings_topic_service()
+
+
+@lru_cache(maxsize=1)
+def _settings_suggestion_service() -> SuggestionService:
+    return SuggestionService(provider=FallbackProvider.from_settings())
+
+
+def get_suggestion_service() -> SuggestionService:
+    """Return the process-wide settings-driven suggestion service (test seam)."""
+    return _settings_suggestion_service()
 
 
 @lru_cache(maxsize=1)
@@ -260,14 +272,78 @@ class MessageRetryView(APIView):
         return sse_streaming_response(events)
 
 
+class MessageSuggestionsView(APIView):
+    """Generate three suggested replies for one selected message.
+
+    POST without a body (TASK-059). The selected message is resolved through
+    a user-scoped session lookup first, so foreign or nonexistent sessions
+    and messages are indistinguishable 404s — no existence leak. Only
+    COMPLETE messages carry usable content: pending or failed assistant rows
+    (and any blank-content row) are a 409 Conflict rejected before any LLM
+    work.
+
+    Inputs to :class:`conversations.suggestions.SuggestionService` come from
+    persisted state only — the session's learning level and topic plus every
+    complete message BEFORE the selection (chronological, bounded by the
+    configured recent-message window). The endpoint is read-only: nothing is
+    persisted, no summary maintenance is scheduled, and suggestions are never
+    stored as chat messages.
+
+    Success body: ``{"replies": [str, str, str]}``. Provider failures map to
+    503 when retryable, 502 otherwise.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs) -> Response:
+        try:
+            session = Session.objects.get(pk=kwargs["pk"], user=request.user)
+        except Session.DoesNotExist:
+            raise Http404("No Session matches the given query.") from None
+        try:
+            message = session.messages.get(pk=kwargs["message_pk"])
+        except Message.DoesNotExist:
+            raise Http404("No Message matches the given query.") from None
+        if message.status != Message.Status.COMPLETE or not message.content.strip():
+            return Response(
+                {"detail": "Suggestions require a completed, non-empty message."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        history = (
+            session.messages.filter(
+                status=Message.Status.COMPLETE,
+                sequence__lt=message.sequence,
+            )
+            .order_by("sequence")
+            .values_list("role", "content")
+        )
+        try:
+            suggestions = get_suggestion_service().suggest(
+                level=session.learning_level,
+                topic=GeneratedTopic(title=session.title, description=session.topic),
+                selected_message=message.content,
+                history=select_recent_messages(history),
+            )
+        except LLMError as exc:
+            code = (
+                status.HTTP_503_SERVICE_UNAVAILABLE
+                if exc.retryable
+                else status.HTTP_502_BAD_GATEWAY
+            )
+            return Response({"detail": str(exc)}, status=code)
+        return Response({"replies": list(suggestions.replies)})
+
+
 __all__ = [
     "ChatMessageSerializer",
     "MessageListView",
     "MessageRetryView",
     "MessageStreamView",
+    "MessageSuggestionsView",
     "SessionCollectionView",
     "SessionDetailView",
     "get_retry_service",
+    "get_suggestion_service",
     "get_topic_service",
     "get_user_message_service",
 ]

@@ -1244,7 +1244,7 @@ Acceptance criteria:
 
 ## TASK-059 — Implement suggestion API
 
-Status: `[ ]`
+Status: `[x]`
 
 Create endpoint for generating suggestions for a selected message.
 

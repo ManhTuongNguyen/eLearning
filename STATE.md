@@ -2,13 +2,71 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 9 TASK-058 complete (next: TASK-059 — suggestion API)
+- **Current Phase**: Phase 9 TASK-059 complete (next: TASK-060 — long-press menu)
 
 ## Current Active Task
 
-(none — TASK-058 completed; next: TASK-059 — Implement suggestion API.)
+(none — TASK-059 completed; next: TASK-060 — Implement message long-press menu.)
 
 ## Archived Tasks
+
+### TASK-059 — Implement suggestion API (COMPLETED 2026-08-26)
+- `conversations/views.py`:
+  - `get_suggestion_service()` seam (`_settings_suggestion_service`
+    lru_cache) wrapping `SuggestionService(provider=FallbackProvider
+    .from_settings())` — same settings-driven pattern as topic service.
+  - `MessageSuggestionsView` — POST
+    `/api/v1/sessions/{pk}/messages/{message_pk}/suggestions/`, no body:
+    user-scoped `Session.objects.get(pk, user)` then
+    `session.messages.get(pk)` → foreign/missing session AND foreign/
+    missing message are indistinguishable 404s (no existence leak);
+    non-COMPLETE targets (pending/failed assistant rows, any blank-content
+    row incl. the zero-delta empty-complete edge) → 409 Conflict with
+    ZERO provider calls; inputs from persisted state only
+    (`level=session.learning_level`, `GeneratedTopic(title=session.title,
+    description=session.topic)`, selected content verbatim, prior COMPLETE
+    history bounded by `select_recent_messages` window); LLMError → 503
+    retryable / 502 permanent (SessionCollectionView mapping); success body
+    `{"replies": [str×3]}` as a JSON list. READ-ONLY: nothing persisted,
+    no on_commit scheduling.
+- `conversations/urls.py` — `session-message-suggestions` route beside retry.
+- `backend/tests/test_suggestions_api.py` (25 tests): auth (401 zero-call,
+  405 matrix); ownership/routing 404s (stranger session, missing session,
+  foreign message in own session, missing message, non-int pks — each with
+  zero provider calls); invalid combinations (pending/failed/blank → 409,
+  data untouched); success (exactly-three list contract + stripped replies +
+  [system,user] request shape; prompt composition pins: level echo B2,
+  topic title/scenario, prior-complete transcript only, selection marked
+  not transcribed, later messages excluded, opening message → empty
+  transcript; window=2 override bounds transcript to its tail; repeated
+  calls independent); failures (availability → 503 detail verbatim, auth →
+  502, LLMResponseError → 502); purity (row snapshot unchanged, on_commit
+  callbacks untouched); wiring seam cached under OPENROUTER_API_KEY
+  override_settings; log hygiene (no reply/selected text at DEBUG).
+- Test gotchas hit:
+  - `asdict()` keeps the frozen VO's tuple → DRF response.data compared
+    unequal to a list; view serializes `list(suggestions.replies)` instead.
+  - `@override_settings` DECORATOR silently did not activate on a pytest
+    class method here (worked standalone via python -c) — context-manager
+    form around api.post works and matches test_window.py convention.
+  - Window-tail arithmetic: prior context includes ALL earlier messages
+    including the learner's own pre-selection turn — with window=2 the tail
+    is [SECRET-user-turn, old-a-2], not [old-q-2, old-a-2].
+- Gates: uv run ruff check clean; ruff format --check clean; manage.py check
+  clean; full pytest DB_ENGINE=sqlite3 → 746 passed / 3 skipped / 250
+  subtests (bare pytest errors remain the PRE-EXISTING local Postgres auth
+  issue; README sqlite3 fallback used).
+- Acceptance: authentication and ownership enforced ✓ (401 anonymous;
+  user-scoped lookups make foreign/missing indistinguishable 404s);
+  invalid message/session combinations rejected ✓ (pending/failed/blank
+  targets 409 with zero provider calls); API tests exist ✓ (25).
+
+#### Sub-step record (all complete)
+1. [x] conversations/views.py — MessageSuggestionsView + service seam
+2. [x] conversations/urls.py — suggestions route
+3. [x] backend/tests/test_suggestions_api.py (25 tests)
+4. [x] Gates green (ruff check/format; manage.py check; sqlite3 pytest 746)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-059
 
 ### TASK-058 — Implement suggestion service (COMPLETED 2026-08-26)
 - `backend/conversations/suggestions.py` (new) — `SuggestionService` +
