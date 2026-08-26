@@ -121,8 +121,9 @@ class TestAuthenticationAndMethods:
         assert response.status_code == 401
         assert item_count() == 0
 
-    @pytest.mark.parametrize("method", ["get", "put", "patch", "delete"])
+    @pytest.mark.parametrize("method", ["put", "patch", "delete"])
     def test_other_methods_are_not_allowed(self, chat_api, method):
+        """GET lists the user's vocabulary since TASK-071; only writes stay rejected."""
         response = getattr(chat_api, method)(SAVE_URL, {}, format="json")
 
         assert response.status_code == 405

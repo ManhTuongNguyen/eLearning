@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 10 TASK-070 complete (next: TASK-071 — vocabulary list API)
+- **Current Phase**: Phase 10 TASK-071 complete (next: TASK-072 — vocabulary screen)
 
 ## Current Active Task
 

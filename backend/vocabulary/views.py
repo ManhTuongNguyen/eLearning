@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from django.db import transaction
 from django.http import Http404
+from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from conversations.models import Message
 from vocabulary.models import VocabularyItem
@@ -14,8 +14,16 @@ from vocabulary.serializers import VocabularyItemSerializer, VocabularySaveSeria
 from vocabulary.tasks import schedule_vocabulary_enrichment
 
 
-class VocabularySaveView(APIView):
-    """Save a word or phrase immediately (TASK-066).
+class VocabularySaveView(generics.ListAPIView):
+    """List and save vocabulary items for the authenticated user.
+
+    GET (TASK-071) returns the caller's saved expressions only — the
+    queryset is scoped to ``request.user``, so other users' vocabulary is
+    unreachable. Results are paginated via the global DRF pagination
+    settings and come back newest first (the model's default
+    ``-created_at`` ordering), serialized through
+    :class:`~vocabulary.serializers.VocabularyItemSerializer` so each row
+    carries its enrichment ``status`` for the mobile list screen.
 
     POST body: ``{"expression": str, "source_message_id"?: int}``. The item is
     created synchronously in ``pending`` status with only the expression and
@@ -43,6 +51,10 @@ class VocabularySaveView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    serializer_class = VocabularyItemSerializer
+
+    def get_queryset(self):
+        return VocabularyItem.objects.filter(user=self.request.user)
 
     def post(self, request, *args, **kwargs) -> Response:
         serializer = VocabularySaveSerializer(data=request.data)

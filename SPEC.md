@@ -1508,7 +1508,7 @@ Acceptance criteria:
 
 ## TASK-071 — Implement vocabulary list API
 
-Status: `[ ]`
+Status: `[x]`
 
 Create:
 
