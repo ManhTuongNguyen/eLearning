@@ -1,15 +1,19 @@
 /**
- * Main conversation screen (SPEC TASK-048/049): chronological message list,
- * composer with send button, loading/error states and keyboard handling.
+ * Main conversation screen (SPEC TASK-048/049/050): chronological message
+ * list, composer with send button, loading/error states and keyboard
+ * handling.
  *
  * The screen loads an existing conversation through its `sessionId` route
  * param; without one it shows an empty state until a conversation is opened
  * or created (TASK-051). Sending posts the turn to
  * POST /api/v1/sessions/{id}/messages/stream/ and consumes the SSE reply:
- * the assistant bubble grows with each delta, completion finalizes it and a
- * silent reload swaps optimistic rows for persisted ones. Error frames and
- * transport failures surface in an inline banner; leaving the screen aborts
- * the stream.
+ * deltas land in a DeltaBuffer so token bursts commit at most once per tick
+ * (TASK-050 render throttling), completion finalizes it and a silent reload
+ * swaps optimistic rows for persisted ones. Error frames and transport
+ * failures surface in an inline banner; leaving the screen aborts the
+ * stream. Auto-scroll follows content growth only while the user rests near
+ * the bottom; an intentional scroll up detaches the follow behavior and a
+ * pill offers the way back down.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -23,6 +27,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import type {NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
 
 import type {ChatStreamEvent, ChatStreamHandle} from '../api/chatStream';
 import {streamChatTurn} from '../api/chatStream';
@@ -32,6 +37,12 @@ import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {ChatScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
+import {
+  DeltaBuffer,
+  isNearBottom,
+  STICK_TO_BOTTOM_THRESHOLD_PX,
+  STREAM_FLUSH_INTERVAL_MS,
+} from './streamingUx';
 
 function bySequence(a: ChatMessage, b: ChatMessage): number {
   return a.sequence - b.sequence;
@@ -190,6 +201,25 @@ function createStyles(c: ThemeColors) {
       borderTopColor: c.border,
       backgroundColor: c.surface,
     },
+    listArea: {
+      flex: 1,
+    },
+    jumpLatest: {
+      position: 'absolute',
+      right: 16,
+      bottom: 12,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      backgroundColor: c.surface,
+      borderRadius: 999,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+    },
+    jumpLatestText: {
+      color: c.accent,
+      fontSize: 13,
+      fontWeight: '600',
+    },
   });
 }
 
@@ -224,6 +254,35 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
+  // TASK-050: delta commits run through a DeltaBuffer so token bursts cause
+  // at most one message-list update per tick instead of one per SSE event.
+  // The flush closure reads the live target id from the ref, so a tick that
+  // lands after turn cleanup finds nothing to update.
+  const deltaBuffer = useMemo(
+    () =>
+      new DeltaBuffer(chunk => {
+        const targetId = streamingAssistantIdRef.current;
+        if (targetId === null) {
+          return;
+        }
+        setMessages(prev =>
+          prev.map(message =>
+            message.id === targetId
+              ? {...message, content: message.content + chunk}
+              : message,
+          ),
+        );
+      }, STREAM_FLUSH_INTERVAL_MS),
+    [],
+  );
+
+  // Scroll-follow state: nearBottomRef is read inside callbacks without
+  // re-rendering; the detached flag drives the jump-to-latest pill and
+  // flips only at the threshold boundary.
+  const listRef = useRef<FlatList<ChatMessage> | null>(null);
+  const nearBottomRef = useRef(true);
+  const [detachedFromBottom, setDetachedFromBottom] = useState(false);
+
   const resetMessages = useCallback(() => {
     setMessages(prev => (prev.length > 0 ? [] : prev));
   }, []);
@@ -233,8 +292,9 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     streamHandleRef.current?.abort();
     streamHandleRef.current = null;
     streamingAssistantIdRef.current = null;
+    deltaBuffer.discard();
     setStreaming(false);
-  }, []);
+  }, [deltaBuffer]);
 
   /**
    * Silent canonical refresh after a turn settles: replaces optimistic rows
@@ -267,6 +327,8 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setError(null);
     setStreamError(null);
     resetMessages();
+    nearBottomRef.current = true;
+    setDetachedFromBottom(false);
     endTurn();
     if (sessionId === undefined) {
       setLoading(false);
@@ -305,40 +367,45 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     };
   }, [sessionId, reloadKey, resetMessages, endTurn]);
 
-  /** Append one streamed chunk to the assistant bubble for this turn. */
-  const appendDelta = useCallback((delta: string) => {
-    const targetId = streamingAssistantIdRef.current;
-    if (targetId === null) {
-      return;
-    }
-    setMessages(prev =>
-      prev.map(message =>
-        message.id === targetId
-          ? {...message, content: message.content + delta}
-          : message,
-      ),
-    );
-  }, []);
+  /**
+   * Queue one streamed chunk for the assistant bubble of this turn. The
+   * text is committed on the next flush tick (or earlier via flushNow), so
+   * arrival frequency never dictates render frequency.
+   */
+  const appendDelta = useCallback(
+    (delta: string) => {
+      if (streamingAssistantIdRef.current === null) {
+        return;
+      }
+      deltaBuffer.push(delta);
+    },
+    [deltaBuffer],
+  );
 
   /**
    * Turn failed: drop optimistic rows, surface the reason and re-sync with
    * the server (a committed user row / failed assistant row reappears; the
-   * retry control itself is TASK-054).
+   * retry control itself is TASK-054). Buffered-but-unflushed deltas die
+   * here — they must never land after the rows are gone.
    */
   const failTurn = useCallback(
     (message: string) => {
       streamHandleRef.current = null;
       streamingAssistantIdRef.current = null;
+      deltaBuffer.discard();
       setStreaming(false);
       setStreamError(message);
       setMessages(prev => (prev.some(m => m.id < 0) ? prev.filter(m => m.id > 0) : prev));
       refreshMessages();
     },
-    [refreshMessages],
+    [deltaBuffer, refreshMessages],
   );
 
   const completeTurn = useCallback(
     (text: string) => {
+      // The completed frame carries the authoritative full text, so any
+      // still-buffered deltas are superseded rather than appended.
+      deltaBuffer.discard();
       const targetId = streamingAssistantIdRef.current;
       setMessages(prev =>
         targetId === null
@@ -355,7 +422,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       // Swap the optimistic echo pair for the persisted rows (real ids).
       refreshMessages();
     },
-    [refreshMessages],
+    [deltaBuffer, refreshMessages],
   );
 
   const startTurn = useCallback(
@@ -445,6 +512,46 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
 
   const canSend = draft.trim().length > 0 && !streaming;
 
+  /** Follow the conversation tail; no-op when the list is not mounted. */
+  const stickToBottom = useCallback((animated: boolean) => {
+    listRef.current?.scrollToEnd({animated});
+  }, []);
+
+  /**
+   * Content growth (streamed deltas, optimistic rows) keeps the viewport
+   * pinned to the newest message — but only while the user is still reading
+   * there. An intentional scroll up has already cleared the sticky flag, so
+   * growth never yanks the view.
+   */
+  const handleContentSizeChange = useCallback(() => {
+    if (nearBottomRef.current) {
+      stickToBottom(false);
+    }
+  }, [stickToBottom]);
+
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
+      const near = isNearBottom(
+        {
+          offsetY: contentOffset.y,
+          contentHeight: contentSize.height,
+          viewportHeight: layoutMeasurement.height,
+        },
+        STICK_TO_BOTTOM_THRESHOLD_PX,
+      );
+      nearBottomRef.current = near;
+      setDetachedFromBottom(!near);
+    },
+    [],
+  );
+
+  const jumpToLatest = useCallback(() => {
+    nearBottomRef.current = true;
+    setDetachedFromBottom(false);
+    stickToBottom(true);
+  }, [stickToBottom]);
+
   const renderMessage = useCallback(
     ({item}: {item: ChatMessage}) => {
       const isUser = item.role === 'user';
@@ -515,19 +622,35 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         </View>
       ) : (
         <>
-          <FlatList
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            data={messages}
-            keyExtractor={message => String(message.id)}
-            renderItem={renderMessage}
-            ListEmptyComponent={
-              <Text style={styles.emptyHint} testID="chat-empty">
-                Say hello to start the conversation.
-              </Text>
-            }
-            testID="chat-list"
-          />
+          <View style={styles.listArea}>
+            <FlatList
+              ref={listRef}
+              style={styles.list}
+              contentContainerStyle={styles.listContent}
+              data={messages}
+              keyExtractor={message => String(message.id)}
+              renderItem={renderMessage}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              onContentSizeChange={handleContentSizeChange}
+              ListEmptyComponent={
+                <Text style={styles.emptyHint} testID="chat-empty">
+                  Say hello to start the conversation.
+                </Text>
+              }
+              testID="chat-list"
+            />
+            {detachedFromBottom ? (
+              <Pressable
+                style={styles.jumpLatest}
+                onPress={jumpToLatest}
+                testID="chat-jump-latest"
+                accessibilityRole="button"
+                accessibilityLabel="Jump to latest messages">
+                <Text style={styles.jumpLatestText}>Jump to latest</Text>
+              </Pressable>
+            ) : null}
+          </View>
           {streamError !== null ? (
             <View style={styles.streamErrorBanner}>
               <Text role="alert" style={styles.error} testID="chat-stream-error">

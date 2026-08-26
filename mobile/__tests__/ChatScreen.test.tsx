@@ -1,8 +1,10 @@
 /**
- * Chat screen tests (SPEC TASK-048/049): message list ordering, composer/
- * send interaction, loading/empty/error states and the keyboard-avoiding
- * shell — plus the SSE streaming round-trip: incremental assistant deltas,
- * completion swap-in, error frames, transport failures and abort-on-exit.
+ * Chat screen tests (SPEC TASK-048/049/050): message list ordering,
+ * composer/send interaction, loading/empty/error states and the
+ * keyboard-avoiding shell — plus the SSE streaming round-trip: incremental
+ * assistant deltas, completion swap-in, error frames, transport failures and
+ * abort-on-exit, and the TASK-050 smooth-streaming behavior (coalesced delta
+ * commits, scroll stick/detach transitions, ghost-delta suppression).
  */
 import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
@@ -26,6 +28,7 @@ import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen} from '../src/screens/ChatScreen';
+import {STREAM_FLUSH_INTERVAL_MS} from '../src/screens/streamingUx';
 import {ThemeProvider} from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
@@ -96,6 +99,18 @@ async function deliver(turn: CapturedTurn, event: ChatStreamEvent): Promise<void
 async function failTransport(turn: CapturedTurn, error: unknown): Promise<void> {
   await act(async () => {
     turn.options.onError(error);
+  });
+}
+
+/**
+ * Let the TASK-050 delta buffer's deferred flush tick elapse inside act so
+ * the resulting state update stays wrapped.
+ */
+async function flushStreamTick(): Promise<void> {
+  await act(async () => {
+    await new Promise<void>(resolve =>
+      setTimeout(() => resolve(), STREAM_FLUSH_INTERVAL_MS + 20),
+    );
   });
 }
 
@@ -215,12 +230,15 @@ describe('ChatScreen', () => {
     await fireEvent.press(screen.getByTestId('chat-send'));
     const turn = turns[0];
 
-    // Chunks append incrementally while streaming.
+    // Chunks append incrementally while streaming (visible after the
+    // buffer's flush tick — commits are coalesced, not per-delta).
     await deliver(turn, {type: 'start', model: 'vendor/model'});
     await deliver(turn, {type: 'delta', text: 'Hello'});
-    expect(screen.getByText('Hello')).toBeOnTheScreen();
+    await waitFor(() => expect(screen.getByText('Hello')).toBeOnTheScreen());
     await deliver(turn, {type: 'delta', text: ', how are you?'});
-    expect(screen.getByText('Hello, how are you?')).toBeOnTheScreen();
+    await waitFor(() =>
+      expect(screen.getByText('Hello, how are you?')).toBeOnTheScreen(),
+    );
 
     // Completion finalizes and silently reloads canonical (persisted) rows.
     await deliver(turn, {
@@ -240,6 +258,165 @@ describe('ChatScreen', () => {
     expect(
       (screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled,
     ).toBe(false);
+  });
+
+  it('coalesces a rapid delta burst into one deferred commit, then swaps in the completed text', async () => {
+    const fullText = 'Otters are semiaquatic mammals that juggle stones.';
+    mockedSessions.listMessages
+      .mockResolvedValueOnce(emptyPage())
+      .mockResolvedValueOnce(
+        pageOf([
+          makeMessage({id: 701, role: 'user', sequence: 1, content: 'Tell me about otters'}),
+          makeMessage({
+            id: 702,
+            role: 'assistant',
+            status: 'complete',
+            sequence: 2,
+            content: fullText,
+          }),
+        ]),
+      );
+    await renderChat({sessionId: 7});
+    await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
+
+    await fireEvent.changeText(screen.getByTestId('composer-input'), 'Tell me about otters');
+    await fireEvent.press(screen.getByTestId('chat-send'));
+    const turn = turns[0];
+
+    // A whole token volley lands before any flush tick: nothing renders yet
+    // because commits are coalesced instead of one state update per delta.
+    await act(async () => {
+      for (const part of [
+        'Otters ',
+        'are ',
+        'semiaquatic ',
+        'mammals ',
+        'that ',
+        'juggle ',
+        'stones.',
+      ]) {
+        turn.options.onEvent({type: 'delta', text: part});
+      }
+    });
+    expect(screen.queryByText(fullText)).toBeNull();
+
+    // One tick later the burst appears exactly once, fully concatenated.
+    await flushStreamTick();
+    expect(screen.getAllByText(fullText)).toHaveLength(1);
+
+    // Deltas buffered behind a completed frame are superseded by its
+    // authoritative text — no duplication and no lost tail.
+    await deliver(turn, {type: 'delta', text: ' EXTRA-NOT-PERSISTED'});
+    await deliver(turn, {
+      type: 'completed',
+      text: fullText,
+      model: 'vendor/model',
+      deltaCount: 7,
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('chat-message-702')).toBeOnTheScreen(),
+    );
+    expect(screen.getByTestId('chat-message-701')).toBeOnTheScreen();
+    expect(screen.queryByText(/EXTRA-NOT-PERSISTED/)).toBeNull();
+    expect(screen.getAllByText(fullText)).toHaveLength(1);
+  });
+
+  it('detaches auto-scroll when the user scrolls up and re-sticks via jump-to-latest', async () => {
+    // Six rows keeps the optimistic pair inside the FlatList render window
+    // (the test environment mounts only the first ~10 items).
+    mockedSessions.listMessages.mockResolvedValue(
+      pageOf(
+        Array.from({length: 6}, (_, i) =>
+          makeMessage({
+            id: 800 + i,
+            role: i % 2 === 0 ? 'user' : 'assistant',
+            sequence: i + 1,
+            content: `Line ${i}`,
+          }),
+        ),
+      ),
+    );
+    await renderChat({sessionId: 9});
+    await waitFor(() => expect(screen.getByTestId('chat-message-805')).toBeOnTheScreen());
+
+    // Reading the tail: no detaching pill.
+    expect(screen.queryByTestId('chat-jump-latest')).toBeNull();
+
+    // An intentional scroll far above the bottom flips to detached…
+    const scrollUp = {
+      nativeEvent: {
+        contentOffset: {x: 0, y: 100},
+        contentSize: {height: 2400, width: 0},
+        layoutMeasurement: {height: 400, width: 0},
+      },
+    };
+    await fireEvent.scroll(screen.getByTestId('chat-list'), scrollUp);
+    expect(screen.getByTestId('chat-jump-latest')).toBeOnTheScreen();
+
+    // …and streamed growth while detached still lands in the bubble without
+    // forcing the viewport back down.
+    await fireEvent.changeText(screen.getByTestId('composer-input'), 'Still there?');
+    await fireEvent.press(screen.getByTestId('chat-send'));
+    await deliver(turns[0], {type: 'delta', text: 'Yes.'});
+    await flushStreamTick();
+    expect(screen.getByText('Yes.')).toBeOnTheScreen();
+    expect(screen.getByTestId('chat-jump-latest')).toBeOnTheScreen();
+
+    // Scrolling back into the threshold window re-sticks and hides the pill.
+    await fireEvent.scroll(screen.getByTestId('chat-list'), {
+      nativeEvent: {
+        contentOffset: {x: 0, y: 1880},
+        contentSize: {height: 2400, width: 0},
+        layoutMeasurement: {height: 400, width: 0},
+      },
+    });
+    expect(screen.queryByTestId('chat-jump-latest')).toBeNull();
+
+    // Detaching again offers the way back; pressing it restores the tail.
+    await fireEvent.scroll(screen.getByTestId('chat-list'), scrollUp);
+    expect(screen.getByTestId('chat-jump-latest')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByTestId('chat-jump-latest'));
+    expect(screen.queryByTestId('chat-jump-latest')).toBeNull();
+  });
+
+  it('drops unflushed deltas when the turn fails so no ghost text lands afterwards', async () => {
+    mockedSessions.listMessages
+      .mockResolvedValueOnce(emptyPage())
+      .mockResolvedValueOnce(
+        pageOf([
+          makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
+          makeMessage({
+            id: 902,
+            role: 'assistant',
+            status: 'failed',
+            sequence: 2,
+            content: '',
+          }),
+        ]),
+      );
+    await renderChat({sessionId: 11});
+    await waitFor(() => expect(screen.getByTestId('chat-empty')).toBeOnTheScreen());
+
+    await fireEvent.changeText(screen.getByTestId('composer-input'), 'Hello');
+    await fireEvent.press(screen.getByTestId('chat-send'));
+    await deliver(turns[0], {type: 'delta', text: 'ghost-text-never-committed'});
+    await deliver(turns[0], {
+      type: 'error',
+      message: 'Generation failed.',
+      retryable: true,
+    });
+    expect(screen.getByTestId('chat-stream-error')).toHaveTextContent(
+      'Generation failed.',
+    );
+
+    // The pending tick finds no target row anymore: the dropped delta never
+    // renders — neither now…
+    await flushStreamTick();
+    expect(screen.queryByText(/ghost-text-never-committed/)).toBeNull();
+
+    // …nor once the server-truth resync has completed.
+    await waitFor(() => expect(screen.getByTestId('chat-message-902')).toBeOnTheScreen());
+    expect(screen.queryByText(/ghost-text-never-committed/)).toBeNull();
   });
 
   it('shows an empty pending bubble while waiting for the first delta', async () => {

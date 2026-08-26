@@ -2,13 +2,88 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 7 TASK-049 complete (next: TASK-050 — smooth
-  streaming UX)
+- **Current Phase**: Phase 7 TASK-050 complete (next: TASK-051 — new
+  conversation UI)
 
 ## Current Active Task
 
-(none — TASK-049 completed; next: TASK-050 — Implement smooth streaming UX,
-third task of Phase 7 Mobile Chat.)
+(none — TASK-050 completed; next: TASK-051 — Implement new conversation UI,
+fourth task of Phase 7 Mobile Chat.)
+
+## Archived Tasks
+
+### TASK-050 — Implement smooth streaming UX (COMPLETED 2026-08-26)
+- `src/screens/streamingUx.ts` (new, pure units so transitions are testable
+  without rendering):
+  - `DeltaBuffer(onFlush, intervalMs)` — coalesces SSE delta bursts into at
+    most ONE state commit per flush tick (50 ms): first push schedules the
+    single timer, later pushes in the window join the pending chunk
+    (jest.getTimerCount pinned to 1); flushNow() applies immediately and
+    cancels the tick without double delivery; discard() drops text and kills
+    the tick; empty pushes never schedule. Render frequency is now bounded
+    by the tick regardless of token arrival frequency.
+  - `isNearBottom({offsetY, contentHeight, viewportHeight}, thresholdPx)` —
+    stick decision: content shorter than viewport is always "at bottom";
+    threshold comparison inclusive at exactly the boundary.
+  - Constants STREAM_FLUSH_INTERVAL_MS=50, STICK_TO_BOTTOM_THRESHOLD_PX=120.
+- `ChatScreen.tsx` wiring:
+  - appendDelta no longer setMessages per event — it guards on the live
+    assistant id then buffer.push(); the flush closure reads the target id
+    from the ref, so a tick landing after cleanup finds nothing to update.
+  - completeTurn discards the buffer BEFORE applying the authoritative
+    completed-frame text (buffered tail deltas are superseded, never
+    duplicated/appended); failTurn and endTurn discard too — unflushed
+    deltas can never land after their row is gone.
+  - Scroll follow: listRef + onScroll (scrollEventThrottle 16) feeds
+    isNearBottom → nearBottomRef (read inside callbacks, no re-render) +
+    detachedFromBottom state (flips only at the boundary); 
+    onContentSizeChange calls scrollToEnd({animated:false}) ONLY while
+    stuck, so an intentional scroll up stops the follow instead of being
+    yanked back; detached state renders a jump-to-latest pill
+    (chat-jump-latest, accessibilityRole button) whose press re-sticks and
+    scrolls animated. Load effect resets stick/detach on session change.
+- __tests__/streamingUx.test.ts (13): isNearBottom matrix (short-content,
+  exact-bottom, within-threshold, inclusive-boundary, just-beyond, far-up);
+  DeltaBuffer burst→single concatenated chunk per tick, single-timer proof,
+  flushNow immediate + cancelled tick, empty flushNow no-op, discard
+  suppresses both paths, empty-push ignored, consecutive cycles ordered.
+- __tests__/ChatScreen.test.tsx extended (+3, existing delta assertions
+  moved onto waitFor flush ticks since commits are now deferred):
+  - burst of 7 deltas inside one act renders nothing yet → one tick shows
+    the full concatenated text exactly once → completed frame supersedes a
+    post-tick buffered delta with zero duplication and swaps persisted ids.
+  - scroll far above bottom → chat-jump-latest appears; streamed growth
+    while detached still lands in the bubble WITHOUT forcing scroll;
+    scrolling back into the threshold hides the pill; detach again → press
+    pill → hidden again.
+  - error frame right after an unflushed delta → banner + ghost text never
+    renders (checked both before and after server-truth resync).
+- Test gotchas hit:
+  - FlatList test env mounts only ~10 items (initialNumToRender): a fixture
+    of 10 loaded rows pushed optimistic rows to index 10/11 which exist in
+    state but never mount — looked like "send appended nothing" until
+    DIAG proved draft cleared + turn started. Fixture reduced to 6 rows.
+  - new Promise(resolve => setTimeout(...)) needs BOTH the <void> type arg
+    AND an arrow-wrapped resolve (RN @types reject passing resolve directly).
+  - Deferred flush means getByText immediately after a delta act is racy by
+    design — assertions must wait for the tick (flushStreamTick helper or
+    waitFor), never assert synchronously.
+- Acceptance: streaming feels continuous (commits coalesced at 50 ms, one
+  map() over rows per tick) ✓; long messages do not visibly stutter (render
+  frequency decoupled from delta frequency, unit-pinned) ✓; auto-scroll near
+  bottom only + never force-scroll after intentional scroll-up (isNearBottom
+  gate on onContentSizeChange + detach pill) ✓; tests cover core state
+  transitions ✓.
+- Gates: pnpm typecheck clean; eslint clean; jest 14 suites 132/132 passed.
+
+#### Sub-step record (all complete)
+1. [x] src/screens/streamingUx.ts — DeltaBuffer + isNearBottom + constants
+2. [x] ChatScreen.tsx — buffered appendDelta, guarded auto-scroll, jump
+       pill, drain-on-terminal semantics
+3. [x] __tests__/streamingUx.test.ts written (13 tests)
+4. [x] __tests__/ChatScreen.test.tsx extended (+3 streaming UX tests)
+5. [x] Gates green (pnpm typecheck, pnpm lint, jest 132/132 across 14 suites)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-050
 
 ## Archived Tasks
 

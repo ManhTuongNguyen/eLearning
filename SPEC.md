@@ -1082,7 +1082,7 @@ Acceptance criteria:
 
 ## TASK-050 — Implement smooth streaming UX
 
-Status: `[ ]`
+Status: `[x]`
 
 Optimize chat streaming behavior.
 
