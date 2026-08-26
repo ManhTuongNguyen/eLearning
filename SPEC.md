@@ -1703,7 +1703,7 @@ Acceptance criteria:
 
 ## TASK-082 — Implement local conversation repository
 
-Status: `[ ]`
+Status: `[x]`
 
 Create repository abstraction for local conversations.
 
