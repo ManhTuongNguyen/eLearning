@@ -1466,7 +1466,7 @@ Acceptance criteria:
 
 ## TASK-069 — Implement text selection flow
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement mobile text selection for vocabulary saving.
 

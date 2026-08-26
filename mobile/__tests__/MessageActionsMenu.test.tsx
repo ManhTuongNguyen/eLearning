@@ -37,7 +37,7 @@ function visibleActionLabels(): string[] {
     .getAllByTestId(/^chat-menu-/)
     .filter(
       element =>
-        /^chat-menu-(suggest-replies|improve-english|copy|speak)$/.test(
+        /^chat-menu-(suggest-replies|improve-english|select-text|copy|speak)$/.test(
           element.props.testID as string,
         ),
     )
@@ -55,7 +55,12 @@ describe('MessageActionsMenu', () => {
   it('shows assistant-message actions without the improvement entry', async () => {
     await renderMenu({role: 'assistant'});
 
-    expect(visibleActionLabels()).toEqual(['Suggest replies', 'Copy', 'Read aloud']);
+    expect(visibleActionLabels()).toEqual([
+      'Suggest replies',
+      'Select text',
+      'Copy',
+      'Read aloud',
+    ]);
   });
 
   it('shows user-message actions including Improve my English', async () => {
@@ -64,6 +69,7 @@ describe('MessageActionsMenu', () => {
     expect(visibleActionLabels()).toEqual([
       'Suggest replies',
       'Improve my English',
+      'Select text',
       'Copy',
       'Read aloud',
     ]);
@@ -75,6 +81,7 @@ describe('MessageActionsMenu', () => {
     for (const testId of [
       'chat-menu-suggest-replies',
       'chat-menu-improve-english',
+      'chat-menu-select-text',
       'chat-menu-copy',
       'chat-menu-speak',
     ]) {

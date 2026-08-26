@@ -10,8 +10,9 @@
  *
  * Selecting an action reports it upward and lets the parent close the menu;
  * the behaviors land in their own tasks (suggestions → TASK-061,
- * improvement sheet → TASK-064, speech → TASK-078) while Copy already works
- * via the clipboard seam in the chat screen.
+ * improvement sheet → TASK-064, text selection → TASK-069, speech →
+ * TASK-078) while Copy already works via the clipboard seam in the chat
+ * screen.
  */
 import React, {useMemo} from 'react';
 import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
@@ -19,7 +20,12 @@ import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 
-export type MessageAction = 'suggest-replies' | 'improve-english' | 'copy' | 'speak';
+export type MessageAction =
+  | 'suggest-replies'
+  | 'improve-english'
+  | 'select-text'
+  | 'copy'
+  | 'speak';
 
 export interface MessageActionItem {
   action: MessageAction;
@@ -29,12 +35,14 @@ export interface MessageActionItem {
 const USER_ACTIONS: MessageActionItem[] = [
   {action: 'suggest-replies', label: 'Suggest replies'},
   {action: 'improve-english', label: 'Improve my English'},
+  {action: 'select-text', label: 'Select text'},
   {action: 'copy', label: 'Copy'},
   {action: 'speak', label: 'Read aloud'},
 ];
 
 const ASSISTANT_ACTIONS: MessageActionItem[] = [
   {action: 'suggest-replies', label: 'Suggest replies'},
+  {action: 'select-text', label: 'Select text'},
   {action: 'copy', label: 'Copy'},
   {action: 'speak', label: 'Read aloud'},
 ];

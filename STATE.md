@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 10 TASK-068 complete (next: TASK-069 — mobile text selection flow)
+- **Current Phase**: Phase 10 TASK-069 complete (next: TASK-070 — vocabulary save popup)
 
 ## Current Active Task
 

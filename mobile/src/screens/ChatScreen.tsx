@@ -29,10 +29,14 @@
  * immediately via the clipboard seam, Suggest replies (TASK-061) calls
  * the read-only suggestions endpoint and presents the three replies as
  * chips above the composer (tapping a chip inserts its text into the draft
- * without sending), and Improve my English (TASK-064) calls the read-only
+ * without sending), Improve my English (TASK-064) calls the read-only
  * improvement endpoint and presents the outcome in a bottom sheet —
  * original vs. suggested rewrite plus a short explanation, with a Copy
- * action for the improved text. Loading and error states cover both
+ * action for the improved text — and Select text (TASK-069) opens a
+ * bottom-sheet surface where a word, phrase or multi-word expression can be
+ * selected inside that message and handed to the vocabulary save flow
+ * (the immediate save round-trip arrives with TASK-070). Loading and error
+ * states cover both
  * generation round-trips; the suggestion strip clears on send and both it
  * and the improvement sheet clear on session change, while speech selection
  * stays a seam for its upcoming task.
@@ -64,6 +68,7 @@ import {ImprovementSheet} from './ImprovementSheet';
 import {MessageActionsMenu} from './MessageActionsMenu';
 import type {MessageAction} from './MessageActionsMenu';
 import {SampleConversationModal} from './SampleConversationModal';
+import {TextSelectionSheet} from './TextSelectionSheet';
 import {
   DeltaBuffer,
   isNearBottom,
@@ -379,6 +384,9 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   } | null>(null);
   const [improvementLoading, setImprovementLoading] = useState(false);
   const [improvementError, setImprovementError] = useState<string | null>(null);
+  // TASK-069: the message whose content is being combed for vocabulary in
+  // the text-selection sheet; null while no sheet is open.
+  const [selectionMessage, setSelectionMessage] = useState<ChatMessage | null>(null);
 
   // Latest-ref seam: the load effect keys on (session, reload) only, so an
   // auth-state transition never refetches the conversation behind the user's
@@ -489,6 +497,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setImprovement(null);
     setImprovementLoading(false);
     setImprovementError(null);
+    setSelectionMessage(null);
     nearBottomRef.current = true;
     setDetachedFromBottom(false);
     endTurn();
@@ -783,6 +792,21 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setImprovementLoading(false);
   }, []);
 
+  /** TASK-069: dismissing the selection sheet never captures anything. */
+  const closeTextSelection = useCallback(() => {
+    setSelectionMessage(null);
+  }, []);
+
+  /**
+   * TASK-069: the vocabulary save flow's entry point — the selection sheet
+   * hands its confirmed expression here and closes. The immediate save
+   * round-trip (popup, API call, toast) is layered onto this seam by its
+   * upcoming task, which will consume `_selectedText`.
+   */
+  const saveVocabularySelection = useCallback((_selectedText: string) => {
+    setSelectionMessage(null);
+  }, []);
+
   /**
    * Retry one failed assistant row (TASK-054): the backend re-arms that
    * exact row in place, so locally it becomes the streaming target — same
@@ -857,9 +881,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   /**
    * TASK-060 menu selection. Copy runs through the clipboard seam, Suggest
    * replies generates three candidate messages (TASK-061) that the user can
-   * tap into the composer and Improve my English (TASK-064) opens the
-   * improvement sheet for that message; speech (TASK-078) remains a
-   * deliberate seam for its upcoming task, exactly like the TASK-048
+   * tap into the composer, Improve my English (TASK-064) opens the
+   * improvement sheet for that message and Select text (TASK-069) opens the
+   * vocabulary selection surface over its content; speech (TASK-078) remains
+   * a deliberate seam for its upcoming task, exactly like the TASK-048
    * composer send preceded its wire call. Every selection dismisses the
    * menu.
    */
@@ -876,6 +901,8 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         startSuggestions(sessionId, message.id);
       } else if (action === 'improve-english') {
         startImprovement(sessionId, message.id);
+      } else if (action === 'select-text') {
+        setSelectionMessage(message);
       }
     },
     [menuMessage, sessionId, startImprovement, startSuggestions],
@@ -1187,6 +1214,12 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
               setMenuMessage(null);
             }}
             onSelect={handleMenuAction}
+          />
+          <TextSelectionSheet
+            visible={selectionMessage !== null}
+            content={selectionMessage?.content ?? ''}
+            onClose={closeTextSelection}
+            onSave={saveVocabularySelection}
           />
         </>
       )}

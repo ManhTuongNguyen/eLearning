@@ -8,9 +8,11 @@
  * TASK-052 collapsible topic header, the TASK-053 sample-conversation
  * overlay entry, the TASK-054 failed-response retry control, the
  * TASK-060 message long-press menu, the TASK-061 suggested-replies
- * chips (tap-to-insert, never auto-send, loading/error states) and the
+ * chips (tap-to-insert, never auto-send, loading/error states), the
  * TASK-064 improvement sheet (loading/error/result round-trip, Copy
- * improved text, untouched original bubble).
+ * improved text, untouched original bubble) and the TASK-069 text
+ * selection flow (Select text opens the vocabulary sheet over that
+ * message's content; capture closes it; dismissal never captures).
  */
 import React from 'react';
 import {View} from 'react-native';
@@ -979,7 +981,7 @@ describe('ChatScreen', () => {
         .getAllByTestId(/^chat-menu-/)
         .map(element => element.props.testID as string)
         .filter(testId =>
-          /^chat-menu-(suggest-replies|improve-english|copy|speak)$/.test(testId),
+          /^chat-menu-(suggest-replies|improve-english|select-text|copy|speak)$/.test(testId),
         );
     }
 
@@ -1008,6 +1010,7 @@ describe('ChatScreen', () => {
       expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen();
       expect(visibleMenuActionTestIds()).toEqual([
         'chat-menu-suggest-replies',
+        'chat-menu-select-text',
         'chat-menu-copy',
         'chat-menu-speak',
       ]);
@@ -1025,6 +1028,7 @@ describe('ChatScreen', () => {
       expect(visibleMenuActionTestIds()).toEqual([
         'chat-menu-suggest-replies',
         'chat-menu-improve-english',
+        'chat-menu-select-text',
         'chat-menu-copy',
         'chat-menu-speak',
       ]);
@@ -1445,6 +1449,127 @@ describe('ChatScreen', () => {
       // The previous result is fully replaced, not appended.
       expect(within(original).queryByText(IMPROVEMENT.improved)).toBeNull();
       expect(mockedSessions.improveMessage).toHaveBeenLastCalledWith('token-a', 5, 803);
+    });
+  });
+
+  describe('text selection flow (TASK-069)', () => {
+    function renderWithMessages(messages: ChatMessage[]) {
+      mockedSessions.listMessages.mockResolvedValue(pageOf(messages));
+      return renderChat({sessionId: 5});
+    }
+
+    async function openSelectionSheet(testId: string): Promise<void> {
+      await fireEvent(screen.getByTestId(testId), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-select-text'));
+    }
+
+    /** Simulate a native selection span over the pinned input. */
+    async function selectRange(start: number, end: number): Promise<void> {
+      await fireEvent(
+        screen.getByTestId('chat-selection-input'),
+        'selectionChange',
+        {nativeEvent: {selection: {start, end}}},
+      );
+    }
+
+    it('renders no selection sheet until Select text is chosen', async () => {
+      await renderWithMessages([
+        makeMessage({
+          id: 810,
+          role: 'assistant',
+          sequence: 1,
+          content: 'The early bird catches the worm.',
+        }),
+      ]);
+      await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
+
+      expect(screen.queryByTestId('chat-selection-modal')).toBeNull();
+      expect(screen.queryByTestId('chat-menu-select-text')).toBeNull();
+    });
+
+    it('opens the selection surface over the long-pressed message content', async () => {
+      await renderWithMessages([
+        makeMessage({
+          id: 810,
+          role: 'assistant',
+          sequence: 1,
+          content: 'The early bird catches the worm.',
+        }),
+      ]);
+      await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
+
+      await openSelectionSheet('chat-message-810');
+
+      // The menu dismissed and the sheet pins exactly this message's text;
+      // the conversation itself stays mounted underneath.
+      expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
+      expect(screen.getByTestId('chat-selection-modal')).toBeOnTheScreen();
+      expect(screen.getByTestId('chat-selection-input').props.value).toBe(
+        'The early bird catches the worm.',
+      );
+      expect(messageTestIds()).toEqual(['chat-message-810']);
+      expect(screen.getByTestId('composer-input')).toBeOnTheScreen();
+    });
+
+    it('works for user messages as well as assistant ones', async () => {
+      await renderWithMessages([
+        makeMessage({
+          id: 811,
+          role: 'user',
+          sequence: 1,
+          content: 'I learned a new phrase today.',
+        }),
+      ]);
+      await waitFor(() => expect(screen.getByTestId('chat-message-811')).toBeOnTheScreen());
+
+      await openSelectionSheet('chat-message-811');
+
+      expect(screen.getByTestId('chat-selection-modal')).toBeOnTheScreen();
+      expect(screen.getByTestId('chat-selection-input').props.value).toBe(
+        'I learned a new phrase today.',
+      );
+    });
+
+    it('a confirmed selection closes the sheet and leaves the conversation intact', async () => {
+      await renderWithMessages([
+        makeMessage({
+          id: 810,
+          role: 'assistant',
+          sequence: 1,
+          content: 'The early bird catches the worm.',
+        }),
+      ]);
+      await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
+      await openSelectionSheet('chat-message-810');
+      await selectRange(4, 9);
+      expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent('early');
+
+      await fireEvent.press(screen.getByTestId('chat-selection-save'));
+
+      // The capture hands the trimmed expression to the save-flow seam
+      // (payload proven by the sheet's own unit tests) and dismisses the
+      // sheet without disturbing the conversation.
+      expect(screen.queryByTestId('chat-selection-modal')).toBeNull();
+      expect(messageTestIds()).toEqual(['chat-message-810']);
+      expect(screen.queryByTestId('chat-stream-error')).toBeNull();
+    });
+
+    it('dismissing through Cancel captures nothing and restores the chat', async () => {
+      await renderWithMessages([
+        makeMessage({
+          id: 810,
+          role: 'assistant',
+          sequence: 1,
+          content: 'The early bird catches the worm.',
+        }),
+      ]);
+      await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
+      await openSelectionSheet('chat-message-810');
+
+      await fireEvent.press(screen.getByTestId('chat-selection-cancel'));
+
+      expect(screen.queryByTestId('chat-selection-modal')).toBeNull();
+      expect(messageTestIds()).toEqual(['chat-message-810']);
     });
   });
 });
