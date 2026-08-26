@@ -2,13 +2,78 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 7 TASK-050 complete (next: TASK-051 — new
-  conversation UI)
+- **Current Phase**: Phase 7 TASK-051 complete (next: TASK-052 — topic header)
 
 ## Current Active Task
 
-(none — TASK-050 completed; next: TASK-051 — Implement new conversation UI,
-fourth task of Phase 7 Mobile Chat.)
+(none — TASK-051 completed; next: TASK-052 — Implement topic header, fifth
+task of Phase 7 Mobile Chat.)
+
+## Archived Tasks
+
+### TASK-051 — Implement new conversation UI (COMPLETED 2026-08-26)
+- `src/navigation/types.ts` + `MainNavigator.tsx`: `NewConversation: undefined`
+  route registered between Chat and History; `NewConversationScreenProps`
+  alias added.
+- `src/screens/NewConversationScreen.tsx` (new):
+  - ROADMAP §6 shape: "What would you like to talk about?" hint input
+    (new-conversation-hint) + primary Start (new-conversation-start) +
+    secondary "Let AI choose a topic" (new-conversation-auto) + Cancel/back
+    link (new-conversation-back → goBack).
+  - Both actions funnel through one handleCreate(rawHint): guard on creating
+    → trim hint → getAccessToken() at press time (sign-out → friendly error)
+    → createSession(token, trimmedHint) → navigation.REPLACE('Chat',
+    {sessionId}) so Android-back never returns to a submitted form. Blank
+    Start behaves exactly like the auto action, so empty input works on BOTH
+    controls.
+  - Creating state: spinner row (new-conversation-loading), both buttons
+    disabled (+ accessibilityState), input non-editable, double-press
+    guarded. Failure: role=alert form-error banner with toErrorMessage,
+    screen stays and buttons re-enable for retry.
+  - Theme tokens via createStyles(colors); KeyboardAvoidingView shell like
+    Login/Chat.
+- `ChatScreen.tsx` entry points: header "New" link (chat-open-new) beside
+  History/Settings; no-session empty state gained a "Start a new conversation"
+  CTA (chat-start-new) so the cold-start path is reachable end-to-end.
+- __tests__/NewConversationScreen.test.tsx (7): render matrix; typed hint →
+  createSession('token-a','Traveling') + stack swaps to real Chat loading
+  session 42 (listMessages asserted with the created id); untouched Start →
+  createSession(token,'') → chat for id 7; auto ignores typed hint (''); ApiError(400)
+  → verbatim message in form-error, still on form, both buttons re-enabled;
+  deferred creation → loading row + disabled buttons + second press does not
+  double-fire (count stays 1) → resolve swaps to chat for id 42; cancel pops
+  back to the underlying no-session chat (initialState stack).
+- __tests__/ChatScreen.test.tsx extended (+2): chat-open-new pushes the flow;
+  chat-no-session CTA pushes it too (stub NewConversation route added to the
+  renderChat harness).
+- Test gotchas hit (IMPORTANT for future suites):
+  - **An onPress that RETURNS a pending promise hangs awaited
+    fireEvent.press forever** (RNTL captures the handler's return into the
+    act scope; React 19's recursive async-act flush never resolves on a
+    foreign pending promise). Fix/convention: brace-wrap async handlers
+    (`onPress={() => { handleCreate(x); }}`) so onPress returns void — same
+    style LoginScreen already used. Symptom is a bare test timeout with no
+    assertion failure; minimal-repro bisect isolated it in minutes.
+  - Bare non-awaited render() leaves `screen.*` unbound ("render function has
+    not been called") — await render even in throwaway harnesses.
+  - After successful replace('Chat'), the form is UNMOUNTED — post-settle
+    assertions must target the chat tree, not the gone form (queryByTestId
+    null-checks are safe; getByTestId re-fetches are not).
+- Acceptance: empty input works (both Start and Let-AI-choose send '') ✓;
+  topic hint works (verbatim to POST /api/v1/sessions/) ✓; session creation
+  navigates to chat (replace carries {sessionId}, Chat loads its messages) ✓;
+  loading/error states exist ✓.
+- Gates: pnpm typecheck clean; eslint clean; jest 15 suites 141/141 passed.
+
+#### Sub-step record (all complete)
+1. [x] types.ts NewConversation route + MainNavigator registration
+2. [x] NewConversationScreen.tsx — hint input, Start/Let-AI-choose, creating
+       + error states, replace-to-chat
+3. [x] ChatScreen entry points (chat-open-new + chat-start-new)
+4. [x] NewConversationScreen.test.tsx (7 tests) + ChatScreen entry-point
+       tests (+2)
+5. [x] Gates green (pnpm typecheck, pnpm lint, jest 141/141 across 15 suites)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-051
 
 ## Archived Tasks
 

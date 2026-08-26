@@ -584,6 +584,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Chat</Text>
         <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => navigation.navigate('NewConversation')}
+            testID="chat-open-new">
+            <Text style={styles.headerLink}>New</Text>
+          </Pressable>
           <Pressable onPress={() => navigation.navigate('History')} testID="chat-open-history">
             <Text style={styles.headerLink}>History</Text>
           </Pressable>
@@ -619,6 +624,14 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           <Text style={styles.emptyHint}>
             Open a past conversation from History or start a new one to practice English.
           </Text>
+          <Pressable
+            style={styles.retryButton}
+            onPress={() => navigation.navigate('NewConversation')}
+            testID="chat-start-new"
+            accessibilityRole="button"
+            accessibilityLabel="Start a new conversation">
+            <Text style={styles.retryText}>Start a new conversation</Text>
+          </Pressable>
         </View>
       ) : (
         <>

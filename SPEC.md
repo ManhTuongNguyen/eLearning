@@ -1103,7 +1103,7 @@ Acceptance criteria:
 
 ## TASK-051 — Implement new conversation UI
 
-Status: `[ ]`
+Status: `[x]`
 
 Create new conversation screen/modal.
 

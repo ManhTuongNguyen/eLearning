@@ -7,6 +7,7 @@
  * commits, scroll stick/detach transitions, ghost-delta suppression).
  */
 import React from 'react';
+import {View} from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {
@@ -78,6 +79,9 @@ async function renderChat(params?: MainStackParamList['Chat']) {
         <NavigationContainer initialState={{index: 0, routes: [{name: 'Chat', params}]}}>
           <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="Chat">
             <Stack.Screen name="Chat" component={ChatScreen} />
+            <Stack.Screen name="NewConversation">
+              {() => <View testID="new-conversation-screen" />}
+            </Stack.Screen>
             <Stack.Screen name="History">{() => null}</Stack.Screen>
             <Stack.Screen name="Settings">{() => null}</Stack.Screen>
             <Stack.Screen name="Level">{() => null}</Stack.Screen>
@@ -581,5 +585,25 @@ describe('ChatScreen', () => {
     const withinRoot = within(screen.getByTestId('chat-screen'));
     expect(withinRoot.getByTestId('chat-list')).toBeOnTheScreen();
     expect(withinRoot.getByTestId('composer-input')).toBeOnTheScreen();
+  });
+
+  it('opens the new conversation flow from the header link (TASK-051)', async () => {
+    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage()]));
+    await renderChat({sessionId: 5});
+    await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
+
+    await fireEvent.press(screen.getByTestId('chat-open-new'));
+
+    expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen();
+  });
+
+  it('offers starting a new conversation from the no-session empty state', async () => {
+    await renderChat(undefined);
+
+    await screen.findByTestId('chat-no-session');
+
+    await fireEvent.press(screen.getByTestId('chat-start-new'));
+
+    expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen();
   });
 });
