@@ -10,14 +10,49 @@ jest.mock('react-native-safe-area-context', () => {
   const frame = { x: 0, y: 0, width: 0, height: 0 };
 
   const PassThrough = ({ children }) => React.createElement(View, null, children);
+  const SafeAreaInsetsContext = React.createContext(insets);
+  const SafeAreaFrameContext = React.createContext(frame);
 
   return {
     SafeAreaProvider: PassThrough,
     SafeAreaConsumer: ({ children }) => children(insets),
     SafeAreaView: PassThrough,
+    SafeAreaInsetsContext,
+    SafeAreaFrameContext,
     initialWindowMetrics: { frame, insets },
     useSafeAreaInsets: () => insets,
     useSafeAreaFrame: () => frame,
+  };
+});
+
+/**
+ * react-native-screens mock: native-stack navigators render through plain
+ * views so navigation state/logic is exercised without native modules.
+ */
+jest.mock('react-native-screens', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  const PassThrough = ({ children }) => React.createElement(View, null, children);
+  const Nothing = () => null;
+
+  return {
+    Screen: PassThrough,
+    ScreenContainer: PassThrough,
+    ScreenFooter: PassThrough,
+    ScreenStack: PassThrough,
+    ScreenStackItem: PassThrough,
+    ScreenStackHeaderBackButtonImage: Nothing,
+    ScreenStackHeaderCenterView: PassThrough,
+    ScreenStackHeaderLeftView: PassThrough,
+    ScreenStackHeaderRightView: PassThrough,
+    ScreenStackHeaderSearchBarView: Nothing,
+    SearchBar: Nothing,
+    isSearchBarAvailableForCurrentPlatform: false,
+    compatibilityFlags: {},
+    enableScreens: jest.fn(),
+    enableFreeze: jest.fn(),
+    screensEnabled: () => false,
   };
 });
 

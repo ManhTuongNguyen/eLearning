@@ -52,28 +52,32 @@ describe('App authentication flow', () => {
     render(<App />);
 
     // Session restored from secure storage survives an app restart.
-    await waitFor(() => expect(screen.getByText(/Welcome, alice/)).toBeOnTheScreen());
-    expect(screen.getByText('alice@example.com')).toBeOnTheScreen();
+    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
-    await fireEvent.press(screen.getByTestId('home-logout'));
+    // Logout lives on the Settings screen of the main stack.
+    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    await fireEvent.press(await screen.findByTestId('settings-logout'));
 
     await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());
     expect(mockedAuth.logout).toHaveBeenCalledWith(tokens);
     expect(mockedStorage.clearTokens).toHaveBeenCalled();
   });
 
-  it('opens the learning level screen from home and returns back', async () => {
+  it('opens the learning level screen from settings and returns back', async () => {
     mockedStorage.loadTokens.mockResolvedValue({access: 'a', refresh: 'r'});
     mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
     mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
 
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Welcome, alice/)).toBeOnTheScreen());
+    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
-    await fireEvent.press(screen.getByTestId('home-open-levels'));
+    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    await fireEvent.press(await screen.findByTestId('settings-open-level'));
     expect(screen.getByTestId('level-AUTO')).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByTestId('level-back'));
-    expect(screen.getByTestId('home-open-levels')).toBeOnTheScreen();
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-open-level')).toBeOnTheScreen(),
+    );
   });
 });

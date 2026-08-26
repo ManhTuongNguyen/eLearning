@@ -16,8 +16,9 @@ import {
 import {getProfile, LEVELS, updateProfile} from '../api/profile';
 import type {EnglishLevel, LevelOption} from '../api/profile';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
+import type {LevelScreenProps} from '../navigation/types';
 
-export function LevelScreen({onBack}: {onBack: () => void}) {
+export function LevelScreen({navigation}: LevelScreenProps) {
   const {getAccessToken} = useAuth();
   const [selected, setSelected] = useState<EnglishLevel | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,7 +91,7 @@ export function LevelScreen({onBack}: {onBack: () => void}) {
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
-          onPress={onBack}
+          onPress={() => navigation.goBack()}
           testID="level-back"
           hitSlop={8}>
           <Text style={styles.backText}>‹ Back</Text>

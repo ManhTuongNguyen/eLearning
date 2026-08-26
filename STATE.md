@@ -2,14 +2,84 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5B complete (TASK-042 done; next: TASK-043,
-  mobile application navigation — first Phase 6 task)
+- **Current Phase**: Phase 6 TASK-043 complete (next: TASK-044 — theme
+  system, light/dark/system)
 
 ## Current Active Task
 
-(none — TASK-042 completed; next: TASK-043 — Create application navigation:
-Auth stack + Main stack [Chat, History, Settings]; unauthenticated users see
-auth screens, authenticated users see the main app, testable navigation state)
+(none — TASK-043 completed; next: TASK-044 — Implement theme system:
+light/dark/system themes with neutral design; switchable, respects system
+preference, screens use theme tokens instead of hard-coded colors)
+
+## Archived Tasks
+
+### TASK-043 — Create application navigation (COMPLETED 2026-08-26)
+- New deps (pnpm): @react-navigation/native ^7.3.17,
+  @react-navigation/native-stack ^7.18.9, react-native-screens ^4.27.0
+  (safe-area-context already present).
+- `src/navigation/types.ts` — AuthStackParamList {Login, Register} +
+  MainStackParamList {Chat, History, Settings, Level} + typed screen-prop
+  aliases via NativeStackScreenProps.
+- `AuthNavigator` / `MainNavigator` — native stacks, headerShown:false
+  (screens own their chrome); Main initial route Chat; Level is pushed from
+  Settings (keeps TASK-018 level editor reachable).
+- `RootNavigator` — auth-status switch: loading → SplashScreen;
+  unauthenticated → AuthNavigator; authenticated → MainNavigator.
+  Whole-navigator swap keeps flows isolated (logout lands Login, login lands
+  Chat).
+- `App.tsx` — SafeAreaProvider > AuthProvider > NavigationContainer >
+  RootNavigator (manual useState screen switching removed).
+- Screens: ChatScreen + HistoryScreen placeholders (unique root testIDs
+  chat-screen/history-screen/settings-screen; cross-links for testability,
+  replaced by real UIs in later phases); HomeScreen DELETED — its content
+  (welcome/email/logout/level entry) became SettingsScreen (testIDs
+  settings-open-level / settings-logout); LevelScreen/LoginScreen/
+  RegisterScreen converted from callback props to typed React Navigation
+  (navigation.navigate/replace/goBack), all existing testIDs preserved.
+- Auth switching uses navigation.REPLACE (not navigate): prevents stacking a
+  second auth screen and Android-back returning to the previous form.
+- jest.setup.js: react-native-screens mock added (ScreenStack/ScreenStackItem/
+  ScreenFooter/header views as pass-through Views; compatibilityFlags:{};
+  screensEnabled()=>false) AND safe-area-context mock extended with
+  SafeAreaInsetsContext/SafeAreaFrameContext (React contexts) —
+  @react-navigation/elements SafeAreaProviderCompat consumes the former and
+  crashed on undefined context without it. jest.config.js gained pnpm-aware
+  transformIgnorePatterns exception for @react-navigation (ships untranspiled
+  ESM; nanoid/non-secure resolves CJS via exports require condition).
+- Tests __tests__/navigation.test.tsx (6): splash-only while restore pending;
+  unauthenticated → login visible + no main app; authenticated → Chat entry +
+  focused route 'Chat'; Chat→History→back via stack state assertions;
+  Settings→Level→back focused-route roundtrip; logout from Settings →
+  Login + server invalidation + clearTokens + focused 'Login'. State
+  assertions via createNavigationContainerRef().getRootState() — routes/index
+  checked directly (acceptance: "navigation state is testable").
+- Updated harnesses: App.test.tsx (restore→chat-screen; logout via settings;
+  levels via settings); Login/RegisterScreen tests render a REAL mini
+  auth-stack in NavigationContainer (typed createNativeStackNavigator<
+  AuthStackParamList>); LevelScreen.test renders stack with initialState
+  {index:1, routes:[Chat,Level]} and asserts back-pop via ref state.
+- Test gotchas hit:
+  - RNTL v14 render() IS ASYNC — querying `screen.*` synchronously right
+    after un-awaited render() throws "`render` function has not been called"
+    (setRenderResult happens after awaited act). Harnesses now await render.
+  - Pass-through screens mock means stacked screens stay MOUNTED: ambiguous
+    text/testID matches across screens ("History" link vs title) — gave each
+    placeholder a unique root testID instead of asserting titles.
+  - navigate('Login') from Register PUSHED a duplicate login screen (two
+    login-identifier elements) — switched to replace().
+  - initialState PartialState routes must NOT carry explicit key fields
+    (TS2353).
+- Gates: typecheck clean; eslint clean; jest 8 suites 42/42 passed.
+
+#### Sub-step record (all complete)
+1. [x] Deps installed (@react-navigation/native, native-stack,
+       react-native-screens) + jest mocks/patterns
+2. [x] src/navigation types + Auth/Main/Root navigators
+3. [x] Chat/History placeholders; SettingsScreen replaces HomeScreen
+4. [x] Login/Register/Level converted; App.tsx NavigationContainer rewired
+5. [x] navigation.test.tsx + updated App/Login/Register/Level suites; gates
+       green (typecheck, lint, 42 jest tests)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-043
 
 ## Archived Tasks
 

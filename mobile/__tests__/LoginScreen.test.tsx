@@ -1,11 +1,15 @@
 import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 
 import {AuthProvider} from '../src/auth/AuthContext';
 import * as authApi from '../src/api/auth';
 import {ApiError} from '../src/api/client';
 import * as secureStorage from '../src/auth/secureStorage';
+import type {AuthStackParamList} from '../src/navigation/types';
 import {LoginScreen} from '../src/screens/LoginScreen';
+import {RegisterScreen} from '../src/screens/RegisterScreen';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/auth/secureStorage');
@@ -14,9 +18,15 @@ const mockedAuth = jest.mocked(authApi);
 const mockedStorage = jest.mocked(secureStorage);
 
 function renderScreen() {
+  const Stack = createNativeStackNavigator<AuthStackParamList>();
   return render(
     <AuthProvider>
-      <LoginScreen onSwitchToRegister={jest.fn()} />
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{headerShown: false}}>
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Register" component={RegisterScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
     </AuthProvider>,
   );
 }

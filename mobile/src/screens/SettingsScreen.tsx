@@ -1,34 +1,37 @@
 /**
- * Minimal authenticated home screen. The real chat experience arrives in
- * later phases; for now it proves the authenticated state and hosts logout.
+ * Settings screen (TASK-043): hosts account actions for the authenticated
+ * user — learning-level entry (SPEC TASK-018) and logout (SPEC TASK-015).
  */
 import React from 'react';
 import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {useAuth} from '../auth/AuthContext';
+import type {SettingsScreenProps} from '../navigation/types';
 
-export function HomeScreen({onOpenLevels}: {onOpenLevels?: () => void}) {
+export function SettingsScreen({navigation}: SettingsScreenProps) {
   const {user, logout, busy} = useAuth();
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome{user ? `, ${user.username}` : ''}</Text>
-      {user ? <Text style={styles.subtitle}>{user.email}</Text> : null}
-
-      {onOpenLevels ? (
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={onOpenLevels}
-          testID="home-open-levels">
-          <Text style={styles.secondaryButtonText}>Learning level</Text>
-        </Pressable>
+    <View style={styles.container} testID="settings-screen">
+      <Text style={styles.title}>Settings</Text>
+      {user ? (
+        <Text style={styles.subtitle}>{user.email}</Text>
       ) : null}
+
+      <Pressable
+        style={styles.secondaryButton}
+        onPress={() => navigation.navigate('Level')}
+        testID="settings-open-level">
+        <Text style={styles.secondaryButtonText}>Learning level</Text>
+      </Pressable>
 
       <Pressable
         style={[styles.button, busy && styles.buttonDisabled]}
         disabled={busy}
-        onPress={() => {logout();}}
-        testID="home-logout">
+        onPress={() => {
+          logout();
+        }}
+        testID="settings-logout">
         {busy ? (
           <ActivityIndicator color="#ffffff" />
         ) : (

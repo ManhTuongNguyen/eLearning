@@ -951,7 +951,7 @@ Acceptance criteria:
 
 ## TASK-043 — Create application navigation
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement navigation structure:
 

@@ -12,8 +12,9 @@ import {
 } from 'react-native';
 
 import {useAuth} from '../auth/AuthContext';
+import type {LoginScreenProps} from '../navigation/types';
 
-export function LoginScreen({onSwitchToRegister}: {onSwitchToRegister: () => void}) {
+export function LoginScreen({navigation}: LoginScreenProps) {
   const {login, busy, error} = useAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -65,7 +66,9 @@ export function LoginScreen({onSwitchToRegister}: {onSwitchToRegister: () => voi
           )}
         </Pressable>
 
-        <Pressable onPress={onSwitchToRegister} testID="login-switch-register">
+        <Pressable
+          onPress={() => navigation.replace('Register')}
+          testID="login-switch-register">
           <Text style={styles.switchText}>
             No account yet? <Text style={styles.switchLink}>Register</Text>
           </Text>

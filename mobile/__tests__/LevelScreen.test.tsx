@@ -1,4 +1,6 @@
 import React from 'react';
+import {NavigationContainer, createNavigationContainerRef} from '@react-navigation/native';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 
 import * as authApi from '../src/api/auth';
@@ -6,6 +8,7 @@ import * as profileApi from '../src/api/profile';
 import {ApiError} from '../src/api/client';
 import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
+import type {MainStackParamList} from '../src/navigation/types';
 import {LevelScreen} from '../src/screens/LevelScreen';
 
 jest.mock('../src/api/auth');
@@ -20,14 +23,34 @@ const mockedAuth = jest.mocked(authApi);
 const mockedProfile = jest.mocked(profileApi);
 const mockedStorage = jest.mocked(secureStorage);
 
-const onBack = jest.fn();
-
 function renderScreen() {
-  return render(
+  const ref = createNavigationContainerRef<MainStackParamList>();
+  const Stack = createNativeStackNavigator<MainStackParamList>();
+
+  render(
     <AuthProvider>
-      <LevelScreen onBack={onBack} />
+      <NavigationContainer
+        ref={ref}
+        initialState={{
+          index: 1,
+          routes: [{name: 'Chat'}, {name: 'Level'}],
+        }}>
+        <Stack.Navigator screenOptions={{headerShown: false}}>
+          <Stack.Screen name="Chat">{() => null}</Stack.Screen>
+          <Stack.Screen name="History">{() => null}</Stack.Screen>
+          <Stack.Screen name="Settings">{() => null}</Stack.Screen>
+          <Stack.Screen name="Level" component={LevelScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
     </AuthProvider>,
   );
+
+  return {
+    focusedRouteName: (): string | undefined => {
+      const state = ref.current?.getRootState();
+      return state ? state.routes[state.index]?.name : undefined;
+    },
+  };
 }
 
 function checkedState(testId: string): boolean | undefined {
@@ -106,12 +129,13 @@ describe('LevelScreen', () => {
     expect(mockedProfile.updateProfile).toHaveBeenCalledWith('token-a', 'A2');
   });
 
-  it('returns to the previous screen on back', async () => {
-    renderScreen();
+  it('pops back to the previous route on back', async () => {
+    const {focusedRouteName} = renderScreen();
     await waitFor(() => expect(screen.getByTestId('level-A1')).toBeOnTheScreen());
+    expect(focusedRouteName()).toBe('Level');
 
     await fireEvent.press(screen.getByTestId('level-back'));
 
-    expect(onBack).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(focusedRouteName()).toBe('Chat'));
   });
 });

@@ -2,51 +2,28 @@
  * eLearning mobile app entry point.
  *
  * Root rendering is driven by authentication state restored from secure
- * storage on startup (SPEC TASK-015).
+ * storage on startup (SPEC TASK-015); navigation structure per SPEC TASK-043:
+ * an auth stack for unauthenticated users and a main stack (Chat, History,
+ * Settings) for authenticated ones.
  */
-import React, {useState} from 'react';
+import {NavigationContainer} from '@react-navigation/native';
+import React from 'react';
 import {StatusBar} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
-import {AuthProvider, useAuth} from './src/auth/AuthContext';
-import {HomeScreen} from './src/screens/HomeScreen';
-import {LevelScreen} from './src/screens/LevelScreen';
-import {LoginScreen} from './src/screens/LoginScreen';
-import {RegisterScreen} from './src/screens/RegisterScreen';
-import {SplashScreen} from './src/screens/SplashScreen';
+import {AuthProvider} from './src/auth/AuthContext';
+import {RootNavigator} from './src/navigation/RootNavigator';
 
 function App() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="dark-content" />
       <AuthProvider>
-        <RootNavigator />
+        <NavigationContainer>
+          <RootNavigator />
+        </NavigationContainer>
       </AuthProvider>
     </SafeAreaProvider>
-  );
-}
-
-function RootNavigator() {
-  const {status} = useAuth();
-  const [showRegister, setShowRegister] = useState(false);
-  const [showLevels, setShowLevels] = useState(false);
-
-  if (status === 'loading') {
-    return <SplashScreen />;
-  }
-
-  if (status === 'unauthenticated') {
-    return showRegister ? (
-      <RegisterScreen onSwitchToLogin={() => setShowRegister(false)} />
-    ) : (
-      <LoginScreen onSwitchToRegister={() => setShowRegister(true)} />
-    );
-  }
-
-  return showLevels ? (
-    <LevelScreen onBack={() => setShowLevels(false)} />
-  ) : (
-    <HomeScreen onOpenLevels={() => setShowLevels(true)} />
   );
 }
 
