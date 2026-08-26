@@ -42,7 +42,10 @@
  * and error states cover both
  * generation round-trips; the suggestion strip clears on send and the
  * suggestion strip, improvement sheet and vocabulary popup clear on session
- * change, while speech selection stays a seam for its upcoming task.
+ * change. Read aloud (TASK-078) speaks the chosen message through the
+ * speech seam with a single-playback contract — starting another message
+ * stops the current one, the speaking bubble shows a visible Stop control,
+ * failures only clear the state — and switching sessions silences playback.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -68,6 +71,7 @@ import type {ChatScreenProps} from '../navigation/types';
 import {copyText} from '../utils/clipboard';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
+import {useSpeechPlayback} from '../tts/useSpeechPlayback';
 import {ImprovementSheet} from './ImprovementSheet';
 import {MessageActionsMenu} from './MessageActionsMenu';
 import type {MessageAction} from './MessageActionsMenu';
@@ -201,6 +205,21 @@ function createStyles(c: ThemeColors) {
     },
     messageRetryText: {
       color: c.textPrimary,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    speechStop: {
+      alignSelf: 'flex-start',
+      marginTop: 6,
+      borderColor: c.borderStrong,
+      borderWidth: 1,
+      borderRadius: 10,
+      paddingVertical: 5,
+      paddingHorizontal: 14,
+      backgroundColor: c.surface,
+    },
+    speechStopText: {
+      color: c.accent,
       fontSize: 13,
       fontWeight: '600',
     },
@@ -429,6 +448,9 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const [vocabError, setVocabError] = useState<string | null>(null);
   // TASK-070: transient success toast; auto-dismissed after a fixed delay.
   const [toast, setToast] = useState<string | null>(null);
+  // TASK-078: single-playback speech controller; speakingMessageId drives
+  // the visible playback state on the bubble currently being read aloud.
+  const {speakingId: speakingMessageId, speak, stop: stopSpeech} = useSpeechPlayback();
 
   // Latest-ref seam: the load effect keys on (session, reload) only, so an
   // auth-state transition never refetches the conversation behind the user's
@@ -548,6 +570,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setVocabSaving(false);
     setVocabError(null);
     setToast(null);
+    stopSpeech();
     nearBottomRef.current = true;
     setDetachedFromBottom(false);
     endTurn();
@@ -592,7 +615,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       cancelled = true;
       endTurn();
     };
-  }, [sessionId, reloadKey, resetMessages, endTurn]);
+  }, [sessionId, reloadKey, resetMessages, endTurn, stopSpeech]);
 
   /**
    * Queue one streamed chunk for the assistant bubble of this turn. The
@@ -999,14 +1022,28 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const canSend = draft.trim().length > 0 && !streaming;
 
   /**
+   * TASK-078: speaking the same message again acts as a stop toggle; any
+   * other message supersedes current playback through the hook.
+   */
+  const toggleSpeech = useCallback(
+    (messageId: number, content: string) => {
+      if (speakingMessageId === messageId) {
+        stopSpeech();
+        return;
+      }
+      speak(messageId, content);
+    },
+    [speakingMessageId, speak, stopSpeech],
+  );
+
+  /**
    * TASK-060 menu selection. Copy runs through the clipboard seam, Suggest
    * replies generates three candidate messages (TASK-061) that the user can
    * tap into the composer, Improve my English (TASK-064) opens the
    * improvement sheet for that message and Select text (TASK-069) opens the
-   * vocabulary selection surface over its content; speech (TASK-078) remains
-   * a deliberate seam for its upcoming task, exactly like the TASK-048
-   * composer send preceded its wire call. Every selection dismisses the
-   * menu.
+   * vocabulary selection surface over its content; Read aloud (TASK-078)
+   * speaks that message — or stops it when it is already speaking. Every
+   * selection dismisses the menu.
    */
   const handleMenuAction = useCallback(
     (action: MessageAction) => {
@@ -1023,9 +1060,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         startImprovement(sessionId, message.id);
       } else if (action === 'select-text') {
         setSelectionMessage(message);
+      } else if (action === 'speak') {
+        toggleSpeech(message.id, message.content);
       }
     },
-    [menuMessage, sessionId, startImprovement, startSuggestions],
+    [menuMessage, sessionId, startImprovement, startSuggestions, toggleSpeech],
   );
 
   /** Follow the conversation tail; no-op when the list is not mounted. */
@@ -1117,11 +1156,22 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
                 <Text style={styles.messageRetryText}>Retry</Text>
               </Pressable>
             ) : null}
+            {speakingMessageId === item.id ? (
+              <Pressable
+                style={styles.speechStop}
+                onPress={stopSpeech}
+                testID={`chat-speech-stop-${item.id}`}
+                accessibilityRole="button"
+                accessibilityLabel="Stop reading aloud"
+                accessibilityState={{busy: true}}>
+                <Text style={styles.speechStopText}>⏹ Speaking… tap to stop</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       );
     },
-    [styles, colors.textMuted, streaming, handleRetry],
+    [styles, colors.textMuted, streaming, handleRetry, speakingMessageId, stopSpeech],
   );
 
   return (

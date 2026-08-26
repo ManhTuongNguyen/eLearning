@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 12 TASK-077 complete (next: TASK-078 — Add TTS to messages)
+- **Current Phase**: Phase 12 TASK-078 complete (next: TASK-079 — Add TTS to sample conversation)
 
 ## Current Active Task
 

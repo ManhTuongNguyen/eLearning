@@ -1629,7 +1629,7 @@ Acceptance criteria:
 
 ## TASK-078 — Add TTS to messages
 
-Status: `[ ]`
+Status: `[x]`
 
 Add TTS action to message menus.
 

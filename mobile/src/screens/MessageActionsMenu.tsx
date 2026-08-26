@@ -9,7 +9,7 @@
  * action exposed as a labeled button.
  *
  * Selecting an action reports it upward and lets the parent close the menu;
- * the behaviors land in their own tasks (suggestions → TASK-061,
+ * the behaviors live in their own tasks (suggestions → TASK-061,
  * improvement sheet → TASK-064, text selection → TASK-069, speech →
  * TASK-078) while Copy already works via the clipboard seam in the chat
  * screen.

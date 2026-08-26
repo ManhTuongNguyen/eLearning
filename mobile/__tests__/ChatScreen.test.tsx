@@ -15,7 +15,11 @@
  * message's content; capture closes it; dismissal never captures) and
  * the TASK-070 vocabulary save popup (capture opens it, Save calls the
  * immediate API and flashes a self-dismissing success toast, failure
- * keeps it open with an alert for retry, Cancel saves nothing).
+ * keeps it open with an alert for retry, Cancel saves nothing), plus the
+ * TASK-078 read-aloud flow (Read aloud speaks the chosen message through
+ * the injected engine double, the speaking bubble exposes a visible Stop
+ * control, finishing or failing playback clears the state, starting
+ * another message supersedes the first cleanly).
  */
 import React from 'react';
 import {View} from 'react-native';
@@ -54,6 +58,7 @@ import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen, VOCAB_TOAST_DURATION_MS} from '../src/screens/ChatScreen';
 import {STREAM_FLUSH_INTERVAL_MS} from '../src/screens/streamingUx';
 import {ThemeProvider} from '../src/theme/ThemeContext';
+import {setSpeechEngine, stubSpeechEngine} from '../src/tts/textToSpeech';
 import {copyText} from '../src/utils/clipboard';
 
 jest.mock('../src/api/auth');
@@ -1122,6 +1127,127 @@ describe('ChatScreen', () => {
       await fireEvent(screen.getByTestId('chat-message-903'), 'longPress');
 
       expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
+    });
+  });
+
+  describe('message read-aloud speech (TASK-078)', () => {
+    let speakMock: jest.Mock;
+    let stopMock: jest.Mock;
+    let utterance: {promise: Promise<void>; resolve: () => void; reject: (reason?: unknown) => void};
+
+    function nextUtterance(): void {
+      let resolve!: () => void;
+      let reject!: (reason?: unknown) => void;
+      const promise = new Promise<void>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      utterance = {promise, resolve, reject};
+    }
+
+    beforeEach(() => {
+      stopMock = jest.fn();
+      speakMock = jest.fn(() => {
+        nextUtterance();
+        return utterance.promise;
+      });
+      setSpeechEngine({speak: speakMock, stop: stopMock});
+    });
+
+    afterEach(() => {
+      setSpeechEngine(stubSpeechEngine);
+    });
+
+    it('speaks an assistant message from Read aloud and shows playback state', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([makeMessage({id: 806, role: 'assistant', sequence: 1, content: 'Read me aloud.'})]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-806')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-806'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-speak'));
+
+      expect(speakMock).toHaveBeenCalledWith('Read me aloud.');
+      expect(screen.getByTestId('chat-speech-stop-806')).toBeOnTheScreen();
+      expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
+    });
+
+    it('halts playback through the visible Stop control and hides the state', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([makeMessage({id: 807, role: 'assistant', sequence: 1})]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-807')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-807'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-speak'));
+      expect(screen.getByTestId('chat-speech-stop-807')).toBeOnTheScreen();
+
+      await fireEvent.press(screen.getByTestId('chat-speech-stop-807'));
+
+      expect(stopMock).toHaveBeenCalled();
+      expect(screen.queryByTestId('chat-speech-stop-807')).toBeNull();
+    });
+
+    it('starting another message stops the previous one cleanly', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([
+          makeMessage({id: 808, role: 'assistant', sequence: 1, content: 'First line'}),
+          makeMessage({id: 809, role: 'assistant', sequence: 2, content: 'Second line'}),
+        ]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-809')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-808'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-speak'));
+      expect(screen.getByTestId('chat-speech-stop-808')).toBeOnTheScreen();
+
+      await fireEvent(screen.getByTestId('chat-message-809'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-speak'));
+
+      expect(stopMock).toHaveBeenCalled();
+      expect(screen.getByTestId('chat-speech-stop-809')).toBeOnTheScreen();
+      expect(screen.queryByTestId('chat-speech-stop-808')).toBeNull();
+    });
+
+    it('finishing playback clears the visible state on its own', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([makeMessage({id: 810, role: 'assistant', sequence: 1})]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-810'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-speak'));
+      expect(screen.getByTestId('chat-speech-stop-810')).toBeOnTheScreen();
+
+      await act(async () => {
+        utterance.resolve();
+      });
+
+      expect(speakMock).toHaveBeenCalled();
+      expect(screen.queryByTestId('chat-speech-stop-810')).toBeNull();
+    });
+
+    it('a failed utterance clears the state without crashing the screen', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([makeMessage({id: 811, role: 'assistant', sequence: 1})]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-811')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-811'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-speak'));
+      expect(screen.getByTestId('chat-speech-stop-811')).toBeOnTheScreen();
+
+      await act(async () => {
+        utterance.reject(new Error('E_TTS_LANGUAGE_UNAVAILABLE'));
+      });
+
+      expect(screen.queryByTestId('chat-speech-stop-811')).toBeNull();
+      expect(screen.getByTestId('chat-message-811')).toBeOnTheScreen();
     });
   });
 
