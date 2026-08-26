@@ -1614,7 +1614,7 @@ Acceptance criteria:
 
 ## TASK-077 — Implement Android TTS
 
-Status: `[ ]`
+Status: `[x]`
 
 Use Android-native TextToSpeech.
 
