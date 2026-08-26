@@ -1721,7 +1721,7 @@ Acceptance criteria:
 
 ## TASK-083 — Implement serverless OpenRouter client
 
-Status: `[ ]`
+Status: `[x]`
 
 Create mobile-side OpenRouter client.
 
