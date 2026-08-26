@@ -2,17 +2,81 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5A — Conversation Context (TASK-038 complete; next TASK-039)
+- **Current Phase**: Phase 5A complete — Conversation Context done (TASK-039
+  complete; next TASK-040, Phase 5B Chat Generation)
 
 ## Current Active Task
 
-(none — TASK-038 completed; next: TASK-039 — Implement asynchronous summary
-update: move session-summary maintenance into a Celery task so the chat
-request does not wait for it; conversation remains usable when summarization
-fails; failed jobs retry; no duplicate summary ranges; tests cover task
-behavior)
+(none — TASK-039 completed; next: TASK-040 — Implement user-message creation
+service: validate session ownership, store user message, build context,
+create assistant generation state; transactional persistence; failed
+generation must not corrupt the conversation)
 
 ## Archived Tasks
+
+### TASK-039 — Implement asynchronous summary update (COMPLETED 2026-08-26)
+- `conversations/tasks.py` (first Celery task in the codebase; picked up by
+  config/celery.py autodiscover_tasks → verified registered as
+  "conversations.update_session_summary" via app.loader.import_default_modules()):
+  - `summarize_session(session_id) -> bool` — worker-free body: fetches the
+    Session row (DoesNotExist → info log + False: sessions deleted between
+    enqueue and execution are a graceful no-op), then delegates to
+    SessionSummaryTrigger(get_summary_provider()).update(session). ALL trigger
+    guarantees carry over unchanged: select_for_update re-fetch, boundary
+    idempotency (duplicate deliveries recompute pending count under the row
+    lock and find nothing left), rollback of summary+boundary on provider
+    failure.
+  - `update_session_summary` shared_task(bind=True): retryable LLMError →
+    self.retry(exc=exc); non-retryable LLMError (auth, unusable output) →
+    warning + return False (conversation keeps working with its existing
+    summary; same range retried on the next threshold crossing). Non-LLMError
+    propagates unmasked. Options: max_retries=5 (SUMMARY_UPDATE_MAX_RETRIES),
+    acks_late=True (at-least-once delivery survives worker crashes;
+    duplicates harmless by construction), retry_backoff=5 exponential with
+    retry_backoff_max=600 and jitter=True.
+  - `get_summary_provider()` seam — lru_cache(maxsize=1)
+    FallbackProvider.from_settings(), mirrors llm.views._settings_streaming_service;
+    tests monkeypatch the module symbol.
+  - `schedule_session_summary_update(session_id)` — request-side entry point:
+    transaction.on_commit(lambda: update_session_summary.delay(session_id)).
+    Nothing reaches the broker while the surrounding transaction may still
+    roll back. Deliberately NOT wired into any view yet: chat flow
+    integration is TASK-040/041.
+  - Logging "conversations.tasks": warning lines carry session id +
+    normalized error str only; payloads never logged.
+- Tests backend/tests/test_summary_tasks.py (19 tests): task options pinned
+  (name/max_retries/backoff/jitter/acks_late); provider seam builds cached
+  FallbackProvider from settings; eager .apply() behavior matrix — happy path
+  persists summary+boundary+True, threshold-not-crossed no-op without
+  provider call, missing session graceful no-op, RETRYABLE failure retried
+  inline until success (2 requests, persisted), budget exhaustion
+  (max_retries monkeypatched 0) → FAILURE surfacing original LLMAvailabilityError
+  + session untouched, non-retryable auth failure → SUCCESS/False no change,
+  blank-output LLMResponseError → SUCCESS/False (request made once),
+  double-run → exactly one summarization (no duplicate ranges, exact turns
+  1-40 archived lines), second batch rolls previous summary forward (turns
+  41-80 + PREVIOUS_SUMMARY_HEADER, boundary 80), failure logs carry ids/
+  errors but never turn text or summary text, schedule helper enqueues
+  exactly once AFTER commit / never after rollback (set_rollback).
+- Test gotchas hit (environment):
+  - Django 6 REMOVED django.test.utils.captureOnCommitCallbacks — drained
+    connection.run_on_commit manually (flush_on_commit_callbacks helper);
+    entries are (sids, func, robust) tuples.
+  - Celery eager apply() RE-EXECUTES retried tasks inline
+    (Task.apply follows retval.sig.apply(retries=retries+1)); a Retry never
+    surfaces as EagerResult state "RETRY" — script failure→success outcomes
+    on ONE provider instance and assert final SUCCESS instead; budget
+    exhaustion tested by monkeypatching max_retries to 0 (original exc is
+    raised at the retry call → FAILURE state).
+- Gates: ruff check/format clean (90 files); pytest 608 passed +202 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/tasks.py — update_session_summary + summarize_session +
+       get_summary_provider seam + schedule_session_summary_update (on_commit)
+2. [x] backend/tests/test_summary_tasks.py written (19 tests)
+3. [x] Gates green (ruff check/format, pytest 608+202 Postgres, manage.py check)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-039
 
 ### TASK-038 — Implement summary trigger (COMPLETED 2026-08-26)
 - `conversations/trigger.py`, two layers:

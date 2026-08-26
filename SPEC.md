@@ -863,7 +863,7 @@ Acceptance criteria:
 
 ## TASK-039 — Implement asynchronous summary update
 
-Status: `[ ]`
+Status: `[x]`
 
 Use Celery for conversation summary updates where appropriate.
 
