@@ -57,3 +57,6 @@ mobile/vendor/bundle/
 
 # --- Local agent config (contains credentials) ---
 opencode.json
+
+# --- Generated output ---
+graphify-out/

@@ -24,13 +24,16 @@ while true; do
     --dangerously-skip-permissions "
       Execution Rules:
       1. READ 'STATE.md' FIRST to recall previous execution context, active sub-steps, or unhandled errors.
-      2. READ 'ROADMAP.md' and 'SPEC.md' to identify overall project goals.
-      3. Find the FIRST uncompleted task in 'SPEC.md' (marked Status: \`[ ]\`).
-      4. If 'STATE.md' has no active sub-steps, BREAK DOWN the selected task into small sub-steps inside 'STATE.md' under '## Current Active Task'.
-      5. Execute the current sub-step and run quality/test checks (Ruff, pytest, pnpm, etc.).
-      6. Fix any errors or test failures encountered.
-      7. Once ALL acceptance criteria for the task pass:
-         - Mark the task as completed in 'SPEC.md' by changing Status: \`[ ]\` to Status: \`[x]\`.
+      2. READ 'ROADMAP.md' ONLY to understand high-level phase trajectory and context.
+      3. READ 'graphify-out/GRAPH_REPORT.md' (or 'graphify-out/graph.json') to understand codebase dependencies and module relationships before making code changes.
+      4. READ 'SPEC.md' to find the FIRST uncompleted task (marked Status: \`[ ]\`).
+      5. If 'STATE.md' has NO active sub-steps, BREAK DOWN the selected task from SPEC.md into small sub-steps inside 'STATE.md' under '## Current Active Task'.
+      6. Execute the current sub-step and run test/quality checks (Ruff, pytest, pnpm, etc.).
+      7. IMMEDIATELY UPDATE 'STATE.md': Mark the completed sub-step as [x] right after finishing it before moving to the next sub-step.
+      8. Fix any errors or test failures encountered.
+      9. ONLY WHEN ALL sub-steps and acceptance criteria pass:
+         - EXECUTE SKILL: Run '/graphify ./docs --update' to re-extract codebase dependencies into 'graphify-out/'.
+         - Change Status: \`[ ]\` to Status: \`[x]\` in 'SPEC.md'.
          - RESET the '## Current Active Task' section in 'STATE.md' back to EMPTY template for the next task.
          - Commit code changes to git with message 'feat: complete TASK-XXX'.
     "
