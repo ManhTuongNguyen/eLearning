@@ -1,5 +1,5 @@
 /**
- * Vocabulary screen (SPEC TASK-072): the authenticated user's saved
+ * Vocabulary screen (SPEC TASK-072/075): the authenticated user's saved
  * expressions. The backend already returns items newest-first, so pages
  * render in delivery order. The first page loads on mount (and on retry);
  * further pages append through a "Load more" control while the DRF envelope
@@ -9,7 +9,10 @@
  * translation, pronunciation, part of speech, example) whenever present.
  * Loading, empty and error states are all explicit; failures never destroy
  * rows that are already visible — pagination errors surface as a banner
- * above the list.
+ * above the list. "Export CSV" (TASK-075) fetches the Anki-compatible export,
+ * hands it to the native share/save sheet and confirms through a
+ * self-dismissing toast, while failures show a retryable alert line without
+ * touching the rendered list.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -21,14 +24,19 @@ import {
   View,
 } from 'react-native';
 
+import {exportVocabulary} from '../api/vocabulary';
 import type {VocabularyItem} from '../api/vocabulary';
 import {listVocabulary} from '../api/vocabulary';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {VocabularyScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
+import {shareAnkiCsv} from '../utils/ankiShare';
 
 type Props = VocabularyScreenProps;
+
+/** How long the export confirmation toast stays visible (TASK-075). */
+const EXPORT_TOAST_DURATION_MS = 2500;
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -53,6 +61,54 @@ function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.accent,
       paddingVertical: 4,
+    },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    exportLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 4,
+    },
+    exportLinkDisabled: {
+      opacity: 0.5,
+    },
+    actionLinkText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.accent,
+    },
+    exportError: {
+      color: c.errorText,
+      fontSize: 13,
+      marginBottom: 12,
+    },
+    toast: {
+      position: 'absolute',
+      bottom: 24,
+      left: 24,
+      right: 24,
+      backgroundColor: c.surface,
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      shadowOffset: {width: 0, height: 2},
+      elevation: 6,
+    },
+    toastText: {
+      color: c.success,
+      fontSize: 14,
+      fontWeight: '600',
+      textAlign: 'center',
     },
     centered: {
       flex: 1,
@@ -279,14 +335,80 @@ export function VocabularyScreen({navigation}: Props) {
     }
   }, [hasMore, loadedPages, loading, loadingMore]);
 
+  /**
+   * TASK-075: Export CSV fetches the complete Anki export (TASK-074) and
+   * hands it to the native share/save sheet through the ankiShare seam. A
+   * busy flag guards double-presses, success flashes a self-dismissing
+   * toast, and any failure surfaces as a retryable alert line while the
+   * rendered list stays untouched. Dismissing the share sheet is a normal,
+   * non-error outcome.
+   */
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const handleExport = useCallback(async () => {
+    if (exporting) {
+      return;
+    }
+    setExporting(true);
+    setExportError(null);
+    try {
+      const token = await getAccessTokenRef.current();
+      if (!token) {
+        throw new Error('You need to sign in again to see your vocabulary.');
+      }
+      await shareAnkiCsv(await exportVocabulary(token));
+      setToast('Vocabulary exported — choose where to save or share it');
+    } catch (err) {
+      setExportError(toErrorMessage(err));
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting]);
+
+  // TASK-075: the success toast dismisses itself after a fixed delay.
+  useEffect(() => {
+    if (toast === null) {
+      return;
+    }
+    const timer = setTimeout(() => setToast(null), EXPORT_TOAST_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   return (
     <View style={styles.container} testID="vocabulary-screen">
       <View style={styles.header}>
         <Text style={styles.title}>Vocabulary</Text>
-        <Pressable onPress={() => navigation.goBack()} testID="vocabulary-back">
-          <Text style={styles.backLink}>Close</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            style={[styles.exportLink, exporting && styles.exportLinkDisabled]}
+            onPress={() => {
+              handleExport();
+            }}
+            disabled={exporting}
+            accessibilityRole="button"
+            accessibilityLabel="Export your vocabulary as an Anki-compatible CSV file"
+            accessibilityState={{disabled: exporting, busy: exporting}}
+            testID="vocabulary-export">
+            {exporting ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : null}
+            <Text style={styles.actionLinkText}>
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => navigation.goBack()} testID="vocabulary-back">
+            <Text style={styles.backLink}>Close</Text>
+          </Pressable>
+        </View>
       </View>
+
+      {exportError !== null ? (
+        <Text role="alert" style={styles.exportError} testID="vocabulary-export-error">
+          {exportError}
+        </Text>
+      ) : null}
 
       {error !== null ? (
         <Text role="alert" style={styles.error} testID="form-error">
@@ -368,6 +490,14 @@ export function VocabularyScreen({navigation}: Props) {
           testID="vocabulary-list"
         />
       )}
+
+      {toast !== null ? (
+        <View pointerEvents="none" style={styles.toast} testID="vocabulary-toast">
+          <Text role="status" style={styles.toastText}>
+            {toast}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

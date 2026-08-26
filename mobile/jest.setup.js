@@ -57,6 +57,31 @@ jest.mock('react-native-screens', () => {
 });
 
 /**
+ * react-native-blob-util mock: exposes just the fs surface used by the Anki
+ * CSV share seam (TASK-075) so tests can assert the file write without
+ * native modules.
+ */
+jest.mock('react-native-blob-util', () => ({
+  __esModule: true,
+  default: {
+    fs: {
+      dirs: { CacheDir: '/mock-cache' },
+      writeFile: jest.fn(async (path, contents) => path),
+    },
+  },
+}));
+
+/**
+ * react-native-share mock: records the options of every open() call.
+ */
+jest.mock('react-native-share', () => ({
+  __esModule: true,
+  default: {
+    open: jest.fn(async () => ({ message: 'shared' })),
+  },
+}));
+
+/**
  * In-memory react-native-keychain mock so tests exercise the same code paths
  * as secure device storage without native modules.
  *

@@ -2,15 +2,14 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 11 TASK-074 complete (next: TASK-075 — Mobile export flow)
+- **Current Phase**: Phase 11 TASK-075 complete (next: TASK-076 — TTS abstraction)
 
 ## Current Active Task
 
-- **Task ID**: TASK-XXX
+- **Task ID**:
 - **Sub-steps**:
-  - [ ] Sub-step 1
-  - [ ] Sub-step 2
-- **Status**: IN_PROGRESS
+  - [ ]
+- **Status**:
 
 ## Working Notes / Unhandled Errors
 - (Only record errors or context BLOCKING the current Task. Leave blank if none)

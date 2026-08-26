@@ -1585,7 +1585,7 @@ Acceptance criteria:
 
 ## TASK-075 — Implement mobile export flow
 
-Status: `[ ]`
+Status: `[x]`
 
 Allow the user to export/share the CSV from the vocabulary screen.
 

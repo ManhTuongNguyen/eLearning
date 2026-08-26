@@ -1,12 +1,25 @@
-/** Vocabulary API binding tests (SPEC TASK-066/070). */
+/**
+ * Vocabulary API binding tests (SPEC TASK-066/070/074): saving is immediate
+ * and never waits for enrichment, and the CSV export returns raw text while
+ * normalizing failures through the shared ApiError contract.
+ */
 
-import {saveVocabulary} from '../src/api/vocabulary';
+import {ApiError} from '../src/api/client';
+import {exportVocabulary, saveVocabulary} from '../src/api/vocabulary';
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
+  } as unknown as Response;
+}
+
+function textResponse(status: number, body: string): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => body,
   } as unknown as Response;
 }
 
@@ -71,5 +84,65 @@ describe('vocabulary api bindings', () => {
 
     expect(item.id).toBe(3);
     expect(item.expression).toBe('the early bird');
+  });
+});
+
+describe('exportVocabulary (TASK-074 binding)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('fetches the export endpoint and returns the raw CSV text untouched', async () => {
+    const csv = 'Front,Back,Example,Pronunciation\n"set off","phrasal verb",,\n';
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(textResponse(200, csv));
+
+    await expect(exportVocabulary('tok')).resolves.toBe(csv);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://10.0.2.2:8000/api/v1/vocabulary/export/',
+      {
+        method: 'GET',
+        headers: {Accept: 'text/csv', Authorization: 'Bearer tok'},
+      },
+    );
+  });
+
+  it('normalizes DRF JSON error bodies through the shared ApiError contract', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        textResponse(401, JSON.stringify({detail: 'Invalid token.'})),
+      );
+
+    const error = await exportVocabulary('expired').catch(
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(401);
+    expect((error as ApiError).message).toBe('Invalid token.');
+  });
+
+  it('falls back to a generic message when an error body is not JSON', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(textResponse(503, '<html>gateway down</html>'));
+
+    const error = await exportVocabulary('tok').catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(503);
+    expect((error as ApiError).message).toBe('Request failed (503).');
+  });
+
+  it('maps network failures to the offline ApiError', async () => {
+    jest.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('offline'));
+
+    const error = await exportVocabulary('tok').catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(0);
   });
 });

@@ -1,10 +1,13 @@
 /**
- * Vocabulary screen tests (SPEC TASK-072): saved expressions render newest-
+ * Vocabulary screen tests (SPEC TASK-072/075): saved expressions render newest-
  * first exactly as delivered, enrichment status is visible per row ("Enriching…"
  * while pending, a failure note while failed, enriched fields once complete),
  * pagination appends further pages through a guarded Load-more control, and
  * loading/empty/error states are all explicit — including retry after a
  * failed first page and failures that never destroy already-visible rows.
+ * The TASK-075 export control fetches the Anki CSV, hands it to the native
+ * share seam behind busy-state guarding, confirms through a toast and
+ * surfaces failures as a retryable alert without disturbing the list.
  */
 import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
@@ -27,14 +30,17 @@ import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen} from '../src/screens/ChatScreen';
 import {VocabularyScreen} from '../src/screens/VocabularyScreen';
 import {ThemeProvider} from '../src/theme/ThemeContext';
+import * as ankiShare from '../src/utils/ankiShare';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/vocabulary');
 jest.mock('../src/auth/secureStorage');
+jest.mock('../src/utils/ankiShare');
 
 const mockedAuth = jest.mocked(authApi);
 const mockedVocabulary = jest.mocked(vocabularyApi);
 const mockedStorage = jest.mocked(secureStorage);
+const mockedShare = jest.mocked(ankiShare);
 
 function makeItem(overrides: Partial<VocabularyItem> = {}): VocabularyItem {
   return {
@@ -315,5 +321,80 @@ describe('VocabularyScreen', () => {
     await fireEvent.press(screen.getByTestId('vocabulary-back'));
 
     await waitFor(() => expect(screen.getByTestId('chat-no-session')).toBeOnTheScreen());
+  });
+
+  describe('export flow (TASK-075)', () => {
+    const EXPORT_CSV = 'Front,Back,Example,Pronunciation\n"set off","phrasal verb",,\n';
+
+    beforeEach(() => {
+      mockedVocabulary.listVocabulary.mockResolvedValue(itemPage([]));
+      mockedShare.shareAnkiCsv.mockResolvedValue(undefined);
+    });
+
+    it('exports the CSV through the native share seam and confirms with a toast', async () => {
+      mockedVocabulary.exportVocabulary.mockResolvedValue(EXPORT_CSV);
+      await renderVocabulary();
+      await screen.findByTestId('vocabulary-empty');
+
+      await fireEvent.press(screen.getByTestId('vocabulary-export'));
+
+      await waitFor(() =>
+        expect(mockedVocabulary.exportVocabulary).toHaveBeenCalledWith('token-a'),
+      );
+      expect(mockedShare.shareAnkiCsv).toHaveBeenCalledWith(EXPORT_CSV);
+      expect(await screen.findByTestId('vocabulary-toast')).toHaveTextContent(
+        'Vocabulary exported — choose where to save or share it',
+      );
+    });
+
+    it('guards double-presses while an export is in flight', async () => {
+      let resolveExport: (csv: string) => void = () => {};
+      mockedVocabulary.exportVocabulary.mockImplementation(
+        () =>
+          new Promise<string>(resolve => {
+            resolveExport = resolve;
+          }),
+      );
+      await renderVocabulary();
+      await screen.findByTestId('vocabulary-empty');
+
+      await fireEvent.press(screen.getByTestId('vocabulary-export'));
+      expect(await screen.findByText('Exporting…')).toBeOnTheScreen();
+
+      // A second press while busy must not fire another request.
+      await fireEvent.press(screen.getByTestId('vocabulary-export'));
+      expect(mockedVocabulary.exportVocabulary).toHaveBeenCalledTimes(1);
+
+      resolveExport(EXPORT_CSV);
+      await screen.findByTestId('vocabulary-toast');
+      expect(screen.getByText('Export CSV')).toBeOnTheScreen();
+      expect(screen.queryByText('Exporting…')).toBeNull();
+    });
+
+    it('shows a retryable alert when the export fails and keeps the list intact', async () => {
+      mockedVocabulary.listVocabulary.mockResolvedValue(
+        itemPage([makeItem({id: 4, expression: 'serendipity'})]),
+      );
+      mockedVocabulary.exportVocabulary
+        .mockRejectedValueOnce(new ApiError(0, 'Network request failed.'))
+        .mockResolvedValueOnce(EXPORT_CSV);
+      await renderVocabulary();
+      await screen.findByTestId('vocabulary-item-4');
+
+      await fireEvent.press(screen.getByTestId('vocabulary-export'));
+
+      expect(await screen.findByTestId('vocabulary-export-error')).toHaveTextContent(
+        'The server is unreachable right now. Please try again later.',
+      );
+      expect(screen.queryByTestId('vocabulary-toast')).toBeNull();
+      expect(mockedShare.shareAnkiCsv).not.toHaveBeenCalled();
+      expect(screen.getByTestId('vocabulary-item-4')).toBeOnTheScreen();
+
+      await fireEvent.press(screen.getByTestId('vocabulary-export'));
+
+      await waitFor(() => expect(screen.queryByTestId('vocabulary-export-error')).toBeNull());
+      expect(mockedShare.shareAnkiCsv).toHaveBeenCalledWith(EXPORT_CSV);
+      expect(screen.queryByTestId('vocabulary-retry')).toBeNull();
+    });
   });
 });
