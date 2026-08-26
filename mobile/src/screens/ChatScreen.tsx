@@ -34,12 +34,15 @@
  * original vs. suggested rewrite plus a short explanation, with a Copy
  * action for the improved text — and Select text (TASK-069) opens a
  * bottom-sheet surface where a word, phrase or multi-word expression can be
- * selected inside that message and handed to the vocabulary save flow
- * (the immediate save round-trip arrives with TASK-070). Loading and error
- * states cover both
- * generation round-trips; the suggestion strip clears on send and both it
- * and the improvement sheet clear on session change, while speech selection
- * stays a seam for its upcoming task.
+ * selected inside that message and handed to the vocabulary save flow: the
+ * confirmation popup (TASK-070) offers Save/Cancel, Save fires the immediate
+ * vocabulary API call (enrichment happens server-side afterwards and is
+ * never awaited), success closes the popup with a self-dismissing toast and
+ * failure keeps it open with an alert and Save available for retry. Loading
+ * and error states cover both
+ * generation round-trips; the suggestion strip clears on send and the
+ * suggestion strip, improvement sheet and vocabulary popup clear on session
+ * change, while speech selection stays a seam for its upcoming task.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -59,6 +62,7 @@ import type {ChatStreamEvent, ChatStreamHandle} from '../api/chatStream';
 import {streamChatTurn, streamRetryTurn} from '../api/chatStream';
 import type {ChatMessage, MessageImprovement, MessageSuggestions, Session} from '../api/sessions';
 import {getMessageSuggestions, getSession, improveMessage, listMessages} from '../api/sessions';
+import {saveVocabulary} from '../api/vocabulary';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {ChatScreenProps} from '../navigation/types';
 import {copyText} from '../utils/clipboard';
@@ -69,6 +73,7 @@ import {MessageActionsMenu} from './MessageActionsMenu';
 import type {MessageAction} from './MessageActionsMenu';
 import {SampleConversationModal} from './SampleConversationModal';
 import {TextSelectionSheet} from './TextSelectionSheet';
+import {VocabularySaveSheet} from './VocabularySaveSheet';
 import {
   DeltaBuffer,
   isNearBottom,
@@ -79,6 +84,9 @@ import {
 function bySequence(a: ChatMessage, b: ChatMessage): number {
   return a.sequence - b.sequence;
 }
+
+/** How long the vocabulary save confirmation toast stays visible (TASK-070). */
+export const VOCAB_TOAST_DURATION_MS = 2500;
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -344,6 +352,30 @@ function createStyles(c: ThemeColors) {
       lineHeight: 18,
       color: c.textPrimary,
     },
+    toast: {
+      position: 'absolute',
+      bottom: 96,
+      left: 24,
+      right: 24,
+      backgroundColor: c.surface,
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      shadowOffset: {width: 0, height: 2},
+      elevation: 6,
+    },
+    toastText: {
+      color: c.success,
+      fontSize: 14,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
   });
 }
 
@@ -387,6 +419,16 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   // TASK-069: the message whose content is being combed for vocabulary in
   // the text-selection sheet; null while no sheet is open.
   const [selectionMessage, setSelectionMessage] = useState<ChatMessage | null>(null);
+  // TASK-070: the confirmed expression awaiting the save round-trip (tied to
+  // its source message id), plus loading/error for the immediate API call.
+  // The popup is visible exactly while one of these three states is active.
+  const [vocabSave, setVocabSave] = useState<{expression: string; messageId: number} | null>(
+    null,
+  );
+  const [vocabSaving, setVocabSaving] = useState(false);
+  const [vocabError, setVocabError] = useState<string | null>(null);
+  // TASK-070: transient success toast; auto-dismissed after a fixed delay.
+  const [toast, setToast] = useState<string | null>(null);
 
   // Latest-ref seam: the load effect keys on (session, reload) only, so an
   // auth-state transition never refetches the conversation behind the user's
@@ -411,6 +453,9 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   // invalidate an in-flight request.
   const suggestionsRequestRef = useRef(0);
   const improvementRequestRef = useRef(0);
+  // TASK-070 shares the same stale-response guard: cancelling the popup or
+  // switching sessions invalidates any in-flight save request.
+  const vocabSaveRequestRef = useRef(0);
 
   // TASK-050: delta commits run through a DeltaBuffer so token bursts cause
   // at most one message-list update per tick instead of one per SSE event.
@@ -498,6 +543,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setImprovementLoading(false);
     setImprovementError(null);
     setSelectionMessage(null);
+    vocabSaveRequestRef.current += 1;
+    setVocabSave(null);
+    setVocabSaving(false);
+    setVocabError(null);
+    setToast(null);
     nearBottomRef.current = true;
     setDetachedFromBottom(false);
     endTurn();
@@ -798,14 +848,84 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   }, []);
 
   /**
-   * TASK-069: the vocabulary save flow's entry point — the selection sheet
-   * hands its confirmed expression here and closes. The immediate save
-   * round-trip (popup, API call, toast) is layered onto this seam by its
-   * upcoming task, which will consume `_selectedText`.
+   * TASK-069/070: the vocabulary save flow's entry point — the selection
+   * sheet hands its confirmed trimmed expression here and closes; the save
+   * confirmation popup opens in its place, carrying the source message id.
    */
-  const saveVocabularySelection = useCallback((_selectedText: string) => {
-    setSelectionMessage(null);
+  const saveVocabularySelection = useCallback(
+    (selectedText: string) => {
+      setSelectionMessage(null);
+      if (selectionMessage !== null) {
+        setVocabError(null);
+        setVocabSave({expression: selectedText, messageId: selectionMessage.id});
+      }
+    },
+    [selectionMessage],
+  );
+
+  /**
+   * TASK-070: Save in the popup fires the immediate vocabulary call. The
+   * endpoint returns as soon as the row is stored — enrichment happens
+   * asynchronously server-side and is never awaited here — so success closes
+   * the popup and flashes a confirmation toast, while failure keeps the
+   * popup open with a role="alert" message and Save available for another
+   * attempt. Stale responses (popup cancelled or session switched mid-flight)
+   * are dropped. Optimistic rows carry synthetic negative ids that are not
+   * real Message pks, so they are sent without source attribution.
+   */
+  const confirmVocabularySave = useCallback(() => {
+    if (vocabSave === null) {
+      return;
+    }
+    const requestId = ++vocabSaveRequestRef.current;
+    const {expression, messageId} = vocabSave;
+    setVocabSaving(true);
+    setVocabError(null);
+    (async () => {
+      try {
+        let token: string | null = null;
+        try {
+          token = await getAccessTokenRef.current();
+        } catch {
+          token = null;
+        }
+        if (!token || vocabSaveRequestRef.current !== requestId) {
+          return;
+        }
+        await saveVocabulary(token, expression, messageId > 0 ? messageId : undefined);
+        if (vocabSaveRequestRef.current !== requestId) {
+          return;
+        }
+        setVocabSave(null);
+        setToast('Saved to vocabulary');
+      } catch (err) {
+        if (vocabSaveRequestRef.current === requestId) {
+          setVocabError(toErrorMessage(err));
+        }
+      } finally {
+        if (vocabSaveRequestRef.current === requestId) {
+          setVocabSaving(false);
+        }
+      }
+    })();
+  }, [vocabSave]);
+
+  /** Popup dismissal also invalidates any in-flight save request. */
+  const cancelVocabularySave = useCallback(() => {
+    vocabSaveRequestRef.current += 1;
+    setVocabSave(null);
+    setVocabSaving(false);
+    setVocabError(null);
   }, []);
+
+  // TASK-070: the success toast dismisses itself after a fixed delay.
+  useEffect(() => {
+    if (toast === null) {
+      return;
+    }
+    const timer = setTimeout(() => setToast(null), VOCAB_TOAST_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   /**
    * Retry one failed assistant row (TASK-054): the backend re-arms that
@@ -1221,6 +1341,21 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             onClose={closeTextSelection}
             onSave={saveVocabularySelection}
           />
+          <VocabularySaveSheet
+            visible={vocabSave !== null || vocabSaving || vocabError !== null}
+            expression={vocabSave?.expression ?? ''}
+            loading={vocabSaving}
+            error={vocabError}
+            onSave={confirmVocabularySave}
+            onClose={cancelVocabularySave}
+          />
+          {toast !== null ? (
+            <View pointerEvents="none" style={styles.toast} testID="chat-toast">
+              <Text role="status" style={styles.toastText}>
+                {toast}
+              </Text>
+            </View>
+          ) : null}
         </>
       )}
     </KeyboardAvoidingView>

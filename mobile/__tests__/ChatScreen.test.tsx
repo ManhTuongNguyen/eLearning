@@ -10,9 +10,12 @@
  * TASK-060 message long-press menu, the TASK-061 suggested-replies
  * chips (tap-to-insert, never auto-send, loading/error states), the
  * TASK-064 improvement sheet (loading/error/result round-trip, Copy
- * improved text, untouched original bubble) and the TASK-069 text
+ * improved text, untouched original bubble), the TASK-069 text
  * selection flow (Select text opens the vocabulary sheet over that
- * message's content; capture closes it; dismissal never captures).
+ * message's content; capture closes it; dismissal never captures) and
+ * the TASK-070 vocabulary save popup (capture opens it, Save calls the
+ * immediate API and flashes a self-dismissing success toast, failure
+ * keeps it open with an alert for retry, Cancel saves nothing).
  */
 import React from 'react';
 import {View} from 'react-native';
@@ -44,10 +47,11 @@ import type {
   SampleTurn,
   Session,
 } from '../src/api/sessions';
+import * as vocabularyApi from '../src/api/vocabulary';
 import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
-import {ChatScreen} from '../src/screens/ChatScreen';
+import {ChatScreen, VOCAB_TOAST_DURATION_MS} from '../src/screens/ChatScreen';
 import {STREAM_FLUSH_INTERVAL_MS} from '../src/screens/streamingUx';
 import {ThemeProvider} from '../src/theme/ThemeContext';
 import {copyText} from '../src/utils/clipboard';
@@ -55,6 +59,7 @@ import {copyText} from '../src/utils/clipboard';
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
 jest.mock('../src/api/chatStream');
+jest.mock('../src/api/vocabulary');
 jest.mock('../src/auth/secureStorage');
 jest.mock('../src/utils/clipboard');
 
@@ -62,6 +67,7 @@ const mockedCopy = jest.mocked(copyText);
 
 const mockedAuth = jest.mocked(authApi);
 const mockedSessions = jest.mocked(sessionsApi);
+const mockedVocabulary = jest.mocked(vocabularyApi);
 const mockedStorage = jest.mocked(secureStorage);
 const mockedStream = jest.mocked(streamChatTurn);
 const mockedStreamRetry = jest.mocked(streamRetryTurn);
@@ -176,6 +182,20 @@ beforeEach(() => {
     original: 'Default original',
     improved: 'Default improved',
     explanation: 'Default explanation',
+  });
+  mockedVocabulary.saveVocabulary.mockResolvedValue({
+    id: 9,
+    expression: 'early',
+    normalized_expression: 'early',
+    definition: '',
+    translation: '',
+    pronunciation: '',
+    part_of_speech: '',
+    example: '',
+    status: 'pending',
+    source_message: 810,
+    source_session: 5,
+    created_at: '2026-08-26T10:00:00Z',
   });
   turns = [];
   mockedStream.mockImplementation(options => {
@@ -1530,7 +1550,7 @@ describe('ChatScreen', () => {
       );
     });
 
-    it('a confirmed selection closes the sheet and leaves the conversation intact', async () => {
+    it('a confirmed selection closes the sheet and opens the save popup', async () => {
       await renderWithMessages([
         makeMessage({
           id: 810,
@@ -1546,10 +1566,11 @@ describe('ChatScreen', () => {
 
       await fireEvent.press(screen.getByTestId('chat-selection-save'));
 
-      // The capture hands the trimmed expression to the save-flow seam
-      // (payload proven by the sheet's own unit tests) and dismisses the
-      // sheet without disturbing the conversation.
+      // The capture hands the trimmed expression to the confirmation popup
+      // (TASK-070) without disturbing the conversation underneath.
       expect(screen.queryByTestId('chat-selection-modal')).toBeNull();
+      expect(screen.getByTestId('chat-vocab-modal')).toBeOnTheScreen();
+      expect(screen.getByTestId('chat-vocab-expression')).toHaveTextContent('early');
       expect(messageTestIds()).toEqual(['chat-message-810']);
       expect(screen.queryByTestId('chat-stream-error')).toBeNull();
     });
@@ -1570,6 +1591,147 @@ describe('ChatScreen', () => {
 
       expect(screen.queryByTestId('chat-selection-modal')).toBeNull();
       expect(messageTestIds()).toEqual(['chat-message-810']);
+    });
+  });
+
+  describe('vocabulary save popup (TASK-070)', () => {
+    function renderWithMessages(messages: ChatMessage[]) {
+      mockedSessions.listMessages.mockResolvedValue(pageOf(messages));
+      return renderChat({sessionId: 5});
+    }
+
+    /** Open the selection sheet, capture "early" and land on the popup. */
+    async function openSavePopup(testId = 'chat-message-810'): Promise<void> {
+      await fireEvent(screen.getByTestId(testId), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-select-text'));
+      await fireEvent(
+        screen.getByTestId('chat-selection-input'),
+        'selectionChange',
+        {nativeEvent: {selection: {start: 4, end: 9}}},
+      );
+      await fireEvent.press(screen.getByTestId('chat-selection-save'));
+    }
+
+    it('Cancel dismisses the popup without calling the API or toasting', async () => {
+      await renderWithMessages([
+        makeMessage({
+          id: 810,
+          role: 'assistant',
+          sequence: 1,
+          content: 'The early bird catches the worm.',
+        }),
+      ]);
+      await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
+      await openSavePopup();
+
+      await fireEvent.press(screen.getByTestId('chat-vocab-cancel'));
+
+      expect(mockedVocabulary.saveVocabulary).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('chat-vocab-modal')).toBeNull();
+      expect(screen.queryByTestId('chat-toast')).toBeNull();
+    });
+
+    it('Save calls the vocabulary API immediately with expression and source message', async () => {
+      await renderWithMessages([
+        makeMessage({
+          id: 810,
+          role: 'assistant',
+          sequence: 1,
+          content: 'The early bird catches the worm.',
+        }),
+      ]);
+      await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
+      await openSavePopup();
+
+      await fireEvent.press(screen.getByTestId('chat-vocab-save'));
+
+      // Saving is immediate (ROADMAP §9): one call with the trimmed
+      // expression and its source message — no enrichment round-trip.
+      expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledTimes(1);
+      expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledWith(
+        'token-a',
+        'early',
+        810,
+      );
+      await waitFor(() => expect(screen.queryByTestId('chat-vocab-modal')).toBeNull());
+    });
+
+    it('a successful save flashes a confirmation toast that dismisses itself', async () => {
+      await renderWithMessages([
+        makeMessage({
+          id: 810,
+          role: 'assistant',
+          sequence: 1,
+          content: 'The early bird catches the worm.',
+        }),
+      ]);
+      await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
+      await openSavePopup();
+
+      jest.useFakeTimers();
+      try {
+        await act(async () => {
+          fireEvent.press(screen.getByTestId('chat-vocab-save'));
+        });
+
+        expect(screen.queryByTestId('chat-vocab-modal')).toBeNull();
+        expect(screen.getByTestId('chat-toast')).toBeOnTheScreen();
+        expect(screen.getByTestId('chat-toast')).toHaveTextContent(
+          'Saved to vocabulary',
+        );
+
+        await act(async () => {
+          jest.advanceTimersByTime(VOCAB_TOAST_DURATION_MS);
+        });
+        expect(screen.queryByTestId('chat-toast')).toBeNull();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('a failed save keeps the popup open with an alert and allows retrying', async () => {
+      mockedVocabulary.saveVocabulary
+        .mockRejectedValueOnce(new ApiError(0, 'Network request failed. Check your connection and try again.'))
+        .mockResolvedValueOnce({
+          id: 9,
+          expression: 'early',
+          normalized_expression: 'early',
+          definition: '',
+          translation: '',
+          pronunciation: '',
+          part_of_speech: '',
+          example: '',
+          status: 'pending',
+          source_message: 810,
+          source_session: 5,
+          created_at: '2026-08-26T10:00:00Z',
+        });
+      await renderWithMessages([
+        makeMessage({
+          id: 810,
+          role: 'assistant',
+          sequence: 1,
+          content: 'The early bird catches the worm.',
+        }),
+      ]);
+      await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
+      await openSavePopup();
+
+      await fireEvent.press(screen.getByTestId('chat-vocab-save'));
+
+      // Status-0 ApiErrors normalize to the friendly unreachable-server copy.
+      expect(await screen.findByTestId('chat-vocab-error')).toBeOnTheScreen();
+      expect(screen.getByTestId('chat-vocab-error')).toHaveTextContent(
+        'The server is unreachable right now. Please try again later.',
+      );
+      expect(screen.queryByTestId('chat-toast')).toBeNull();
+      expect(screen.getByTestId('chat-vocab-save')).toBeOnTheScreen();
+
+      // The second attempt succeeds and closes the popup with the toast.
+      await fireEvent.press(screen.getByTestId('chat-vocab-save'));
+      await waitFor(() => expect(screen.getByTestId('chat-toast')).toBeOnTheScreen());
+      expect(screen.queryByTestId('chat-vocab-modal')).toBeNull();
+      expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledTimes(2);
     });
   });
 });

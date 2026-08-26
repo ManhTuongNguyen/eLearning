@@ -1486,7 +1486,7 @@ Acceptance criteria:
 
 ## TASK-070 — Implement vocabulary save popup
 
-Status: `[ ]`
+Status: `[x]`
 
 Display a popup after text selection.
 
