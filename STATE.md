@@ -2,16 +2,69 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 6 TASK-045 complete (next: TASK-046 — secure token
-  storage)
+- **Current Phase**: Phase 6 TASK-046 complete (next: TASK-047 —
+  authentication state)
 
 ## Current Active Task
 
-(none — TASK-045 completed; next: TASK-046 — Create secure token storage:
-tokens not in plain AsyncStorage, survive restart, logout removes them.
-NOTE: src/auth/{secureStorage,tokens}.ts already exist on react-native-
-keychain from TASK-015 with a passing suite — TASK-046 should audit/extend
-rather than duplicate.)
+(none — TASK-046 completed; next: TASK-047 — Implement authentication state:
+startup restores authentication, expired access tokens refresh, invalid
+refresh credentials return the user to login. NOTE: AuthContext.tsx from
+TASK-015 already implements restore + single-refresh fallback + logout;
+TASK-047 should audit/extend (e.g. 401-triggered transparent re-auth for
+API calls) rather than duplicate.)
+
+## Archived Tasks
+
+### TASK-046 — Create secure token storage (COMPLETED 2026-08-26)
+- Audited the existing TASK-015 implementation and EXTENDED rather than
+  duplicated: src/auth/secureStorage.ts already persists {access,refresh}
+  JSON via react-native-keychain (service com.elearningmobile.auth,
+  validated load, corrupted/partial payloads → null); AuthContext already
+  restores on mount (loadTokens → getMe → single refresh fallback →
+  clearTokens when refresh dies) and logout always clears locally.
+  grep verified ZERO AsyncStorage usage/dependency in mobile/.
+- jest.setup.js keychain mock hardened: backing Map hoisted OUTSIDE the
+  mock factory as module-scope `mockKeychainStore` (babel-jest whitelists
+  `mock`-prefixed out-of-scope refs), so jest.resetModules() recreates JS
+  modules while the "device" store survives — true process-restart
+  semantics for tests.
+- __tests__/secureStorage.test.ts extended (+4): fresh require of
+  secureStorage after jest.resetModules() reloads persisted tokens
+  (restart survival); cleared credentials stay cleared across restart;
+  corrupted payloads stay rejected across restart; writes go ONLY through
+  Keychain.setGenericPassword with the exact JSON envelope.
+- New __tests__/tokenLifecycle.test.tsx (2 end-to-end lifecycle tests):
+  AuthProvider runs against REAL secureStorage + persistent keychain mock
+  (only ../src/api/auth mocked). Restarts simulated by remounting
+  AuthProvider via key changes on ONE RNTL render instance (rerender) —
+  avoids multi-render `screen` binding ambiguity. Launch 1 login → tokens
+  written to keychain; launch 2 restores authenticated via stored access
+  token with login called exactly once total; logout clears;
+  post-logout restart stays unauthenticated with getMe/refresh never
+  called (no credential material reaches any API).
+- Test gotchas hit:
+  - jest.resetModules() ALSO resets jest.mock factories — a store declared
+    inside the factory would be recreated empty; hence the hoisted
+    module-scope holder.
+  - RNTL v14 render()/rerender are async and return Promises — unawaited
+    handles break .unmount()/.rerender() and querying.
+  - Sequential RNTL renders in one test made `screen` resolve across
+    trees (stale status text / "unable to find"); single-render + keyed
+    rerender eliminated it. Mock call history must be cleared before a
+    relaunch so assertions judge only the new launch.
+- Acceptance: tokens not in plain AsyncStorage (keychain-only writes,
+  pinned by tests); tokens survive restart (module-lifetime + provider-
+  remount proof); logout removes credentials (store emptied, restart
+  logged out).
+- Gates: pnpm typecheck clean; eslint clean; jest 11 suites 74/74 passed.
+
+#### Sub-step record (all complete)
+1. [x] secureStorage.test.ts extended (+4 restart-boundary tests);
+       jest.setup.js keychain store hoisted for resetModules survival
+2. [x] tokenLifecycle.test.tsx written (2 three-launch lifecycle tests)
+3. [x] Gates green (pnpm typecheck, pnpm lint, jest 74/74 across 11 suites)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-046
 
 ## Archived Tasks
 

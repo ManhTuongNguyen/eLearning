@@ -59,9 +59,17 @@ jest.mock('react-native-screens', () => {
 /**
  * In-memory react-native-keychain mock so tests exercise the same code paths
  * as secure device storage without native modules.
+ *
+ * The backing store deliberately lives OUTSIDE the mock factory (babel
+ * allows `mock`-prefixed out-of-scope references): jest.resetModules()
+ * recreates the JS modules but keeps this Map, mirroring how device storage
+ * outlives an application process. __resetKeychainStore() clears it between
+ * tests.
  */
+const mockKeychainStore = new Map();
+
 jest.mock('react-native-keychain', () => {
-  const store = new Map();
+  const store = mockKeychainStore;
 
   const serviceOf = (options) =>
     options && typeof options.service === 'string' ? options.service : 'default';

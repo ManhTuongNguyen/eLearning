@@ -1014,7 +1014,7 @@ Acceptance criteria:
 
 ## TASK-046 — Create secure token storage
 
-Status: `[ ]`
+Status: `[x]`
 
 Store authentication tokens using secure device storage.
 
