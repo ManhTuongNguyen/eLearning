@@ -1,10 +1,11 @@
 /**
- * Chat screen tests (SPEC TASK-048/049/050): message list ordering,
+ * Chat screen tests (SPEC TASK-048/049/050/052): message list ordering,
  * composer/send interaction, loading/empty/error states and the
  * keyboard-avoiding shell — plus the SSE streaming round-trip: incremental
  * assistant deltas, completion swap-in, error frames, transport failures and
- * abort-on-exit, and the TASK-050 smooth-streaming behavior (coalesced delta
- * commits, scroll stick/detach transitions, ghost-delta suppression).
+ * abort-on-exit, the TASK-050 smooth-streaming behavior (coalesced delta
+ * commits, scroll stick/detach transitions, ghost-delta suppression) and the
+ * TASK-052 collapsible topic header.
  */
 import React from 'react';
 import {View} from 'react-native';
@@ -24,7 +25,7 @@ import {streamChatTurn} from '../src/api/chatStream';
 import * as authApi from '../src/api/auth';
 import {ApiError} from '../src/api/client';
 import * as sessionsApi from '../src/api/sessions';
-import type {ChatMessage, Paginated} from '../src/api/sessions';
+import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
 import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
@@ -57,6 +58,18 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
     status: 'complete',
     content: 'Hello! Ready to practice?',
     sequence: 1,
+    created_at: '2026-08-26T10:00:00Z',
+    ...overrides,
+  };
+}
+
+function makeSession(overrides: Partial<Session> = {}): Session {
+  return {
+    id: 5,
+    title: 'Traveling',
+    topic: 'Talking about favorite destinations, transport and travel plans.',
+    topic_hint: '',
+    learning_level: 'B1',
     created_at: '2026-08-26T10:00:00Z',
     ...overrides,
   };
@@ -128,6 +141,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
   mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  mockedSessions.getSession.mockResolvedValue(makeSession());
   turns = [];
   mockedStream.mockImplementation(options => {
     const handle = {abort: jest.fn()};
@@ -605,5 +619,74 @@ describe('ChatScreen', () => {
     await fireEvent.press(screen.getByTestId('chat-start-new'));
 
     expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen();
+  });
+
+  it('shows a compact collapsed topic header once the session detail loads (TASK-052)', async () => {
+    mockedSessions.listMessages.mockResolvedValue(emptyPage());
+    mockedSessions.getSession.mockResolvedValue(
+      makeSession({id: 5, title: 'Traveling', topic: 'A long topic description'}),
+    );
+
+    await renderChat({sessionId: 5});
+    await waitFor(() => expect(screen.getByTestId('chat-topic')).toBeOnTheScreen());
+
+    // Compact by default: only the title line, never the full description.
+    expect(mockedSessions.getSession).toHaveBeenCalledWith('token-a', 5);
+    expect(screen.getByTestId('chat-topic-title')).toHaveTextContent('Traveling');
+    expect(screen.queryByTestId('chat-topic-text')).toBeNull();
+    expect(
+      (screen.getByTestId('chat-topic').props.accessibilityState ?? {}).expanded,
+    ).toBe(false);
+  });
+
+  it('expands and collapses the full topic description on toggle', async () => {
+    mockedSessions.listMessages.mockResolvedValue(emptyPage());
+    mockedSessions.getSession.mockResolvedValue(
+      makeSession({
+        id: 5,
+        title: 'Traveling',
+        topic: 'Talking about favorite destinations and travel plans.',
+      }),
+    );
+    await renderChat({sessionId: 5});
+    await waitFor(() => expect(screen.getByTestId('chat-topic')).toBeOnTheScreen());
+
+    await fireEvent.press(screen.getByTestId('chat-topic'));
+
+    expect(screen.getByTestId('chat-topic-text')).toHaveTextContent(
+      'Talking about favorite destinations and travel plans.',
+    );
+    expect(
+      (screen.getByTestId('chat-topic').props.accessibilityState ?? {}).expanded,
+    ).toBe(true);
+
+    await fireEvent.press(screen.getByTestId('chat-topic'));
+
+    expect(screen.queryByTestId('chat-topic-text')).toBeNull();
+    expect(
+      (screen.getByTestId('chat-topic').props.accessibilityState ?? {}).expanded,
+    ).toBe(false);
+    expect(screen.getByTestId('chat-topic-title')).toBeOnTheScreen();
+  });
+
+  it('renders no topic bar without a session and skips the detail fetch', async () => {
+    await renderChat(undefined);
+
+    expect(await screen.findByTestId('chat-no-session')).toBeOnTheScreen();
+    expect(screen.queryByTestId('chat-topic')).toBeNull();
+    expect(mockedSessions.getSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps the conversation usable when the session detail fetch fails', async () => {
+    mockedSessions.listMessages.mockResolvedValue(emptyPage());
+    mockedSessions.getSession.mockRejectedValueOnce(new ApiError(0, 'Network request failed.'));
+
+    await renderChat({sessionId: 5});
+
+    // Messages win over metadata: composer present, no error banner, the
+    // topic bar is simply absent.
+    await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
+    expect(screen.queryByTestId('form-error')).toBeNull();
+    expect(screen.queryByTestId('chat-topic')).toBeNull();
   });
 });

@@ -65,6 +65,9 @@ beforeEach(() => {
   mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
   mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
   mockedSessions.listMessages.mockResolvedValue(emptyMessagesPage());
+  // ChatScreen (the post-create destination) fetches the session detail for
+  // its topic bar.
+  mockedSessions.getSession.mockResolvedValue(makeSession());
 });
 
 describe('NewConversationScreen', () => {

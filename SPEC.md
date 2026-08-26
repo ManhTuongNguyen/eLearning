@@ -1126,7 +1126,7 @@ Acceptance criteria:
 
 ## TASK-052 — Implement topic header
 
-Status: `[ ]`
+Status: `[x]`
 
 Display current topic in chat.
 

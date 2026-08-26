@@ -2,12 +2,56 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 7 TASK-051 complete (next: TASK-052 — topic header)
+- **Current Phase**: Phase 7 TASK-052 complete (next: TASK-053 — sample conversation UI)
 
 ## Current Active Task
 
-(none — TASK-051 completed; next: TASK-052 — Implement topic header, fifth
-task of Phase 7 Mobile Chat.)
+(none — TASK-052 completed; next: TASK-053 — Implement sample conversation
+UI, sixth task of Phase 7 Mobile Chat.)
+
+## Archived Tasks
+
+### TASK-052 — Implement topic header (COMPLETED 2026-08-26)
+- `ChatScreen.tsx`:
+  - Load effect now fetches the session detail through the existing
+    `getSession` binding alongside `listMessages` via Promise.all — but
+    NON-FATALLY: `.catch(() => null)` on the detail promise, so a failed
+    metadata fetch only hides the topic bar while messages/composer keep the
+    conversation fully usable (messages remain the primary load; a
+    listMessages failure still shows the error+retry state).
+  - New state: `session: Session | null` + `topicExpanded` (default false).
+    Both reset at effect start on session/reload change.
+  - Compact collapsible topic bar rendered ONLY in the in-conversation
+    branch between the app header and the list area: collapsed shows one
+    line of session.title (`numberOfLines={1}`); pressing toggles expansion,
+    revealing the full session.topic description. testIDs chat-topic
+    (root Pressable), chat-topic-title, chat-topic-text, chat-topic-toggle
+    (▾/▴ glyph); accessibilityRole button + accessibilityState.expanded +
+    dynamic label Show/Hide topic details. Surface background with border —
+    visually subordinate to the chat, satisfying "visible without
+    dominating".
+- __tests__/ChatScreen.test.tsx extended (+4): compact collapsed render once
+  detail loads (getSession called with token+id, description absent,
+  expanded=false); toggle round-trip (description appears verbatim +
+  expanded=true, collapses back leaving title); no-session state renders no
+  bar and never calls getSession; detail-fetch failure keeps composer +
+  zero error banner with bar simply absent.
+- Harness parity: ChatScreen.test beforeEach gained a getSession default;
+  NewConversationScreen.test beforeEach too (it mounts the real ChatScreen
+  after replace('Chat', {sessionId}) — without it the auto-mock returns
+  undefined and Promise.all would reject into the error state).
+- Acceptance: topic visible without dominating (one-line title strip) ✓;
+  collapsible/compacted (toggle to full description) ✓.
+- Gates: pnpm typecheck clean; eslint clean; jest 15 suites 145/145 passed.
+
+#### Sub-step record (all complete)
+1. [x] ChatScreen.tsx — getSession fetch (Promise.all, detail failure → null)
+       + collapsible topic bar UI/styles
+2. [x] __tests__/ChatScreen.test.tsx — makeSession helper, beforeEach
+       getSession default, +4 topic tests
+3. [x] __tests__/NewConversationScreen.test.tsx — getSession default mock
+4. [x] Gates green (pnpm typecheck, pnpm lint, jest 145/145 across 15 suites)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-052
 
 ## Archived Tasks
 

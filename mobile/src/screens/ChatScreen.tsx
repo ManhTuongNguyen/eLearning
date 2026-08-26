@@ -1,6 +1,6 @@
 /**
- * Main conversation screen (SPEC TASK-048/049/050): chronological message
- * list, composer with send button, loading/error states and keyboard
+ * Main conversation screen (SPEC TASK-048/049/050/052): chronological
+ * message list, composer with send button, loading/error states and keyboard
  * handling.
  *
  * The screen loads an existing conversation through its `sessionId` route
@@ -13,7 +13,10 @@
  * failures surface in an inline banner; leaving the screen aborts the
  * stream. Auto-scroll follows content growth only while the user rests near
  * the bottom; an intentional scroll up detaches the follow behavior and a
- * pill offers the way back down.
+ * pill offers the way back down. A compact collapsible topic bar (TASK-052)
+ * sits under the header once the session detail loads — one line of the
+ * session title by default, full topic description on demand; a failed
+ * detail fetch only hides the bar, never the conversation.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -31,8 +34,8 @@ import type {NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
 
 import type {ChatStreamEvent, ChatStreamHandle} from '../api/chatStream';
 import {streamChatTurn} from '../api/chatStream';
-import type {ChatMessage} from '../api/sessions';
-import {listMessages} from '../api/sessions';
+import type {ChatMessage, Session} from '../api/sessions';
+import {getSession, listMessages} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {ChatScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
@@ -77,6 +80,34 @@ function createStyles(c: ThemeColors) {
     headerLink: {
       fontSize: 15,
       fontWeight: '600',
+      color: c.accent,
+    },
+    topicBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      backgroundColor: c.surface,
+    },
+    topicMeta: {
+      flex: 1,
+    },
+    topicTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: c.textPrimary,
+    },
+    topicDescription: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.textSecondary,
+      marginTop: 4,
+    },
+    topicToggleGlyph: {
+      fontSize: 14,
       color: c.accent,
     },
     body: {
@@ -232,6 +263,8 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const [loading, setLoading] = useState(sessionId !== undefined);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [topicExpanded, setTopicExpanded] = useState(false);
   const [draft, setDraft] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [streaming, setStreaming] = useState(false);
@@ -327,6 +360,8 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setError(null);
     setStreamError(null);
     resetMessages();
+    setSession(null);
+    setTopicExpanded(false);
     nearBottomRef.current = true;
     setDetachedFromBottom(false);
     endTurn();
@@ -343,10 +378,16 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           throw new Error('You need to sign in again to open this conversation.');
         }
         // The first page covers recent history; older pages arrive with the
-        // history work (Phase 8 pagination UI).
-        const page = await listMessages(token, sessionId);
+        // history work (Phase 8 pagination UI). The session detail only
+        // feeds the topic bar, so its failure resolves to null instead of
+        // failing the conversation.
+        const [page, detail] = await Promise.all([
+          listMessages(token, sessionId),
+          getSession(token, sessionId).catch(() => null),
+        ]);
         if (!cancelled) {
           setMessages([...page.results].sort(bySequence));
+          setSession(detail);
         }
       } catch (err) {
         if (!cancelled) {
@@ -635,6 +676,36 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         </View>
       ) : (
         <>
+          {session !== null ? (
+            <Pressable
+              style={styles.topicBar}
+              onPress={() => {
+                setTopicExpanded(expanded => !expanded);
+              }}
+              testID="chat-topic"
+              accessibilityRole="button"
+              accessibilityLabel={
+                topicExpanded ? 'Hide topic details' : 'Show topic details'
+              }
+              accessibilityState={{expanded: topicExpanded}}>
+              <View style={styles.topicMeta}>
+                <Text
+                  numberOfLines={topicExpanded ? undefined : 1}
+                  style={styles.topicTitle}
+                  testID="chat-topic-title">
+                  {session.title}
+                </Text>
+                {topicExpanded ? (
+                  <Text style={styles.topicDescription} testID="chat-topic-text">
+                    {session.topic}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={styles.topicToggleGlyph} testID="chat-topic-toggle">
+                {topicExpanded ? '▴' : '▾'}
+              </Text>
+            </Pressable>
+          ) : null}
           <View style={styles.listArea}>
             <FlatList
               ref={listRef}
