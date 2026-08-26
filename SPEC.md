@@ -1774,7 +1774,7 @@ Acceptance criteria:
 
 ## TASK-086 — Implement serverless chat streaming
 
-Status: `[ ]`
+Status: `[x]`
 
 Use direct OpenRouter streaming.
 

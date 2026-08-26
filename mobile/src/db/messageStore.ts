@@ -38,30 +38,47 @@ export async function insertMessage(
     status?: LocalMessageStatus;
   },
 ): Promise<LocalMessage> {
+  return db.transaction(tx => appendMessage(tx, input));
+}
+
+/**
+ * Append one message using an existing executor (a transaction or bare
+ * connection) without opening its own transaction. Sequence reservation
+ * reads MAX(sequence) inside the caller's transaction, so several appends
+ * composed by one caller (e.g. a user turn plus its pending assistant slot)
+ * receive consecutive numbers and commit or roll back together.
+ */
+export async function appendMessage(
+  executor: SqlExecutor,
+  input: {
+    session_id: number;
+    role: LocalMessageRole;
+    content: string;
+    status?: LocalMessageStatus;
+  },
+): Promise<LocalMessage> {
   const timestamp = nowIso();
   const status = input.status ?? 'complete';
 
-  return db.transaction(async tx => {
-    const maxResult = await tx.execute(
-      'SELECT COALESCE(MAX(sequence), 0) AS max_sequence FROM messages WHERE session_id = ?',
-      [input.session_id],
-    );
-    const sequence = Number(maxResult.rows[0]?.max_sequence ?? 0) + 1;
+  const maxResult = await executor.execute(
+    'SELECT COALESCE(MAX(sequence), 0) AS max_sequence FROM messages WHERE session_id = ?',
+    [input.session_id],
+  );
+  const sequence = Number(maxResult.rows[0]?.max_sequence ?? 0) + 1;
 
-    const insertResult = await tx.execute(
-      `INSERT INTO messages (session_id, role, status, content, sequence, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [input.session_id, input.role, status, input.content, sequence, timestamp],
-    );
+  const insertResult = await executor.execute(
+    `INSERT INTO messages (session_id, role, status, content, sequence, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [input.session_id, input.role, status, input.content, sequence, timestamp],
+  );
 
-    const stored = await tx.execute(`${messageQuery()} WHERE id = ?`, [
-      insertResult.insertId,
-    ]);
-    if (!stored.rows[0]) {
-      throw new Error('insertMessage: inserted row could not be read back');
-    }
-    return mapMessage(stored.rows[0]);
-  });
+  const stored = await executor.execute(`${messageQuery()} WHERE id = ?`, [
+    insertResult.insertId,
+  ]);
+  if (!stored.rows[0]) {
+    throw new Error('appendMessage: inserted row could not be read back');
+  }
+  return mapMessage(stored.rows[0]);
 }
 
 /** Read one message by id; resolves null when it does not exist. */
