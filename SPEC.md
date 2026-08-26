@@ -1258,7 +1258,7 @@ Acceptance criteria:
 
 ## TASK-060 — Implement message long-press menu
 
-Status: `[ ]`
+Status: `[x]`
 
 Long-press a message to display contextual actions.
 

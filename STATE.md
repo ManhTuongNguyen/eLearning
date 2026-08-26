@@ -2,11 +2,77 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 9 TASK-059 complete (next: TASK-060 — long-press menu)
+- **Current Phase**: Phase 9 TASK-060 complete (next: TASK-061 — suggestion UI)
 
 ## Current Active Task
 
-(none — TASK-059 completed; next: TASK-060 — Implement message long-press menu.)
+(none — TASK-060 completed; next: TASK-061 — Implement suggestion UI.)
+
+## Archived Tasks
+
+### TASK-060 — Implement message long-press menu (COMPLETED 2026-08-26)
+- `src/screens/MessageActionsMenu.tsx` (new) — presentational bottom-sheet
+  action menu over a transparent RN Modal (fade): backdrop Pressable
+  (`chat-menu-backdrop`) dismisses, sheet (`chat-menu`) does not, Close
+  control (`chat-menu-close`, role button), Android back via onRequestClose,
+  content container `chat-menu-content` with accessibilityViewIsModal.
+  Role-driven action matrix exported as MessageAction union: user →
+  [Suggest replies, Improve my English, Copy, Read aloud]
+  (`chat-menu-{suggest-replies|improve-english|copy|speak}`); assistant drops
+  improve-english. Every item role=button + label; `onSelect(action)` is a
+  callback seam and the PARENT closes the menu.
+- Behavior staging (same pattern as TASK-048 composer send preceding
+  TASK-049's wire call): selection seams for suggestions (TASK-061),
+  improvement (TASK-064) and speech (TASK-078). Copy has no later task, so
+  it works NOW: new `src/utils/clipboard.ts` seam wrapping react-native's
+  built-in Clipboard export (deprecated but functional in 0.81 — zero new
+  native dependencies); tests auto-mock the seam module.
+- `ChatScreen.tsx`: bubbles are now Pressables carrying onLongPress ONLY
+  when the row is eligible (`status === 'complete'` + non-blank trimmed
+  content) — pending spinners and failed rows carry no actionable text and
+  are rejected suggestion targets server-side anyway. New `menuMessage`
+  state (null = closed) reset by the load effect alongside the other
+  overlays; `handleMenuAction` closes first then copies content for
+  'copy'; menu mounted beside SampleConversationModal with
+  role={menuMessage?.role ?? 'assistant'} so a closed menu renders nothing.
+- Tests (+15 → 18 suites 204/204):
+  - __tests__/MessageActionsMenu.test.tsx (8): closed renders nothing;
+    assistant/user action matrices (exact order, improvement only for
+    user); per-item role+label + viewIsModal container + close role;
+    onSelect payload ('copy', 'improve-english'); backdrop+Close dismissal
+    (sheet inert, exactly two onClose calls); Android back via
+    onRequestClose; all actions inside the sheet.
+  - __tests__/ChatScreen.test.tsx (+7 describe block): default-closed;
+    long-press assistant row → exact assistant testID matrix; user row →
+    includes chat-menu-improve-english; Copy copies verbatim content and
+    closes; non-copy selection closes WITHOUT clipboard call; Close
+    control closes; failed AND blank-complete rows never open the menu.
+- Test gotchas hit:
+  - RNTL v14 has NO fireEvent.longPress helper (typings reject it) — use
+    the generic form fireEvent(el, 'longPress').
+  - v14 TestInstance lacks findByProps — assert flags via props on a
+    dedicated testID'd element instead of searching the tree.
+  - A careless perl one-liner ate getByTestId's closing paren when
+    rewriting longPress calls; verify rewrites with grep before typecheck.
+  - The suite-wide "not configured to support act(...)" console noise is
+    PRE-EXISTING (AuthContext startup restore in other suites): 91
+    occurrences identically with and without this change; touched suites
+    log nothing.
+- Acceptance: correct actions appear by message type ✓ (both matrices
+  pinned exactly, component-level and integration-level); menu dismisses
+  correctly ✓ (Close, backdrop, action selection, Android back);
+  accessibility behavior exists ✓ (role buttons + labels,
+  accessibilityViewIsModal, dismissible controls).
+- Gates: pnpm typecheck clean; eslint clean; jest 18 suites 204/204.
+
+#### Sub-step record (all complete)
+1. [x] src/screens/MessageActionsMenu.tsx — role-driven action menu modal
+2. [x] src/utils/clipboard.ts — copyText seam; ChatScreen long-press wiring
+       + handleMenuAction (copy now; suggest/improve/speak documented seams)
+3. [x] __tests__/MessageActionsMenu.test.tsx (8 tests)
+4. [x] __tests__/ChatScreen.test.tsx — long-press integration (+7)
+5. [x] Gates green (pnpm typecheck, pnpm lint, jest 204/204 across 18 suites)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-060
 
 ## Archived Tasks
 

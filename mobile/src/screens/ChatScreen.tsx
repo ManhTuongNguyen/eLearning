@@ -24,7 +24,10 @@
  * status failed) carry an inline Retry control (TASK-054): pressing it
  * re-arms that row locally exactly like the backend does and streams the
  * replacement attempt from POST .../messages/{id}/retry/ into the same
- * bubble through the shared turn pipeline.
+ * bubble through the shared turn pipeline. Long-pressing a message row with
+ * real text (TASK-060) opens the contextual actions menu — Copy runs
+ * immediately via the clipboard seam while suggestion/improvement/speech
+ * selection stays a seam for their upcoming tasks.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -46,8 +49,11 @@ import type {ChatMessage, Session} from '../api/sessions';
 import {getSession, listMessages} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {ChatScreenProps} from '../navigation/types';
+import {copyText} from '../utils/clipboard';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
+import {MessageActionsMenu} from './MessageActionsMenu';
+import type {MessageAction} from './MessageActionsMenu';
 import {SampleConversationModal} from './SampleConversationModal';
 import {
   DeltaBuffer,
@@ -318,6 +324,8 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const [reloadKey, setReloadKey] = useState(0);
   const [streaming, setStreaming] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  // TASK-060: the message whose long-press menu is open; null when closed.
+  const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null);
 
   // Latest-ref seam: the load effect keys on (session, reload) only, so an
   // auth-state transition never refetches the conversation behind the user's
@@ -412,6 +420,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setSession(null);
     setTopicExpanded(false);
     setExampleVisible(false);
+    setMenuMessage(null);
     nearBottomRef.current = true;
     setDetachedFromBottom(false);
     endTurn();
@@ -664,6 +673,27 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
 
   const canSend = draft.trim().length > 0 && !streaming;
 
+  /**
+   * TASK-060 menu selection. Copy works today through the clipboard seam;
+   * the remaining actions are deliberate seams for their own upcoming
+   * tasks (suggestions → TASK-061, improvement → TASK-064, speech →
+   * TASK-078), exactly like the TASK-048 composer send preceded its wire
+   * call. Every selection dismisses the menu.
+   */
+  const handleMenuAction = useCallback(
+    (action: MessageAction) => {
+      const message = menuMessage;
+      setMenuMessage(null);
+      if (!message) {
+        return;
+      }
+      if (action === 'copy') {
+        copyText(message.content);
+      }
+    },
+    [menuMessage],
+  );
+
   /** Follow the conversation tail; no-op when the list is not mounted. */
   const stickToBottom = useCallback((animated: boolean) => {
     listRef.current?.scrollToEnd({animated});
@@ -710,12 +740,23 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       const failed = !isUser && item.status === 'failed';
       const waiting =
         item.status === 'pending' && item.role === 'assistant' && item.content === '';
+      // Only rows with real text offer the long-press menu (TASK-060):
+      // pending spinners and failed rows carry nothing actionable, and the
+      // backend rejects them as suggestion targets anyway.
+      const menuEligible = item.status === 'complete' && item.content.trim().length > 0;
       return (
         <View style={[styles.row, isUser && styles.rowUser]}>
           <View>
-            <View
+            <Pressable
               style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
-              testID={`chat-message-${item.id}`}>
+              testID={`chat-message-${item.id}`}
+              onLongPress={
+                menuEligible
+                  ? () => {
+                      setMenuMessage(item);
+                    }
+                  : undefined
+              }>
               {waiting ? (
                 <ActivityIndicator size="small" color={colors.textMuted} />
               ) : failed ? (
@@ -727,7 +768,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
                   {item.content}
                 </Text>
               )}
-            </View>
+            </Pressable>
             {failed ? (
               <Pressable
                 style={[styles.messageRetry, streaming && styles.messageRetryDisabled]}
@@ -910,6 +951,14 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             onClose={() => {
               setExampleVisible(false);
             }}
+          />
+          <MessageActionsMenu
+            visible={menuMessage !== null}
+            role={menuMessage?.role ?? 'assistant'}
+            onClose={() => {
+              setMenuMessage(null);
+            }}
+            onSelect={handleMenuAction}
           />
         </>
       )}

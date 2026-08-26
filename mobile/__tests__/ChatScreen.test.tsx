@@ -6,7 +6,8 @@
  * abort-on-exit, the TASK-050 smooth-streaming behavior (coalesced delta
  * commits, scroll stick/detach transitions, ghost-delta suppression), the
  * TASK-052 collapsible topic header, the TASK-053 sample-conversation
- * overlay entry and the TASK-054 failed-response retry control.
+ * overlay entry, the TASK-054 failed-response retry control and the
+ * TASK-060 message long-press menu.
  */
 import React from 'react';
 import {View} from 'react-native';
@@ -37,11 +38,15 @@ import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen} from '../src/screens/ChatScreen';
 import {STREAM_FLUSH_INTERVAL_MS} from '../src/screens/streamingUx';
 import {ThemeProvider} from '../src/theme/ThemeContext';
+import {copyText} from '../src/utils/clipboard';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
 jest.mock('../src/api/chatStream');
 jest.mock('../src/auth/secureStorage');
+jest.mock('../src/utils/clipboard');
+
+const mockedCopy = jest.mocked(copyText);
 
 const mockedAuth = jest.mocked(authApi);
 const mockedSessions = jest.mocked(sessionsApi);
@@ -948,5 +953,133 @@ describe('ChatScreen', () => {
     );
     expect((screen.getByTestId('chat-retry-702').props.accessibilityState ?? {}).disabled).toBe(false);
     expect(screen.getByTestId('chat-retry-701')).toBeOnTheScreen();
+  });
+
+  describe('message long-press menu (TASK-060)', () => {
+    function visibleMenuActionTestIds(): string[] {
+      return screen
+        .getAllByTestId(/^chat-menu-/)
+        .map(element => element.props.testID as string)
+        .filter(testId =>
+          /^chat-menu-(suggest-replies|improve-english|copy|speak)$/.test(testId),
+        );
+    }
+
+    it('keeps the menu closed until a message is long-pressed', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([
+          makeMessage({id: 801, role: 'user', sequence: 1, content: 'Hi there'}),
+          makeMessage({id: 802, role: 'assistant', sequence: 2}),
+        ]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
+
+      expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
+    });
+
+    it('offers assistant-message actions on long-press without the improvement entry', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([makeMessage({id: 802, role: 'assistant', sequence: 1})]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-802'), 'longPress');
+
+      expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen();
+      expect(visibleMenuActionTestIds()).toEqual([
+        'chat-menu-suggest-replies',
+        'chat-menu-copy',
+        'chat-menu-speak',
+      ]);
+    });
+
+    it('offers user-message actions including Improve my English on long-press', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([makeMessage({id: 801, role: 'user', sequence: 1, content: 'I go to store yesterday.'})]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-801'), 'longPress');
+
+      expect(visibleMenuActionTestIds()).toEqual([
+        'chat-menu-suggest-replies',
+        'chat-menu-improve-english',
+        'chat-menu-copy',
+        'chat-menu-speak',
+      ]);
+    });
+
+    it('copies the chosen message and dismisses when Copy is selected', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([makeMessage({id: 803, role: 'assistant', sequence: 1, content: 'Copy me!'})]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-803')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-803'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-copy'));
+
+      expect(mockedCopy).toHaveBeenCalledWith('Copy me!');
+      expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
+    });
+
+    it('dismisses without copying when another action is selected', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([makeMessage({id: 804, role: 'assistant', sequence: 1})]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-804')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-804'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-suggest-replies'));
+
+      expect(mockedCopy).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
+    });
+
+    it('dismisses through the menu Close control after a long-press', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([makeMessage({id: 805, role: 'assistant', sequence: 1})]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-805')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-805'), 'longPress');
+      await fireEvent.press(screen.getByTestId('chat-menu-close'));
+
+      expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
+      expect(mockedCopy).not.toHaveBeenCalled();
+    });
+
+    it('does not open the menu for rows without actionable text', async () => {
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([
+          makeMessage({
+            id: 902,
+            role: 'assistant',
+            status: 'failed',
+            sequence: 1,
+            content: '',
+          }),
+          makeMessage({
+            id: 903,
+            role: 'assistant',
+            status: 'complete',
+            sequence: 2,
+            content: '   ',
+          }),
+        ]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-902')).toBeOnTheScreen());
+
+      await fireEvent(screen.getByTestId('chat-message-902'), 'longPress');
+      await fireEvent(screen.getByTestId('chat-message-903'), 'longPress');
+
+      expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
+    });
   });
 });
