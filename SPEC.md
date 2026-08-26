@@ -1679,7 +1679,7 @@ Acceptance criteria:
 
 ## TASK-081 — Implement local SQLite database
 
-Status: `[ ]`
+Status: `[x]`
 
 Create local persistence for serverless mode.
 

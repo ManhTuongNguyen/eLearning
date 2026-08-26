@@ -63,6 +63,18 @@ State lives in `src/mode/`:
 
 The two modes are intentionally isolated; switching never merges or synchronizes their data (ROADMAP §15).
 
+## Local database (serverless)
+
+Serverless mode persists conversations on-device in SQLite (`src/db/`, SPEC TASK-081):
+
+- `driver.ts` — the small SQL seam (`execute` / `transaction` / `close`) all stores depend on.
+- `nativeDriver.ts` — adapter over `react-native-sqlite-storage`; enables foreign keys so deleting a session cascades to its messages and summary.
+- `migrations.ts` — append-only, ordered migration list; the applied version is stored in SQLite's `user_version`. Each migration runs in a transaction and a failure leaves the recorded version untouched.
+- `database.ts` — `getLocalDatabase()` opens and migrates the database automatically on first use.
+- Entity stores (`sessionStore`, `messageStore`, `summaryStore`, `profileStore`, `settingsStore`) expose typed CRUD mirroring the backend serializers. The OpenRouter API key must not be stored here (secure storage only).
+
+Tests run against real SQL via a sql.js-backed driver (`testing/sqlJsDriver.ts`, dev-only, never bundled); `react-native-sqlite-storage` is mocked globally in `jest.setup.js`.
+
 ## Release build
 
 ```bash

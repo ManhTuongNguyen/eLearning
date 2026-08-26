@@ -82,6 +82,43 @@ jest.mock('react-native-share', () => ({
 }));
 
 /**
+ * react-native-sqlite-storage mock (local serverless database, TASK-081).
+ *
+ * Records every executed statement against a shared statement log so tests
+ * can assert calls made through the native driver seam. Tests that need real
+ * SQL semantics inject the sql.js-backed driver instead
+ * (testing/sqlJsDriver.ts) and never rely on this mock's results.
+ */
+const mockSqliteStatements = [];
+
+jest.mock('react-native-sqlite-storage', () => {
+  const makeResultSet = () => ({
+    rows: { raw: () => [], length: 0 },
+    rowsAffected: 0,
+    insertId: null,
+  });
+
+  const makeDatabase = () => ({
+    executeSql: jest.fn(async (sql, params) => {
+      mockSqliteStatements.push({ sql, params });
+      return [makeResultSet()];
+    }),
+    close: jest.fn(async () => undefined),
+  });
+
+  return {
+    __esModule: true,
+    default: {
+      enablePromise: jest.fn(),
+      openDatabase: jest.fn(async () => makeDatabase()),
+    },
+    __resetSqliteStatementLog: () => {
+      mockSqliteStatements.length = 0;
+    },
+  };
+});
+
+/**
  * In-memory AsyncStorage mock (mode flag persistence, SPEC TASK-080).
  *
  * Like the keychain store below, the backing Map lives OUTSIDE the mock

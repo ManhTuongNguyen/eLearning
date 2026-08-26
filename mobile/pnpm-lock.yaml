@@ -41,6 +41,9 @@ importers:
       react-native-share:
         specifier: ^12.3.1
         version: 12.3.1
+      react-native-sqlite-storage:
+        specifier: ^6.0.1
+        version: 6.0.1(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.81.4(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.1.0))
     devDependencies:
       '@babel/core':
         specifier: ^7.25.2
@@ -81,9 +84,15 @@ importers:
       '@types/react':
         specifier: ^19.1.0
         version: 19.2.18
+      '@types/react-native-sqlite-storage':
+        specifier: ^6.0.5
+        version: 6.0.5
       '@types/react-test-renderer':
         specifier: ^19.1.0
         version: 19.1.0
+      '@types/sql.js':
+        specifier: ^1.4.11
+        version: 1.4.11
       eslint:
         specifier: ^8.19.0
         version: 8.57.1
@@ -96,6 +105,9 @@ importers:
       react-test-renderer:
         specifier: 19.1.0
         version: 19.1.0(react@19.1.0)
+      sql.js:
+        specifier: ^1.14.2
+        version: 1.14.2
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
@@ -1149,6 +1161,9 @@ packages:
   '@types/babel__traverse@7.28.0':
     resolution: {integrity: sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q==}
 
+  '@types/emscripten@1.41.5':
+    resolution: {integrity: sha512-cMQm7pxu6BxtHyqJ7mQZ2kXWV5SLmugybFdHCBbJ5eHzOo6VhBckEgAT3//rP5FwPHNPeEiq4SmQ5ucBwsOo4Q==}
+
   '@types/graceful-fs@4.1.9':
     resolution: {integrity: sha512-olP3sd1qOEe5dXTSaFvQG+02VdRXcdytWLAZsAq1PecU8uqQAhkrnbli7DagjtXKW/Bl7YJbUsa8MPcuc8LHEQ==}
 
@@ -1170,6 +1185,9 @@ packages:
   '@types/node@26.3.0':
     resolution: {integrity: sha512-L3fgrnchriRC2ExBflb8j4uZZURHZfQsmQeyVzhjcHW4kkwVyo8/0h1B2MVzMTrYUJYu6G7EWs14hW/L9putqw==}
 
+  '@types/react-native-sqlite-storage@6.0.5':
+    resolution: {integrity: sha512-1gPwgYil6pHV/EDF816M8KmVsQC5nGMTAm8OMC25GbyuBaXFn7sdguMq6A2owtXB8c4qsH2tOEIQNetbOquawA==}
+
   '@types/react-reconciler@0.33.0':
     resolution: {integrity: sha512-HZOXsKT0tGI9LlUw2LuedXsVeB88wFa536vVL0M6vE8zN63nI+sSr1ByxmPToP5K5bukaVscyeCJcF9guVNJ1g==}
     peerDependencies:
@@ -1183,6 +1201,9 @@ packages:
 
   '@types/semver@7.8.0':
     resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
+
+  '@types/sql.js@1.4.11':
+    resolution: {integrity: sha512-QXIx38p2ZThJaK9vP5ZdqdlRe1FG9I8SmCZOS7FHfB/2qPAjZwkL7/vlfPg6N/oWHuuOaGg/P/IRwfP2W0kWVQ==}
 
   '@types/stack-utils@2.0.3':
     resolution: {integrity: sha512-9aEbYZ3TbYMznPdcdr3SmIrLXwC/AKZXQeCf9Pgao5CKb8CyHuEX5jzWPTkvregvhRJHcpRO6BFoGW9ycaOkYw==}
@@ -3129,6 +3150,11 @@ packages:
     resolution: {integrity: sha512-mRVRie0qKbtj+jWqJ2POPkeSd8SxnMp6aazFZVmq8ZbkUGtQLENR/L58ky8zH4VUEF/WYRmdBiBHWHVtzOewtQ==}
     engines: {node: '>=16'}
 
+  react-native-sqlite-storage@6.0.1:
+    resolution: {integrity: sha512-1tDFjrint6X6qSYKf3gDyz+XB+X79jfiL6xTugKHPRtF0WvqMtVgdLuNqZunIXjNEvNtNVEbXaeZ6MsguFu00A==}
+    peerDependencies:
+      react-native: '>=0.14.0'
+
   react-native@0.81.4:
     resolution: {integrity: sha512-bt5bz3A/+Cv46KcjV0VQa+fo7MKxs17RCcpzjftINlen4ZDUl0I6Ut+brQ2FToa5oD0IB0xvQHfmsg2EDqsZdQ==}
     engines: {node: '>= 20.19.4'}
@@ -3377,6 +3403,9 @@ packages:
 
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
+
+  sql.js@1.14.2:
+    resolution: {integrity: sha512-3ZGPovObMFrdw79zrUHbfdE/DLIsy8jdNdssmMSQuRAymedU6q84asPt0kgiqrdMYlPegDItiIMfmIXzZnYFcw==}
 
   stack-utils@2.0.6:
     resolution: {integrity: sha512-XlkWvfIm6RmsWtNJx+uqtKLS8eqFbxUg0ZzLXqY0caEy9l7hruX8IpiDnjsLavoBgqCCR71TqWO8MaXYheJ3RQ==}
@@ -5265,6 +5294,8 @@ snapshots:
     dependencies:
       '@babel/types': 7.29.8
 
+  '@types/emscripten@1.41.5': {}
+
   '@types/graceful-fs@4.1.9':
     dependencies:
       '@types/node': 26.3.0
@@ -5290,6 +5321,8 @@ snapshots:
     dependencies:
       undici-types: 8.3.0
 
+  '@types/react-native-sqlite-storage@6.0.5': {}
+
   '@types/react-reconciler@0.33.0(@types/react@19.2.18)':
     dependencies:
       '@types/react': 19.2.18
@@ -5303,6 +5336,11 @@ snapshots:
       csstype: 3.2.3
 
   '@types/semver@7.8.0': {}
+
+  '@types/sql.js@1.4.11':
+    dependencies:
+      '@types/emscripten': 1.41.5
+      '@types/node': 26.3.0
 
   '@types/stack-utils@2.0.3': {}
 
@@ -7750,6 +7788,10 @@ snapshots:
 
   react-native-share@12.3.1: {}
 
+  react-native-sqlite-storage@6.0.1(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.81.4(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.1.0)):
+    dependencies:
+      react-native: 0.81.4(@babel/core@7.29.7)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.81.4(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.1.0)
+
   react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.81.4(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.1.0):
     dependencies:
       '@jest/create-cache-key-function': 29.7.0
@@ -8068,6 +8110,8 @@ snapshots:
   split-on-first@1.1.0: {}
 
   sprintf-js@1.0.3: {}
+
+  sql.js@1.14.2: {}
 
   stack-utils@2.0.6:
     dependencies:
