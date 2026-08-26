@@ -1,7 +1,7 @@
 /**
- * Main conversation screen (SPEC TASK-048/049/050/052/053): chronological
- * message list, composer with send button, loading/error states and keyboard
- * handling.
+ * Main conversation screen (SPEC TASK-048/049/050/052/053/054):
+ * chronological message list, composer with send button, loading/error
+ * states and keyboard handling.
  *
  * The screen loads an existing conversation through its `sessionId` route
  * param; without one it shows an empty state until a conversation is opened
@@ -20,7 +20,11 @@
  * carries sample turns from session creation, a "Show me an example" link
  * (TASK-053) opens the generated sample conversation in a dismissible modal
  * that stays fully separate from the chat history and exposes per-line TTS
- * controls through the speech seam.
+ * controls through the speech seam. Failed assistant rows (persisted with
+ * status failed) carry an inline Retry control (TASK-054): pressing it
+ * re-arms that row locally exactly like the backend does and streams the
+ * replacement attempt from POST .../messages/{id}/retry/ into the same
+ * bubble through the shared turn pipeline.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -37,7 +41,7 @@ import {
 import type {NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
 
 import type {ChatStreamEvent, ChatStreamHandle} from '../api/chatStream';
-import {streamChatTurn} from '../api/chatStream';
+import {streamChatTurn, streamRetryTurn} from '../api/chatStream';
 import type {ChatMessage, Session} from '../api/sessions';
 import {getSession, listMessages} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
@@ -153,6 +157,29 @@ function createStyles(c: ThemeColors) {
       color: c.textPrimary,
       fontSize: 14,
       fontWeight: '600',
+    },
+    messageRetry: {
+      alignSelf: 'flex-start',
+      marginTop: 6,
+      borderColor: c.borderStrong,
+      borderWidth: 1,
+      borderRadius: 10,
+      paddingVertical: 5,
+      paddingHorizontal: 14,
+      backgroundColor: c.surface,
+    },
+    messageRetryDisabled: {
+      opacity: 0.5,
+    },
+    messageRetryText: {
+      color: c.textPrimary,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    failedNote: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.textMuted,
     },
     list: {
       flex: 1,
@@ -448,9 +475,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
 
   /**
    * Turn failed: drop optimistic rows, surface the reason and re-sync with
-   * the server (a committed user row / failed assistant row reappears; the
-   * retry control itself is TASK-054). Buffered-but-unflushed deltas die
-   * here — they must never land after the rows are gone.
+   * the server (a committed user row / failed assistant row reappears; for
+   * TASK-054 retries every row is persisted, so nothing is dropped and the
+   * resync restores the still-failed row). Buffered-but-unflushed deltas
+   * die here — they must never land after the rows are gone.
    */
   const failTurn = useCallback(
     (message: string) => {
@@ -489,6 +517,26 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     [deltaBuffer, refreshMessages],
   );
 
+  /** One shared SSE event pipeline for fresh turns and retries alike. */
+  const handleTurnEvent = useCallback(
+    (event: ChatStreamEvent): void => {
+      switch (event.type) {
+        case 'start':
+          break;
+        case 'delta':
+          appendDelta(event.text);
+          break;
+        case 'completed':
+          completeTurn(event.text);
+          break;
+        case 'error':
+          failTurn(event.message);
+          break;
+      }
+    },
+    [appendDelta, completeTurn, failTurn],
+  );
+
   const startTurn = useCallback(
     (sid: number, text: string) => {
       (async () => {
@@ -505,33 +553,73 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           failTurn('You need to sign in again to send messages.');
           return;
         }
-        const handleEvent = (event: ChatStreamEvent): void => {
-          switch (event.type) {
-            case 'start':
-              break;
-            case 'delta':
-              appendDelta(event.text);
-              break;
-            case 'completed':
-              completeTurn(event.text);
-              break;
-            case 'error':
-              failTurn(event.message);
-              break;
-          }
-        };
         streamHandleRef.current = streamChatTurn({
           token,
           sessionId: sid,
           text,
-          onEvent: handleEvent,
+          onEvent: handleTurnEvent,
           onError: err => {
             failTurn(toErrorMessage(err));
           },
         });
       })();
     },
-    [appendDelta, completeTurn, failTurn],
+    [failTurn, handleTurnEvent],
+  );
+
+  const startRetry = useCallback(
+    (sid: number, messageId: number) => {
+      (async () => {
+        let token: string | null = null;
+        try {
+          token = await getAccessTokenRef.current();
+        } catch {
+          token = null;
+        }
+        if (sessionIdRef.current !== sid) {
+          return;
+        }
+        if (!token) {
+          failTurn('You need to sign in again to send messages.');
+          return;
+        }
+        streamHandleRef.current = streamRetryTurn({
+          token,
+          sessionId: sid,
+          messageId,
+          onEvent: handleTurnEvent,
+          onError: err => {
+            failTurn(toErrorMessage(err));
+          },
+        });
+      })();
+    },
+    [failTurn, handleTurnEvent],
+  );
+
+  /**
+   * Retry one failed assistant row (TASK-054): the backend re-arms that
+   * exact row in place, so locally it becomes the streaming target — same
+   * pending spinner, same buffered deltas — and completion flips it to
+   * complete. A failure keeps the row failed after resync, leaving the
+   * control available for another attempt.
+   */
+  const handleRetry = useCallback(
+    (message: ChatMessage) => {
+      if (sessionId === undefined || streaming) {
+        return;
+      }
+      setStreamError(null);
+      streamingAssistantIdRef.current = message.id;
+      setMessages(prev =>
+        prev.map(row =>
+          row.id === message.id ? {...row, status: 'pending', content: ''} : row,
+        ),
+      );
+      setStreaming(true);
+      startRetry(sessionId, message.id);
+    },
+    [sessionId, streaming, startRetry],
   );
 
   const handleSend = useCallback(() => {
@@ -619,25 +707,46 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const renderMessage = useCallback(
     ({item}: {item: ChatMessage}) => {
       const isUser = item.role === 'user';
+      const failed = !isUser && item.status === 'failed';
       const waiting =
         item.status === 'pending' && item.role === 'assistant' && item.content === '';
       return (
         <View style={[styles.row, isUser && styles.rowUser]}>
-          <View
-            style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
-            testID={`chat-message-${item.id}`}>
-            {waiting ? (
-              <ActivityIndicator size="small" color={colors.textMuted} />
-            ) : (
-              <Text style={[styles.content, isUser ? styles.contentUser : styles.contentAssistant]}>
-                {item.content}
-              </Text>
-            )}
+          <View>
+            <View
+              style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
+              testID={`chat-message-${item.id}`}>
+              {waiting ? (
+                <ActivityIndicator size="small" color={colors.textMuted} />
+              ) : failed ? (
+                <Text style={[styles.content, styles.failedNote]}>
+                  The response failed to generate.
+                </Text>
+              ) : (
+                <Text style={[styles.content, isUser ? styles.contentUser : styles.contentAssistant]}>
+                  {item.content}
+                </Text>
+              )}
+            </View>
+            {failed ? (
+              <Pressable
+                style={[styles.messageRetry, streaming && styles.messageRetryDisabled]}
+                disabled={streaming}
+                onPress={() => {
+                  handleRetry(item);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Retry failed response"
+                accessibilityState={{disabled: streaming}}
+                testID={`chat-retry-${item.id}`}>
+                <Text style={styles.messageRetryText}>Retry</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       );
     },
-    [styles, colors.textMuted],
+    [styles, colors.textMuted, streaming, handleRetry],
   );
 
   return (

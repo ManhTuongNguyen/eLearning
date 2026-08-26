@@ -1,12 +1,12 @@
 /**
- * Chat screen tests (SPEC TASK-048/049/050/052/053): message list ordering,
- * composer/send interaction, loading/empty/error states and the
+ * Chat screen tests (SPEC TASK-048/049/050/052/053/054): message list
+ * ordering, composer/send interaction, loading/empty/error states and the
  * keyboard-avoiding shell — plus the SSE streaming round-trip: incremental
  * assistant deltas, completion swap-in, error frames, transport failures and
  * abort-on-exit, the TASK-050 smooth-streaming behavior (coalesced delta
  * commits, scroll stick/detach transitions, ghost-delta suppression), the
- * TASK-052 collapsible topic header and the TASK-053 sample-conversation
- * overlay entry.
+ * TASK-052 collapsible topic header, the TASK-053 sample-conversation
+ * overlay entry and the TASK-054 failed-response retry control.
  */
 import React from 'react';
 import {View} from 'react-native';
@@ -21,8 +21,12 @@ import {
   within,
 } from '@testing-library/react-native';
 
-import type {ChatStreamEvent, StreamChatTurnOptions} from '../src/api/chatStream';
-import {streamChatTurn} from '../src/api/chatStream';
+import type {
+  ChatStreamEvent,
+  StreamChatTurnOptions,
+  StreamRetryTurnOptions,
+} from '../src/api/chatStream';
+import {streamChatTurn, streamRetryTurn} from '../src/api/chatStream';
 import * as authApi from '../src/api/auth';
 import {ApiError} from '../src/api/client';
 import * as sessionsApi from '../src/api/sessions';
@@ -43,10 +47,11 @@ const mockedAuth = jest.mocked(authApi);
 const mockedSessions = jest.mocked(sessionsApi);
 const mockedStorage = jest.mocked(secureStorage);
 const mockedStream = jest.mocked(streamChatTurn);
+const mockedStreamRetry = jest.mocked(streamRetryTurn);
 
-/** One captured streamChatTurn invocation plus its abort spy. */
+/** One captured stream invocation (send or retry) plus its abort spy. */
 interface CapturedTurn {
-  options: StreamChatTurnOptions;
+  options: StreamChatTurnOptions | StreamRetryTurnOptions;
   handle: {abort: () => void};
 }
 
@@ -149,6 +154,11 @@ beforeEach(() => {
   mockedSessions.getSession.mockResolvedValue(makeSession());
   turns = [];
   mockedStream.mockImplementation(options => {
+    const handle = {abort: jest.fn()};
+    turns.push({options, handle});
+    return handle;
+  });
+  mockedStreamRetry.mockImplementation(options => {
     const handle = {abort: jest.fn()};
     turns.push({options, handle});
     return handle;
@@ -745,5 +755,198 @@ describe('ChatScreen', () => {
     expect(screen.queryByTestId('sample-modal')).toBeNull();
     expect(screen.queryByText('Coach greeting example')).toBeNull();
     expect(screen.getByTestId('composer-input')).toBeOnTheScreen();
+  });
+
+  it('shows a retry control only on failed assistant rows (TASK-054)', async () => {
+    mockedSessions.listMessages.mockResolvedValue(
+      pageOf([
+        makeMessage({id: 401, role: 'user', sequence: 1, content: 'Hi'}),
+        makeMessage({
+          id: 402,
+          role: 'assistant',
+          status: 'complete',
+          sequence: 2,
+          content: 'All good.',
+        }),
+        makeMessage({id: 403, role: 'assistant', status: 'failed', sequence: 3, content: ''}),
+      ]),
+    );
+
+    await renderChat({sessionId: 5});
+
+    const failedBubble = await screen.findByTestId('chat-message-403');
+    expect(within(failedBubble).getByText('The response failed to generate.')).toBeOnTheScreen();
+    expect(screen.getByTestId('chat-retry-403')).toBeOnTheScreen();
+    expect(
+      (screen.getByTestId('chat-retry-403').props.accessibilityState ?? {}).disabled,
+    ).toBe(false);
+    expect(screen.queryByTestId('chat-retry-401')).toBeNull();
+    expect(screen.queryByTestId('chat-retry-402')).toBeNull();
+  });
+
+  it('pressing Retry invokes the backend retry for that exact row and re-arms it', async () => {
+    mockedSessions.listMessages.mockResolvedValue(
+      pageOf([
+        makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
+        makeMessage({id: 902, role: 'assistant', status: 'failed', sequence: 2, content: ''}),
+      ]),
+    );
+    await renderChat({sessionId: 5});
+    await waitFor(() => expect(screen.getByTestId('chat-retry-902')).toBeOnTheScreen());
+
+    // A pending draft proves sending is blocked by the running retry, not
+    // by an empty composer.
+    await fireEvent.changeText(screen.getByTestId('composer-input'), 'Next message');
+    await fireEvent.press(screen.getByTestId('chat-retry-902'));
+
+    expect(mockedStreamRetry).toHaveBeenCalledTimes(1);
+    expect(mockedStream).not.toHaveBeenCalled();
+    expect(turns[0]?.options).toMatchObject({
+      token: 'token-a',
+      sessionId: 5,
+      messageId: 902,
+    });
+    // The failed row is re-armed locally exactly like the backend does:
+    // pending + blank renders as the streaming spinner and the control is
+    // gone while the attempt runs.
+    await waitFor(() => expect(screen.queryByTestId('chat-retry-902')).toBeNull());
+    const bubble = screen.getByTestId('chat-message-902');
+    expect(within(bubble).queryByText('The response failed to generate.')).toBeNull();
+    expect((screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled).toBe(true);
+  });
+
+  it('streams the replacement into the same row and removes the failure state on completion', async () => {
+    mockedSessions.listMessages
+      .mockResolvedValueOnce(
+        pageOf([
+          makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
+          makeMessage({id: 902, role: 'assistant', status: 'failed', sequence: 2, content: ''}),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        pageOf([
+          makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
+          makeMessage({
+            id: 902,
+            role: 'assistant',
+            status: 'complete',
+            sequence: 2,
+            content: 'A fresh successful answer.',
+          }),
+        ]),
+      );
+    await renderChat({sessionId: 5});
+    await waitFor(() => expect(screen.getByTestId('chat-retry-902')).toBeOnTheScreen());
+
+    // A pending draft proves sending is blocked by the running retry, not
+    // by an empty composer.
+    await fireEvent.changeText(screen.getByTestId('composer-input'), 'Next message');
+    await fireEvent.press(screen.getByTestId('chat-retry-902'));
+    const turn = turns[0];
+
+    // Deltas grow the very same (persisted) row in place.
+    await deliver(turn, {type: 'delta', text: 'A fresh '});
+    await flushStreamTick();
+    expect(screen.getByText('A fresh ')).toBeOnTheScreen();
+
+    await deliver(turn, {
+      type: 'completed',
+      text: 'A fresh successful answer.',
+      model: 'vendor/model',
+      deltaCount: 2,
+    });
+    await waitFor(() => expect(screen.getByText('A fresh successful answer.')).toBeOnTheScreen());
+    expect(mockedSessions.listMessages).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId('chat-retry-902')).toBeNull();
+    expect(screen.queryByTestId('chat-stream-error')).toBeNull();
+    // The pending draft from before the retry is sendable again.
+    expect((screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled).toBe(false);
+  });
+
+  it('keeps the failure state usable when the retried attempt fails again', async () => {
+    mockedSessions.listMessages
+      .mockResolvedValueOnce(
+        pageOf([
+          makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
+          makeMessage({id: 902, role: 'assistant', status: 'failed', sequence: 2, content: ''}),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        pageOf([
+          makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
+          makeMessage({id: 902, role: 'assistant', status: 'failed', sequence: 2, content: ''}),
+        ]),
+      );
+    await renderChat({sessionId: 5});
+    await waitFor(() => expect(screen.getByTestId('chat-retry-902')).toBeOnTheScreen());
+
+    await fireEvent.press(screen.getByTestId('chat-retry-902'));
+    await deliver(turns[0], {
+      type: 'error',
+      message: 'The provider is unavailable right now.',
+      retryable: true,
+    });
+
+    expect(screen.getByTestId('chat-stream-error')).toHaveTextContent(
+      'The provider is unavailable right now.',
+    );
+    // Server truth restores the still-failed row; the control is available
+    // for another attempt.
+    await waitFor(() =>
+      expect(within(screen.getByTestId('chat-message-902')).getByText('The response failed to generate.')).toBeOnTheScreen(),
+    );
+    const control = screen.getByTestId('chat-retry-902');
+    expect(control.props.accessibilityState?.disabled ?? false).toBe(false);
+
+    await fireEvent.press(control);
+    expect(mockedStreamRetry).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces transport failures of a retry as friendly unreachable errors', async () => {
+    mockedSessions.listMessages.mockResolvedValue(
+      pageOf([makeMessage({id: 905, role: 'assistant', status: 'failed', sequence: 1})]),
+    );
+    await renderChat({sessionId: 5});
+    await waitFor(() => expect(screen.getByTestId('chat-retry-905')).toBeOnTheScreen());
+
+    await fireEvent.press(screen.getByTestId('chat-retry-905'));
+    await failTransport(turns[0], new ApiError(0, 'Network request failed.'));
+
+    expect(screen.getByTestId('chat-stream-error')).toHaveTextContent(
+      /server is unreachable right now/i,
+    );
+  });
+
+  it('does not start another stream while one is already running', async () => {
+    mockedSessions.listMessages.mockResolvedValue(
+      pageOf([
+        makeMessage({id: 701, role: 'assistant', status: 'failed', sequence: 1}),
+        makeMessage({id: 702, role: 'assistant', status: 'failed', sequence: 2}),
+      ]),
+    );
+    await renderChat({sessionId: 5});
+    await waitFor(() => expect(screen.getByTestId('chat-retry-701')).toBeOnTheScreen());
+
+    await fireEvent.changeText(screen.getByTestId('composer-input'), 'Draft waiting');
+    await fireEvent.press(screen.getByTestId('chat-retry-701'));
+    expect(mockedStreamRetry).toHaveBeenCalledTimes(1);
+    // The retried row re-arms into the spinner; its control is gone…
+    expect(screen.queryByTestId('chat-retry-701')).toBeNull();
+
+    // …and the other failed row's control is visible but inert: pressing it
+    // cannot start a second stream while one is running.
+    const other = screen.getByTestId('chat-retry-702');
+    expect((other.props.accessibilityState ?? {}).disabled).toBe(true);
+    await fireEvent.press(other);
+    expect(mockedStreamRetry).toHaveBeenCalledTimes(1);
+
+    await deliver(turns[0], {type: 'completed', text: 'Recovered.', model: 'm', deltaCount: 1});
+    // After completion the untouched row re-enables, the resync restores
+    // 701 as still-failed with its control back, and the draft is sendable.
+    await waitFor(() =>
+      expect((screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled).toBe(false),
+    );
+    expect((screen.getByTestId('chat-retry-702').props.accessibilityState ?? {}).disabled).toBe(false);
+    expect(screen.getByTestId('chat-retry-701')).toBeOnTheScreen();
   });
 });

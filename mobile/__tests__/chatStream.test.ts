@@ -9,6 +9,7 @@ import {
   decodeChatStreamFrame,
   parseSseFrame,
   streamChatTurn,
+  streamRetryTurn,
 } from '../src/api/chatStream';
 import {API_BASE_URL} from '../src/config';
 
@@ -89,6 +90,23 @@ function beginTurn(): ActiveTurn {
     },
   });
   // streamChatTurn issues exactly one request synchronously.
+  turn.xhr = FakeXHR.sent[FakeXHR.sent.length - 1];
+  return turn;
+}
+
+function beginRetry(): ActiveTurn {
+  const turn: ActiveTurn = {xhr: new FakeXHR(), events: [], errors: [], handle: null as never};
+  turn.handle = streamRetryTurn({
+    token: 'token-sse',
+    sessionId: 7,
+    messageId: 42,
+    onEvent: event => {
+      turn.events.push(event);
+    },
+    onError: error => {
+      turn.errors.push(error);
+    },
+  });
   turn.xhr = FakeXHR.sent[FakeXHR.sent.length - 1];
   return turn;
 }
@@ -332,5 +350,64 @@ describe('streamChatTurn transport', () => {
       {type: 'completed', text: 'Done', model: 'm', deltaCount: 1},
     ]);
     expect(turn.errors).toEqual([]);
+  });
+});
+
+describe('streamRetryTurn transport (TASK-054)', () => {
+  it('POSTs to the retry endpoint of the failed row with no body', () => {
+    const turn = beginRetry();
+
+    expect(turn.xhr.method).toBe('POST');
+    expect(turn.xhr.url).toBe(`${API_BASE_URL}/api/v1/sessions/7/messages/42/retry/`);
+    expect(turn.xhr.headers.Accept).toBe('text/event-stream');
+    expect(turn.xhr.headers.Authorization).toBe('Bearer token-sse');
+    // TASK-042 contract: POST without a body — no JSON content type either.
+    expect(turn.xhr.body).toBeUndefined();
+    expect(turn.xhr.headers['Content-Type']).toBeUndefined();
+    expect(turn.events).toEqual([]);
+    expect(turn.errors).toEqual([]);
+  });
+
+  it('streams the replacement attempt incrementally like a fresh turn', () => {
+    const turn = beginRetry();
+
+    turn.xhr.emit(sse('start', {model: 'vendor/model'}));
+    turn.xhr.emit(sse('delta', {text: 'New '}));
+    turn.xhr.emit(sse('delta', {text: 'attempt'}));
+    turn.xhr.emit(sse('completed', {text: 'New attempt', model: 'm', delta_count: 2}));
+    turn.xhr.respond(200);
+
+    expect(turn.events.map(event => event.type)).toEqual([
+      'start',
+      'delta',
+      'delta',
+      'completed',
+    ]);
+    expect(turn.errors).toEqual([]);
+  });
+
+  it('normalizes the 409 conflict for non-retryable targets into ApiError', () => {
+    const turn = beginRetry();
+
+    turn.xhr.responseText = JSON.stringify({
+      detail: 'Only failed assistant messages can be retried.',
+    });
+    turn.xhr.respond(409);
+
+    expect(turn.events).toEqual([]);
+    expect(turn.errors[0]).toMatchObject({name: 'ApiError', status: 409});
+    expect((turn.errors[0] as Error).message).toContain(
+      'Only failed assistant messages can be retried.',
+    );
+  });
+
+  it('reports a mid-attempt network drop as unreachable ApiError(0)', () => {
+    const turn = beginRetry();
+
+    turn.xhr.emit(sse('delta', {text: 'partial'}));
+    turn.xhr.networkFail();
+
+    expect(turn.errors).toHaveLength(1);
+    expect(turn.errors[0]).toMatchObject({name: 'ApiError', status: 0});
   });
 });

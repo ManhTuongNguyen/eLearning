@@ -1,5 +1,6 @@
 /**
- * Typed SSE consumption for chat streaming (SPEC TASK-049).
+ * Typed SSE consumption for chat streaming (SPEC TASK-049) and failed-turn
+ * retries (SPEC TASK-054).
  *
  * Speaks the wire protocol produced by the backend (llm/sse.py):
  *
@@ -18,8 +19,8 @@
  * Transport: React Native's fetch buffers response bodies before they
  * resolve, so incremental reads go through XMLHttpRequest, whose progress
  * events expose the accumulating `responseText` as bytes arrive. The handle
- * returned by streamChatTurn aborts the underlying request; leaving a chat
- * screen must call it so no turn outlives its UI.
+ * returned by streamChatTurn/streamRetryTurn aborts the underlying request;
+ * leaving a chat screen must call it so no turn outlives its UI.
  */
 import {API_BASE_URL} from '../config';
 import {ApiError, normalizeApiError} from './client';
@@ -112,6 +113,16 @@ export interface StreamChatTurnOptions {
   onError: (error: unknown) => void;
 }
 
+/** Retry one failed assistant generation (SPEC TASK-054). */
+export interface StreamRetryTurnOptions {
+  token: string;
+  sessionId: number;
+  /** The failed assistant message row being retried. */
+  messageId: number;
+  onEvent: (event: ChatStreamEvent) => void;
+  onError: (error: unknown) => void;
+}
+
 export interface ChatStreamHandle {
   /**
    * Cancel the stream. After abort() no further callbacks fire, so screens
@@ -133,13 +144,21 @@ function toApiError(status: number, bodyText: string): ApiError {
   return normalizeApiError(status, payload);
 }
 
+interface ConsumeStreamOptions {
+  url: string;
+  /** Serialized JSON request body; null sends no body at all. */
+  body: string | null;
+  token: string;
+  onEvent: (event: ChatStreamEvent) => void;
+  onError: (error: unknown) => void;
+}
+
 /**
- * Start one chat turn over SSE and consume it incrementally. Returns an
- * abort handle immediately; events flow through callbacks afterwards.
- * Exactly one terminal outcome occurs per stream: a `completed` or `error`
- * application event, or an onError transport failure — never both.
+ * Shared XHR/SSE consumption loop behind streamChatTurn and
+ * streamRetryTurn: both backend endpoints answer with the identical frame
+ * protocol, so only the URL and request body differ.
  */
-export function streamChatTurn(options: StreamChatTurnOptions): ChatStreamHandle {
+function consumeSseStream(options: ConsumeStreamOptions): ChatStreamHandle {
   // aborted: user cancel — suppress every callback from now on.
   // finished: the stream reached its single terminal outcome.
   let aborted = false;
@@ -147,11 +166,10 @@ export function streamChatTurn(options: StreamChatTurnOptions): ChatStreamHandle
   let terminalSeen = false;
 
   const xhr = new XMLHttpRequest();
-  xhr.open(
-    'POST',
-    `${API_BASE_URL}/api/v1/sessions/${options.sessionId}/messages/stream/`,
-  );
-  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.open('POST', options.url);
+  if (options.body !== null) {
+    xhr.setRequestHeader('Content-Type', 'application/json');
+  }
   xhr.setRequestHeader('Accept', 'text/event-stream');
   xhr.setRequestHeader('Authorization', `Bearer ${options.token}`);
 
@@ -211,7 +229,8 @@ export function streamChatTurn(options: StreamChatTurnOptions): ChatStreamHandle
       return;
     }
     if (xhr.status < 200 || xhr.status >= 300) {
-      // Pre-stream rejections (auth/validation/404) are plain DRF JSON, not SSE.
+      // Pre-stream rejections (auth/validation/404/409) are plain DRF JSON,
+      // not SSE.
       finishWith(toApiError(xhr.status, xhr.responseText));
       return;
     }
@@ -232,7 +251,7 @@ export function streamChatTurn(options: StreamChatTurnOptions): ChatStreamHandle
     finishWith(new ApiError(0, NETWORK_ERROR_MESSAGE));
   };
 
-  xhr.send(JSON.stringify({text: options.text}));
+  xhr.send(options.body ?? undefined);
 
   return {
     abort() {
@@ -244,4 +263,37 @@ export function streamChatTurn(options: StreamChatTurnOptions): ChatStreamHandle
       xhr.abort();
     },
   };
+}
+
+/**
+ * Start one chat turn over SSE and consume it incrementally. Returns an
+ * abort handle immediately; events flow through callbacks afterwards.
+ * Exactly one terminal outcome occurs per stream: a `completed` or `error`
+ * application event, or an onError transport failure — never both.
+ */
+export function streamChatTurn(options: StreamChatTurnOptions): ChatStreamHandle {
+  return consumeSseStream({
+    url: `${API_BASE_URL}/api/v1/sessions/${options.sessionId}/messages/stream/`,
+    body: JSON.stringify({text: options.text}),
+    token: options.token,
+    onEvent: options.onEvent,
+    onError: options.onError,
+  });
+}
+
+/**
+ * Retry one failed assistant generation over SSE (TASK-042 backend
+ * contract): POST without a body to
+ * /api/v1/sessions/{id}/messages/{message_pk}/retry/. The failed row is
+ * re-armed in place server-side and the replacement attempt streams with
+ * the same start/delta/completed/error frames as a fresh turn.
+ */
+export function streamRetryTurn(options: StreamRetryTurnOptions): ChatStreamHandle {
+  return consumeSseStream({
+    url: `${API_BASE_URL}/api/v1/sessions/${options.sessionId}/messages/${options.messageId}/retry/`,
+    body: null,
+    token: options.token,
+    onEvent: options.onEvent,
+    onError: options.onError,
+  });
 }

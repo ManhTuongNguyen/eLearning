@@ -1159,7 +1159,7 @@ Acceptance criteria:
 
 ## TASK-054 — Implement failed-response retry UI
 
-Status: `[ ]`
+Status: `[x]`
 
 Display retry control when assistant generation fails.
 

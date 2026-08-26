@@ -2,12 +2,81 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 7 TASK-053 complete (next: TASK-054 — failed-response retry UI)
+- **Current Phase**: Phase 7 TASK-054 complete (next: TASK-055 — history screen, first task of Phase 8)
 
 ## Current Active Task
 
-(none — TASK-053 completed; next: TASK-054 — Implement failed-response retry
-UI, seventh task of Phase 7 Mobile Chat.)
+(none — TASK-054 completed; next: TASK-055 — Create history screen, first
+task of Phase 8 History.)
+
+## Archived Tasks
+
+### TASK-054 — Implement failed-response retry UI (COMPLETED 2026-08-26)
+- `src/api/chatStream.ts`: XHR/SSE consumption loop extracted verbatim into
+  private `consumeSseStream({url, body|null, token, onEvent, onError})`;
+  `streamChatTurn` unchanged behaviorally. New `streamRetryTurn(token,
+  sessionId, messageId, onEvent, onError)` POSTs to
+  `/api/v1/sessions/{id}/messages/{message_pk}/retry/` with NO body and no
+  Content-Type header (TASK-042 contract); same frame protocol, same abort
+  semantics.
+- `ChatScreen.tsx`:
+  - Shared `handleTurnEvent` pipeline (start ignored / delta buffered /
+    completed → completeTurn / error → failTurn) now feeds BOTH send and
+    retry; `startRetry(sid, messageId)` mirrors startTurn's token+stale-
+    session guards.
+  - Failed assistant rows render a muted "The response failed to generate."
+    note plus an inline Retry pressable (testID chat-retry-{id},
+    accessibilityRole button, label Retry failed response,
+    accessibilityState.disabled while any stream runs).
+  - `handleRetry(message)`: guarded by sessionId + streaming; clears the
+    banner; re-arms that row LOCALLY exactly like RetryService.prepare_retry
+    does server-side ({status:'pending', content:''}) so it renders as the
+    spinner bubble; points streamingAssistantIdRef at the REAL row id —
+    DeltaBuffer flushes land in-place via the existing id map.
+  - Reused unchanged: completeTurn flips the same row to complete with
+    authoritative text then silently reloads canonical rows;
+    failTurn's optimistic-row drop is a no-op for persisted ids and its
+    resync restores the still-failed row after error frames/transport
+    failures (control returns for another attempt); endTurn cleanup aborts
+    retry streams on unmount/session change too; `streaming` blocks Send
+    AND other retries concurrently.
+- __tests__/chatStream.test.ts (+4 → 21): retry request shape (URL, Bearer,
+  Accept, body undefined, no Content-Type); incremental start/deltas/
+  completed over the retry endpoint; 409 {"detail"} normalized to
+  ApiError(409) with verbatim detail; mid-attempt network drop →
+  ApiError(0).
+- __tests__/ChatScreen.test.tsx (+6 → 27): control only on failed assistant
+  rows (none for user/complete rows); press invokes streamRetryTurn with
+  {token-a, sessionId, messageId} and re-arms the row (spinner, control
+  hidden, send blocked even with a pending draft); deltas grow the SAME
+  persisted row in place and completion removes the failure state + silent
+  canonical swap + composer re-enabled; error frame keeps failure state
+  usable (banner, resynced failed row, second attempt fires again);
+  transport failure shows friendly unreachable banner; concurrency guard —
+  retried row's control vanishes, other failed rows' controls visible but
+  inert (press fires nothing), everything re-enables after completion.
+- Test gotchas hit:
+  - The retried row's own control disappears the moment handleRetry flips
+    it to pending — a "press it twice" assertion must target ANOTHER
+    failed row's control instead (first draft failed on missing
+    chat-retry-701).
+  - canSend requires a non-blank draft: asserting send disabled/enabled
+    around a retry is only meaningful after typing into the composer
+    (empty-draft assertions are vacuous/incorrect).
+- Acceptance: retry invokes backend retry (streamRetryTurn → retry endpoint)
+  ✓; user sees useful error state (inline note + banner + resynced failed
+  row) ✓; successful responses remove failure state (completed frame flips
+  row, control gone) ✓.
+- Gates: pnpm typecheck clean; eslint clean; jest 16 suites 170/170 passed.
+
+#### Sub-step record (all complete)
+1. [x] chatStream.ts — shared consume core + streamRetryTurn binding
+2. [x] ChatScreen.tsx — failed-row Retry control + handleRetry/startRetry
+       wiring through the existing turn pipeline
+3. [x] __tests__/chatStream.test.ts — retry binding tests (+4)
+4. [x] __tests__/ChatScreen.test.tsx — retry UI tests (+6)
+5. [x] Gates green (pnpm typecheck, pnpm lint, jest 170/170 across 16 suites)
+6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-054
 
 ## Archived Tasks
 
