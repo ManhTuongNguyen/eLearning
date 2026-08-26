@@ -109,4 +109,48 @@ describe('api client', () => {
     expect(error.status).toBe(500);
     expect(error.message).toContain('500');
   });
+
+  it('defaults to GET without an Authorization header when no token is given', async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse(200, {healthy: true}));
+
+    await expect(apiRequest('/api/v1/health/')).resolves.toEqual({healthy: true});
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init?.method).toBe('GET');
+    expect(init?.body).toBeUndefined();
+    expect(init?.headers).not.toHaveProperty('Authorization');
+  });
+
+  it('passes through non-object JSON success payloads untouched', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, ['a', 'b']));
+
+    await expect(apiRequest<string[]>('/api/v1/things/')).resolves.toEqual(['a', 'b']);
+  });
+
+  it('ignores non-string error field values and still raises a consistent ApiError', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(400, {
+        level: [{unexpected: 'shape'}, 42],
+        count: 3,
+        nested: {deep: true},
+      }),
+    );
+
+    const error = await expectApiError(apiRequest('/api/v1/profile/', {method: 'PATCH'}));
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(400);
+    expect(error.fields).toEqual({});
+    expect(error.message).toBe('Request failed (400).');
+  });
+
+  it('normalizes an empty JSON error object to a generic message', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(409, {}));
+
+    const error = await expectApiError(apiRequest('/api/v1/sessions/', {method: 'POST'}));
+    expect(error.status).toBe(409);
+    expect(error.fields).toEqual({});
+    expect(error.message).toBe('Request failed (409).');
+  });
 });

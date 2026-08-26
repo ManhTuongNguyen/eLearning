@@ -993,7 +993,7 @@ Acceptance criteria:
 
 ## TASK-045 — Create mobile API client
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement typed API client.
 

@@ -2,31 +2,53 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 6 TASK-044 complete (next: TASK-045 — mobile API
-  client)
+- **Current Phase**: Phase 6 TASK-045 complete (next: TASK-046 — secure token
+  storage)
 
 ## Current Active Task
 
-(none — TASK-044 completed; next: TASK-045 — Create mobile API client:
-typed client with TypeScript types, auth headers, error normalization, JSON
-handling; no `any` for normal API models, consistent API errors, unit tests.
-NOTE: a partial typed client already exists in src/api/{client,auth,profile}.ts
-from earlier tasks — TASK-045 should audit/extend it rather than duplicate.)
-
-#### Sub-step record (all complete)
-1. [x] src/theme/colors.ts (ThemeColors type + light/dark neutral palettes),
-       src/theme/system.ts (useSystemColorScheme seam), ThemeContext.tsx
-       (ThemeProvider/useTheme/setMode), navigationTheme.ts
-2. [x] App.tsx wiring (ThemeProvider outermost, nav theme mapping, StatusBar)
-3. [x] Converted Login/Register/Chat/History/Splash/Settings/Level to tokens;
-       added Theme section (Light/Dark/System radios) to SettingsScreen;
-       added root testIDs login-screen/register-screen/level-screen
-4. [x] __tests__/theme.test.tsx written (15 tests)
-5. [x] Gates green (pnpm typecheck clean, eslint clean, jest 9 suites
-       57/57 passed incl. updated harnesses)
-6. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-044
+(none — TASK-045 completed; next: TASK-046 — Create secure token storage:
+tokens not in plain AsyncStorage, survive restart, logout removes them.
+NOTE: src/auth/{secureStorage,tokens}.ts already exist on react-native-
+keychain from TASK-015 with a passing suite — TASK-046 should audit/extend
+rather than duplicate.)
 
 ## Archived Tasks
+
+### TASK-045 — Create mobile API client (COMPLETED 2026-08-26)
+- Audit found a working partial client: `src/api/client.ts` (apiRequest<T>
+  transport: JSON headers, optional Bearer token, ApiError{status,message,
+  fields} normalization of DRF detail/field errors, network failures →
+  status 0, non-JSON bodies → null payload), `src/api/auth.ts` +
+  `src/api/profile.ts` typed bindings, 5 tests. grep confirmed zero `any`
+  in src/. Extended rather than duplicated.
+- New `src/api/sessions.ts` — models mirroring backend serializers exactly
+  (Session: id/title/topic/topic_hint/learning_level/created_at;
+  ChatMessage: id/role/status/content/sequence/created_at with
+  MessageRole/MessageStatus unions; Paginated<T> DRF envelope) + bindings
+  for every REST resource that exists server-side: listSessions(page?),
+  createSession(topicHint=''), getSession, renameSession, deleteSession
+  (→ void), listMessages(page?). SSE stream/retry deliberately NOT bound —
+  streaming consumption is TASK-049, retry UI TASK-054.
+- apiClient.test.ts extended (+4): default GET without Authorization header
+  when token absent; non-object success payload passthrough; junk-typed
+  error field values ignored → consistent generic ApiError; empty JSON
+  error object → generic message.
+- New sessionsApi.test.ts (7): pagination envelope + ?page= query; empty-body
+  POST creation; topic_hint body; GET/PATCH/DELETE paths+methods+bodies+
+  Bearer headers; message listing shape incl. failed assistant rows.
+- Acceptance: no `any` for API models (types only, `unknown` internally);
+  errors consistently ApiError{status,message,fields}; 16 unit tests for the
+  client layer.
+- Gates: pnpm typecheck clean; eslint clean; jest 10 suites 68/68 passed.
+
+#### Sub-step record (all complete)
+1. [x] src/api/sessions.ts — Session/ChatMessage/Paginated<T> models + six
+       REST bindings
+2. [x] apiClient.test.ts extended (+4 transport edge cases)
+3. [x] __tests__/sessionsApi.test.ts written (7 binding contract tests)
+4. [x] Gates green (pnpm typecheck, pnpm lint, jest 68/68 across 10 suites)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-045
 
 ### TASK-044 — Implement theme system (COMPLETED 2026-08-26)
 - React Context token system (`src/theme/`), deliberately NOT NativeWind:
