@@ -3,13 +3,16 @@
  * topic's generated sample conversation in a modal. The example is pure
  * presentation data — it never becomes part of the user's actual chat
  * history (a note says so explicitly) — and every turn carries a Play/Stop
- * control wired through the TextToSpeechEngine seam; the real Android
- * engine arrives in Phase 12 behind that seam without UI changes. The
- * overlay is dismissible via its Close control and via the Android back
- * button (Modal onRequestClose), and hides itself entirely when closed so
- * nothing leaks into the conversation tree underneath.
+ * control wired through the TextToSpeechEngine seam. Playback state is
+ * managed by the same useSpeechPlayback hook as chat messages (TASK-079),
+ * so example lines behave identically: one line at a time, starting
+ * another halts the current one, failures never crash, and closing or
+ * unmounting the overlay silences the engine. The overlay is dismissible
+ * via its Close control and via the Android back button (Modal
+ * onRequestClose), and hides itself entirely when closed so nothing leaks
+ * into the conversation tree underneath.
  */
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo} from 'react';
 import {
   Modal,
   Pressable,
@@ -24,6 +27,7 @@ import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 import type {TextToSpeechEngine} from '../tts/textToSpeech';
 import {getSpeechEngine} from '../tts/textToSpeech';
+import {useSpeechPlayback} from '../tts/useSpeechPlayback';
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -141,28 +145,18 @@ export function SampleConversationModal({
 }: SampleConversationModalProps) {
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
+  // Shared playback state machine (TASK-078): single playback, overlap
+  // prevention, stale-settlement guard and failure-safe clearing — exactly
+  // the semantics chat messages get.
+  const {speakingId, speak, stop} = useSpeechPlayback(speech);
 
-  const speechRef = useRef(speech);
-  useEffect(() => {
-    speechRef.current = speech;
-  }, [speech]);
-
-  // Closing the overlay halts playback immediately; a fresh open starts clean.
+  // Closing the overlay halts playback immediately; a fresh open starts
+  // clean. Unmount cleanup is handled inside the hook.
   useEffect(() => {
     if (!visible) {
-      speechRef.current.stop();
-      setSpeakingIndex(null);
+      stop();
     }
-  }, [visible]);
-
-  // Unmounting (screen exit) must also silence the engine.
-  useEffect(
-    () => () => {
-      speechRef.current.stop();
-    },
-    [],
-  );
+  }, [visible, stop]);
 
   const handleToggleSpeech = useCallback(
     (index: number) => {
@@ -170,27 +164,13 @@ export function SampleConversationModal({
       if (!turn) {
         return;
       }
-      if (speakingIndex === index) {
-        speechRef.current.stop();
-        setSpeakingIndex(null);
+      if (speakingId === index) {
+        stop();
         return;
       }
-      // Starting another line halts the current one first so playback
-      // never overlaps; nothing plays yet on a first press.
-      if (speakingIndex !== null) {
-        speechRef.current.stop();
-      }
-      setSpeakingIndex(index);
-      speechRef.current
-        .speak(turn.content)
-        .then(() => {
-          setSpeakingIndex(prev => (prev === index ? null : prev));
-        })
-        .catch(() => {
-          setSpeakingIndex(prev => (prev === index ? null : prev));
-        });
+      speak(index, turn.content);
     },
-    [turns, speakingIndex],
+    [turns, speakingId, speak, stop],
   );
 
   if (!visible) {
@@ -218,7 +198,7 @@ export function SampleConversationModal({
         <ScrollView style={styles.body} contentContainerStyle={styles.turns}>
           {turns.map((turn, index) => {
             const isUser = turn.role === 'user';
-            const speaking = speakingIndex === index;
+            const speaking = speakingId === index;
             return (
               <View
                 key={`sample-turn-${index}`}

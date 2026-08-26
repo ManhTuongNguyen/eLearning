@@ -2,9 +2,10 @@
  * Sample conversation modal tests (SPEC TASK-053): ordered example turns
  * with role labels, separation note, accessible/dismissible overlay (Close
  * button + Android back), and per-line TTS controls wired through the
- * injected TextToSpeechEngine seam: speak/stop calls, speaking-state
- * transitions, overlap prevention between lines, and halting playback on
- * close/unmount.
+ * injected TextToSpeechEngine seam via the shared useSpeechPlayback hook
+ * (TASK-079, same playback semantics as chat messages): speak/stop calls,
+ * speaking-state transitions, overlap prevention between lines, failure
+ * clearing without crashes, and halting playback on close/unmount.
  */
 import React from 'react';
 import {
@@ -220,6 +221,42 @@ describe('SampleConversationModal', () => {
     await act(async () => {
       spoken[0]?.release();
     });
+  });
+
+  it('clears the speaking state when an utterance fails instead of crashing', async () => {
+    const stopMock = jest.fn();
+    const failingEngine: TextToSpeechEngine = {
+      speak: () => Promise.reject(new Error('E_TTS_LANGUAGE_UNAVAILABLE')),
+      stop: stopMock,
+    };
+    const utils = await renderModal({speech: failingEngine});
+
+    await fireEvent.press(screen.getByTestId('sample-tts-1'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('sample-tts-1').props.accessibilityLabel).toBe(
+        'Play example line 2',
+      ),
+    );
+
+    // The failure is contained: other lines still play normally afterwards.
+    const {engine, spoken} = makeDeferredEngine();
+    await act(async () => {
+      utils.rerender(
+        <ThemeProvider>
+          <SampleConversationModal
+            visible
+            turns={TURNS}
+            onClose={() => undefined}
+            speech={engine}
+          />
+        </ThemeProvider>,
+      );
+    });
+    await fireEvent.press(screen.getByTestId('sample-tts-0'));
+    expect(spoken.map(call => call.text)).toEqual([
+      'Hello! Ready to practice English?',
+    ]);
   });
 
   it('halts playback when unmounted mid-line', async () => {

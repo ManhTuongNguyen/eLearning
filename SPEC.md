@@ -1643,7 +1643,7 @@ Acceptance criteria:
 
 ## TASK-079 — Add TTS to sample conversation
 
-Status: `[ ]`
+Status: `[x]`
 
 Add TTS controls to sample conversation messages.
 
