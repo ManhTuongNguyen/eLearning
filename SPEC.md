@@ -812,7 +812,7 @@ Acceptance criteria:
 
 ## TASK-037 — Implement conversation summarizer
 
-Status: `[ ]`
+Status: `[x]`
 
 Create a summarization service.
 

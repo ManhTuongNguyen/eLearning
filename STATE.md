@@ -2,15 +2,76 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5A — Conversation Context (TASK-036 complete; next TASK-037)
+- **Current Phase**: Phase 5A — Conversation Context (TASK-037 complete; next TASK-038)
 
 ## Current Active Task
 
-(none — TASK-036 completed; next: TASK-037 — Implement conversation
-summarizer: input = previous summary + messages leaving the recent window,
-output = new summary; must NOT process the whole conversation every time;
-existing summary incorporated, only newly archived messages summarized,
-input boundaries tested, LLM calls mockable)
+(none — TASK-037 completed; next: TASK-038 — Implement summary trigger:
+configurable thresholds; never summarize after every user message; trigger
+only when the configured context threshold is crossed; persist the summary
+boundary; repeated requests must not re-summarize the same messages; tests
+cover boundary behavior)
+
+## Archived Tasks
+
+### TASK-037 — Implement conversation summarizer (COMPLETED 2026-08-26)
+- `conversations/summarizer.py`: `ConversationSummarizer(provider)` wrapping
+  ANY LLMProvider (constructor injection → mockable); `summarize(*,
+  previous_summary="", archived_messages) -> str`. Input is EXACTLY the
+  increment: previous rolling summary + only the `(role, content)` turns that
+  just left the recent window, chronological. The whole conversation is never
+  seen by (or sent to) this service.
+- Request: one CompletionRequest.from_texts — system prompt demanding ONLY a
+  plain-text updated summary (no headings/markdown/quoting/commentary;
+  preserve names, preferences, corrections, open threads) + user turn with
+  optional "Summary of the conversation so far:" block (blank or whitespace-
+  only previous summary = first compaction, block omitted) + the archived
+  batch verbatim as labeled `role: content` lines + write instruction. No
+  model pin / temperature (provider default resolves).
+- Validation (all ValueError pre-call): previous_summary must be str;
+  archived_messages must be non-empty (summarization runs only when messages
+  actually leave the window); entries unpack as (role, content), roles
+  restricted to {user, assistant} via conversations.context.HISTORY_ROLES
+  (reused, single source of truth; "system"/"tool"/case variants rejected),
+  non-blank string content enforced. Mirrors ContextBuilder history rules.
+- Parsing `_parse_summary`: strip + tolerate ONE surrounding ``` fence
+  (optional language tag); blank/whitespace output → LLMResponseError(
+  provider="summaries", model=served). Provider LLMError failures propagate
+  UNCHANGED (identity preserved); non-LLMError unmasked.
+- Logging "conversations.summaries": info success line (model/chars/duration),
+  warning on unusable output (normalized error str + served model). Request/
+  completion payload text never logged (asserted for both paths).
+- Persistence deliberately out of scope: callers own the Session row
+  (summary/summary_message_boundary) — trigger/persistence is TASK-038,
+  async Celery update TASK-039.
+- Tests backend/tests/test_summarizer.py (28 tests + 23 subtests,
+  SimpleTestCase/FakeProvider): stripped result, fenced tolerance (incl.
+  language-tagged), empty-batch rejection without provider call, invalid-role
+  matrix ("system"/"tool"/""/"User"/"USER"/"assistant "/None/5), blank +
+  non-string content, malformed entry shapes (("user",)/(a,b,c)/"user: hi"/
+  None), non-str previous_summary — all no-provider-call; request shape
+  exactly system+user, plain-text system contract, no model/temperature pins;
+  first-compaction omits summary block, existing summary incorporated under
+  header, distinct summaries → distinct prompts, whitespace-only ≡ empty
+  (equal requests), archived lines verbatim/in-order/labeled, ONLY-the-batch
+  boundary (outsider texts absent; exact line slice between headers equals
+  the batch), generator input accepted, determinism, cross-call recording;
+  blank-completion matrix → non-retryable "summaries" errors with served
+  model; auth/availability/base-LLM error identity passthrough; RuntimeError
+  unmasked; log hygiene success+failure (model/error present, SECRET marker
+  from request AND completion absent).
+- Test gotcha: a JSON-looking non-blank completion is ACCEPTED as summary
+  text by design (free-text contract) — failure-log hygiene test had to mark
+  the REQUEST payload instead and force the blank-output warning path.
+- Gates: ruff check/format clean (86 files); pytest 557 passed +173 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/summarizer.py — ConversationSummarizer.summarize(
+       *, previous_summary="", archived_messages) -> str
+2. [x] backend/tests/test_summarizer.py written (28 tests)
+3. [x] Gates green (ruff check/format, pytest 557+173 Postgres, manage.py check)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-037
 
 ## Archived Tasks
 
