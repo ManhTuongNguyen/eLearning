@@ -2,12 +2,65 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 7 TASK-054 complete (next: TASK-055 — history screen, first task of Phase 8)
+- **Current Phase**: Phase 8 TASK-055 complete (next: TASK-056 — session rename UI)
 
 ## Current Active Task
 
-(none — TASK-054 completed; next: TASK-055 — Create history screen, first
-task of Phase 8 History.)
+(none — TASK-055 completed; next: TASK-056 — Implement session rename UI.)
+
+## Archived Tasks
+
+### TASK-055 — Create history screen (COMPLETED 2026-08-26)
+- `src/screens/HistoryScreen.tsx` rewritten from the TASK-043 placeholder to
+  the real session list:
+  - Load effect keyed on reloadKey only; token read through a
+    getAccessToken LATEST-REF seam (AuthContext's value object is recreated
+    per auth-state change — same TASK-048 infinite-loop avoidance as
+    ChatScreen). First page via listSessions(token, 1); backend already
+    orders most-recently-updated first, so delivery order IS display order.
+  - States: history-loading spinner; form-error (role=alert) + history-retry
+    "Try again" button on first-page failure (toErrorMessage mapping, so
+    ApiError(0)/5xx → friendly unreachable copy); history-empty when count 0;
+    FlatList (history-list) of Pressable rows history-item-{id} with title +
+    one-line topic snippet, accessibilityRole button + label.
+  - Pagination: hasMore = page.next !== null; loadedPages counter;
+    history-load-more footer requests loadedPages + 1 and APPENDS results.
+    Guarded against concurrent runs (loading/loadingMore/hasMore check),
+    disabled (+ accessibilityState.disabled) while loading more with label
+    swap Load more ⇄ Loading…. Page failures keep every rendered row and
+    surface the banner above the list; control re-enables for another try.
+  - Row tap → navigation.navigate('Chat', {sessionId}) (pushes, so Android-
+    back returns to History). Pinned placeholder testIDs preserved:
+    history-screen root + history-back Close control (navigation.test).
+- __tests__/HistoryScreen.test.tsx (9): deferred-first-page loading state
+  then ordered render [302,301,300]; empty state; reject-then-resolve retry
+  round-trip (listSessions twice, banner clears); no-token → sign-in-again
+  banner with zero API calls; tap opens chat-screen and loads that session
+  (listMessages token+id); page append order [12,11,10] + control hidden
+  when next null; double-fire guard (deferred page 2, press ×2, call count
+  stays 2, disabled mid-flight, re-enabled after settle); load-more failure
+  keeps rows + re-enables; back pops to underlying chat-no-session.
+- Test gotchas hit:
+  - Final assertion of the double-fire test initially expected the control
+    still enabled after resolving page 2 with next:null — but hiding the
+    exhausted control is CORRECT behavior; fixed the fixture (page 2 now
+    carries a ?page=3 next) so re-enablement is actually observable.
+- navigation.test/App.test unaffected: they mount the real HistoryScreen
+  without mocking sessions; the resulting unmocked-fetch failure lands in
+  the error state inside history-screen while the pinned testIDs stay
+  mounted (same pattern ChatScreen already exercised there).
+- Acceptance: sessions paginated (page-1 load + Load-more append) ✓; most
+  recent first (delivery order preserved, pinned by ordered-render test)
+  ✓; tapping opens chat ✓; loading/empty/error states exist (incl. retry
+  and pagination failure paths) ✓.
+- Gates: pnpm typecheck clean; eslint clean; jest 17 suites 179/179 passed.
+
+#### Sub-step record (all complete)
+1. [x] HistoryScreen.tsx rewrite — load/states/pagination/tap-through UI
+2. [x] __tests__/HistoryScreen.test.tsx written (9 tests)
+3. [x] navigation.test + App.test verified green against the real screen
+4. [x] Gates green (pnpm typecheck, pnpm lint, jest 179/179 across 17 suites)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-055
 
 ## Archived Tasks
 

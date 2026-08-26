@@ -1175,7 +1175,7 @@ Acceptance criteria:
 
 ## TASK-055 — Create history screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Display authenticated user's sessions.
 
