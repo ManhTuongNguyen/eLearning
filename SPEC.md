@@ -1028,7 +1028,7 @@ Acceptance criteria:
 
 ## TASK-047 — Implement authentication state
 
-Status: `[ ]`
+Status: `[x]`
 
 Create application auth state.
 

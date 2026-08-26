@@ -7,12 +7,63 @@
 
 ## Current Active Task
 
-(none — TASK-046 completed; next: TASK-047 — Implement authentication state:
-startup restores authentication, expired access tokens refresh, invalid
-refresh credentials return the user to login. NOTE: AuthContext.tsx from
-TASK-015 already implements restore + single-refresh fallback + logout;
-TASK-047 should audit/extend (e.g. 401-triggered transparent re-auth for
-API calls) rather than duplicate.)
+(none — TASK-047 completed; next: TASK-048 — Create chat screen, first task
+of Phase 7 Mobile Chat.)
+
+## Archived Tasks
+
+### TASK-047 — Implement authentication state (COMPLETED 2026-08-26)
+- Audited TASK-015/046 implementation per prior note: startup restore +
+  refresh fallback + logout existed and were tested; the GAP was mid-session
+  behavior — an expired access token during app usage failed hard with
+  ApiError(401) and dead refresh credentials never forced a return to login.
+  EXTENDED rather than duplicated.
+- `src/auth/AuthContext.tsx`:
+  - Replaced tryRefreshSession with single-flight `refreshAccess()` shared by
+    startup restore AND every 401 arrival (refreshPromiseRef): concurrent
+    callers await ONE network refresh; success persists {new access, same
+    refresh} via saveTokens; rejection clears tokens + user + flips status to
+    unauthenticated exactly once and resolves null. RootNavigator's existing
+    whole-navigator swap lands the user back on Login.
+  - New context method `authedRequest<T>(path, options)` (AuthorizedRequestOptions =
+    Omit<RequestOptions,'token'>; RequestOptions now exported from client.ts):
+    awaits restore settle → requires tokens else ApiError(401 'signed out')
+    without network → first attempt with current access token → ApiError 401
+    triggers refreshAccess + exactly ONE retry with the new token; refresh
+    death rethrows the ORIGINAL 401; non-401 errors and still-failing retries
+    propagate untouched (no loops). busy/error form state untouched.
+  - Startup restore refactored onto refreshAccess (deduplicated refresh logic;
+    getMe-after-refresh failure still ends locally unauthenticated).
+  - LevelScreen/screens deliberately NOT retrofitted: chat/history screens do
+    not exist yet; retrofitting consumers is Phase 7+ work.
+- __tests__/AuthContext.test.tsx extended (+7 authorized-request tests; probe
+  gained request-result text + single/double-fire pressables): Bearer attach
+  without refresh; 401→one refresh→retry succeeds with new token + saveTokens
+  persisted + stays authenticated; invalid refresh credentials → clearTokens +
+  user none + status unauthenticated (= back at Login) + original fail:401 +
+  exactly one fetch and one refresh; non-401 (500) passthrough with no
+  refresh/clear; retry-still-failing stops at one retry (2 fetches, 1 refresh);
+  concurrent double-request holds refresh open and proves single-flight
+  (count stays 1 across macrotask drains) then both succeed after release
+  (4 fetches total); signed-out rejection with zero fetches.
+- Test gotchas hit:
+  - toHaveTextContent is substring matching — assertion string must match the
+    probe's actual template (single ok: prefix), not an idealized one.
+  - @types/react-native setTimeout callback signature rejects passing `resolve`
+    directly — wrap in arrow.
+  - Single-flight determinism: gate refreshAccessToken with a manually released
+    promise, assert call count stays 1 after setTimeout(0) drains, then release.
+- Acceptance: startup restores authentication (pre-existing, retested);
+  expired access tokens refresh transparently mid-session (authedRequest);
+  invalid refresh credentials return the user to login (forced local logout →
+  AuthNavigator swap).
+- Gates: pnpm typecheck clean; eslint clean; jest 11 suites 81/81 passed.
+
+#### Sub-step record (all complete)
+1. [x] AuthContext.tsx — single-flight refreshAccess + authedRequest on context
+2. [x] __tests__/AuthContext.test.tsx — authorized-request block (+7)
+3. [x] Gates green (pnpm typecheck, pnpm lint, jest 81/81 across 11 suites)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-047
 
 ## Archived Tasks
 

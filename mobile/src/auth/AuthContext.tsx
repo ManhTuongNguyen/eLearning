@@ -1,4 +1,12 @@
-/** Application authentication state backed by secure token storage. */
+/**
+ * Application authentication state backed by secure token storage.
+ *
+ * Owns the full session lifecycle: startup restore, login/register/logout,
+ * and (TASK-047) mid-session transparent re-auth — `authedRequest` retries
+ * once after a single-flight access-token refresh when the backend answers
+ * 401, and ends the local session (returning the user to Login via
+ * RootNavigator) when refresh credentials are no longer accepted.
+ */
 import React, {
   createContext,
   useCallback,
@@ -11,11 +19,15 @@ import React, {
 
 import * as authApi from '../api/auth';
 import type {RegisterInput} from '../api/auth';
-import {ApiError} from '../api/client';
+import {apiRequest, ApiError} from '../api/client';
+import type {RequestOptions} from '../api/client';
 import {clearTokens, loadTokens, saveTokens} from './secureStorage';
 import type {AuthTokens, AuthUser} from './tokens';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
+
+/** Options for authenticated requests; the Bearer token is managed here. */
+export type AuthorizedRequestOptions = Omit<RequestOptions, 'token'>;
 
 export interface AuthContextValue {
   status: AuthStatus;
@@ -24,6 +36,12 @@ export interface AuthContextValue {
   busy: boolean;
   /** Current access token for authenticated API calls once restored. */
   getAccessToken(): Promise<string | null>;
+  /**
+   * Authenticated API request with transparent re-auth: a 401 triggers one
+   * shared refresh attempt and a single retry; an unusable refresh ends the
+   * session locally and rethrows the original error.
+   */
+  authedRequest<T>(path: string, options?: AuthorizedRequestOptions): Promise<T>;
   login(identifier: string, password: string): Promise<void>;
   register(input: RegisterInput): Promise<void>;
   logout(): Promise<void>;
@@ -39,6 +57,9 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   const tokensRef = useRef<AuthTokens | null>(null);
   const restorePromiseRef = useRef<Promise<void> | null>(null);
   const restoreResolverRef = useRef<(() => void) | null>(null);
+  // In-flight refresh shared by every 401 arrival so concurrent callers
+  // trigger exactly one network refresh.
+  const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
   // Resolves once the initial session restore has finished, so late callers
   // (e.g. screens mounted alongside the provider) read a settled token state.
   if (!restorePromiseRef.current) {
@@ -47,20 +68,40 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     });
   }
 
-  const tryRefreshSession = useCallback(
-    async (tokens: AuthTokens): Promise<AuthUser | null> => {
-      try {
-        const {access} = await authApi.refreshAccessToken(tokens.refresh);
-        const nextTokens = {...tokens, access};
+  /**
+   * Single-flight access-token refresh. Resolves the new access token, or
+   * null once the session was ended locally because the refresh credentials
+   * were rejected (tokens cleared, status back to unauthenticated).
+   */
+  const refreshAccess = useCallback(async (): Promise<string | null> => {
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
+    }
+    const current = tokensRef.current;
+    if (!current) {
+      return null;
+    }
+    const attempt = authApi
+      .refreshAccessToken(current.refresh)
+      .then(async ({access}) => {
+        const nextTokens = {...current, access};
         tokensRef.current = nextTokens;
         await saveTokens(nextTokens);
-        return await authApi.getMe(access);
-      } catch {
+        return access;
+      })
+      .catch(async () => {
+        await clearTokens();
+        tokensRef.current = null;
+        setUser(null);
+        setStatus('unauthenticated');
         return null;
-      }
-    },
-    [],
-  );
+      })
+      .finally(() => {
+        refreshPromiseRef.current = null;
+      });
+    refreshPromiseRef.current = attempt;
+    return attempt;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,17 +123,23 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
             setStatus('authenticated');
           }
         } catch {
-          // Access token expired or revoked: fall back to a single refresh.
-          const restored = await tryRefreshSession(tokens);
-          if (!cancelled) {
-            if (restored) {
-              setUser(restored);
+          // Access token expired or revoked: fall back to one shared refresh.
+          const access = await refreshAccess();
+          if (!cancelled && access) {
+            try {
+              setUser(await authApi.getMe(access));
               setStatus('authenticated');
-            } else {
+            } catch {
               await clearTokens();
               tokensRef.current = null;
-              setStatus('unauthenticated');
+              if (!cancelled) {
+                setUser(null);
+                setStatus('unauthenticated');
+              }
             }
+          } else if (!cancelled) {
+            // Credentials were already cleared by refreshAccess.
+            setStatus('unauthenticated');
           }
         }
       } finally {
@@ -105,7 +152,7 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     return () => {
       cancelled = true;
     };
-  }, [tryRefreshSession]);
+  }, [refreshAccess]);
 
   const applyLoginResponse = useCallback(async (response: authApi.LoginResponse) => {
     const tokens: AuthTokens = {access: response.access, refresh: response.refresh};
@@ -170,6 +217,34 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     [runAction],
   );
 
+  const authedRequest = useCallback(
+    async <T,>(path: string, options: AuthorizedRequestOptions = {}): Promise<T> => {
+      await restorePromiseRef.current;
+      const tokens = tokensRef.current;
+      if (!tokens) {
+        throw new ApiError(401, 'You are signed out. Please log in again.');
+      }
+      try {
+        return await apiRequest<T>(path, {...options, token: tokens.access});
+      } catch (err) {
+        // Only an authentication failure triggers transparent re-auth;
+        // network/validation/server errors surface untouched.
+        if (!(err instanceof ApiError) || err.status !== 401) {
+          throw err;
+        }
+        const access = await refreshAccess();
+        if (!access) {
+          // Session ended locally (RootNavigator is back at Login);
+          // surface the original authentication failure.
+          throw err;
+        }
+        // A single retry; a still-failing retry propagates without looping.
+        return apiRequest<T>(path, {...options, token: access});
+      }
+    },
+    [refreshAccess],
+  );
+
   const value = useMemo(
     () => ({
       status,
@@ -180,11 +255,12 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
         await restorePromiseRef.current;
         return tokensRef.current?.access ?? null;
       },
+      authedRequest,
       login,
       register,
       logout,
     }),
-    [status, user, error, busy, login, register, logout],
+    [status, user, error, busy, authedRequest, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
