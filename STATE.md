@@ -2,11 +2,75 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 9 TASK-061 complete (next: TASK-062 — improvement service)
+- **Current Phase**: Phase 9B TASK-062 complete (next: TASK-063 — improvement API)
 
 ## Current Active Task
 
-(none — TASK-061 completed; next: TASK-062 — Implement improvement service.)
+(none — TASK-062 completed; next: TASK-063 — Implement improvement API.)
+
+## Archived Tasks
+
+### TASK-062 — Implement improvement service (COMPLETED 2026-08-26)
+- `backend/conversations/improvement.py` (new) — `ImprovementService` +
+  frozen `Improvement` value object (`original`, `improved`,
+  `explanation`) following the established topics.py/suggestions.py
+  conventions (provider-injected `improve()`, never streams).
+  - DESIGN DECISION: the LLM is asked ONLY for
+    `{"improved", "explanation"}`; the service composes `original` from
+    the VERBATIM stripped input. TASK-063/064 require the original message
+    remain unchanged — trusting a model echo could let a paraphrase
+    masquerade as the learner's words. The VO still carries all three
+    fields per SPEC.
+  - Input validation before ANY provider call (ValueError, zero requests):
+    level ∈ Level.values, non-blank string original_message.
+  - User prompt: improve-instruction header + level line (AUTO → infer
+    appropriate level for the explanation; concrete CEFR echoed verbatim +
+    "write the explanation so a learner at that level understands it") +
+    quoted message. System prompt demands ONLY one JSON object with the
+    exact two-key shape, fixes grammar/spelling/word choice/phrasing while
+    preserving meaning and tone, explicitly allows improved == original for
+    already-correct messages ("return it unchanged and say so briefly"),
+    and pins explanation brevity (one or two short sentences).
+  - Output validation: both fields non-empty strings stripped on ingest;
+    wrong key names/blanks/non-strings → LLMResponseError(
+    provider="improvement", model=served); extra keys ignored;
+    fence/prose-tolerant `_extract_json_object`. Improved == original is
+    LEGAL (already-correct path). Purity: nothing persisted, no DB access.
+  - Logging hygiene: INFO logs model/duration only; WARNING logs the
+    normalized error only; payload text never logged.
+- `backend/tests/test_improvement_service.py` (25 tests + 43 subtests,
+  all SimpleTestCase/mock-provider): frozen/comparing value object +
+  non-blank field invariants; zero-call input-validation matrix (bad
+  levels incl. lowercase/auto, blank/non-string message); happy paths
+  (verbatim stripped fields + trimmed original, model echo NEVER used for
+  original even when present, all levels accepted incl. AUTO,
+  already-correct keeps improved == original, [system,user] request shape,
+  prompt composition pins — JSON/two-key system prompt, message quote,
+  concrete-level echo vs AUTO, distinct prompts per distinct messages,
+  fenced + prose-wrapped + extra-keys tolerance); invalid-output matrix
+  (23 shapes: prose/list/scalars/truncated/{}/wrong key names/missing/
+  blank/non-string fields/python-fence/garbage → retryable=False,
+  provider="improvement", served model attached); provider-failure
+  passthrough (availability identical instance + retryable, auth error,
+  non-LLM unmasked); logging hygiene (success log names model but no
+  payload text; failure warning carries neither completion nor input).
+- Gates: uv run ruff check clean; ruff format --check clean (99 files);
+  manage.py check clean; full pytest DB_ENGINE=sqlite3 → 771 passed /
+  3 skipped / 293 subtests (bare pytest still hits the PRE-EXISTING local
+  Postgres auth issue; README sqlite3 fallback used).
+- Acceptance: grammar/wording issues can be corrected ✓ (correction task
+  pinned by system-prompt contract + parsed improved field); explanation
+  is concise ✓ (brevity demanded in system prompt, level-appropriate via
+  level line); valid structured output enforced ✓ (exhaustive invalid-
+  output matrix); tests mock LLM behavior ✓ (FakeProvider seam, zero
+  network).
+
+#### Sub-step record (all complete)
+1. [x] backend/conversations/improvement.py — ImprovementService +
+       Improvement value object
+2. [x] backend/tests/test_improvement_service.py (25 tests + 43 subtests)
+3. [x] Gates green (ruff check/format; manage.py check; sqlite3 pytest 771)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-062
 
 ## Archived Tasks
 

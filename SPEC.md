@@ -1308,7 +1308,7 @@ Acceptance criteria:
 
 ## TASK-062 — Implement improvement service
 
-Status: `[ ]`
+Status: `[x]`
 
 Create LLM service for improving a user's English message.
 
