@@ -882,7 +882,7 @@ Acceptance criteria:
 
 ## TASK-040 — Implement user-message creation service
 
-Status: `[ ]`
+Status: `[x]`
 
 Create an application service for adding user messages.
 

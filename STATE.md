@@ -2,15 +2,81 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 5A complete — Conversation Context done (TASK-039
-  complete; next TASK-040, Phase 5B Chat Generation)
+- **Current Phase**: Phase 5B chat write-side done (TASK-040 complete; next
+  TASK-041, streaming chat endpoint)
 
 ## Current Active Task
 
-(none — TASK-039 completed; next: TASK-040 — Implement user-message creation
-service: validate session ownership, store user message, build context,
-create assistant generation state; transactional persistence; failed
-generation must not corrupt the conversation)
+(none — TASK-040 completed; next: TASK-041 — Implement POST
+/api/v1/sessions/{id}/messages/stream/: auth + ownership, save user message,
+build context, start LLM stream, SSE text chunks, persist final assistant
+message onto the pending row, emit completion event; failed generation must
+be retryable)
+
+## Archived Tasks
+
+### TASK-040 — Implement user-message creation service (COMPLETED 2026-08-26)
+- `conversations/chat.py`:
+  - `PreparedTurn(user_message, assistant_message, request)` frozen dataclass —
+    everything TASK-041 needs: the committed rows plus the ready-to-stream
+    CompletionRequest.
+  - `UserMessageService(context_builder=None)` — constructor injection of the
+    ContextBuilder (tests substitute a recording fake); default builds the real
+    one. NO provider involvement: this service makes no LLM call.
+  - `create_turn(*, session_id, user, text)`: strip-validate text first
+    (non-str / blank-after-strip → ValueError BEFORE any write), then ONE
+    transaction.atomic block: Session.objects.select_for_update().get(pk,
+    user) → foreign and nonexistent sessions are the same DoesNotExist (no
+    existence leak; upstream maps to 404; row lock also serializes concurrent
+    sequence allocation per session) → Message.append user (role=user,
+    status=complete, stored content stripped) → Message.append assistant
+    (pending, blank) → context build → on_commit(schedule_session_summary_update).
+  - `_build_request`: history = session.messages filtered status=complete AND
+    boundary < sequence < current sequence (current message never duplicated;
+    pending/failed assistant rows carry no context), chronological via
+    .order_by("sequence").values_list("role", "content"), windowed through
+    select_recent_messages; topic reconstructed as GeneratedTopic(title=
+    session.title, description=session.topic); summary + learning_level from
+    the session row. Delegates entirely to ContextBuilder.
+  - Summary wiring (the deferred TASK-039 integration): every turn schedules
+    exactly one post-commit summary check; rollback enqueues nothing.
+  - Logging "conversations.chat": single info line with session/user-message/
+    assistant-message ids + duration. Message text NEVER logged.
+  - Failure semantics: builder failure inside the block rolls back BOTH rows
+    (conversation untouched — acceptance criterion); later stream failure is
+    TASK-041's pending→failed transition on the already-committed row.
+- Tests backend/tests/test_chat_service.py (34 tests): frozen value object;
+  non-str + blank matrices rejected with zero writes; stripping; stranger +
+  missing session → DoesNotExist with zero writes; sequences 1/2 then 3/4;
+  persisted row states incl. is_retryable False while pending; fresh-request
+  shape (system+user only, no model/temperature pins); history verbatim
+  chronological between system and current; window=5 tail-only over 9 seeded
+  turns; archived head excluded after boundary update (turns ≤8 absent);
+  failed/pending assistant rows excluded from history; summary section
+  present/absent; topic reconstructed into title/scenario lines; B2 vs AUTO
+  level lines; builder-failure rollback of both rows + no enqueue;
+  success → exactly one drained on_commit callback carrying session pk
+  (nothing before commit), two turns → two callbacks; injected builder
+  receives exact assembly kwargs (level/topic-as-GeneratedTopic/summary/
+  recent_messages/current_message) and its request is returned verbatim;
+  default builder is a real ContextBuilder; log hygiene (ids present,
+  SECRET marker absent).
+- Test gotchas hit:
+  - Message.append defaults ASSISTANT rows to status=pending — history seed
+    fixtures MUST pass status=COMPLETE explicitly or the service's
+    complete-only filter silently drops them (first run caught 3 tests).
+  - Django 6 has no captureOnCommitCallbacks — drain connection.run_on_commit
+    manually (entries are (sids, func, robust)); monkeypatched module symbol
+    IS picked up because the on_commit lambda resolves the global at call time.
+- Gates: ruff check/format clean (92 files); pytest 642 passed +202 subtests
+  (Postgres); manage.py check clean.
+
+#### Sub-step record (all complete)
+1. [x] conversations/chat.py — UserMessageService.create_turn + PreparedTurn +
+       validation + transactional scheduling + logging
+2. [x] backend/tests/test_chat_service.py written (34 tests)
+3. [x] Gates green (ruff check/format, pytest 642+202 Postgres, manage.py check)
+4. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-040
 
 ## Archived Tasks
 
