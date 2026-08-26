@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.db import transaction
 from django.http import Http404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -10,6 +11,7 @@ from rest_framework.views import APIView
 from conversations.models import Message
 from vocabulary.models import VocabularyItem
 from vocabulary.serializers import VocabularyItemSerializer, VocabularySaveSerializer
+from vocabulary.tasks import schedule_vocabulary_enrichment
 
 
 class VocabularySaveView(APIView):
@@ -32,8 +34,12 @@ class VocabularySaveView(APIView):
     duplicate rows — while a new expression returns 201. Re-saving is never
     an error, matching the immediate-save success-toast flow.
 
-    Scheduling of post-commit enrichment is TASK-067's transaction.on_commit
-    hook; until then nothing background work is enqueued here.
+    New items schedule their post-commit enrichment (TASK-067) inside the
+    same atomic block that creates them:
+    ``transaction.on_commit`` fires only after COMMIT, so a rolled-back
+    transaction never enqueues anything and a committed one enqueues
+    exactly one :func:`~vocabulary.tasks.enrich_vocabulary_item` job. The
+    duplicate shortcut deliberately schedules nothing.
     """
 
     permission_classes = [IsAuthenticated]
@@ -50,13 +56,15 @@ class VocabularySaveView(APIView):
         ).first()
         if existing is not None:
             return Response(VocabularyItemSerializer(existing).data)
-        item = VocabularyItem.objects.create(
-            user=request.user,
-            expression=expression,
-            normalized_expression=normalized,
-            source_message=message,
-            source_session=message.session if message is not None else None,
-        )
+        with transaction.atomic():
+            item = VocabularyItem.objects.create(
+                user=request.user,
+                expression=expression,
+                normalized_expression=normalized,
+                source_message=message,
+                source_session=message.session if message is not None else None,
+            )
+            schedule_vocabulary_enrichment(item.pk)
         return Response(VocabularyItemSerializer(item).data, status=201)
 
     def _resolve_source(self, message_pk: int | None) -> Message | None:

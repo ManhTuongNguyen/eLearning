@@ -6,8 +6,8 @@ the optional source message (foreign/missing ids are indistinguishable 404s),
 the immediate-save JSON contract (verbatim words AND phrases, pending status,
 empty enrichment fields), the deterministic idempotent duplicate policy
 (case/whitespace-insensitive match returns the existing row unchanged,
-distinct users stay independent) and purity (nothing scheduled, bounded
-query count — no LLM or Celery work on the save path).
+distinct users stay independent) and immediacy (the only deferred work is
+TASK-067's single post-commit enrichment hook; no LLM work on the save path).
 """
 
 import pytest
@@ -355,13 +355,14 @@ class TestDuplicateBehavior:
 
 
 class TestImmediacyAndPurity:
-    def test_save_enqueues_no_background_work(self, chat_api):
+    def test_save_registers_exactly_the_post_commit_enrichment_hook(self, chat_api):
+        """TASK-067: the only deferred work is the single enrichment hook."""
         callbacks_before = list(connection.run_on_commit)
 
         response = chat_api.post(SAVE_URL, {"expression": "set off"}, format="json")
 
         assert response.status_code == 201
-        assert list(connection.run_on_commit) == callbacks_before
+        assert len(connection.run_on_commit) == len(callbacks_before) + 1
 
     def test_new_save_stays_within_a_bounded_query_budget(
         self, chat_api, django_assert_max_num_queries

@@ -1413,7 +1413,7 @@ Acceptance criteria:
 
 ## TASK-067 — Implement post-commit enrichment task scheduling
 
-Status: `[ ]`
+Status: `[x]`
 
 After vocabulary creation, enqueue enrichment using a transaction commit hook.
 

@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 10 TASK-066 complete (next: TASK-067 — post-commit enrichment scheduling)
+- **Current Phase**: Phase 10 TASK-067 complete (next: TASK-068 — vocabulary enrichment task)
 
 ## Current Active Task
 
