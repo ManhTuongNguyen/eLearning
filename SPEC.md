@@ -1044,7 +1044,7 @@ Acceptance criteria:
 
 ## TASK-048 — Create chat screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement the main conversation UI.
 

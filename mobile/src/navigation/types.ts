@@ -9,7 +9,8 @@ export type AuthStackParamList = {
 
 /** Stack shown to authenticated users. */
 export type MainStackParamList = {
-  Chat: undefined;
+  /** Active conversation; absent until a session is opened/created. */
+  Chat: {sessionId?: number} | undefined;
   History: undefined;
   Settings: undefined;
   /** Learning-level editor pushed from Settings (SPEC TASK-018). */
@@ -19,6 +20,8 @@ export type MainStackParamList = {
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 export type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, 'Register'>;
+
+export type ChatScreenProps = NativeStackScreenProps<MainStackParamList, 'Chat'>;
 
 export type LevelScreenProps = NativeStackScreenProps<MainStackParamList, 'Level'>;
 

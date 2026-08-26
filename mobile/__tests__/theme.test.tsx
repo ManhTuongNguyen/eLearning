@@ -23,6 +23,9 @@ const mockSystemState: {
   listeners: Array<(next: SystemScheme) => void>;
 } = {current: 'light', listeners: []};
 
+// Stable identity across renders: consumers may key effects on it.
+const mockGetAccessToken = async () => 'token';
+
 jest.mock('../src/theme/system', () => ({
   __setSystemScheme: (scheme: SystemScheme) => {
     mockSystemState.current = scheme;
@@ -52,7 +55,7 @@ jest.mock('../src/auth/AuthContext', () => ({
     user: {id: 1, username: 'alice', email: 'alice@example.com'},
     busy: false,
     logout: jest.fn(),
-    getAccessToken: async () => 'token',
+    getAccessToken: mockGetAccessToken,
   }),
 }));
 
@@ -308,7 +311,7 @@ describe('screens consume theme tokens', () => {
     expect(backgroundOf('login-screen')).toBe(darkColors.background);
   });
 
-  it('the chat placeholder background follows the active palette', async () => {
+  it('the chat screen background follows the active palette', async () => {
     await render(
       <ThemeProvider>
         <ChatScreen {...chatProps} />

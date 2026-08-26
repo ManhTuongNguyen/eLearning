@@ -2,13 +2,78 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-26
-- **Current Phase**: Phase 6 TASK-046 complete (next: TASK-047 —
-  authentication state)
+- **Current Phase**: Phase 7 TASK-048 complete (next: TASK-049 — SSE mobile
+  client)
 
 ## Current Active Task
 
-(none — TASK-047 completed; next: TASK-048 — Create chat screen, first task
-of Phase 7 Mobile Chat.)
+(none — TASK-048 completed; next: TASK-049 — Implement SSE mobile client,
+second task of Phase 7 Mobile Chat.)
+
+## Archived Tasks
+
+### TASK-048 — Create chat screen (COMPLETED 2026-08-26)
+- `src/navigation/types.ts`: MainStackParamList.Chat now
+  `{sessionId?: number} | undefined` (TASK-051 navigates here after session
+  creation); ChatScreenProps alias added.
+- `src/screens/ChatScreen.tsx` rewritten from placeholder to the real
+  conversation shell:
+  - Header keeps the pinned testIDs chat-open-history/chat-open-settings
+    (App.test + navigation.test depend on them) as accent links beside the
+    title; chat-screen root testID preserved for theme probe.
+  - Load effect keyed on (sessionId, reloadKey) via getAccessToken LATEST-REF
+    seam — auth-state transitions never refetch behind the user's back;
+    first page of listMessages sorted by sequence ascending (chronological
+    guarantee independent of delivery order).
+  - States: loading spinner (chat-loading), load-error (form-error +
+    chat-retry re-run), no-session empty state (chat-no-session, composer
+    withheld until a conversation exists), in-conversation empty state
+    (chat-empty ListEmptyComponent).
+  - Message list FlatList: user bubbles primary/right, assistant surface/
+    left, per-message testID chat-message-{id}.
+  - Composer (chat-composer): multiline TextInput + Send Pressable; send
+    disabled while trimmed draft is blank (accessibilityState.disabled);
+    successful send appends optimistic local echo (synthetic negative id,
+    next sequence) chronologically and clears the draft. Deliberate seam:
+    NO wire call — the only send endpoint streams, consuming it IS TASK-049;
+    KeyboardAvoidingView shell (android undefined behavior, iOS padding)
+    mirrors LoginScreen.
+- __tests__/ChatScreen.test.tsx (8): deferred-promise loading state;
+  empty-session state with composer present; chronological order regardless
+  of delivery order (queryAllByTestId tree order); send appends after all
+  loaded messages + clears composer; disabled matrix blank→whitespace→text;
+  error+retry round-trip (reject-then-resolve, listMessages called exactly
+  twice); no-param no-fetch empty state; shell structure (header/list/
+  composer inside chat-screen root).
+- Test gotchas hit:
+  - RNTL v14 un-awaited fireEvent CORRUPTS THE REST OF THE FILE (same
+    family as the act() note in TASK-044): every changeText/press must be
+    awaited or subsequent renders never mount (findBy timeouts).
+  - RN Pressable does NOT keep raw .props.disabled — read
+    accessibilityState.disabled instead.
+  - Host elements expose .type as string ('View'), composite components are
+    unreachable via screen UNSAFE_* APIs in v14 (removed) — assert structure
+    by containment, not component identity.
+  - Unconditional setMessages([]) inside an effect whose deps include an
+    UNSTABLE getAccessToken (theme.test's old inline-arrow mock) = infinite
+    effect loop → worker OOM. Fixed two ways: idempotent resets (return prev
+    array when already empty) + hoisted stable mockGetAccessToken in
+    theme.test; latest-ref removes getAccessToken from load-effect deps.
+- Acceptance: user can enter and send a message (append + clear pinned);
+  messages render chronologically (sorted by sequence, appended last);
+  UI works with keyboard (KeyboardAvoidingView shell, LoginScreen parity).
+- Gates: pnpm typecheck clean; eslint clean; jest 12 suites 89/89 passed.
+
+#### Sub-step record (all complete)
+1. [x] navigation/types.ts — Chat params {sessionId?: number} +
+       ChatScreenProps alias
+2. [x] src/screens/ChatScreen.tsx rewrite — header, FlatList message list
+       (sequence-sorted), composer + send, loading/error/empty states,
+       KeyboardAvoidingView, optimistic send seam
+3. [x] __tests__/ChatScreen.test.tsx written (8 tests); theme.test wording
+       updated (placeholder → screen)
+4. [x] Gates green (pnpm typecheck, pnpm lint, jest 89/89 across 12 suites)
+5. [x] SPEC.md marked [x]; STATE archived; commit feat: complete TASK-048
 
 ## Archived Tasks
 
