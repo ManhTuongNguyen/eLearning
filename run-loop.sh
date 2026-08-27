@@ -30,9 +30,13 @@ while true; do
       6. IMMEDIATELY UPDATE 'STATE.md': Mark the completed sub-step as [x] right after finishing it before moving to the next sub-step.
       7. Fix any errors or test failures encountered.
       8. ONLY WHEN ALL sub-steps and acceptance criteria pass:
-         - Change Status: \`[ ]\` to Status: \`[x]\` in 'SPEC.md'.
-         - RESET the '## Current Active Task' section in 'STATE.md' back to EMPTY template for the next task.
-         - Commit code changes to git with message 'feat: complete TASK-XXX'.
+        - Change Status: \`[ ]\` to Status: \`[x]\` in 'SPEC.md'.
+        - UPDATE 'STATE.md': Advance 'Current Phase' in Metadata, and SET '## Current Active Task' strictly to this exact text:
+          - **Task ID**:
+          - **Sub-steps**:
+            - [ ]
+          - **Status**: Empty
+        - Commit code changes to git with message 'feat: complete TASK-XXX'.
     "
 
   EXIT_CODE=$?
