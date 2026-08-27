@@ -1831,7 +1831,7 @@ Acceptance criteria:
 
 ## TASK-089 — Implement serverless message improvement
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement English improvement directly through OpenRouter.
 

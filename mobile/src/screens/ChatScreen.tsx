@@ -75,6 +75,7 @@ import {useSpeechPlayback} from '../tts/useSpeechPlayback';
 import {useApplicationMode} from '../mode/ModeContext';
 import {getLocalDatabase} from '../db/database';
 import {createOpenRouterClient} from '../serverless/openrouterClient';
+import {generateImprovement} from '../serverless/improvement';
 import {generateSuggestions} from '../serverless/suggestions';
 import {loadServerlessOpenRouterConfig} from '../serverless/settings';
 import {getLearningProfile} from '../db/profileStore';
@@ -888,12 +889,14 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   }, [mode]);
 
   /**
-   * TASK-064: improve one selected user message through the read-only
-   * improvement endpoint. The result lands in a bottom sheet that shows
-   * the original verbatim, the suggested rewrite and a short explanation;
-   * nothing about the stored message changes. Stale responses (session
-   * switched, newer request started, or the sheet explicitly dismissed)
-   * are dropped instead of reopening stale UI.
+   * TASK-064/089: improve one selected user message. Server mode asks the
+   * read-only improvement endpoint; serverless mode generates locally
+   * through the user's own OpenRouter key — no backend request either way.
+   * The result lands in a bottom sheet that shows the original verbatim,
+   * the suggested rewrite and a short explanation; nothing about the stored
+   * message changes. Stale responses (session switched, newer request
+   * started, or the sheet explicitly dismissed) are dropped instead of
+   * reopening stale UI.
    */
   const startImprovement = useCallback((sid: number, messageId: number) => {
     const requestId = ++improvementRequestRef.current;
@@ -902,6 +905,40 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setImprovementLoading(true);
     (async () => {
       try {
+        if (mode === 'serverless') {
+          // Serverless mode (TASK-089): correct the message locally with an
+          // LLM call using the user's own OpenRouter key. No backend involved.
+          const currentSession = sessionIdRef.current;
+          const userMessage = messagesRef.current.find(m => m.id === messageId);
+          if (currentSession === undefined || !userMessage) {
+            return;
+          }
+
+          // Load serverless OpenRouter configuration and create client
+          const serverlessConfig = await loadServerlessOpenRouterConfig();
+          if (!serverlessConfig) {
+            return;
+          }
+          const client = createOpenRouterClient(serverlessConfig);
+
+          // Load learning profile from local storage
+          const db = await getLocalDatabase();
+          const profile = await getLearningProfile(db);
+
+          const result = await generateImprovement(client, {
+            level: profile.level,
+            originalMessage: userMessage.content,
+          });
+
+          if (
+            sessionIdRef.current !== currentSession ||
+            improvementRequestRef.current !== requestId
+          ) {
+            return;
+          }
+          setImprovement({...result, messageId});
+        } else {
+        // Server mode (TASK-063): ask the backend to improve the message.
         let token: string | null = null;
         try {
           token = await getAccessTokenRef.current();
@@ -923,6 +960,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           return;
         }
         setImprovement({...result, messageId});
+        }
       } catch (err) {
         if (
           sessionIdRef.current === sid &&
@@ -936,7 +974,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         }
       }
     })();
-  }, []);
+  }, [mode]);
 
   /** Sheet dismissal also invalidates any in-flight improvement request. */
   const closeImprovement = useCallback(() => {
