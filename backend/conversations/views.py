@@ -8,9 +8,16 @@ from functools import lru_cache
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, serializers, status
+from rest_framework.exceptions import APIException
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+
+class Conflict(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Conflict."
+    default_code = "conflict"
 
 from conversations.chat import RetryService, UserMessageService, finalize_turn
 from conversations.improvement import ImprovementService
@@ -115,7 +122,7 @@ class SessionCollectionView(generics.ListAPIView):
             topic = service.generate(level=profile.level, hint=hint)
             sample = service.generate_sample(topic=topic, level=profile.level)
         except LLMError as exc:
-            return self._error_response(exc)
+            raise exc
         session = Session.objects.create(
             user=request.user,
             title=topic.title,
@@ -126,11 +133,6 @@ class SessionCollectionView(generics.ListAPIView):
         data = SessionSerializer(session).data
         data["sample_conversation"] = asdict(sample)
         return Response(data, status=status.HTTP_201_CREATED)
-
-    @staticmethod
-    def _error_response(exc: LLMError) -> Response:
-        code = status.HTTP_503_SERVICE_UNAVAILABLE if exc.retryable else status.HTTP_502_BAD_GATEWAY
-        return Response({"detail": str(exc)}, status=code)
 
 
 class SessionDetailView(generics.RetrieveDestroyAPIView):
@@ -275,7 +277,7 @@ class MessageRetryView(APIView):
         except Message.DoesNotExist:
             raise Http404("No Message matches the given query.") from None
         except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+            raise Conflict(str(exc))
         events = finalize_turn(
             prepared.assistant_message,
             llm_views.get_streaming_service().stream(prepared.request),
@@ -316,10 +318,7 @@ class MessageSuggestionsView(APIView):
         except Message.DoesNotExist:
             raise Http404("No Message matches the given query.") from None
         if message.status != Message.Status.COMPLETE or not message.content.strip():
-            return Response(
-                {"detail": "Suggestions require a completed, non-empty message."},
-                status=status.HTTP_409_CONFLICT,
-            )
+            raise Conflict("Suggestions require a completed, non-empty message.")
         history = (
             session.messages.filter(
                 status=Message.Status.COMPLETE,
@@ -336,12 +335,7 @@ class MessageSuggestionsView(APIView):
                 history=select_recent_messages(history),
             )
         except LLMError as exc:
-            code = (
-                status.HTTP_503_SERVICE_UNAVAILABLE
-                if exc.retryable
-                else status.HTTP_502_BAD_GATEWAY
-            )
-            return Response({"detail": str(exc)}, status=code)
+            raise exc
         return Response({"replies": list(suggestions.replies)})
 
 
@@ -377,22 +371,14 @@ class MessageImprovementView(APIView):
         except Message.DoesNotExist:
             raise Http404("No Message matches the given query.") from None
         if message.role != Message.Role.USER or not message.content.strip():
-            return Response(
-                {"detail": "Improvement requires a non-empty user message."},
-                status=status.HTTP_409_CONFLICT,
-            )
+            raise Conflict("Improvement requires a non-empty user message.")
         try:
             improvement = get_improvement_service().improve(
                 level=session.learning_level,
                 original_message=message.content,
             )
         except LLMError as exc:
-            code = (
-                status.HTTP_503_SERVICE_UNAVAILABLE
-                if exc.retryable
-                else status.HTTP_502_BAD_GATEWAY
-            )
-            return Response({"detail": str(exc)}, status=code)
+            raise exc
         return Response(asdict(improvement))
 
 

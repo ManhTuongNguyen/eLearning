@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     # JWT refresh-token invalidation support (logout blacklisting).
     "rest_framework_simplejwt.token_blacklist",
     # Project apps
+    "api",
     "accounts",
     "learning",
     "conversations",
@@ -199,6 +200,7 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    "EXCEPTION_HANDLER": "api.errors.api_exception_handler",
 }
 
 # Celery

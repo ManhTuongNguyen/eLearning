@@ -1954,7 +1954,7 @@ Acceptance criteria:
 
 ## TASK-095 — Define API error format
 
-Status: `[ ]`
+Status: `[x]`
 
 Create a consistent backend API error structure.
 
