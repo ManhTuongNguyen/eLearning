@@ -2060,7 +2060,7 @@ Acceptance criteria:
 
 ## TASK-101 — Review secret handling
 
-Status: `[ ]`
+Status: `[x]`
 
 Audit:
 
