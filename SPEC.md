@@ -1969,7 +1969,7 @@ Acceptance criteria:
 
 ## TASK-096 — Implement network error handling
 
-Status: `[ ]`
+Status: `[x]`
 
 Mobile API clients must distinguish:
 
