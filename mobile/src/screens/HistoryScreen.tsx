@@ -1,17 +1,21 @@
 /**
  * History screen (SPEC TASK-055/056): the authenticated user's past sessions.
- * The backend already returns sessions most-recently-updated first, so pages
- * render in delivery order. The first page loads on mount (and on retry);
- * further pages append through a "Load more" control while the DRF envelope
- * reports a next page. Tapping a session opens its conversation; loading,
- * empty and error states are all explicit. Failures never destroy rows that
- * are already visible — pagination errors surface as a banner above the list.
- * Each row also offers an inline rename editor: saving PATCHes the title and
- * swaps the authoritative response into local state immediately, while
- * failures keep the editor open for another attempt. Rows likewise offer a
- * deletion flow: the entry control swaps THAT row into an inline confirmation
- * step, and a confirmed DELETE removes the session from local state
- * immediately — failures keep the confirmation open with an explanation.
+ * The data source follows the application mode (TASK-090): server mode reads
+ * the backend — the API already returns sessions most-recently-updated first,
+ * so pages render in delivery order, and further pages append through a
+ * "Load more" control while the DRF envelope reports a next page. Serverless
+ * mode instead lists the on-device SQLite conversations through the local
+ * repository, so server history disappears and local history appears with a
+ * mode switch, without any backend traffic. The first page loads on mount
+ * (and on retry); loading, empty and error states are all explicit.
+ * Failures never destroy rows that are already visible — pagination errors
+ * surface as a banner above the list. Each row also offers an inline rename
+ * editor: saving persists the title through the active backend and swaps the
+ * authoritative result into local state immediately, while failures keep the
+ * editor open for another attempt. Rows likewise offer a deletion flow: the
+ * entry control swaps THAT row into an inline confirmation step, and a
+ * confirmed DELETE removes the session from local state immediately —
+ * failures keep the confirmation open with an explanation.
  */
 import React, {
   useCallback,
@@ -33,6 +37,9 @@ import {
 import type {Session} from '../api/sessions';
 import {deleteSession, listSessions, renameSession} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
+import {LocalConversationRepository} from '../db/conversationRepository';
+import type {LocalSession} from '../db/types';
+import {useApplicationMode} from '../mode/ModeContext';
 import type {MainStackParamList} from '../navigation/types';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {ThemeColors} from '../theme/colors';
@@ -41,6 +48,26 @@ import {useTheme} from '../theme/ThemeContext';
 type Props = {
   navigation: NativeStackNavigationProp<MainStackParamList, 'History'>;
 };
+
+/** Local rows mirror server fields; copy only the UI-model fields across. */
+function toSessionModel(local: LocalSession): Session {
+  return {
+    id: local.id,
+    title: local.title,
+    topic: local.topic,
+    topic_hint: local.topic_hint,
+    learning_level: local.learning_level,
+    created_at: local.created_at,
+  };
+}
+
+/**
+ * Stateless serverless-data seam (TASK-090): one repository instance per
+ * mount covers every load/rename/delete of that screen's lifetime.
+ */
+function useLocalRepository(): LocalConversationRepository {
+  return useMemo(() => new LocalConversationRepository(), []);
+}
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -219,6 +246,11 @@ function createStyles(c: ThemeColors) {
 export function HistoryScreen({navigation}: Props) {
   const {getAccessToken} = useAuth();
   const {colors} = useTheme();
+  // TASK-090: the active application mode selects the history data source.
+  // Nothing is fetched until the persisted mode has been restored, so a
+  // fast-tapped History screen never touches the wrong backend mid-restore.
+  const {status: modeStatus, mode} = useApplicationMode();
+  const localRepository = useLocalRepository();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -241,6 +273,9 @@ export function HistoryScreen({navigation}: Props) {
   getAccessTokenRef.current = getAccessToken;
 
   useEffect(() => {
+    if (modeStatus !== 'ready') {
+      return;
+    }
     let cancelled = false;
 
     setError(null);
@@ -255,6 +290,17 @@ export function HistoryScreen({navigation}: Props) {
     setDeleting(false);
     (async () => {
       try {
+        if (mode === 'serverless') {
+          // Serverless history (TASK-090): read straight from the on-device
+          // SQLite store. Local rows are already ordered most-recently-active
+          // first and are delivered in one shot — no pagination.
+          const rows = await localRepository.listSessions();
+          if (!cancelled) {
+            setSessions(rows.map(toSessionModel));
+            setHasMore(false);
+          }
+          return;
+        }
         const token = await getAccessTokenRef.current();
         if (!token) {
           throw new Error('You need to sign in again to see your history.');
@@ -279,7 +325,7 @@ export function HistoryScreen({navigation}: Props) {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [localRepository, reloadKey, modeStatus, mode]);
 
   /** Append the next page; failures keep the rendered rows and show why. */
   const handleLoadMore = useCallback(async () => {
@@ -320,9 +366,10 @@ export function HistoryScreen({navigation}: Props) {
   }, [savingRename]);
 
   /**
-   * PATCH the new title and swap the authoritative response into local
-   * state — the row updates immediately without refetching the list.
-   * Failures keep the editor open with the draft intact for another try.
+   * Persist the new title through the active backend and swap the
+   * authoritative result into local state — the row updates immediately
+   * without refetching the list. Failures keep the editor open with the
+   * draft intact for another try.
    */
   const handleRenameSave = useCallback(async () => {
     const sessionId = renamingId;
@@ -334,14 +381,23 @@ export function HistoryScreen({navigation}: Props) {
     // A fresh attempt supersedes any previous failure message.
     setError(null);
     try {
-      const token = await getAccessTokenRef.current();
-      if (!token) {
-        throw new Error('You need to sign in again to see your history.');
+      if (mode === 'serverless') {
+        await localRepository.renameSession(sessionId, trimmed);
+        setSessions(prev =>
+          prev.map(session =>
+            session.id === sessionId ? {...session, title: trimmed} : session,
+          ),
+        );
+      } else {
+        const token = await getAccessTokenRef.current();
+        if (!token) {
+          throw new Error('You need to sign in again to see your history.');
+        }
+        const updated = await renameSession(token, sessionId, trimmed);
+        setSessions(prev =>
+          prev.map(session => (session.id === updated.id ? {...session, ...updated} : session)),
+        );
       }
-      const updated = await renameSession(token, sessionId, trimmed);
-      setSessions(prev =>
-        prev.map(session => (session.id === updated.id ? {...session, ...updated} : session)),
-      );
       setRenamingId(null);
       setDraftTitle('');
     } catch (err) {
@@ -349,7 +405,7 @@ export function HistoryScreen({navigation}: Props) {
     } finally {
       setSavingRename(false);
     }
-  }, [draftTitle, renamingId, savingRename]);
+  }, [draftTitle, localRepository, mode, renamingId, savingRename]);
 
   /** Swap THAT row into the inline confirmation step. */
   const startDelete = useCallback((session: Session) => {
@@ -367,9 +423,10 @@ export function HistoryScreen({navigation}: Props) {
   }, [deleting]);
 
   /**
-   * DELETE the session after confirmation and drop it from local state —
-   * the row disappears immediately without refetching the list. Failures
-   * keep the confirmation open with a banner for another attempt.
+   * DELETE the session after confirmation through the active backend and
+   * drop it from local state — the row disappears immediately without
+   * refetching the list. Failures keep the confirmation open with a banner
+   * for another attempt.
    */
   const handleDeleteConfirm = useCallback(async () => {
     const sessionId = deletingId;
@@ -380,11 +437,15 @@ export function HistoryScreen({navigation}: Props) {
     // A fresh attempt supersedes any previous failure message.
     setError(null);
     try {
-      const token = await getAccessTokenRef.current();
-      if (!token) {
-        throw new Error('You need to sign in again to see your history.');
+      if (mode === 'serverless') {
+        await localRepository.deleteSession(sessionId);
+      } else {
+        const token = await getAccessTokenRef.current();
+        if (!token) {
+          throw new Error('You need to sign in again to see your history.');
+        }
+        await deleteSession(token, sessionId);
       }
-      await deleteSession(token, sessionId);
       setSessions(prev => prev.filter(session => session.id !== sessionId));
       setDeletingId(null);
     } catch (err) {
@@ -392,7 +453,7 @@ export function HistoryScreen({navigation}: Props) {
     } finally {
       setDeleting(false);
     }
-  }, [deleting, deletingId]);
+  }, [deleting, deletingId, localRepository, mode]);
 
   return (
     <View style={styles.container} testID="history-screen">

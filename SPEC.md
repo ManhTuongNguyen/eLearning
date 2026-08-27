@@ -1845,7 +1845,7 @@ Acceptance criteria:
 
 ## TASK-090 — Implement serverless mode UI
 
-Status: `[ ]`
+Status: `[x]`
 
 Create Settings controls for serverless mode.
 

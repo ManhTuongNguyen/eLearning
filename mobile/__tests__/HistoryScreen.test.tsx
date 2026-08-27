@@ -24,7 +24,11 @@ import * as sessionsApi from '../src/api/sessions';
 import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
 import {AuthProvider} from '../src/auth/AuthContext';
 import {ModeProvider} from '../src/mode/ModeContext';
+import {saveApplicationMode} from '../src/mode/modeStorage';
+import {setRuntimeApplicationMode} from '../src/mode/runtime';
+import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
 import * as secureStorage from '../src/auth/secureStorage';
+import type {LocalSession} from '../src/db/types';
 import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen} from '../src/screens/ChatScreen';
 import {HistoryScreen} from '../src/screens/HistoryScreen';
@@ -34,6 +38,18 @@ jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
 jest.mock('../src/api/chatStream');
 jest.mock('../src/auth/secureStorage');
+
+// TASK-090: serverless history goes through the on-device repository seam;
+// this mock replaces SQLite entirely so behavior is asserted at the seam.
+const mockLocalRepository = {
+  listSessions: jest.fn<Promise<LocalSession[]>, []>(),
+  renameSession: jest.fn<Promise<void>, [number, string]>(),
+  deleteSession: jest.fn<Promise<boolean>, [number]>(),
+};
+
+jest.mock('../src/db/conversationRepository', () => ({
+  LocalConversationRepository: jest.fn(() => mockLocalRepository),
+}));
 
 const mockedAuth = jest.mocked(authApi);
 const mockedSessions = jest.mocked(sessionsApi);
@@ -541,5 +557,119 @@ describe('HistoryScreen delete (TASK-057)', () => {
     expect(await screen.findByTestId('history-empty')).toBeOnTheScreen();
     expect(screen.queryAllByTestId(/^history-item-/)).toHaveLength(0);
     expect(mockedSessions.deleteSession).toHaveBeenCalledWith('token-a', 5);
+  });
+});
+
+describe('HistoryScreen serverless (TASK-090)', () => {
+  function makeLocalSession(overrides: Partial<LocalSession> = {}): LocalSession {
+    return {
+      id: 42,
+      title: 'Traveling',
+      topic: 'Favorite destinations and travel plans.',
+      topic_hint: '',
+      learning_level: 'B1',
+      created_at: '2026-08-26T10:00:00Z',
+      updated_at: '2026-08-26T10:30:00Z',
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    // Persist serverless mode BEFORE render so ModeProvider restores it —
+    // the screen must not touch either backend until the mode is ready.
+    await saveApplicationMode('serverless');
+    mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
+    mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  });
+
+  afterEach(async () => {
+    setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
+    await saveApplicationMode(DEFAULT_APPLICATION_MODE);
+  });
+
+  it('lists on-device conversations through the local repository without any server call', async () => {
+    mockLocalRepository.listSessions.mockResolvedValue([
+      makeLocalSession({id: 303, title: 'Latest local chat'}),
+      makeLocalSession({id: 301, title: 'Older local chat'}),
+    ]);
+    await renderHistory();
+
+    await waitFor(() => expect(renderedItemIds()).toEqual([303, 301]));
+    expect(mockLocalRepository.listSessions).toHaveBeenCalledTimes(1);
+    expect(mockedSessions.listSessions).not.toHaveBeenCalled();
+    // Local rows arrive in one shot — no pagination control.
+    expect(screen.queryByTestId('history-load-more')).toBeNull();
+  });
+
+  it('shows the empty state when no local conversations exist', async () => {
+    mockLocalRepository.listSessions.mockResolvedValue([]);
+    await renderHistory();
+
+    expect(await screen.findByTestId('history-empty')).toBeOnTheScreen();
+    expect(mockedSessions.listSessions).not.toHaveBeenCalled();
+  });
+
+  it('surfaces local load failures and recovers through Try again', async () => {
+    mockLocalRepository.listSessions
+      .mockRejectedValueOnce(new Error('sqlite unavailable'))
+      .mockResolvedValueOnce([makeLocalSession({id: 7, title: 'Recovered locally'})]);
+    await renderHistory();
+
+    expect(await screen.findByTestId('form-error')).toHaveTextContent(
+      'sqlite unavailable',
+    );
+
+    await fireEvent.press(screen.getByTestId('history-retry'));
+
+    expect(await screen.findByText('Recovered locally')).toBeOnTheScreen();
+    expect(screen.queryByTestId('form-error')).toBeNull();
+    expect(mockLocalRepository.listSessions).toHaveBeenCalledTimes(2);
+    expect(mockedSessions.listSessions).not.toHaveBeenCalled();
+  });
+
+  it('persists renames through the local repository and updates the row immediately', async () => {
+    mockLocalRepository.listSessions.mockResolvedValue([
+      makeLocalSession({id: 42, title: 'Traveling'}),
+    ]);
+    mockLocalRepository.renameSession.mockResolvedValue(undefined);
+    await renderHistory();
+    await screen.findByTestId('history-item-42');
+
+    await fireEvent.press(screen.getByTestId('history-rename-42'));
+    const input = await screen.findByTestId('history-rename-input');
+    await fireEvent.changeText(input, 'Trips abroad');
+    await fireEvent.press(screen.getByTestId('history-rename-save'));
+
+    await waitFor(() =>
+      expect(mockLocalRepository.renameSession).toHaveBeenCalledWith(42, 'Trips abroad'),
+    );
+    expect(await screen.findByText('Trips abroad')).toBeOnTheScreen();
+    expect(screen.queryByTestId('history-rename-input')).toBeNull();
+    expect(screen.queryByTestId('form-error')).toBeNull();
+    // Immediate update — the list was NOT reloaded.
+    expect(mockLocalRepository.listSessions).toHaveBeenCalledTimes(1);
+    // The rename never reaches the backend in serverless mode.
+    expect(mockedSessions.renameSession).not.toHaveBeenCalled();
+  });
+
+  it('deletes conversations through the local repository after confirmation', async () => {
+    mockLocalRepository.listSessions.mockResolvedValue([
+      makeLocalSession({id: 42, title: 'Traveling'}),
+      makeLocalSession({id: 43, title: 'Cooking'}),
+    ]);
+    mockLocalRepository.deleteSession.mockResolvedValue(true);
+    await renderHistory();
+    await screen.findByTestId('history-item-43');
+
+    await fireEvent.press(screen.getByTestId('history-delete-42'));
+    await fireEvent.press(await screen.findByTestId('history-delete-confirm'));
+
+    await waitFor(() =>
+      expect(mockLocalRepository.deleteSession).toHaveBeenCalledWith(42),
+    );
+    await waitFor(() => expect(renderedItemIds()).toEqual([43]));
+    expect(screen.queryByTestId('form-error')).toBeNull();
+    expect(mockedSessions.deleteSession).not.toHaveBeenCalled();
   });
 });

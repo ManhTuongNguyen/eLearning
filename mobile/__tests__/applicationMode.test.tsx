@@ -19,10 +19,35 @@ import {
   setRuntimeApplicationMode,
 } from '../src/mode/runtime';
 import {DEFAULT_APPLICATION_MODE, parseApplicationMode} from '../src/mode/types';
+import type {SettingsScreenProps} from '../src/navigation/types';
+import {SettingsScreen} from '../src/screens/SettingsScreen';
+import {ThemeProvider} from '../src/theme/ThemeContext';
 
 const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
   __resetAsyncStorageStore: () => void;
 };
+
+jest.mock('../src/auth/AuthContext', () => ({
+  useAuth: () => ({
+    user: {id: 1, username: 'alice', email: 'alice@example.com'},
+    busy: false,
+    logout: jest.fn(),
+    getAccessToken: async () => 'token',
+  }),
+}));
+
+function settingsPropsStub(): SettingsScreenProps {
+  return {
+    navigation: {navigate: jest.fn(), goBack: jest.fn()},
+    route: {key: 'settings-test', name: 'Settings', params: undefined},
+  } as unknown as SettingsScreenProps;
+}
+
+/** Checked state of a settings mode radio, read once it has settled. */
+function checkedStateOf(testID: string): boolean | undefined {
+  const state = screen.getByTestId(testID).props.accessibilityState;
+  return state ? state.checked : undefined;
+}
 
 function resetStorage() {
   asyncStorage.__resetAsyncStorageStore();
@@ -238,5 +263,77 @@ describe('server API gate', () => {
     } finally {
       globalThis.XMLHttpRequest = realXHR;
     }
+  });
+});
+
+describe('Settings application-mode switcher (TASK-090)', () => {
+  function renderSettings() {
+    return render(
+      <ModeProvider>
+        <ThemeProvider>
+          <SettingsScreen {...settingsPropsStub()} />
+        </ThemeProvider>
+      </ModeProvider>,
+    );
+  }
+
+  beforeEach(async () => {
+    asyncStorage.__resetAsyncStorageStore();
+    jest.clearAllMocks();
+    setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
+    await saveApplicationMode(DEFAULT_APPLICATION_MODE);
+  });
+
+  afterEach(() => {
+    setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
+  });
+
+  it('explains both modes with the documented copy and checks the current mode', async () => {
+    await renderSettings();
+
+    expect(await screen.findByTestId('settings-mode-section')).toBeOnTheScreen();
+    expect(screen.getByText('Server mode')).toBeOnTheScreen();
+    expect(
+      screen.getByText('Your conversations are stored with your account.'),
+    ).toBeOnTheScreen();
+    expect(screen.getByText('Serverless mode')).toBeOnTheScreen();
+    expect(
+      screen.getByText(
+        'Conversations stay on this device and AI requests go directly to OpenRouter.',
+      ),
+    ).toBeOnTheScreen();
+
+    // Restore settles asynchronously; wait for the checked state to reflect
+    // the persisted default before asserting.
+    await waitFor(() => expect(checkedStateOf('settings-mode-server')).toBe(true));
+    expect(checkedStateOf('settings-mode-serverless')).toBe(false);
+  });
+
+  it('restores a persisted serverless selection with its radio checked', async () => {
+    await saveApplicationMode('serverless');
+    await renderSettings();
+
+    await waitFor(() => expect(checkedStateOf('settings-mode-serverless')).toBe(true));
+    expect(checkedStateOf('settings-mode-server')).toBe(false);
+  });
+
+  it('switching to serverless flips the radios, persists, and moves the runtime gate', async () => {
+    await renderSettings();
+    await waitFor(() => expect(checkedStateOf('settings-mode-server')).toBe(true));
+
+    await fireEvent.press(screen.getByTestId('settings-mode-serverless'));
+
+    await waitFor(() => expect(checkedStateOf('settings-mode-serverless')).toBe(true));
+    expect(checkedStateOf('settings-mode-server')).toBe(false);
+    expect(getRuntimeApplicationMode()).toBe('serverless');
+    await expect(loadApplicationMode()).resolves.toBe('serverless');
+
+    // Switching back restores server data access and persistence.
+    await fireEvent.press(screen.getByTestId('settings-mode-server'));
+
+    await waitFor(() => expect(getRuntimeApplicationMode()).toBe('server'));
+    expect(checkedStateOf('settings-mode-server')).toBe(true);
+    expect(checkedStateOf('settings-mode-serverless')).toBe(false);
+    await expect(loadApplicationMode()).resolves.toBe('server');
   });
 });

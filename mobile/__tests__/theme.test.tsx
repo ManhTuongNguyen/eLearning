@@ -245,10 +245,12 @@ describe('useTheme', () => {
 describe('settings theme switcher', () => {
   it('shows all three modes with system checked by default', async () => {
     await render(
-      <ThemeProvider>
-        <SettingsScreen {...settingsProps} />
-        <ThemeProbe />
-      </ThemeProvider>,
+      <ModeProvider>
+        <ThemeProvider>
+          <SettingsScreen {...settingsProps} />
+          <ThemeProbe />
+        </ThemeProvider>
+      </ModeProvider>,
     );
 
     expect(screen.getByTestId('settings-theme-system').props.accessibilityState).toMatchObject({
@@ -264,10 +266,12 @@ describe('settings theme switcher', () => {
 
   it('selecting Dark re-themes the whole tree and moves the checked state', async () => {
     await render(
-      <ThemeProvider>
-        <SettingsScreen {...settingsProps} />
-        <ThemeProbe />
-      </ThemeProvider>,
+      <ModeProvider>
+        <ThemeProvider>
+          <SettingsScreen {...settingsProps} />
+          <ThemeProbe />
+        </ThemeProvider>
+      </ModeProvider>,
     );
 
     await fireEvent.press(screen.getByTestId('settings-theme-dark'));
@@ -284,10 +288,12 @@ describe('settings theme switcher', () => {
   it('selecting Light wins over a dark OS preference', async () => {
     setSystemScheme('dark');
     await render(
-      <ThemeProvider>
-        <SettingsScreen {...settingsProps} />
-        <ThemeProbe />
-      </ThemeProvider>,
+      <ModeProvider>
+        <ThemeProvider>
+          <SettingsScreen {...settingsProps} />
+          <ThemeProbe />
+        </ThemeProvider>
+      </ModeProvider>,
     );
 
     await fireEvent.press(screen.getByTestId('settings-theme-light'));
