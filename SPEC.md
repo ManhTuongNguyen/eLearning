@@ -2005,7 +2005,7 @@ Acceptance criteria:
 
 ## TASK-098 — Implement Celery retry policy
 
-Status: `[ ]`
+Status: `[x]`
 
 Configure retry policies for:
 
