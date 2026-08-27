@@ -153,4 +153,128 @@ describe('api client', () => {
     expect(error.fields).toEqual({});
     expect(error.message).toBe('Request failed (409).');
   });
+
+  describe('error categorization', () => {
+    it('categorizes network failure (status 0) as network', async () => {
+      jest.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Network request failed'));
+
+      const error = await expectApiError(apiRequest('/api/v1/health/'));
+      expect(error.category).toBe('network');
+    });
+
+it('categorizes timeout error (AbortError) as timeout', async () => {
+    const abortError = new Error('Aborted');
+    abortError.name = 'AbortError';
+    jest.spyOn(globalThis, 'fetch').mockRejectedValue(abortError);
+
+    const error = await expectApiError(apiRequest('/api/v1/health/'));
+    expect(error.category).toBe('timeout');
+  });
+
+    it('categorizes 401 as authentication', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(401, {detail: 'Unauthorized'}));
+
+      const error = await expectApiError(apiRequest('/api/v1/auth/me/'));
+      expect(error.category).toBe('authentication');
+    });
+
+    it('categorizes 403 as authentication', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(403, {detail: 'Forbidden'}));
+
+      const error = await expectApiError(apiRequest('/api/v1/auth/me/'));
+      expect(error.category).toBe('authentication');
+    });
+
+    it('categorizes 400 as validation', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(400, {detail: 'Bad request'}));
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('validation');
+    });
+
+    it('categorizes 422 as validation', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(422, {detail: 'Unprocessable'}));
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('validation');
+    });
+
+    it('categorizes 408 as timeout', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(408, {detail: 'Request timeout'}));
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('timeout');
+    });
+
+    it('categorizes 504 as timeout', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(504, {detail: 'Gateway timeout'}));
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('timeout');
+    });
+
+    it('categorizes 500 as server', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(500, {detail: 'Server error'}));
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('server');
+    });
+
+    it('categorizes 502 as server', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(502, {detail: 'Bad gateway'}));
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('server');
+    });
+
+    it('categorizes 503 as server', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(503, {detail: 'Service unavailable'}));
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('server');
+    });
+
+    it('categorizes LLM provider error (openrouter in detail) as llm', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+        jsonResponse(502, {detail: 'OpenRouter provider unavailable'}),
+      );
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('llm');
+    });
+
+    it('categorizes LLM provider error (model in detail) as llm', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+        jsonResponse(502, {detail: 'Model not found'}),
+      );
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('llm');
+    });
+
+    it('categorizes LLM provider error (streaming in detail) as llm', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+        jsonResponse(502, {detail: 'Streaming failed'}),
+      );
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('llm');
+    });
+
+    it('categorizes LLM provider error (provider field) as llm', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+        jsonResponse(502, {provider: 'OpenRouter unavailable'}),
+      );
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/'));
+      expect(error.category).toBe('llm');
+    });
+
+    it('categorizes 404 as validation', async () => {
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(404, {detail: 'Not found'}));
+
+      const error = await expectApiError(apiRequest('/api/v1/sessions/999/'));
+      expect(error.category).toBe('validation');
+    });
+  });
 });

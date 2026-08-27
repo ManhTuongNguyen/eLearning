@@ -3,16 +3,32 @@
 import {assertServerApiAllowed} from '../mode/runtime';
 import {API_BASE_URL} from '../config';
 
-/** Normalized API failure carrying the HTTP status and DRF field errors. */
+/** Category of API failure for programmatic handling. */
+export type ApiErrorCategory =
+  | 'network'
+  | 'authentication'
+  | 'validation'
+  | 'server'
+  | 'llm'
+  | 'timeout';
+
+/** Normalized API failure carrying the HTTP status, DRF field errors, and category. */
 export class ApiError extends Error {
   readonly status: number;
   readonly fields: Readonly<Record<string, readonly string[]>>;
+  readonly category: ApiErrorCategory;
 
-  constructor(status: number, message: string, fields?: Record<string, string[]>) {
+  constructor(
+    status: number,
+    message: string,
+    fields?: Record<string, string[]>,
+    category: ApiErrorCategory = 'server',
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.fields = fields ?? {};
+    this.category = category;
   }
 }
 
@@ -42,8 +58,14 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     });
-  } catch {
-    throw new ApiError(0, 'Network request failed. Check your connection and try again.');
+  } catch (err) {
+    // Distinguish timeout from general network failure when possible.
+    const isTimeout =
+      err instanceof Error && (err.name === 'AbortError' || err.message.toLowerCase().includes('timeout'));
+    if (isTimeout) {
+      throw new ApiError(0, 'The request timed out. Please try again.', {}, 'timeout');
+    }
+    throw new ApiError(0, 'Network request failed. Check your connection and try again.', {}, 'network');
   }
 
   const payload = await readPayload(response);
@@ -61,8 +83,64 @@ async function readPayload(response: Response): Promise<unknown> {
   }
 }
 
+/** Map an HTTP status to an error category. */
+function statusToCategory(status: number): ApiErrorCategory {
+  if (status === 0) {
+    return 'network';
+  }
+  if (status === 401 || status === 403) {
+    return 'authentication';
+  }
+  if (status === 400 || status === 404 || status === 422) {
+    return 'validation';
+  }
+  if (status === 408 || status === 504) {
+    return 'timeout';
+  }
+  if (status >= 500) {
+    return 'server';
+  }
+  return 'server';
+}
+
+/** Check if the error response indicates an LLM provider failure. */
+function isLlmError(payload: unknown): boolean {
+  if (payload !== null && typeof payload === 'object') {
+    const obj = payload as Record<string, unknown>;
+    // LLM errors often have specific detail patterns or fields
+    const detail = obj.detail;
+    if (typeof detail === 'string') {
+      const lower = detail.toLowerCase();
+      if (
+        lower.includes('openrouter') ||
+        lower.includes('provider') ||
+        lower.includes('model') ||
+        lower.includes('llm') ||
+        lower.includes('streaming') ||
+        lower.includes('completion')
+      ) {
+        return true;
+      }
+    }
+    // Check for fields related to LLM
+    for (const key of Object.keys(obj)) {
+      const lowerKey = key.toLowerCase();
+      if (
+        lowerKey.includes('model') ||
+        lowerKey.includes('provider') ||
+        lowerKey.includes('stream')
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /** Build the normalized ApiError for a failed HTTP response payload. */
 export function normalizeApiError(status: number, payload: unknown): ApiError {
+  const category = statusToCategory(status);
+
   if (payload !== null && typeof payload === 'object') {
     const fields: Record<string, string[]> = {};
     let detail: string | null = null;
@@ -87,8 +165,15 @@ export function normalizeApiError(status: number, payload: unknown): ApiError {
     );
     const message =
       detail ?? (fieldMessages.length > 0 ? fieldMessages.join('\n') : `Request failed (${status}).`);
-    return new ApiError(status, message, fields);
+
+    // Override category for LLM-specific errors
+    let finalCategory = category;
+    if (category === 'server' && isLlmError(payload)) {
+      finalCategory = 'llm';
+    }
+
+    return new ApiError(status, message, fields, finalCategory);
   }
 
-  return new ApiError(status, `Request failed (${status}).`);
+  return new ApiError(status, `Request failed (${status}).`, {}, category);
 }

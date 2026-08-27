@@ -2024,7 +2024,7 @@ Acceptance criteria:
 
 ## TASK-099 — Review authentication security
 
-Status: `[ ]`
+Status: `[x]`
 
 Review:
 

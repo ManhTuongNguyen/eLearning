@@ -19,6 +19,7 @@ class Conflict(APIException):
     default_detail = "Conflict."
     default_code = "conflict"
 
+
 from conversations.chat import RetryService, UserMessageService, finalize_turn
 from conversations.improvement import ImprovementService
 from conversations.models import Message, Session

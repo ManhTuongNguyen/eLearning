@@ -1,8 +1,10 @@
 """HTTP API for account registration and authentication."""
 
+from django.conf import settings
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -14,12 +16,33 @@ from accounts.serializers import (
 )
 
 
+class AuthAnonRateThrottle(AnonRateThrottle):
+    """Throttle anonymous identity-establishing endpoints.
+
+    Limits are read from ``settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['auth']``
+    so they can be tuned per environment without code changes. The scope name
+    is the same on every auth view so a single shared bucket constrains
+    register/login/refresh/logout from a given client together.
+
+    Overrides ``get_rate`` to read the rate from settings at request time
+    (not at class-definition time) so tests can patch the setting.
+    """
+
+    scope = "auth"
+
+    def get_rate(self):
+        """Read the throttle rate from Django settings at request time."""
+        throttle_rates = getattr(settings, "REST_FRAMEWORK", {}).get("DEFAULT_THROTTLE_RATES", {})
+        return throttle_rates.get(self.scope, "10/min")
+
+
 class RegistrationView(generics.CreateAPIView):
     """Create a new user account from public registration input."""
 
     queryset = User.objects.all()
     serializer_class = RegistrationSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [AuthAnonRateThrottle]
 
 
 class LoginView(TokenObtainPairView):
@@ -27,12 +50,14 @@ class LoginView(TokenObtainPairView):
 
     serializer_class = LoginSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [AuthAnonRateThrottle]
 
 
 class RefreshView(TokenRefreshView):
     """Exchange a valid refresh token for a fresh access token."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [AuthAnonRateThrottle]
 
 
 class LogoutView(APIView):
@@ -43,6 +68,8 @@ class LogoutView(APIView):
     token can no longer be used against the refresh endpoint; outstanding
     access tokens simply expire on their configured lifetime.
     """
+
+    throttle_classes = [AuthAnonRateThrottle]
 
     def post(self, request):
         serializer = LogoutSerializer(data=request.data)

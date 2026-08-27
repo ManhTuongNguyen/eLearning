@@ -23,6 +23,9 @@ ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1", ca
 if DEBUG and "10.0.2.2" not in ALLOWED_HOSTS:
     # Android emulator alias for the host loopback interface.
     ALLOWED_HOSTS.append("10.0.2.2")
+if DEBUG and "testserver" not in ALLOWED_HOSTS:
+    # Django test client uses 'testserver' as the default host.
+    ALLOWED_HOSTS.append("testserver")
 
 
 def validate_production_configuration(
@@ -190,6 +193,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Authentication defaults to JWT; permissions default to deny-unauthenticated
 # so every new endpoint is protected unless it explicitly opts out with
 # AllowAny (registration, login, refresh, health).
+#
+# The ``auth`` throttle rate caps anonymous identity-establishing endpoints
+# (login/refresh/register/logout) per IP. The default is intentionally low
+# (10/minute) to make credential-stuffing and brute force attacks
+# impractical; tests and the local mobile emulator override it via the
+# ``AUTH_THROTTLE_RATE`` environment variable.
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -201,6 +210,9 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "api.errors.api_exception_handler",
+    "DEFAULT_THROTTLE_RATES": {
+        "auth": config("AUTH_THROTTLE_RATE", default="10/min"),
+    },
 }
 
 # Celery

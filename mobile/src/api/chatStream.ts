@@ -134,6 +134,7 @@ export interface ChatStreamHandle {
 
 const NETWORK_ERROR_MESSAGE =
   'Network request failed. Check your connection and try again.';
+const TIMEOUT_ERROR_MESSAGE = 'The request timed out. Please try again.';
 
 function toApiError(status: number, bodyText: string): ApiError {
   let payload: unknown = null;
@@ -186,6 +187,8 @@ function consumeSseStream(options: ConsumeStreamOptions): ChatStreamHandle {
   }
   xhr.setRequestHeader('Accept', 'text/event-stream');
   xhr.setRequestHeader('Authorization', `Bearer ${options.token}`);
+  // 60s total timeout for the SSE connection (matches backend streaming timeout)
+  xhr.timeout = 60000;
 
   // Cursor into the accumulating responseText plus the tail of a possibly
   // half-delivered frame across progress boundaries.
@@ -262,7 +265,11 @@ function consumeSseStream(options: ConsumeStreamOptions): ChatStreamHandle {
   };
 
   xhr.onerror = () => {
-    finishWith(new ApiError(0, NETWORK_ERROR_MESSAGE));
+    finishWith(new ApiError(0, NETWORK_ERROR_MESSAGE, {}, 'network'));
+  };
+
+  xhr.ontimeout = () => {
+    finishWith(new ApiError(0, TIMEOUT_ERROR_MESSAGE, {}, 'timeout'));
   };
 
   xhr.send(options.body ?? undefined);

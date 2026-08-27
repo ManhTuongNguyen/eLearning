@@ -276,10 +276,24 @@ export function useAuth(): AuthContextValue {
 
 export function toErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.status === 0 || err.status >= 500) {
-      return 'The server is unreachable right now. Please try again later.';
+    switch (err.category) {
+      case 'network':
+        return 'Network connection failed. Check your internet and try again.';
+      case 'timeout':
+        return 'The request timed out. Please try again.';
+      case 'authentication':
+        return err.message || 'Your session has expired. Please log in again.';
+      case 'validation':
+        return err.message || 'Invalid input. Please check your data and try again.';
+      case 'llm':
+        return 'The AI service is temporarily unavailable. Please try again in a moment.';
+      case 'server':
+      default:
+        if (err.status === 0 || err.status >= 500) {
+          return 'The server is unreachable right now. Please try again later.';
+        }
+        return err.message;
     }
-    return err.message;
   }
   if (err instanceof Error && err.message) {
     return err.message;

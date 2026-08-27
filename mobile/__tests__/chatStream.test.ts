@@ -30,10 +30,12 @@ class FakeXHR {
   responseText = '';
   status = 0;
   aborted = false;
+  timeout = 0;
   onprogress: Listener = null;
   onload: Listener = null;
   onerror: Listener = null;
   onabort: Listener = null;
+  ontimeout: Listener = null;
 
   open(method: string, url: string): void {
     this.method = method;
@@ -307,8 +309,24 @@ describe('streamChatTurn transport', () => {
     turn.xhr.networkFail();
 
     expect(turn.errors).toHaveLength(1);
-    expect(turn.errors[0]).toMatchObject({name: 'ApiError', status: 0});
+    expect(turn.errors[0]).toMatchObject({name: 'ApiError', status: 0, category: 'network'});
     expect((turn.errors[0] as Error).message).toMatch(/network request failed/i);
+  });
+
+  it('reports XHR timeout as a timeout ApiError(0)', () => {
+    const turn = beginTurn();
+
+    turn.xhr.ontimeout?.();
+
+    expect(turn.errors).toHaveLength(1);
+    expect(turn.errors[0]).toMatchObject({name: 'ApiError', status: 0, category: 'timeout'});
+    expect((turn.errors[0] as Error).message).toMatch(/timed out/i);
+  });
+
+  it('configures a 60s XHR timeout for streaming turns', () => {
+    const turn = beginTurn();
+
+    expect(turn.xhr.timeout).toBe(60000);
   });
 
   it('reports a clean close that never delivered a terminal frame', () => {
