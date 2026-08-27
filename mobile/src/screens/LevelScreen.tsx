@@ -1,7 +1,11 @@
 /**
- * Learning-level screen (SPEC TASK-018): onboarding/settings UI listing every
- * CEFR level plus AUTO. The current level is loaded from the server profile
- * and each selection is persisted immediately via PATCH /api/v1/profile/.
+ * Learning-level screen (SPEC TASK-018/091): settings UI listing every CEFR
+ * level plus AUTO. The data source follows the application mode: in server
+ * mode the level loads through GET /api/v1/profile/ and each selection is
+ * persisted immediately via PATCH; in serverless mode (TASK-091) the same UI
+ * reads and writes the on-device SQLite profile through profileStore, so no
+ * backend traffic happens while serverless is active. Selections persist
+ * immediately in both modes; errors keep the last confirmed value selected.
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
@@ -16,6 +20,9 @@ import {
 import {getProfile, LEVELS, updateProfile} from '../api/profile';
 import type {EnglishLevel, LevelOption} from '../api/profile';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
+import {getLocalDatabase} from '../db/database';
+import {getLearningProfile, saveLearningProfile} from '../db/profileStore';
+import {useApplicationMode} from '../mode/ModeContext';
 import type {LevelScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
@@ -121,6 +128,7 @@ function createStyles(c: ThemeColors) {
 
 export function LevelScreen({navigation}: LevelScreenProps) {
   const {getAccessToken} = useAuth();
+  const {mode} = useApplicationMode();
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [selected, setSelected] = useState<EnglishLevel | null>(null);
@@ -129,8 +137,39 @@ export function LevelScreen({navigation}: LevelScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // Reset the transient confirmations whenever the data source flips so a
+  // mode switch cannot show a stale "Saved." from the other backend.
+  useEffect(() => {
+    setSaved(false);
+    setError(null);
+    setLoading(true);
+  }, [mode]);
+
   useEffect(() => {
     let cancelled = false;
+
+    if (mode === 'serverless') {
+      (async () => {
+        try {
+          const db = await getLocalDatabase();
+          const profile = await getLearningProfile(db);
+          if (!cancelled) {
+            setSelected(profile.level);
+          }
+        } catch (err) {
+          if (!cancelled) {
+            setError(toErrorMessage(err));
+          }
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
 
     (async () => {
       const token = await getAccessToken();
@@ -160,21 +199,39 @@ export function LevelScreen({navigation}: LevelScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [getAccessToken]);
+  }, [mode, getAccessToken]);
 
   const handleSelect = useCallback(
     async (option: LevelOption) => {
       if (saving !== null || option.value === selected) {
         return;
       }
-      const token = await getAccessToken();
-      if (!token || saving !== null || option.value === selected) {
-        return;
-      }
 
       setSaving(option.value);
       setError(null);
       setSaved(false);
+
+      if (mode === 'serverless') {
+        try {
+          const db = await getLocalDatabase();
+          const profile = await saveLearningProfile(db, option.value);
+          setSelected(profile.level);
+          setSaved(true);
+        } catch (err) {
+          // Selection stays on the last confirmed value.
+          setError(toErrorMessage(err));
+        } finally {
+          setSaving(null);
+        }
+        return;
+      }
+
+      const token = await getAccessToken();
+      if (!token || saving !== null || option.value === selected) {
+        setSaving(null);
+        return;
+      }
+
       try {
         const profile = await updateProfile(token, option.value);
         setSelected(profile.level);
@@ -186,7 +243,7 @@ export function LevelScreen({navigation}: LevelScreenProps) {
         setSaving(null);
       }
     },
-    [getAccessToken, saving, selected],
+    [getAccessToken, mode, saving, selected],
   );
 
   return (

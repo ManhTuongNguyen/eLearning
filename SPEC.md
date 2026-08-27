@@ -1871,7 +1871,7 @@ Acceptance criteria:
 
 ## TASK-091 — Create settings screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Include:
 

@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-27
-- **Current Phase**: Phase 13 TASK-090 complete (next: TASK-091 — Create settings screen)
+- **Current Phase**: Phase 14 TASK-091 complete (next: TASK-092 — Implement serverless OpenRouter settings)
 
 ## Current Active Task
 
