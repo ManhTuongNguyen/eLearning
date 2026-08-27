@@ -1,7 +1,7 @@
 /**
- * Streaming UX primitives (SPEC TASK-050).
+ * Streaming UX primitives (SPEC TASK-050/103).
  *
- * Two concerns of a smooth chat stream, kept as pure units so the state
+ * Three concerns of a smooth chat stream, kept as pure units so the state
  * transitions are exhaustively testable without rendering:
  *
  * - DeltaBuffer coalesces bursts of SSE delta events into at most one state
@@ -13,10 +13,35 @@
  *   the bottom to justify auto-scrolling. The screen scrolls on content
  *   growth only while this holds, so an intentional scroll upward stops the
  *   follow behavior instead of fighting the user.
+ * - The FlatList virtualization bounds below (TASK-103) keep long
+ *   conversations usable: only a bounded slice of messages is ever mounted
+ *   and rendered per batch, independent of total history length.
  */
 
 /** How often buffered deltas are committed to component state (ms). */
 export const STREAM_FLUSH_INTERVAL_MS = 50;
+
+/**
+ * TASK-103: rows rendered before the first scroll. Enough to cover the
+ * visible viewport of recent history on first open, small enough that
+ * opening a long conversation does not lay out its entire history.
+ */
+export const CHAT_LIST_INITIAL_NUM_TO_RENDER = 12;
+
+/**
+ * TASK-103: rows mounted per incremental batch as the user scrolls back
+ * through history. One batch per frame keeps catch-up scrolling smooth.
+ */
+export const CHAT_LIST_MAX_TO_RENDER_PER_BATCH = 12;
+
+/**
+ * TASK-103: render window measured in viewport heights around the visible
+ * area. The default (21) keeps roughly ten screens of content alive for a
+ * chat, far more than can be visible; bounding it to 7 keeps memory and
+ * reconciliation work flat while scrolling without ever revealing blank
+ * space at normal scroll speeds.
+ */
+export const CHAT_LIST_WINDOW_SIZE = 7;
 
 /**
  * Distance (in px) from the bottom edge within which the user still counts

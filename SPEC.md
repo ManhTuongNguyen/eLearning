@@ -2096,7 +2096,7 @@ Acceptance criteria:
 
 ## TASK-103 — Optimize streaming UI
 
-Status: `[ ]`
+Status: `[x]`
 
 Profile the React Native chat screen.
 

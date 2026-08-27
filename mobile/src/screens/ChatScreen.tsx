@@ -46,6 +46,10 @@
  * speech seam with a single-playback contract — starting another message
  * stops the current one, the speaking bubble shows a visible Stop control,
  * failures only clear the state — and switching sessions silences playback.
+ * Rendering performance (TASK-103): rows render through a memoized
+ * MessageRow with stable prop identities, so a delta flush re-renders only
+ * the streaming bubble while every untouched row bails out, and the FlatList
+ * virtualization bounds keep long conversations mounted in a bounded window.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -83,12 +87,16 @@ import type {LocalMessage} from '../db/types';
 import {ImprovementSheet} from './ImprovementSheet';
 import {MessageActionsMenu} from './MessageActionsMenu';
 import type {MessageAction} from './MessageActionsMenu';
+import {MessageRow, createRowStyles} from './MessageRow';
 import {SampleConversationModal} from './SampleConversationModal';
 import {TextSelectionSheet} from './TextSelectionSheet';
 import {VocabularySaveSheet} from './VocabularySaveSheet';
 import {
   DeltaBuffer,
   isNearBottom,
+  CHAT_LIST_INITIAL_NUM_TO_RENDER,
+  CHAT_LIST_MAX_TO_RENDER_PER_BATCH,
+  CHAT_LIST_WINDOW_SIZE,
   STICK_TO_BOTTOM_THRESHOLD_PX,
   STREAM_FLUSH_INTERVAL_MS,
 } from './streamingUx';
@@ -198,44 +206,6 @@ function createStyles(c: ThemeColors) {
       fontSize: 14,
       fontWeight: '600',
     },
-    messageRetry: {
-      alignSelf: 'flex-start',
-      marginTop: 6,
-      borderColor: c.borderStrong,
-      borderWidth: 1,
-      borderRadius: 10,
-      paddingVertical: 5,
-      paddingHorizontal: 14,
-      backgroundColor: c.surface,
-    },
-    messageRetryDisabled: {
-      opacity: 0.5,
-    },
-    messageRetryText: {
-      color: c.textPrimary,
-      fontSize: 13,
-      fontWeight: '600',
-    },
-    speechStop: {
-      alignSelf: 'flex-start',
-      marginTop: 6,
-      borderColor: c.borderStrong,
-      borderWidth: 1,
-      borderRadius: 10,
-      paddingVertical: 5,
-      paddingHorizontal: 14,
-      backgroundColor: c.surface,
-    },
-    speechStopText: {
-      color: c.accent,
-      fontSize: 13,
-      fontWeight: '600',
-    },
-    failedNote: {
-      fontSize: 14,
-      lineHeight: 20,
-      color: c.textMuted,
-    },
     list: {
       flex: 1,
     },
@@ -243,38 +213,6 @@ function createStyles(c: ThemeColors) {
       paddingVertical: 16,
       paddingHorizontal: 16,
       gap: 10,
-    },
-    row: {
-      flexDirection: 'row',
-    },
-    rowUser: {
-      justifyContent: 'flex-end',
-    },
-    bubble: {
-      maxWidth: '82%',
-      borderRadius: 16,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-    },
-    bubbleUser: {
-      backgroundColor: c.primary,
-      borderBottomRightRadius: 4,
-    },
-    bubbleAssistant: {
-      backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.border,
-      borderBottomLeftRadius: 4,
-    },
-    content: {
-      fontSize: 15,
-      lineHeight: 21,
-    },
-    contentUser: {
-      color: c.onPrimary,
-    },
-    contentAssistant: {
-      color: c.textPrimary,
     },
     composer: {
       flexDirection: 'row',
@@ -416,6 +354,9 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const {colors} = useTheme();
   const {mode} = useApplicationMode();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  // Row styles are created once per theme so the memoized MessageRow sees a
+  // stable `styles` prop (TASK-103).
+  const rowStyles = useMemo(() => createRowStyles(colors), [colors]);
 
   const [loading, setLoading] = useState(sessionId !== undefined);
   const [error, setError] = useState<string | null>(null);
@@ -1156,6 +1097,16 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   );
 
   /**
+   * TASK-103: stable long-press callback shared by every row so the
+   * memoized MessageRow's prop comparison never sees a fresh closure —
+   * an inline arrow here would re-render every mounted bubble on each
+   * delta flush.
+   */
+  const handleRowLongPress = useCallback((message: ChatMessage) => {
+    setMenuMessage(message);
+  }, []);
+
+  /**
    * TASK-060 menu selection. Copy runs through the clipboard seam, Suggest
    * replies generates three candidate messages (TASK-061) that the user can
    * tap into the composer, Improve my English (TASK-064) opens the
@@ -1227,70 +1178,27 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   }, [stickToBottom]);
 
   const renderMessage = useCallback(
-    ({item}: {item: ChatMessage}) => {
-      const isUser = item.role === 'user';
-      const failed = !isUser && item.status === 'failed';
-      const waiting =
-        item.status === 'pending' && item.role === 'assistant' && item.content === '';
-      // Only rows with real text offer the long-press menu (TASK-060):
-      // pending spinners and failed rows carry nothing actionable, and the
-      // backend rejects them as suggestion targets anyway.
-      const menuEligible = item.status === 'complete' && item.content.trim().length > 0;
-      return (
-        <View style={[styles.row, isUser && styles.rowUser]}>
-          <View>
-            <Pressable
-              style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
-              testID={`chat-message-${item.id}`}
-              onLongPress={
-                menuEligible
-                  ? () => {
-                      setMenuMessage(item);
-                    }
-                  : undefined
-              }>
-              {waiting ? (
-                <ActivityIndicator size="small" color={colors.textMuted} />
-              ) : failed ? (
-                <Text style={[styles.content, styles.failedNote]}>
-                  The response failed to generate.
-                </Text>
-              ) : (
-                <Text style={[styles.content, isUser ? styles.contentUser : styles.contentAssistant]}>
-                  {item.content}
-                </Text>
-              )}
-            </Pressable>
-            {failed ? (
-              <Pressable
-                style={[styles.messageRetry, streaming && styles.messageRetryDisabled]}
-                disabled={streaming}
-                onPress={() => {
-                  handleRetry(item);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Retry failed response"
-                accessibilityState={{disabled: streaming}}
-                testID={`chat-retry-${item.id}`}>
-                <Text style={styles.messageRetryText}>Retry</Text>
-              </Pressable>
-            ) : null}
-            {speakingMessageId === item.id ? (
-              <Pressable
-                style={styles.speechStop}
-                onPress={stopSpeech}
-                testID={`chat-speech-stop-${item.id}`}
-                accessibilityRole="button"
-                accessibilityLabel="Stop reading aloud"
-                accessibilityState={{busy: true}}>
-                <Text style={styles.speechStopText}>⏹ Speaking… tap to stop</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      );
-    },
-    [styles, colors.textMuted, streaming, handleRetry, speakingMessageId, stopSpeech],
+    ({item}: {item: ChatMessage}) => (
+      <MessageRow
+        item={item}
+        styles={rowStyles}
+        streaming={streaming}
+        speaking={speakingMessageId === item.id}
+        spinnerColor={colors.textMuted}
+        onMessageLongPress={handleRowLongPress}
+        onRetry={handleRetry}
+        onStopSpeech={stopSpeech}
+      />
+    ),
+    [
+      rowStyles,
+      streaming,
+      speakingMessageId,
+      colors.textMuted,
+      handleRowLongPress,
+      handleRetry,
+      stopSpeech,
+    ],
   );
 
   return (
@@ -1405,6 +1313,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
               onScroll={handleScroll}
               scrollEventThrottle={16}
               onContentSizeChange={handleContentSizeChange}
+              // TASK-103 virtualization bounds: mount a bounded slice of a
+              // long conversation and grow it in steady batches.
+              initialNumToRender={CHAT_LIST_INITIAL_NUM_TO_RENDER}
+              maxToRenderPerBatch={CHAT_LIST_MAX_TO_RENDER_PER_BATCH}
+              windowSize={CHAT_LIST_WINDOW_SIZE}
               ListEmptyComponent={
                 <Text style={styles.emptyHint} testID="chat-empty">
                   Say hello to start the conversation.
