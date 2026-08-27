@@ -45,7 +45,7 @@ from conversations.context import ContextBuilder
 from conversations.models import Message, Session
 from conversations.tasks import schedule_session_summary_update
 from conversations.topics import GeneratedTopic
-from conversations.window import select_recent_messages
+from conversations.window import recent_message_window, select_recent_messages
 from llm.types import CompletionRequest, StreamCompleted, StreamFailed, StreamingEvent
 
 logger = logging.getLogger("conversations.chat")
@@ -117,24 +117,29 @@ def _build_turn_request(
     """Assemble the LLM request for one turn from persisted session state.
 
     History is every complete message past the summary boundary and before
-    ``before_sequence``, chronological; the window selects its tail and
+    ``before_sequence``. Only the configured recent-message window is fetched
+    from the database — the queryset is bounded in SQL (reverse-order
+    ``LIMIT``) so long conversations never transfer more rows than the
+    window holds; :func:`~conversations.window.select_recent_messages` then
+    re-applies the window contract to the chronological re-ordered tail.
     ``current_text`` becomes the final user message.
     """
-    history = (
+    window = recent_message_window()
+    recent_history = (
         session.messages.filter(
             status=Message.Status.COMPLETE,
             sequence__gt=session.summary_message_boundary,
             sequence__lt=before_sequence,
         )
-        .order_by("sequence")
-        .values_list("role", "content")
+        .order_by("-sequence")
+        .values_list("role", "content")[:window]
     )
     topic = GeneratedTopic(title=session.title, description=session.topic)
     return context_builder.build(
         level=session.learning_level,
         topic=topic,
         summary=session.summary,
-        recent_messages=select_recent_messages(history),
+        recent_messages=select_recent_messages(reversed(list(recent_history))),
         current_message=current_text,
     )
 

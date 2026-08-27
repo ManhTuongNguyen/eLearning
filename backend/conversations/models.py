@@ -37,6 +37,12 @@ class Session(models.Model):
 
     class Meta:
         ordering = ("-updated_at",)
+        indexes = [
+            models.Index(
+                fields=("user", "-updated_at"),
+                name="conv_session_user_updated",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.user.username}: {self.title}"
@@ -82,6 +88,12 @@ class Message(models.Model):
 
     class Meta:
         ordering = ("sequence",)
+        indexes = [
+            models.Index(
+                fields=("session", "status", "sequence"),
+                name="conv_msg_session_status_seq",
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=("session", "sequence"),

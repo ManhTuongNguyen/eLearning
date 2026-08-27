@@ -24,7 +24,7 @@ from conversations.serializers import (
 )
 from conversations.suggestions import SuggestionService
 from conversations.topics import GeneratedTopic, TopicGenerationService
-from conversations.window import select_recent_messages
+from conversations.window import recent_message_window, select_recent_messages
 from learning.models import Profile
 from llm import views as llm_views
 from llm.exceptions import LLMError
@@ -319,20 +319,20 @@ class MessageSuggestionsView(APIView):
             raise Http404("No Message matches the given query.") from None
         if message.status != Message.Status.COMPLETE or not message.content.strip():
             raise Conflict("Suggestions require a completed, non-empty message.")
-        history = (
+        recent_history = (
             session.messages.filter(
                 status=Message.Status.COMPLETE,
                 sequence__lt=message.sequence,
             )
-            .order_by("sequence")
-            .values_list("role", "content")
+            .order_by("-sequence")
+            .values_list("role", "content")[: recent_message_window()]
         )
         try:
             suggestions = get_suggestion_service().suggest(
                 level=session.learning_level,
                 topic=GeneratedTopic(title=session.title, description=session.topic),
                 selected_message=message.content,
-                history=select_recent_messages(history),
+                history=select_recent_messages(reversed(list(recent_history))),
             )
         except LLMError as exc:
             raise exc
