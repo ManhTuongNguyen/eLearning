@@ -14,6 +14,7 @@ import logging
 import math
 from dataclasses import dataclass
 
+import httpx
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
@@ -33,6 +34,8 @@ class ModelConfiguration:
     api_key: str
     base_url: str
     timeout_seconds: float
+    connect_timeout_seconds: float
+    read_timeout_seconds: float
     primary_model: str
     fallback_models: tuple[str, ...]
 
@@ -40,6 +43,16 @@ class ModelConfiguration:
     def model_chain(self) -> tuple[str, ...]:
         """Ordered attempt chain: primary model first, then fallbacks."""
         return (self.primary_model, *self.fallback_models)
+
+    @property
+    def httpx_timeout(self) -> httpx.Timeout:
+        """Return an httpx.Timeout configured with separate connect/read timeouts."""
+        return httpx.Timeout(
+            connect=self.connect_timeout_seconds,
+            read=self.read_timeout_seconds,
+            write=self.connect_timeout_seconds,
+            pool=self.connect_timeout_seconds,
+        )
 
 
 def load_model_configuration() -> ModelConfiguration:
@@ -64,7 +77,9 @@ def load_model_configuration() -> ModelConfiguration:
     configuration = ModelConfiguration(
         api_key=str(_setting("OPENROUTER_API_KEY", default="")),
         base_url=_required_text("OPENROUTER_BASE_URL").rstrip("/"),
-        timeout_seconds=_timeout_seconds(),
+        timeout_seconds=_timeout_seconds("LLM_REQUEST_TIMEOUT_SECONDS", 60.0),
+        connect_timeout_seconds=_timeout_seconds("LLM_CONNECT_TIMEOUT_SECONDS", 10.0),
+        read_timeout_seconds=_timeout_seconds("LLM_READ_TIMEOUT_SECONDS", 60.0),
         primary_model=primary,
         fallback_models=tuple(fallbacks),
     )
@@ -96,10 +111,9 @@ def _clean_model(raw: object) -> str:
     return str(raw).strip() if raw is not None else ""
 
 
-def _timeout_seconds() -> float:
-    name = "LLM_REQUEST_TIMEOUT_SECONDS"
+def _timeout_seconds(name: str, default: float) -> float:
     try:
-        timeout = float(str(_setting(name)))
+        timeout = float(str(_setting(name, default=default)))
     except (TypeError, ValueError) as exc:
         raise ImproperlyConfigured(f"{name} must be a number of seconds.") from exc
     if not math.isfinite(timeout) or timeout <= 0:

@@ -59,7 +59,8 @@ class OpenRouterProvider(LLMProvider):
         api_key: str,
         default_model: str,
         base_url: str = DEFAULT_BASE_URL,
-        timeout: float = 60.0,
+        connect_timeout: float = 10.0,
+        read_timeout: float = 60.0,
         client: httpx.Client | None = None,
     ) -> None:
         if not api_key.strip():
@@ -68,17 +69,25 @@ class OpenRouterProvider(LLMProvider):
             raise ValueError("OpenRouter default_model must be a non-empty string.")
         if not base_url.strip():
             raise ValueError("OpenRouter base_url must be a non-empty string.")
-        if timeout <= 0:
-            raise ValueError("OpenRouter timeout must be greater than zero.")
+        if connect_timeout <= 0:
+            raise ValueError("OpenRouter connect_timeout must be greater than zero.")
+        if read_timeout <= 0:
+            raise ValueError("OpenRouter read_timeout must be greater than zero.")
 
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.default_model = default_model
-        self.timeout = float(timeout)
+        self.connect_timeout = float(connect_timeout)
+        self.read_timeout = float(read_timeout)
         self._owns_client = client is None
         self._client = client or httpx.Client(
             base_url=self.base_url,
-            timeout=httpx.Timeout(self.timeout),
+            timeout=httpx.Timeout(
+                connect=self.connect_timeout,
+                read=self.read_timeout,
+                write=self.connect_timeout,
+                pool=self.connect_timeout,
+            ),
         )
 
     @classmethod
@@ -89,7 +98,8 @@ class OpenRouterProvider(LLMProvider):
             api_key=config.api_key,
             base_url=config.base_url,
             default_model=config.primary_model,
-            timeout=config.timeout_seconds,
+            connect_timeout=config.connect_timeout_seconds,
+            read_timeout=config.read_timeout_seconds,
         )
 
     def close(self) -> None:
@@ -361,9 +371,14 @@ class OpenRouterProvider(LLMProvider):
         return LLMResponseError(f"unexpected HTTP {status_code}: {message}", **kwargs)
 
     def _timeout_failure(self, model: str | None) -> LLMTimeoutError:
-        logger.warning("openrouter request timed out model=%s timeout=%.0fs", model, self.timeout)
+        logger.warning(
+            "openrouter request timed out model=%s connect_timeout=%.0fs read_timeout=%.0fs",
+            model,
+            self.connect_timeout,
+            self.read_timeout,
+        )
         return LLMTimeoutError(
-            f"request exceeded timeout of {self.timeout:g}s",
+            f"request timed out (connect={self.connect_timeout:g}s, read={self.read_timeout:g}s)",
             provider="openrouter",
             model=model,
         )

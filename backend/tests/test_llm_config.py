@@ -34,6 +34,8 @@ def _configuration(**overrides: object) -> ModelConfiguration:
         "api_key": "sk-test",
         "base_url": "https://openrouter.ai/api/v1",
         "timeout_seconds": 30.0,
+        "connect_timeout_seconds": 10.0,
+        "read_timeout_seconds": 30.0,
         "primary_model": "vendor/main",
         "fallback_models": ("vendor/f1",),
     }
@@ -68,6 +70,8 @@ class LoadModelConfigurationTests(SimpleTestCase):
         OPENROUTER_API_KEY="sk-or-v1-abc",
         OPENROUTER_BASE_URL="https://openrouter.ai/api/v1/",
         LLM_REQUEST_TIMEOUT_SECONDS=45,
+        LLM_CONNECT_TIMEOUT_SECONDS=12,
+        LLM_READ_TIMEOUT_SECONDS=45,
         LLM_PRIMARY_MODEL="acme/primary",
         LLM_FALLBACK_MODELS=["acme/fb-1", "acme/fb-2"],
     )
@@ -77,6 +81,8 @@ class LoadModelConfigurationTests(SimpleTestCase):
         self.assertEqual(config.api_key, "sk-or-v1-abc")
         self.assertEqual(config.base_url, "https://openrouter.ai/api/v1")
         self.assertEqual(config.timeout_seconds, 45.0)
+        self.assertEqual(config.connect_timeout_seconds, 12.0)
+        self.assertEqual(config.read_timeout_seconds, 45.0)
         self.assertEqual(config.model_chain, ("acme/primary", "acme/fb-1", "acme/fb-2"))
 
     @override_settings(
@@ -169,6 +175,8 @@ class ProviderWiringTests(SimpleTestCase):
         OPENROUTER_API_KEY="sk-wiring",
         OPENROUTER_BASE_URL="https://openrouter.ai/api/v1/",
         LLM_REQUEST_TIMEOUT_SECONDS=11,
+        LLM_CONNECT_TIMEOUT_SECONDS=5,
+        LLM_READ_TIMEOUT_SECONDS=11,
         LLM_PRIMARY_MODEL="wiring/primary",
         LLM_FALLBACK_MODELS=["wiring/fb"],
     )
@@ -179,12 +187,15 @@ class ProviderWiringTests(SimpleTestCase):
         self.assertEqual(provider.api_key, "sk-wiring")
         self.assertEqual(provider.base_url, "https://openrouter.ai/api/v1")
         self.assertEqual(provider.default_model, "wiring/primary")
-        self.assertEqual(provider.timeout, 11.0)
+        self.assertEqual(provider.connect_timeout, 5.0)
+        self.assertEqual(provider.read_timeout, 11.0)
 
     @override_settings(
         OPENROUTER_API_KEY="sk-wiring",
         OPENROUTER_BASE_URL="https://openrouter.ai/api/v1",
         LLM_REQUEST_TIMEOUT_SECONDS=12,
+        LLM_CONNECT_TIMEOUT_SECONDS=6,
+        LLM_READ_TIMEOUT_SECONDS=12,
         LLM_PRIMARY_MODEL="wiring/primary",
         LLM_FALLBACK_MODELS=["wiring/fb-1", "wiring/fb-2"],
     )

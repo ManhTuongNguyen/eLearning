@@ -375,6 +375,8 @@ class LifecycleAndWiringTests(SimpleTestCase):
             api_key="sk-test",
             base_url=DEFAULT_BASE_URL,
             timeout_seconds=30.0,
+            connect_timeout_seconds=10.0,
+            read_timeout_seconds=30.0,
             primary_model="vendor/main",
             fallback_models=("vendor/f1", "vendor/f2"),
         )
@@ -388,7 +390,8 @@ class LifecycleAndWiringTests(SimpleTestCase):
             api_key="sk-test",
             base_url=DEFAULT_BASE_URL,
             default_model="vendor/main",
-            timeout=30.0,
+            connect_timeout=10.0,
+            read_timeout=30.0,
         )
         self.assertIs(fallback.provider, inner)
         self.assertEqual(fallback.models, ("vendor/main", "vendor/f1", "vendor/f2"))

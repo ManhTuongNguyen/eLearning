@@ -1991,7 +1991,7 @@ Acceptance criteria:
 
 ## TASK-097 — Implement LLM timeout handling
 
-Status: `[ ]`
+Status: `[x]`
 
 Configure sensible timeouts for OpenRouter requests.
 

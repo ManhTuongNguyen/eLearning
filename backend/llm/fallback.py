@@ -53,7 +53,8 @@ class FallbackProvider(LLMProvider):
                 api_key=config.api_key,
                 base_url=config.base_url,
                 default_model=config.primary_model,
-                timeout=config.timeout_seconds,
+                connect_timeout=config.connect_timeout_seconds,
+                read_timeout=config.read_timeout_seconds,
             ),
             models=config.model_chain,
         )

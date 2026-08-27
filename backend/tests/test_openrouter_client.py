@@ -29,7 +29,8 @@ def make_provider(handler: Callable[[httpx.Request], httpx.Response]) -> OpenRou
         api_key=API_KEY,
         base_url=BASE_URL,
         default_model=MODEL,
-        timeout=5.0,
+        connect_timeout=2.0,
+        read_timeout=5.0,
         client=httpx.Client(base_url=BASE_URL, transport=httpx.MockTransport(handler)),
     )
 
@@ -99,10 +100,15 @@ class ConstructionTests(SimpleTestCase):
         with self.assertRaises(ValueError):
             OpenRouterProvider(api_key=API_KEY, default_model=MODEL, base_url=" ")
 
-    def test_non_positive_timeout_is_rejected(self) -> None:
+    def test_non_positive_connect_timeout_is_rejected(self) -> None:
         for timeout in (0, -1):
             with self.assertRaises(ValueError):
-                OpenRouterProvider(api_key=API_KEY, default_model=MODEL, timeout=timeout)
+                OpenRouterProvider(api_key=API_KEY, default_model=MODEL, connect_timeout=timeout)
+
+    def test_non_positive_read_timeout_is_rejected(self) -> None:
+        for timeout in (0, -1):
+            with self.assertRaises(ValueError):
+                OpenRouterProvider(api_key=API_KEY, default_model=MODEL, read_timeout=timeout)
 
     def test_close_only_closes_owned_client(self) -> None:
         owned = OpenRouterProvider(api_key=API_KEY, default_model=MODEL)
@@ -705,6 +711,8 @@ class SettingsWiringTests(SimpleTestCase):
         OPENROUTER_BASE_URL=f"{DEFAULT_BASE_URL}/",
         LLM_PRIMARY_MODEL="settings/model",
         LLM_REQUEST_TIMEOUT_SECONDS=7,
+        LLM_CONNECT_TIMEOUT_SECONDS=5,
+        LLM_READ_TIMEOUT_SECONDS=8,
     )
     def test_from_settings_reads_configuration(self) -> None:
         provider = OpenRouterProvider.from_settings()
@@ -713,7 +721,8 @@ class SettingsWiringTests(SimpleTestCase):
         self.assertEqual(provider.api_key, "sk-from-settings")
         self.assertEqual(provider.base_url, DEFAULT_BASE_URL)
         self.assertEqual(provider.default_model, "settings/model")
-        self.assertEqual(provider.timeout, 7.0)
+        self.assertEqual(provider.connect_timeout, 5.0)
+        self.assertEqual(provider.read_timeout, 8.0)
 
     def test_default_base_url_constant_matches_documented_api_root(self) -> None:
         self.assertEqual(DEFAULT_BASE_URL, "https://openrouter.ai/api/v1")
