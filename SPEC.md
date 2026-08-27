@@ -1927,7 +1927,7 @@ Acceptance criteria:
 
 ## TASK-094 — Implement local-data clearing
 
-Status: `[ ]`
+Status: `[x]`
 
 Settings must provide:
 

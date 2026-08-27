@@ -16,6 +16,7 @@ import {
   loadServerlessApiKey,
   saveServerlessApiKey,
 } from './secureApiKey';
+import {clearServerlessLocalData} from '../db/clearLocalData';
 import type {OpenRouterClientConfig} from './types';
 
 const SETTING_PRIMARY_MODEL = 'serverless_primary_model';
@@ -86,6 +87,11 @@ export async function clearServerlessOpenRouterConfig(): Promise<void> {
     SETTING_PRIMARY_MODEL,
     SETTING_FALLBACK_MODELS,
   ]);
+}
+
+/** Clear all serverless local data (TASK-094). */
+export async function clearAllServerlessData(): Promise<void> {
+  await clearServerlessLocalData();
 }
 
 /** Check if serverless OpenRouter is configured. */

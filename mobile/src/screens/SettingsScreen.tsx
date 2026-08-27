@@ -4,17 +4,18 @@
  * active application mode (TASK-080).
  *
  * Always shown: signed-in account identity, application-mode switcher
- * (TASK-090), theme selection (TASK-044) and logout (TASK-015). Server mode
- * adds rows backed by server features — learning level editing (TASK-018)
- * and the saved vocabulary list (TASK-072). Serverless mode replaces them
- * with an OpenRouter settings card that opens the local AI configuration
+ * (TASK-090), theme selection (TASK-044), local data clearing (TASK-094,
+ * serverless mode only) and logout (TASK-015). Server mode adds rows
+ * backed by server features — learning level editing (TASK-018) and the
+ * saved vocabulary list (TASK-072). Serverless mode replaces them with
+ * an OpenRouter settings card that opens the local AI configuration
  * editor (TASK-092): the key itself is stored in secure storage and is
- * never displayed. Local data clearing arrives with its own task
- * (TASK-094), so it is not rendered until it can actually work.
+ * never displayed.
  */
 import React, {useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,7 +27,7 @@ import {useAuth} from '../auth/AuthContext';
 import {useApplicationMode} from '../mode/ModeContext';
 import type {ApplicationMode} from '../mode/types';
 import type {SettingsScreenProps} from '../navigation/types';
-import {loadServerlessOpenRouterConfig} from '../serverless/settings';
+import {clearAllServerlessData, loadServerlessOpenRouterConfig} from '../serverless/settings';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 import type {ThemeMode} from '../theme/ThemeContext';
@@ -327,6 +328,21 @@ function createStyles(c: ThemeColors) {
       fontSize: 16,
       fontWeight: '600',
     },
+    secondaryButton: {
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.danger,
+      borderRadius: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 32,
+      alignItems: 'center',
+      alignSelf: 'stretch',
+    },
+    secondaryButtonText: {
+      color: c.danger,
+      fontSize: 16,
+      fontWeight: '600',
+    },
   });
 }
 
@@ -358,6 +374,43 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
     primaryModel: string | null;
     fallbackCount: number;
   }>('loading');
+
+  /** While clearing local data, the button is disabled to prevent double-taps. */
+  const [clearing, setClearing] = useState(false);
+
+  /**
+   * Confirm and clear all serverless local data (TASK-094). Server mode
+   * has nothing to clear locally, so the action is only exposed when
+   * the local store might have data to remove.
+   */
+  const confirmClearLocalData = (): void => {
+    Alert.alert(
+      'Clear local data?',
+      'This will remove all serverless conversations, summaries, profile and OpenRouter settings from this device. Your account on the server is not affected.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            setClearing(true);
+            try {
+              await clearAllServerlessData();
+              setOpenRouterStatus({hasApiKey: false, primaryModel: null, fallbackCount: 0});
+              Alert.alert('Local data cleared', 'All serverless data has been removed from this device.');
+            } catch (error) {
+              Alert.alert(
+                'Clearing failed',
+                error instanceof Error ? error.message : 'Unable to clear local data.',
+              );
+            } finally {
+              setClearing(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   useEffect(() => {
     if (appMode !== 'serverless') {
@@ -571,6 +624,27 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
             );
           })}
         </View>
+
+        {/* Local data clearing (TASK-094): only meaningful in serverless mode,
+            where the on-device SQLite database actually holds user data. */}
+        {appMode === 'serverless' ? (
+          <View style={styles.rowGroup} testID="settings-clear-local-section">
+            <Text style={styles.sectionLabel}>Local data</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear local data"
+              style={[styles.secondaryButton, clearing && styles.buttonDisabled]}
+              disabled={clearing}
+              onPress={confirmClearLocalData}
+              testID="settings-clear-local">
+              {clearing ? (
+                <ActivityIndicator color={colors.textPrimary} />
+              ) : (
+                <Text style={styles.secondaryButtonText}>Clear local data</Text>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
 
         <Pressable
           style={[styles.button, busy && styles.buttonDisabled]}
