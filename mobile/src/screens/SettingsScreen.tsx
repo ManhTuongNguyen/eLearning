@@ -7,10 +7,10 @@
  * (TASK-090), theme selection (TASK-044) and logout (TASK-015). Server mode
  * adds rows backed by server features — learning level editing (TASK-018)
  * and the saved vocabulary list (TASK-072). Serverless mode replaces them
- * with an OpenRouter settings card reporting whether a local AI
- * configuration exists — the key itself is stored in secure storage and is
- * never displayed (TASK-083/092); local data clearing arrives with its own
- * task (TASK-094), so it is not rendered until it can actually work.
+ * with an OpenRouter settings card that opens the local AI configuration
+ * editor (TASK-092): the key itself is stored in secure storage and is
+ * never displayed. Local data clearing arrives with its own task
+ * (TASK-094), so it is not rendered until it can actually work.
  */
 import React, {useEffect, useMemo, useState} from 'react';
 import {
@@ -449,7 +449,12 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
         ) : null}
 
         {appMode === 'serverless' ? (
-          <View style={[styles.openRouterCard]} testID="settings-openrouter-card">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="OpenRouter settings"
+            onPress={() => navigation.navigate('OpenRouterSettings')}
+            style={({pressed}) => [styles.openRouterCard, pressed && styles.rowPressed]}
+            testID="settings-openrouter-card">
             <View style={styles.openRouterHeader}>
               <Text style={styles.openRouterTitle}>OpenRouter</Text>
               {openRouterStatus === 'loading' ? (
@@ -495,7 +500,7 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
               }
               testID="settings-openrouter-fallback-status"
             />
-          </View>
+          </Pressable>
         ) : null}
 
         <View style={styles.rowGroup}>

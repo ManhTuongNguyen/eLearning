@@ -1891,7 +1891,7 @@ Show only relevant options for the current mode.
 
 ## TASK-092 — Implement serverless OpenRouter settings
 
-Status: `[ ]`
+Status: `[x]`
 
 Allow the user to configure:
 

@@ -245,4 +245,13 @@ describe('serverless-mode visibility (TASK-091)', () => {
       ),
     ).toBeOnTheScreen();
   });
+
+  it('opens the OpenRouter editor from the serverless status card (TASK-092)', async () => {
+    mockedConfig.mockResolvedValue(configuredStub());
+    const props = await renderSettings('serverless');
+
+    fireEvent.press(await screen.findByTestId('settings-openrouter-card'));
+
+    expect(props.navigation.navigate).toHaveBeenCalledWith('OpenRouterSettings');
+  });
 });

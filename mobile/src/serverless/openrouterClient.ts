@@ -60,6 +60,142 @@ export function buildModelChain(
   return chain;
 }
 
+/** Extract a human-readable message from an error body; never logs secrets. */
+function extractErrorMessage(bodyText: string): string {
+  const snippet = bodyText.trim().slice(0, MAX_ERROR_SNIPPET_LENGTH);
+  let payload: unknown = null;
+  try {
+    payload = JSON.parse(bodyText);
+  } catch {
+    return snippet || 'empty error body';
+  }
+  if (typeof payload === 'object' && payload !== null) {
+    const record = payload as Record<string, unknown>;
+    const error = record.error;
+    if (typeof error === 'object' && error !== null) {
+      const message = (error as Record<string, unknown>).message;
+      if (typeof message === 'string' && message.trim()) {
+        return message.slice(0, MAX_ERROR_SNIPPET_LENGTH);
+      }
+    }
+    if (typeof record.message === 'string' && record.message.trim()) {
+      return (record.message as string).slice(0, MAX_ERROR_SNIPPET_LENGTH);
+    }
+  }
+  return snippet || 'unrecognized error body';
+}
+
+/** Normalize one model-catalog entry; malformed entries are skipped. */
+function parseModelEntry(entry: unknown): ModelInfo | null {
+  if (typeof entry !== 'object' || entry === null) {
+    return null;
+  }
+  const record = entry as Record<string, unknown>;
+  const id = record.id;
+  if (typeof id !== 'string' || !id.trim()) {
+    return null;
+  }
+  const intOrNull = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isInteger(value) ? value : null;
+  return {
+    id: id.trim(),
+    name: typeof record.name === 'string' ? record.name : '',
+    description: typeof record.description === 'string' ? record.description : null,
+    contextLength: intOrNull(record.context_length),
+    created: intOrNull(record.created),
+  };
+}
+
+/** GET {baseUrl}/models and normalize the payload; failures are pre-normalized. */
+async function requestModelCatalog(
+  baseUrl: string,
+  headers: Record<string, string>,
+  timeoutMs: number,
+): Promise<ModelInfo[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${baseUrl}/models`, {
+      method: 'GET',
+      headers,
+      signal: controller.signal,
+    });
+    const bodyText = await response.text();
+    if (!response.ok) {
+      throw normalizeHttpFailure(response.status, extractErrorMessage(bodyText), null);
+    }
+    let body: unknown;
+    try {
+      body = JSON.parse(bodyText);
+    } catch {
+      throw new OpenRouterResponseError('Malformed JSON from provider.');
+    }
+    const entries =
+      typeof body === 'object' && body !== null
+        ? (body as Record<string, unknown>).data
+        : undefined;
+    if (!Array.isArray(entries)) {
+      throw new OpenRouterResponseError('Models response contains no data list.');
+    }
+    const catalog: ModelInfo[] = [];
+    for (const entry of entries) {
+      const parsed = parseModelEntry(entry);
+      if (parsed) {
+        catalog.push(parsed);
+      }
+    }
+    return catalog;
+  } catch (error) {
+    if (error instanceof OpenRouterError) {
+      throw error;
+    }
+    if (controller.signal.aborted) {
+      throw new OpenRouterTimeoutError(`request exceeded timeout of ${timeoutMs}ms`);
+    }
+    throw new OpenRouterRequestError(
+      'Network request failed. Check your connection and try again.',
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Options for fetching the model catalog without a full client config. */
+export interface OpenRouterModelListingOptions {
+  /** The user's personal API key; only ever sent toward openrouter.ai. */
+  apiKey: string;
+  baseUrl?: string;
+  timeoutMs?: number;
+}
+
+/**
+ * Retrieve the model catalog using only an API key (SPEC TASK-092). Needed
+ * while settings are being configured — before any primary model exists,
+ * `createOpenRouterClient` cannot be constructed yet. Same normalized result
+ * and error hierarchy as `OpenRouterClient.listModels()`.
+ */
+export async function listOpenRouterModels(
+  options: OpenRouterModelListingOptions,
+): Promise<ModelInfo[]> {
+  const apiKey = options.apiKey.trim();
+  if (!apiKey) {
+    throw new Error('An OpenRouter API key is required.');
+  }
+  const baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).trim().replace(/\/+$/, '');
+  if (!baseUrl) {
+    throw new Error('The OpenRouter base URL must be a non-empty string.');
+  }
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error('The OpenRouter timeout must be greater than zero.');
+  }
+  return requestModelCatalog(
+    baseUrl,
+    {Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json'},
+    timeoutMs,
+  );
+}
+
 /**
  * Create an OpenRouter client bound to one user configuration. Config
  * problems are programmer errors and throw synchronously.
@@ -88,31 +224,6 @@ export function createOpenRouterClient(config: OpenRouterClientConfig): OpenRout
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     };
-  }
-
-  /** Extract a human-readable message from an error body; never logs secrets. */
-  function extractErrorMessage(bodyText: string): string {
-    const snippet = bodyText.trim().slice(0, MAX_ERROR_SNIPPET_LENGTH);
-    let payload: unknown = null;
-    try {
-      payload = JSON.parse(bodyText);
-    } catch {
-      return snippet || 'empty error body';
-    }
-    if (typeof payload === 'object' && payload !== null) {
-      const record = payload as Record<string, unknown>;
-      const error = record.error;
-      if (typeof error === 'object' && error !== null) {
-        const message = (error as Record<string, unknown>).message;
-        if (typeof message === 'string' && message.trim()) {
-          return message.slice(0, MAX_ERROR_SNIPPET_LENGTH);
-        }
-      }
-      if (typeof record.message === 'string' && record.message.trim()) {
-        return (record.message as string).slice(0, MAX_ERROR_SNIPPET_LENGTH);
-      }
-    }
-    return snippet || 'unrecognized error body';
   }
 
   function buildPayload(request: CompletionRequest, model: string, stream: boolean): string {
@@ -503,75 +614,9 @@ export function createOpenRouterClient(config: OpenRouterClientConfig): OpenRout
     };
   }
 
-  /** Normalize one model-catalog entry; malformed entries are skipped. */
-  function parseModelEntry(entry: unknown): ModelInfo | null {
-    if (typeof entry !== 'object' || entry === null) {
-      return null;
-    }
-    const record = entry as Record<string, unknown>;
-    const id = record.id;
-    if (typeof id !== 'string' || !id.trim()) {
-      return null;
-    }
-    const intOrNull = (value: unknown): number | null =>
-      typeof value === 'number' && Number.isInteger(value) ? value : null;
-    return {
-      id: id.trim(),
-      name: typeof record.name === 'string' ? record.name : '',
-      description: typeof record.description === 'string' ? record.description : null,
-      contextLength: intOrNull(record.context_length),
-      created: intOrNull(record.created),
-    };
-  }
-
-  async function listModels(): Promise<ModelInfo[]> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(`${baseUrl}/models`, {
-        method: 'GET',
-        headers: authHeaders(),
-        signal: controller.signal,
-      });
-      const bodyText = await response.text();
-      if (!response.ok) {
-        throw normalizeHttpFailure(response.status, extractErrorMessage(bodyText), null);
-      }
-      let body: unknown;
-      try {
-        body = JSON.parse(bodyText);
-      } catch {
-        throw new OpenRouterResponseError('Malformed JSON from provider.');
-      }
-      const entries =
-        typeof body === 'object' && body !== null
-          ? (body as Record<string, unknown>).data
-          : undefined;
-      if (!Array.isArray(entries)) {
-        throw new OpenRouterResponseError('Models response contains no data list.');
-      }
-      const catalog: ModelInfo[] = [];
-      for (const entry of entries) {
-        const parsed = parseModelEntry(entry);
-        if (parsed) {
-          catalog.push(parsed);
-        }
-      }
-      return catalog;
-    } catch (error) {
-      if (error instanceof OpenRouterError) {
-        throw error;
-      }
-      if (controller.signal.aborted) {
-        throw new OpenRouterTimeoutError(`request exceeded timeout of ${timeoutMs}ms`);
-      }
-      throw new OpenRouterRequestError(
-        'Network request failed. Check your connection and try again.',
-      );
-    } finally {
-      clearTimeout(timer);
-    }
-  }
+  /** Retrieve the model catalog through the shared catalog request. */
+  const listModels = (): Promise<ModelInfo[]> =>
+    requestModelCatalog(baseUrl, authHeaders(), timeoutMs);
 
   return {complete, streamCompletion, listModels};
 }

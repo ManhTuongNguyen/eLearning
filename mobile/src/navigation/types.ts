@@ -27,6 +27,8 @@ export type MainStackParamList = {
   Level: undefined;
   /** Saved-expression list pushed from Settings (SPEC TASK-072). */
   Vocabulary: undefined;
+  /** Serverless OpenRouter editor pushed from Settings (SPEC TASK-092). */
+  OpenRouterSettings: undefined;
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -43,5 +45,10 @@ export type NewConversationScreenProps = NativeStackScreenProps<
 export type LevelScreenProps = NativeStackScreenProps<MainStackParamList, 'Level'>;
 
 export type VocabularyScreenProps = NativeStackScreenProps<MainStackParamList, 'Vocabulary'>;
+
+export type OpenRouterSettingsScreenProps = NativeStackScreenProps<
+  MainStackParamList,
+  'OpenRouterSettings'
+>;
 
 export type SettingsScreenProps = NativeStackScreenProps<MainStackParamList, 'Settings'>;
