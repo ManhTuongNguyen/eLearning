@@ -23,6 +23,7 @@ import {ApiError} from '../src/api/client';
 import * as sessionsApi from '../src/api/sessions';
 import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
 import {AuthProvider} from '../src/auth/AuthContext';
+import {ModeProvider} from '../src/mode/ModeContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen} from '../src/screens/ChatScreen';
@@ -85,9 +86,11 @@ async function renderHistory(options?: {withChatUnderneath?: boolean}) {
   );
 
   return render(
-    <ThemeProvider>
-      <AuthProvider>{navigator}</AuthProvider>
-    </ThemeProvider>,
+    <ModeProvider>
+      <ThemeProvider>
+        <AuthProvider>{navigator}</AuthProvider>
+      </ThemeProvider>
+    </ModeProvider>,
   );
 }
 

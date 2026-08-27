@@ -1789,7 +1789,7 @@ Acceptance criteria:
 
 ## TASK-087 — Implement serverless conversation context
 
-Status: `[ ]`
+Status: `[x]`
 
 Reuse the same context strategy as server mode:
 
@@ -1817,7 +1817,7 @@ Acceptance criteria:
 
 ## TASK-088 — Implement serverless suggested replies
 
-Status: `[ ]`
+Status: `[x]`
 
 Implement suggestions directly through OpenRouter.
 

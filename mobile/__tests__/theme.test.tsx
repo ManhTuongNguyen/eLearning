@@ -9,6 +9,7 @@ import {Pressable, Text, View} from 'react-native';
 import {act, fireEvent, render, screen} from '@testing-library/react-native';
 
 import {darkColors, lightColors} from '../src/theme/colors';
+import {ModeProvider} from '../src/mode/ModeContext';
 import {ThemeProvider, useTheme} from '../src/theme/ThemeContext';
 import type {LoginScreenProps, SettingsScreenProps} from '../src/navigation/types';
 import {ChatScreen} from '../src/screens/ChatScreen';
@@ -313,10 +314,12 @@ describe('screens consume theme tokens', () => {
 
   it('the chat screen background follows the active palette', async () => {
     await render(
-      <ThemeProvider>
-        <ChatScreen {...chatProps} />
-        <ModeControls />
-      </ThemeProvider>,
+      <ModeProvider>
+        <ThemeProvider>
+          <ChatScreen {...chatProps} />
+          <ModeControls />
+        </ThemeProvider>
+      </ModeProvider>,
     );
 
     expect(backgroundOf('chat-screen')).toBe(lightColors.background);

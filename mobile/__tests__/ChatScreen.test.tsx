@@ -53,6 +53,7 @@ import type {
 } from '../src/api/sessions';
 import * as vocabularyApi from '../src/api/vocabulary';
 import {AuthProvider} from '../src/auth/AuthContext';
+import {ModeProvider} from '../src/mode/ModeContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen, VOCAB_TOAST_DURATION_MS} from '../src/screens/ChatScreen';
@@ -125,21 +126,23 @@ async function renderChat(params?: MainStackParamList['Chat']) {
   const Stack = createNativeStackNavigator<MainStackParamList>();
 
   return render(
-    <ThemeProvider>
-      <AuthProvider>
-        <NavigationContainer initialState={{index: 0, routes: [{name: 'Chat', params}]}}>
-          <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="Chat">
-            <Stack.Screen name="Chat" component={ChatScreen} />
-            <Stack.Screen name="NewConversation">
-              {() => <View testID="new-conversation-screen" />}
-            </Stack.Screen>
-            <Stack.Screen name="History">{() => null}</Stack.Screen>
-            <Stack.Screen name="Settings">{() => null}</Stack.Screen>
-            <Stack.Screen name="Level">{() => null}</Stack.Screen>
-          </Stack.Navigator>
-        </NavigationContainer>
-      </AuthProvider>
-    </ThemeProvider>,
+    <ModeProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <NavigationContainer initialState={{index: 0, routes: [{name: 'Chat', params}]}}>
+            <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="Chat">
+              <Stack.Screen name="Chat" component={ChatScreen} />
+              <Stack.Screen name="NewConversation">
+                {() => <View testID="new-conversation-screen" />}
+              </Stack.Screen>
+              <Stack.Screen name="History">{() => null}</Stack.Screen>
+              <Stack.Screen name="Settings">{() => null}</Stack.Screen>
+              <Stack.Screen name="Level">{() => null}</Stack.Screen>
+            </Stack.Navigator>
+          </NavigationContainer>
+        </AuthProvider>
+      </ThemeProvider>
+    </ModeProvider>,
   );
 }
 

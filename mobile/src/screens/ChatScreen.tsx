@@ -72,6 +72,13 @@ import {copyText} from '../utils/clipboard';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 import {useSpeechPlayback} from '../tts/useSpeechPlayback';
+import {useApplicationMode} from '../mode/ModeContext';
+import {getLocalDatabase} from '../db/database';
+import {createOpenRouterClient} from '../serverless/openrouterClient';
+import {generateSuggestions} from '../serverless/suggestions';
+import {loadServerlessOpenRouterConfig} from '../serverless/settings';
+import {getLearningProfile} from '../db/profileStore';
+import type {LocalMessage} from '../db/types';
 import {ImprovementSheet} from './ImprovementSheet';
 import {MessageActionsMenu} from './MessageActionsMenu';
 import type {MessageAction} from './MessageActionsMenu';
@@ -406,6 +413,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const hasSample = sampleTurns !== undefined && sampleTurns.length > 0;
   const {getAccessToken} = useAuth();
   const {colors} = useTheme();
+  const {mode} = useApplicationMode();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [loading, setLoading] = useState(sessionId !== undefined);
@@ -468,6 +476,19 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  // TASK-061/088: ref for live messages access inside async callbacks without
+  // adding them to useCallback dependencies.
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // TASK-088: ref for live session access (needed for topic in serverless mode)
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   // TASK-061: monotonically increasing request id; responses apply only
   // when both the session and no newer request superseded them. TASK-064
@@ -756,41 +777,101 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     [failTurn, handleTurnEvent],
   );
 
-  /**
-   * TASK-061: generate three suggested replies for one selected message
-   * through the read-only suggestions endpoint. Nothing auto-sends — the
-   * replies land as chips above the composer and tapping one merely fills
-   * the draft. Stale responses (session switched or a newer request
-   * started) are dropped instead of overwriting newer state.
-   */
-  const startSuggestions = useCallback((sid: number, messageId: number) => {
-    const requestId = ++suggestionsRequestRef.current;
-    setSuggestions(null);
-    setSuggestionsError(null);
-    setSuggestionsLoading(true);
-    (async () => {
-      try {
-        let token: string | null = null;
+/**
+     * TASK-061: generate three suggested replies for one selected message
+     * through the read-only suggestions endpoint. Nothing auto-sends — the
+     * replies land as chips above the composer and tapping one merely fills
+     * the draft. Stale responses (session switched or a newer request
+     * started) are dropped instead of overwriting newer state.
+     */
+    const startSuggestions = useCallback((sid: number, messageId: number) => {
+      const requestId = ++suggestionsRequestRef.current;
+      setSuggestions(null);
+      setSuggestionsError(null);
+      setSuggestionsLoading(true);
+      (async () => {
         try {
-          token = await getAccessTokenRef.current();
-        } catch {
-          token = null;
+          if (mode === 'serverless') {
+            // Serverless mode (TASK-088): generate suggestions locally with an
+            // LLM call using the user's own OpenRouter key. No backend involved.
+            const currentSession = sessionIdRef.current;
+            const currentMessages = messagesRef.current;
+            const currentSessionObj = sessionRef.current;
+            const userMessage = currentMessages.find(m => m.id === messageId);
+            const sessionTopic = currentSessionObj?.topic;
+            if (
+              currentSession === undefined ||
+              !userMessage ||
+              !sessionTopic
+            ) {
+              return;
+            }
+
+            // Load serverless OpenRouter configuration and create client
+            const serverlessConfig = await loadServerlessOpenRouterConfig();
+            if (!serverlessConfig) {
+              return;
+            }
+            const client = createOpenRouterClient(serverlessConfig);
+
+            // Load learning profile from local storage
+            const db = await getLocalDatabase();
+            const profile = await getLearningProfile(db);
+
+            // Convert ChatMessage[] to LocalMessage[] for history
+            const history: readonly LocalMessage[] = currentMessages
+              .filter(m => m.sequence < userMessage.sequence)
+              .map(m => ({
+                id: m.id,
+                session_id: currentSession,
+                role: m.role,
+                status: m.status,
+                content: m.content,
+                sequence: m.sequence,
+                created_at: m.created_at,
+              }));
+
+            const result = await generateSuggestions(client, {
+              level: profile.level,
+              topic: {
+                title: sessionTopic,
+                description: '',
+              },
+              selectedMessage: userMessage.content,
+              history,
+            });
+
+            if (
+              sessionIdRef.current !== currentSession ||
+              suggestionsRequestRef.current !== requestId
+            ) {
+              return;
+            }
+            setSuggestions({messageId, replies: [...result.replies]});
+          } else {
+          // Server mode (TASK-061): ask the backend to generate suggestions.
+          let token: string | null = null;
+          try {
+            token = await getAccessTokenRef.current();
+          } catch {
+            token = null;
+          }
+          if (
+            !token ||
+            sessionIdRef.current !== sid ||
+            suggestionsRequestRef.current !== requestId
+          ) {
+            return;
+          }
+          const result = await getMessageSuggestions(token, sid, messageId);
+          if (
+            sessionIdRef.current !== sid ||
+            suggestionsRequestRef.current !== requestId
+          ) {
+            return;
+          }
+          setSuggestions({...result, messageId});
         }
-        if (
-          !token ||
-          sessionIdRef.current !== sid ||
-          suggestionsRequestRef.current !== requestId
-        ) {
-          return;
-        }
-        const result = await getMessageSuggestions(token, sid, messageId);
-        if (
-          sessionIdRef.current !== sid ||
-          suggestionsRequestRef.current !== requestId
-        ) {
-          return;
-        }
-        setSuggestions({...result, messageId});
       } catch (err) {
         if (
           sessionIdRef.current === sid &&
@@ -804,7 +885,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         }
       }
     })();
-  }, []);
+  }, [mode]);
 
   /**
    * TASK-064: improve one selected user message through the read-only

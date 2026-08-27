@@ -27,6 +27,7 @@ import type {
   Session,
 } from '../src/api/sessions';
 import {AuthProvider} from '../src/auth/AuthContext';
+import {ModeProvider} from '../src/mode/ModeContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen} from '../src/screens/ChatScreen';
@@ -71,16 +72,18 @@ function emptyMessagesPage(): Paginated<ChatMessage> {
 async function renderScreen() {
   const Stack = createNativeStackNavigator<MainStackParamList>();
   return render(
-    <ThemeProvider>
-      <AuthProvider>
-        <NavigationContainer>
-          <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="NewConversation">
-            <Stack.Screen name="Chat" component={ChatScreen} />
-            <Stack.Screen name="NewConversation" component={NewConversationScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </AuthProvider>
-    </ThemeProvider>,
+    <ModeProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <NavigationContainer>
+            <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="NewConversation">
+              <Stack.Screen name="Chat" component={ChatScreen} />
+              <Stack.Screen name="NewConversation" component={NewConversationScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </AuthProvider>
+      </ThemeProvider>
+    </ModeProvider>,
   );
 }
 
@@ -194,20 +197,22 @@ describe('NewConversationScreen', () => {
   it('dismisses back to chat via the cancel control', async () => {
     const Stack = createNativeStackNavigator<MainStackParamList>();
     await render(
-      <ThemeProvider>
-        <AuthProvider>
-          <NavigationContainer
-            initialState={{
-              index: 1,
-              routes: [{name: 'Chat'}, {name: 'NewConversation'}],
-            }}>
-            <Stack.Navigator screenOptions={{headerShown: false}}>
-              <Stack.Screen name="Chat" component={ChatScreen} />
-              <Stack.Screen name="NewConversation" component={NewConversationScreen} />
-            </Stack.Navigator>
-          </NavigationContainer>
-        </AuthProvider>
-      </ThemeProvider>,
+      <ModeProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <NavigationContainer
+              initialState={{
+                index: 1,
+                routes: [{name: 'Chat'}, {name: 'NewConversation'}],
+              }}>
+              <Stack.Navigator screenOptions={{headerShown: false}}>
+                <Stack.Screen name="Chat" component={ChatScreen} />
+                <Stack.Screen name="NewConversation" component={NewConversationScreen} />
+              </Stack.Navigator>
+            </NavigationContainer>
+          </AuthProvider>
+        </ThemeProvider>
+      </ModeProvider>,
     );
 
     await screen.findByTestId('new-conversation-screen');

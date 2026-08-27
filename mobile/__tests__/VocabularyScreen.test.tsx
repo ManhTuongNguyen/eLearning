@@ -25,6 +25,7 @@ import type {Paginated} from '../src/api/sessions';
 import * as vocabularyApi from '../src/api/vocabulary';
 import type {VocabularyItem} from '../src/api/vocabulary';
 import {AuthProvider} from '../src/auth/AuthContext';
+import {ModeProvider} from '../src/mode/ModeContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen} from '../src/screens/ChatScreen';
@@ -91,9 +92,11 @@ async function renderVocabulary(options?: {withChatUnderneath?: boolean}) {
   );
 
   return render(
-    <ThemeProvider>
-      <AuthProvider>{navigator}</AuthProvider>
-    </ThemeProvider>,
+    <ModeProvider>
+      <ThemeProvider>
+        <AuthProvider>{navigator}</AuthProvider>
+      </ThemeProvider>
+    </ModeProvider>,
   );
 }
 

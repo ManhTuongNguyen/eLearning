@@ -14,6 +14,7 @@ import type {AuthTokens} from '../src/auth/tokens';
 import * as vocabularyApi from '../src/api/vocabulary';
 import {RootNavigator} from '../src/navigation/RootNavigator';
 import type {AuthStackParamList, MainStackParamList} from '../src/navigation/types';
+import {ModeProvider} from '../src/mode/ModeContext';
 import {ThemeProvider} from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
@@ -38,13 +39,15 @@ async function renderRoot() {
   };
 
   await render(
-    <ThemeProvider>
-      <AuthProvider>
-        <NavigationContainer ref={ref}>
-          <RootNavigator />
-        </NavigationContainer>
-      </AuthProvider>
-    </ThemeProvider>,
+    <ModeProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <NavigationContainer ref={ref}>
+            <RootNavigator />
+          </NavigationContainer>
+        </AuthProvider>
+      </ThemeProvider>
+    </ModeProvider>,
   );
 
   return {focusedRouteName};
