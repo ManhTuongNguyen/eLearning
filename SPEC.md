@@ -1912,7 +1912,7 @@ Acceptance criteria:
 
 ## TASK-093 — Implement secure API-key storage
 
-Status: `[ ]`
+Status: `[x]`
 
 Store the serverless OpenRouter API key using secure device storage.
 

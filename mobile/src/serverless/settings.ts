@@ -1,16 +1,22 @@
 /**
- * Serverless OpenRouter settings loading (SPEC TASK-088, TASK-093).
+ * Serverless OpenRouter settings loading (SPEC TASK-088, TASK-092, TASK-093).
  *
  * Loads the user's OpenRouter configuration from on-device storage:
- * - API key from secure keychain (never in plain SQLite)
- * - Primary model and fallback models from local settings table
+ * - API key from secure keychain via secureApiKey (never in plain SQLite,
+ *   never in AsyncStorage, never logged)
+ * - Primary model and fallback models from the local settings table
+ *
+ * The two halves of the configuration are intentionally split: the
+ * secret lives in the keychain, the non-secret identifiers live next
+ * to other local preferences so they are easy to clear together.
  */
-import * as Keychain from 'react-native-keychain';
 import {getLocalDatabase} from '../db/database';
+import {
+  clearServerlessApiKey,
+  loadServerlessApiKey,
+  saveServerlessApiKey,
+} from './secureApiKey';
 import type {OpenRouterClientConfig} from './types';
-
-const SERVERLESS_KEYCHAIN_SERVICE = 'com.elearningmobile.serverless';
-const SERVERLESS_KEYCHAIN_USERNAME = 'openrouter-config';
 
 const SETTING_PRIMARY_MODEL = 'serverless_primary_model';
 const SETTING_FALLBACK_MODELS = 'serverless_fallback_models';
@@ -19,14 +25,7 @@ const SETTING_FALLBACK_MODELS = 'serverless_fallback_models';
 export async function loadServerlessOpenRouterConfig(): Promise<OpenRouterClientConfig | null> {
   const db = await getLocalDatabase();
 
-  // Load API key from secure storage
-  const credentials = await Keychain.getGenericPassword({
-    service: SERVERLESS_KEYCHAIN_SERVICE,
-  });
-  if (!credentials) {
-    return null;
-  }
-  const apiKey = credentials.password.trim();
+  const apiKey = await loadServerlessApiKey();
   if (!apiKey) {
     return null;
   }
@@ -61,21 +60,16 @@ export async function loadServerlessOpenRouterConfig(): Promise<OpenRouterClient
 export async function saveServerlessOpenRouterConfig(config: OpenRouterClientConfig): Promise<void> {
   const db = await getLocalDatabase();
 
-  // Save API key to secure storage
-  await Keychain.setGenericPassword(
-    SERVERLESS_KEYCHAIN_USERNAME,
-    config.apiKey,
-    {service: SERVERLESS_KEYCHAIN_SERVICE},
-  );
+  // Persist the secret into the keychain (TASK-093) and the non-secret
+  // identifiers into the local settings table (TASK-092).
+  await saveServerlessApiKey(config.apiKey);
 
-  // Save primary model to settings
   await db.execute(
     `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
      ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
     [SETTING_PRIMARY_MODEL, config.primaryModel],
   );
 
-  // Save fallback models as comma-separated string
   const fallbackValue = (config.fallbackModels ?? []).join(',');
   await db.execute(
     `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
@@ -87,7 +81,7 @@ export async function saveServerlessOpenRouterConfig(config: OpenRouterClientCon
 /** Clear the serverless OpenRouter configuration. */
 export async function clearServerlessOpenRouterConfig(): Promise<void> {
   const db = await getLocalDatabase();
-  await Keychain.resetGenericPassword({service: SERVERLESS_KEYCHAIN_SERVICE});
+  await clearServerlessApiKey();
   await db.execute('DELETE FROM settings WHERE key IN (?, ?)', [
     SETTING_PRIMARY_MODEL,
     SETTING_FALLBACK_MODELS,
