@@ -2045,7 +2045,7 @@ Acceptance criteria:
 
 ## TASK-100 — Review authorization
 
-Status: `[ ]`
+Status: `[x]`
 
 Audit all user-owned endpoints.
 

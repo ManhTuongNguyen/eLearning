@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from functools import lru_cache
 
 from rest_framework import serializers
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from llm.fallback import FallbackProvider
@@ -70,6 +71,8 @@ class LLMStreamView(APIView):
     onto :data:`llm.types.StreamingEvent`; it terminates with exactly one
     ``completed`` (success) or ``error`` (failure) frame.
     """
+
+    permission_classes = [IsAuthenticated]
 
     def post(self, request) -> object:
         serializer = StreamRequestSerializer(data=request.data)

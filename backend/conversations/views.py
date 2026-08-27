@@ -13,13 +13,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-
-class Conflict(APIException):
-    status_code = status.HTTP_409_CONFLICT
-    default_detail = "Conflict."
-    default_code = "conflict"
-
-
 from conversations.chat import RetryService, UserMessageService, finalize_turn
 from conversations.improvement import ImprovementService
 from conversations.models import Message, Session
@@ -37,6 +30,12 @@ from llm import views as llm_views
 from llm.exceptions import LLMError
 from llm.fallback import FallbackProvider
 from llm.sse import sse_streaming_response
+
+
+class Conflict(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Conflict."
+    default_code = "conflict"
 
 
 @lru_cache(maxsize=1)
@@ -278,7 +277,7 @@ class MessageRetryView(APIView):
         except Message.DoesNotExist:
             raise Http404("No Message matches the given query.") from None
         except ValueError as exc:
-            raise Conflict(str(exc))
+            raise Conflict(str(exc)) from None
         events = finalize_turn(
             prepared.assistant_message,
             llm_views.get_streaming_service().stream(prepared.request),
