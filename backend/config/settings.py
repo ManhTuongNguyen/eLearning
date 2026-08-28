@@ -10,6 +10,8 @@ from pathlib import Path
 from decouple import Csv, config
 from django.core.exceptions import ImproperlyConfigured
 
+from llm.provider_specs import get_provider_spec
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 _DEV_SECRET_KEY = "dev-only-insecure-secret-key"
@@ -33,13 +35,16 @@ def validate_production_configuration(
     secret_key: str,
     allowed_hosts: list[str] | tuple[str, ...],
     database_password: str,
-    openrouter_api_key: str,
+    llm_provider: str,
+    provider_api_key: str,
 ) -> None:
     """Fail clearly when required values are missing for production.
 
-    Called once at settings import when ``DJANGO_DEBUG=False`` so a misconfigured
-    production deployment stops immediately with an explicit message naming
-    every offending variable instead of failing later in subtle ways.
+    Called once at settings import when ``DJANGO_DEBUG=False`` so a
+    misconfigured production deployment stops immediately with an explicit
+    message naming every offending variable instead of failing later in
+    subtle ways. The required API key belongs to the configured LLM provider
+    (``LLM_PROVIDER`` selects which ``<PREFIX>_API_KEY`` must be present).
     """
 
     missing: list[str] = []
@@ -49,8 +54,10 @@ def validate_production_configuration(
         missing.append("DJANGO_ALLOWED_HOSTS")
     if not database_password:
         missing.append("POSTGRES_PASSWORD")
-    if not openrouter_api_key:
-        missing.append("OPENROUTER_API_KEY")
+    # Raises immediately for an unknown provider, naming LLM_PROVIDER.
+    provider_spec = get_provider_spec(llm_provider)
+    if not provider_api_key:
+        missing.append(provider_spec.api_key_setting)
     if missing:
         raise ImproperlyConfigured(
             "Missing required production environment variables: "
@@ -61,11 +68,15 @@ def validate_production_configuration(
 
 
 if not DEBUG:
+    _PRODUCTION_LLM_PROVIDER = str(config("LLM_PROVIDER", default="openrouter"))
     validate_production_configuration(
         secret_key=SECRET_KEY,
         allowed_hosts=ALLOWED_HOSTS,
         database_password=config("POSTGRES_PASSWORD", default=""),
-        openrouter_api_key=config("OPENROUTER_API_KEY", default=""),
+        llm_provider=_PRODUCTION_LLM_PROVIDER,
+        provider_api_key=config(
+            get_provider_spec(_PRODUCTION_LLM_PROVIDER).api_key_setting, default=""
+        ),
     )
 
 # Application definition
@@ -237,14 +248,36 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
-# OpenRouter / LLM
+# LLM provider selection and per-provider connection settings
 #
-# The server-side OpenRouter key must never reach the mobile application.
-# Defaults exist so development works without a key; production validation
-# above requires one when DEBUG is disabled.
+# ``LLM_PROVIDER`` picks the integration built by llm.registry (see
+# llm/provider_specs.py): each provider reads its own ``<PREFIX>_API_KEY``
+# and ``<PREFIX>_BASE_URL``. Server-side keys must never reach the mobile
+# application. Defaults exist so development works without a key;
+# production validation above requires the configured provider's key when
+# DEBUG is disabled.
+
+LLM_PROVIDER = config("LLM_PROVIDER", default="openrouter")
 
 OPENROUTER_API_KEY = config("OPENROUTER_API_KEY", default="")
 OPENROUTER_BASE_URL = config("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1")
+
+GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
+GEMINI_BASE_URL = config(
+    "GEMINI_BASE_URL", default="https://generativelanguage.googleapis.com/v1beta"
+)
+
+OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
+OPENAI_BASE_URL = config("OPENAI_BASE_URL", default="https://api.openai.com/v1")
+
+NINEROUTER_API_KEY = config("NINEROUTER_API_KEY", default="")
+NINEROUTER_BASE_URL = config("NINEROUTER_BASE_URL", default="http://localhost:20128/v1")
+
+# Generic OpenAI-compatible deployment; the base URL has no sensible
+# default and must be provided when LLM_PROVIDER=openai-compatible.
+OPENAI_COMPATIBLE_API_KEY = config("OPENAI_COMPATIBLE_API_KEY", default="")
+OPENAI_COMPATIBLE_BASE_URL = config("OPENAI_COMPATIBLE_BASE_URL", default="")
+
 LLM_PRIMARY_MODEL = config("LLM_PRIMARY_MODEL", default="openai/gpt-4o-mini")
 LLM_FALLBACK_MODELS = config(
     "LLM_FALLBACK_MODELS",

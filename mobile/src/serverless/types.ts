@@ -1,11 +1,15 @@
 /**
- * Shared data structures for the serverless OpenRouter integration
- * (SPEC TASK-083). These mirror the backend llm contract (llm/types.py)
- * so application services can treat both modes uniformly: the mobile app
- * talks to OpenRouter directly here, with the user's own API key — it is
- * never sent to the eLearning backend.
+ * Shared data structures for the serverless LLM integration (SPEC TASK-083,
+ * TASK-AUDIT-013). These mirror the backend llm contract (llm/types.py) so
+ * application services can treat both modes uniformly: in serverless mode
+ * the mobile app talks to the configured provider directly, with the user's
+ * own API key — it is never sent to the eLearning backend.
+ *
+ * Conversation code depends only on the `LLMClient` interface and the
+ * normalized data structures below; the concrete provider (OpenRouter,
+ * Gemini, OpenAI, 9Router, …) is selected via `createProviderClient`.
  */
-import type {OpenRouterError} from './errors';
+import type {LLMError} from './errors';
 
 /** Chat roles accepted by the OpenRouter chat API. */
 export type ChatRole = 'system' | 'user' | 'assistant';
@@ -195,8 +199,8 @@ export function normalizeModelEntry(entry: unknown): ModelInfo | null {
 }
 
 /** Serverless LLM configuration supplied by the user (TASK-093 storage). */
-export interface OpenRouterClientConfig {
-  /** The user's personal OpenRouter API key. Stays on-device. */
+export interface LLMClientConfig {
+  /** The user's personal provider API key. Stays on-device. */
   apiKey: string;
   /** Model tried first. */
   primaryModel: string;
@@ -205,7 +209,12 @@ export interface OpenRouterClientConfig {
   baseUrl?: string;
   /** Total timeout in ms for non-streaming requests (default 60000). */
   timeoutMs?: number;
+  /** Which provider integration to use (default `openrouter`). */
+  provider?: ProviderId;
 }
+
+/** Historic OpenRouter-branded alias of the client configuration. */
+export type OpenRouterClientConfig = LLMClientConfig;
 
 /**
  * Events emitted by streamCompletion, terminating in exactly one terminal
@@ -230,8 +239,8 @@ export interface StreamHandle {
   abort(): void;
 }
 
-/** Contract shared by the real client and the test mock adapter. */
-export interface OpenRouterClient {
+/** Contract shared by every provider client and the test mock adapter. */
+export interface LLMClient {
   /** Run one non-streaming chat completion across the model chain. */
   complete(request: CompletionRequest): Promise<CompletionResult>;
   /**
@@ -243,11 +252,19 @@ export interface OpenRouterClient {
   listModels(): Promise<ModelInfo[]>;
 }
 
+/** Historic OpenRouter-branded alias of the client contract. */
+export type OpenRouterClient = LLMClient;
+
+/**
+ * Canonical provider ids supported by the serverless provider registry.
+ * Adding a provider means implementing `LLMClient` (reusing the shared
+ * OpenAI-compatible strategy when the wire contract matches) and
+ * registering it in `providerRegistry.ts`.
+ */
+export type ProviderId = 'openrouter' | 'gemini' | 'openai' | 'ninerouter';
+
 /** Build the terminal `failed` event for one normalized provider error. */
-export function failedEvent(
-  error: OpenRouterError,
-  partialText: string,
-): ServerlessStreamEvent {
+export function failedEvent(error: LLMError, partialText: string): ServerlessStreamEvent {
   return {
     type: 'failed',
     message: error.message,

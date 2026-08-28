@@ -21,8 +21,8 @@ from dataclasses import replace
 
 from llm.config import load_model_configuration
 from llm.exceptions import LLMAvailabilityError, LLMError, LLMResponseError
-from llm.openrouter import OpenRouterProvider
 from llm.provider import LLMProvider
+from llm.registry import build_provider
 from llm.types import CompletionRequest, CompletionResponse, StreamEvent
 
 logger = logging.getLogger("llm.fallback")
@@ -46,16 +46,15 @@ class FallbackProvider(LLMProvider):
 
     @classmethod
     def from_settings(cls) -> FallbackProvider:
-        """Build a settings-driven OpenRouter provider with its model chain."""
+        """Build the settings-selected provider with its model chain.
+
+        The inner provider comes from the provider registry (``LLM_PROVIDER``
+        decides which integration is built), keeping the fallback machinery
+        completely provider-agnostic.
+        """
         config = load_model_configuration()
         return cls(
-            provider=OpenRouterProvider(
-                api_key=config.api_key,
-                base_url=config.base_url,
-                default_model=config.primary_model,
-                connect_timeout=config.connect_timeout_seconds,
-                read_timeout=config.read_timeout_seconds,
-            ),
+            provider=build_provider(config),
             models=config.model_chain,
         )
 

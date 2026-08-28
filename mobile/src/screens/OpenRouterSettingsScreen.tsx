@@ -1,14 +1,18 @@
 /**
- * Serverless OpenRouter settings editor (SPEC TASK-092): configures the
- * user's API key, primary model and ordered fallback models. The key lives
- * only in secure storage via saveServerlessOpenRouterConfig (TASK-088/093)
- * — it is never rendered, logged or sent anywhere except OpenRouter's
- * Authorization header. Models come from the locally cached catalog
- * (TASK-084) or a direct keyless refresh through listOpenRouterModels
- * (TASK-AUDIT-004): discovery hits OpenRouter's public /models endpoint
- * with no credentials, so it works before any key is configured and an
- * invalid key can never block it. Fallback order is edited in place with
- * move up/down controls.
+ * Serverless LLM provider settings editor (SPEC TASK-092,
+ * TASK-AUDIT-013): configures the active provider (OpenRouter, Gemini,
+ * OpenAI or 9Router), the user's API key, primary model and ordered
+ * fallback models. Keys live only in secure storage via
+ * saveServerlessOpenRouterConfig (TASK-088/093) — they are never rendered,
+ * logged or sent anywhere except the selected provider's auth header, and
+ * each provider gets its own keychain/settings/catalog namespace so
+ * switching providers never mixes secrets or model ids. Models come from
+ * the locally cached per-provider catalog (TASK-084) or a direct refresh
+ * through listProviderModels (TASK-AUDIT-004): discovery hits the public
+ * /models endpoint with no credentials for providers that publish one
+ * (OpenRouter, 9Router) and requires the user's key for the others
+ * (Gemini, OpenAI). Fallback order is edited in place with move up/down
+ * controls.
  *
  * The top inset comes from useSafeAreaInsets (TASK-AUDIT-012) instead of a
  * fixed oversized padding, so the header sits at the same spacing as the
@@ -31,12 +35,17 @@ import {toErrorMessage} from '../auth/AuthContext';
 import {getLocalDatabase} from '../db/database';
 import type {OpenRouterSettingsScreenProps} from '../navigation/types';
 import {getCachedModelCatalog, refreshModelCatalog} from '../serverless/modelCatalog';
-import {listOpenRouterModels} from '../serverless/openrouterClient';
 import {
-  loadServerlessOpenRouterConfig,
+  listProviderModels,
+  PROVIDER_DESCRIPTORS,
+  SUPPORTED_PROVIDER_IDS,
+} from '../serverless/providerRegistry';
+import {
+  loadServerlessProvider,
+  loadServerlessProviderState,
   saveServerlessOpenRouterConfig,
 } from '../serverless/settings';
-import type {ModelInfo, OpenRouterClientConfig} from '../serverless/types';
+import type {LLMClientConfig, ModelInfo, ProviderId} from '../serverless/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 
@@ -84,6 +93,31 @@ export function createStyles(c: ThemeColors, topInset: number) {
       textTransform: 'uppercase',
       color: c.textMuted,
       marginBottom: -10,
+    },
+    providerRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    providerChip: {
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 999,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      backgroundColor: c.surface,
+    },
+    providerChipActive: {
+      borderColor: c.accent,
+      backgroundColor: c.accentSoft,
+    },
+    providerChipText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.textSecondary,
+    },
+    providerChipTextActive: {
+      color: c.accent,
     },
     card: {
       borderWidth: 1,
@@ -329,7 +363,11 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
   );
 
   const [loading, setLoading] = useState(true);
-  /** Key already stored on-device; null when none saved yet. Never rendered. */
+  /** Provider currently being edited (defaults to the historic choice). */
+  const [provider, setProvider] = useState<ProviderId>('openrouter');
+  /** Switching while the target provider's stored state loads. */
+  const [switching, setSwitching] = useState(false);
+  /** Key already stored on-device for `provider`; null when none saved yet. Never rendered. */
   const [storedKey, setStoredKey] = useState<string | null>(null);
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [primaryModel, setPrimaryModel] = useState<string | null>(null);
@@ -342,21 +380,25 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load current configuration plus the cached catalog; both are local
-  // reads, so nothing here touches the network or leaks the stored key.
+  const descriptor = PROVIDER_DESCRIPTORS[provider];
+
+  // Load the persisted provider plus its stored state and cached catalog;
+  // all local reads, so nothing here touches the network or leaks the key.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const db = await getLocalDatabase();
-        const [config, catalog] = await Promise.all([
-          loadServerlessOpenRouterConfig(),
-          getCachedModelCatalog(db),
+        const activeProvider = await loadServerlessProvider();
+        const [state, catalog] = await Promise.all([
+          loadServerlessProviderState(activeProvider),
+          getCachedModelCatalog(db, activeProvider),
         ]);
         if (!cancelled) {
-          setStoredKey(config && config.apiKey ? config.apiKey : null);
-          setPrimaryModel(config?.primaryModel ?? null);
-          setFallbackModels([...(config?.fallbackModels ?? [])]);
+          setProvider(activeProvider);
+          setStoredKey(state.apiKey);
+          setPrimaryModel(state.primaryModel);
+          setFallbackModels([...state.fallbackModels]);
           setModels(catalog?.models ?? null);
           setModelsUpdatedAt(catalog?.fetchedAt ?? null);
         }
@@ -387,6 +429,43 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     return storedKey;
   }, [apiKeyDraft, storedKey]);
 
+  /**
+   * Edit another provider: load its stored key/models and cached catalog.
+   * The persisted active provider only changes when the edited
+   * configuration is saved.
+   */
+  const switchProvider = useCallback(
+    async (id: ProviderId) => {
+      if (id === provider || switching) {
+        return;
+      }
+      setError(null);
+      setSaved(false);
+      setRefreshing(false);
+      setFilter('');
+      setSwitching(true);
+      try {
+        const db = await getLocalDatabase();
+        const [state, catalog] = await Promise.all([
+          loadServerlessProviderState(id),
+          getCachedModelCatalog(db, id),
+        ]);
+        setProvider(id);
+        setStoredKey(state.apiKey);
+        setApiKeyDraft('');
+        setPrimaryModel(state.primaryModel);
+        setFallbackModels([...state.fallbackModels]);
+        setModels(catalog?.models ?? null);
+        setModelsUpdatedAt(catalog?.fetchedAt ?? null);
+      } catch (err) {
+        setError(toErrorMessage(err));
+      } finally {
+        setSwitching(false);
+      }
+    },
+    [provider, switching],
+  );
+
   const handleRefreshModels = useCallback(async () => {
     if (refreshing) {
       return;
@@ -396,9 +475,25 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     setRefreshing(true);
     try {
       const db = await getLocalDatabase();
-      // Discovery is keyless (TASK-AUDIT-004): the public /models endpoint
-      // needs no credentials, so the catalog loads before any key exists.
-      const snapshot = await refreshModelCatalog(db, () => listOpenRouterModels());
+      const currentDescriptor = PROVIDER_DESCRIPTORS[provider];
+      let discoveryKey: string | undefined;
+      if (currentDescriptor.modelDiscoveryRequiresAuth) {
+        const key = resolveApiKey();
+        if (!key) {
+          throw new Error(
+            `Enter your ${currentDescriptor.label} API key to download the model catalog.`,
+          );
+        }
+        discoveryKey = key;
+      }
+      // Discovery is keyless for providers with a public catalog
+      // (TASK-AUDIT-004): no credentials are needed or sent. Providers
+      // whose discovery endpoint is authenticated require the key.
+      const snapshot = await refreshModelCatalog(
+        db,
+        () => listProviderModels(provider, {apiKey: discoveryKey}),
+        provider,
+      );
       setModels(snapshot.models);
       setModelsUpdatedAt(snapshot.fetchedAt);
     } catch (err) {
@@ -407,7 +502,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     } finally {
       setRefreshing(false);
     }
-  }, [refreshing]);
+  }, [refreshing, provider, resolveApiKey]);
 
   const choosePrimary = useCallback((id: string) => {
     setError(null);
@@ -455,9 +550,11 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     }
     setError(null);
     setSaved(false);
+    const label = PROVIDER_DESCRIPTORS[provider].label;
+    const article = /^[AEIOU]/.test(label) ? 'An' : 'A';
     const apiKey = resolveApiKey();
     if (!apiKey) {
-      setError('An OpenRouter API key is required.');
+      setError(`${article} ${label} API key is required.`);
       return;
     }
     if (!primaryModel) {
@@ -466,7 +563,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     }
     setSaving(true);
     try {
-      const config: OpenRouterClientConfig = {apiKey, primaryModel, fallbackModels};
+      const config: LLMClientConfig = {provider, apiKey, primaryModel, fallbackModels};
       await saveServerlessOpenRouterConfig(config);
       // The typed key has been persisted; forget it from component state so
       // it cannot linger longer than necessary.
@@ -478,7 +575,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     } finally {
       setSaving(false);
     }
-  }, [saving, resolveApiKey, primaryModel, fallbackModels]);
+  }, [saving, resolveApiKey, primaryModel, fallbackModels, provider]);
 
   /** Filtered + alphabetically stable subset of the discovered catalog. */
   const visibleModels = useMemo<{models: ModelInfo[]; total: number}>(() => {
@@ -510,11 +607,39 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
           testID="openrouter-back">
           <Text style={styles.backText}>‹ Back</Text>
         </Pressable>
-        <Text style={styles.title}>OpenRouter</Text>
+        <Text style={styles.title}>{descriptor.label}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        <Text style={styles.sectionLabel}>Provider</Text>
+        <View style={styles.providerRow}>
+          {SUPPORTED_PROVIDER_IDS.map(id => {
+            const chipDescriptor = PROVIDER_DESCRIPTORS[id];
+            const active = id === provider;
+            return (
+              <Pressable
+                key={id}
+                accessibilityRole="button"
+                accessibilityState={{selected: active}}
+                disabled={switching || loading}
+                onPress={() => {
+                  switchProvider(id);
+                }}
+                style={[styles.providerChip, active && styles.providerChipActive]}
+                testID={`provider-chip-${id}`}>
+                <Text
+                  style={[
+                    styles.providerChipText,
+                    active && styles.providerChipTextActive,
+                  ]}>
+                  {chipDescriptor.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <Text style={styles.sectionLabel}>API key</Text>
         <View style={styles.card}>
           <TextInput
@@ -525,7 +650,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
               setSaved(false);
               setError(null);
             }}
-            placeholder={storedKey ? '••••••••••••  saved' : 'sk-or-v1-…'}
+            placeholder={storedKey ? '••••••••••••  saved' : descriptor.keyPlaceholder}
             secureTextEntry
             style={styles.input}
             testID="openrouter-api-key-input"
@@ -534,14 +659,14 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
           <Text style={styles.hint}>
             {storedKey
               ? 'Your key is stored securely on this device. Type a new key to replace it.'
-              : 'Get a key at openrouter.ai. It is stored securely on this device and sent only to OpenRouter.'}
+              : descriptor.keyHint}
           </Text>
         </View>
 
         <Text style={styles.sectionLabel}>Models</Text>
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Discovered from OpenRouter</Text>
+            <Text style={styles.cardTitle}>Discovered from {descriptor.label}</Text>
             <Pressable
               accessibilityRole="button"
               disabled={refreshing || loading}
@@ -563,8 +688,8 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
 
           {models === null ? (
             <Text style={styles.emptyText} testID="openrouter-models-empty">
-              No models downloaded yet. Tap Refresh to load the available models
-              from OpenRouter.
+              No models downloaded yet. Tap Refresh to load the available models from{' '}
+              {descriptor.label}.
             </Text>
           ) : (
             <>
@@ -655,7 +780,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                     </Text>
                   ) : (
                     <Text style={styles.catalogMeta} testID="openrouter-model-count">
-                      {visibleModels.total} model(s) available on OpenRouter.
+                      {visibleModels.total} model(s) available on {descriptor.label}.
                     </Text>
                   )}
                 </>

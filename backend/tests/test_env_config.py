@@ -10,7 +10,8 @@ _PRODUCTION_KWARGS = {
     "secret_key": "a-real-production-secret",
     "allowed_hosts": ["example.com"],
     "database_password": "s3cret",
-    "openrouter_api_key": "sk-or-v1-test",
+    "llm_provider": "openrouter",
+    "provider_api_key": "sk-or-v1-test",
 }
 
 
@@ -46,8 +47,22 @@ class ValidateProductionConfigurationTests(SimpleTestCase):
 
     def test_missing_openrouter_api_key_is_reported(self) -> None:
         with self.assertRaises(ImproperlyConfigured) as ctx:
-            validate_production_configuration(**{**_PRODUCTION_KWARGS, "openrouter_api_key": ""})
+            validate_production_configuration(**{**_PRODUCTION_KWARGS, "provider_api_key": ""})
         self.assertIn("OPENROUTER_API_KEY", str(ctx.exception))
+
+    def test_missing_gemini_api_key_is_reported_for_gemini_provider(self) -> None:
+        with self.assertRaises(ImproperlyConfigured) as ctx:
+            validate_production_configuration(
+                **{**_PRODUCTION_KWARGS, "llm_provider": "gemini", "provider_api_key": ""}
+            )
+        self.assertIn("GEMINI_API_KEY", str(ctx.exception))
+
+    def test_unknown_provider_names_the_llm_provider_setting(self) -> None:
+        with self.assertRaises(ImproperlyConfigured) as ctx:
+            validate_production_configuration(
+                **{**_PRODUCTION_KWARGS, "llm_provider": "not-a-provider"}
+            )
+        self.assertIn("LLM_PROVIDER", str(ctx.exception))
 
     def test_all_missing_values_are_reported_at_once(self) -> None:
         with self.assertRaises(ImproperlyConfigured) as ctx:
@@ -55,7 +70,8 @@ class ValidateProductionConfigurationTests(SimpleTestCase):
                 secret_key="",
                 allowed_hosts=(),
                 database_password="",
-                openrouter_api_key="",
+                llm_provider="openrouter",
+                provider_api_key="",
             )
         message = str(ctx.exception)
         for variable in (
@@ -76,6 +92,23 @@ class EnvironmentConfigurationSmokeTests(SimpleTestCase):
     def test_jwt_lifetimes_are_positive_integers(self) -> None:
         self.assertGreater(settings.JWT_ACCESS_TOKEN_MINUTES, 0)
         self.assertGreater(settings.JWT_REFRESH_TOKEN_DAYS, 0)
+
+    def test_provider_selection_is_configured(self) -> None:
+        self.assertIsInstance(settings.LLM_PROVIDER, str)
+        self.assertTrue(settings.LLM_PROVIDER)
+
+    def test_every_supported_provider_has_connection_settings(self) -> None:
+        from llm.provider_specs import PROVIDER_SPECS
+
+        for spec in PROVIDER_SPECS.values():
+            self.assertTrue(
+                hasattr(settings, spec.api_key_setting),
+                f"settings must define {spec.api_key_setting}",
+            )
+            self.assertTrue(
+                hasattr(settings, spec.base_url_setting),
+                f"settings must define {spec.base_url_setting}",
+            )
 
     def test_openrouter_settings_are_configured(self) -> None:
         self.assertTrue(settings.OPENROUTER_BASE_URL.startswith("https://"))

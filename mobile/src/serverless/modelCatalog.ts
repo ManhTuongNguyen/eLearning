@@ -1,26 +1,35 @@
 /**
- * Serverless model discovery with local caching (SPEC TASK-084).
+ * Serverless model discovery with local caching (SPEC TASK-084,
+ * TASK-AUDIT-013).
  *
- * The OpenRouter transport itself lives in ./openrouterClient (TASK-083);
- * this module adds the local-cache layer on top of the serverless SQLite
- * settings store. `refreshModelCatalog` fetches through an injected
- * `listModels` adapter and persists the result only after success, so a
- * failed refresh never destroys the previously cached catalog — cached
- * models stay available without any network access via
+ * The provider transports live behind the serverless client factories
+ * (./openAICompatibleClient, ./geminiClient); this module adds the
+ * local-cache layer on top of the serverless SQLite settings store.
+ * Catalog snapshots are namespaced per provider (the historic
+ * `model_catalog` key remains the OpenRouter namespace), so switching
+ * providers never mixes model ids. `refreshModelCatalog` fetches through
+ * an injected `listModels` adapter and persists the result only after
+ * success, so a failed refresh never destroys the previously cached
+ * catalog — cached models stay available without any network access via
  * `getCachedModelCatalog`.
  */
 import type {SqlExecutor} from '../db/driver';
 import {nowIso} from '../db/driver';
 import {getSetting, setSetting} from '../db/settingsStore';
-import {normalizeModelInfo, type ModelInfo} from './types';
+import {normalizeModelInfo, type ModelInfo, type ProviderId} from './types';
 
-/** Settings key holding the serialized catalog snapshot. */
+/** Settings key holding the serialized OpenRouter catalog snapshot (historic). */
 export const MODEL_CATALOG_SETTING_KEY = 'model_catalog';
+
+/** Settings key holding the serialized catalog snapshot for one provider. */
+export function modelCatalogSettingKey(provider: ProviderId): string {
+  return provider === 'openrouter' ? MODEL_CATALOG_SETTING_KEY : `${MODEL_CATALOG_SETTING_KEY}_${provider}`;
+}
 
 /** One locally persisted catalog snapshot. */
 export interface CachedModelCatalog {
   models: ModelInfo[];
-  /** ISO-8601 timestamp of when the snapshot was fetched from OpenRouter. */
+  /** ISO-8601 timestamp of when the snapshot was fetched from the provider. */
   fetchedAt: string;
 }
 
@@ -59,17 +68,19 @@ function parseCachedCatalog(raw: string | null): CachedModelCatalog | null {
 }
 
 /**
- * Fetch the model catalog directly from OpenRouter through `listModels` and
- * persist it locally. On failure the normalized provider error propagates
- * and any previously cached catalog remains untouched.
+ * Fetch the model catalog directly from the provider through `listModels`
+ * and persist it locally under the provider's cache namespace. On failure
+ * the normalized provider error propagates and any previously cached
+ * catalog remains untouched.
  */
 export async function refreshModelCatalog(
   db: SqlExecutor,
   listModels: () => Promise<ModelInfo[]>,
+  provider: ProviderId = 'openrouter',
 ): Promise<CachedModelCatalog> {
   const models = await listModels();
   const snapshot: CachedModelCatalog = {models, fetchedAt: nowIso()};
-  await setSetting(db, MODEL_CATALOG_SETTING_KEY, JSON.stringify(snapshot));
+  await setSetting(db, modelCatalogSettingKey(provider), JSON.stringify(snapshot));
   return snapshot;
 }
 
@@ -80,6 +91,7 @@ export async function refreshModelCatalog(
  */
 export async function getCachedModelCatalog(
   db: SqlExecutor,
+  provider: ProviderId = 'openrouter',
 ): Promise<CachedModelCatalog | null> {
-  return parseCachedCatalog(await getSetting(db, MODEL_CATALOG_SETTING_KEY));
+  return parseCachedCatalog(await getSetting(db, modelCatalogSettingKey(provider)));
 }

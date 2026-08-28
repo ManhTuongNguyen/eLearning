@@ -1,5 +1,6 @@
 /**
- * Local data clearing for serverless mode (SPEC TASK-094).
+ * Local data clearing for serverless mode (SPEC TASK-094,
+ * TASK-AUDIT-013).
  *
  * Removes all serverless-mode data from on-device storage while preserving
  * the authentication tokens used by server mode. The operation is
@@ -7,6 +8,7 @@
  */
 import {getLocalDatabase} from './database';
 import type {SqlDriver, SqlExecutor} from './driver';
+import {SUPPORTED_PROVIDER_IDS} from '../serverless/providerRegistry';
 import {clearServerlessApiKey} from '../serverless/secureApiKey';
 
 /**
@@ -16,7 +18,8 @@ import {clearServerlessApiKey} from '../serverless/secureApiKey';
  * - All conversation sessions, messages, and summaries (cascade via FKs)
  * - Learning profile row
  * - Serverless settings (model selections)
- * - Secure OpenRouter API key from the keychain
+ * - Secure provider API keys from the keychain, for every supported
+ *   provider namespace (TASK-AUDIT-013)
  *
  * Does NOT delete:
  * - Authentication tokens (server mode credentials)
@@ -42,8 +45,12 @@ export async function clearServerlessLocalData(
   });
 
   // Secure storage is outside the SQLite transaction; clear it after
-  // the database succeeds so a database failure does not orphan the key.
-  await clearServerlessApiKey();
+  // the database succeeds so a database failure does not orphan the keys.
+  // Every provider namespace is wiped: stale credentials must never
+  // survive a "clear local data" operation.
+  for (const provider of SUPPORTED_PROVIDER_IDS) {
+    await clearServerlessApiKey(provider);
+  }
 }
 
 /**

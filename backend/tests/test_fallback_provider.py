@@ -369,9 +369,10 @@ class LifecycleAndWiringTests(SimpleTestCase):
 
         self.assertTrue(inner.closed)
 
-    def test_from_settings_builds_openrouter_chain_from_configuration(self) -> None:
+    def test_from_settings_builds_registry_provider_with_full_chain(self) -> None:
         inner = Mock(spec=LLMProvider)
         config = ModelConfiguration(
+            provider="openrouter",
             api_key="sk-test",
             base_url=DEFAULT_BASE_URL,
             timeout_seconds=30.0,
@@ -382,16 +383,10 @@ class LifecycleAndWiringTests(SimpleTestCase):
         )
         with (
             patch("llm.fallback.load_model_configuration", return_value=config),
-            patch("llm.fallback.OpenRouterProvider", return_value=inner) as factory,
+            patch("llm.fallback.build_provider", return_value=inner) as build,
         ):
             fallback = FallbackProvider.from_settings()
 
-        factory.assert_called_once_with(
-            api_key="sk-test",
-            base_url=DEFAULT_BASE_URL,
-            default_model="vendor/main",
-            connect_timeout=10.0,
-            read_timeout=30.0,
-        )
+        build.assert_called_once_with(config)
         self.assertIs(fallback.provider, inner)
         self.assertEqual(fallback.models, ("vendor/main", "vendor/f1", "vendor/f2"))

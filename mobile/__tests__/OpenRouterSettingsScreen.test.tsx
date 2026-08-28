@@ -1,10 +1,12 @@
 /**
- * Serverless OpenRouter settings editor tests (SPEC TASK-092): the screen
- * renders the stored configuration without ever revealing the API key,
- * models are chosen from the discovered catalog — refreshed keylessly from
- * OpenRouter's public endpoint (TASK-AUDIT-004) —, fallback order is edited
- * in place and persisted through the settings store, and validation keeps
- * an incomplete configuration from being saved. Storage/catalog/HTTP seams
+ * Serverless provider settings editor tests (SPEC TASK-092,
+ * TASK-AUDIT-013): the screen renders the stored configuration without
+ * ever revealing the API key, the provider can be switched between the
+ * registry-supported ids, models are chosen from the discovered catalog —
+ * refreshed keylessly for public-catalog providers (TASK-AUDIT-004) and
+ * with the user's key otherwise —, fallback order is edited in place and
+ * persisted through the settings store, and validation keeps an
+ * incomplete configuration from being saved. Storage/catalog/HTTP seams
  * are module mocks — no SQLite or network participates here.
  */
 import React from 'react';
@@ -13,21 +15,24 @@ import {render, screen, userEvent, waitFor} from '@testing-library/react-native'
 import type {OpenRouterSettingsScreenProps} from '../src/navigation/types';
 import {OpenRouterSettingsScreen} from '../src/screens/OpenRouterSettingsScreen';
 import * as modelCatalog from '../src/serverless/modelCatalog';
-import * as openrouterClient from '../src/serverless/openrouterClient';
+import * as providerRegistry from '../src/serverless/providerRegistry';
 import * as serverlessSettings from '../src/serverless/settings';
-import type {ModelInfo, OpenRouterClientConfig} from '../src/serverless/types';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import type {ModelInfo} from '../src/serverless/types';import {ThemeProvider} from '../src/theme/ThemeContext';
 
 jest.mock('../src/db/database');
 jest.mock('../src/serverless/settings');
 jest.mock('../src/serverless/modelCatalog');
-jest.mock('../src/serverless/openrouterClient');
+jest.mock('../src/serverless/providerRegistry', () => ({
+  ...jest.requireActual('../src/serverless/providerRegistry'),
+  listProviderModels: jest.fn(),
+}));
 
-const mockedLoadConfig = jest.mocked(serverlessSettings.loadServerlessOpenRouterConfig);
+const mockedLoadProvider = jest.mocked(serverlessSettings.loadServerlessProvider);
+const mockedLoadProviderState = jest.mocked(serverlessSettings.loadServerlessProviderState);
 const mockedSaveConfig = jest.mocked(serverlessSettings.saveServerlessOpenRouterConfig);
 const mockedGetCached = jest.mocked(modelCatalog.getCachedModelCatalog);
 const mockedRefresh = jest.mocked(modelCatalog.refreshModelCatalog);
-const mockedListModels = jest.mocked(openrouterClient.listOpenRouterModels);
+const mockedListProviderModels = jest.mocked(providerRegistry.listProviderModels);
 
 // One configured userEvent instance; its internal act handling drives
 // deterministic commits across every interaction below.
@@ -60,10 +65,6 @@ const CATALOG: ModelInfo[] = [
 
 function catalogSnapshot(models = CATALOG, fetchedAt = '2026-08-27T00:00:00.000Z') {
   return {models, fetchedAt};
-}
-
-function configuredConfig(): OpenRouterClientConfig {
-  return {apiKey: STORED_KEY, primaryModel: 'vendor/model-a', fallbackModels: ['vendor/model-b']};
 }
 
 function checkedStateOf(testID: string): boolean | undefined {
@@ -100,16 +101,25 @@ async function renderSettledScreen(): Promise<OpenRouterSettingsScreenProps> {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // Defaults describe a fresh unconfigured device with no cached catalog;
-  // individual tests override through the exposed seams.
-  mockedLoadConfig.mockResolvedValue(null);
+  // Defaults describe a fresh unconfigured device on the historic default
+  // provider with no cached catalog; tests override through the seams.
+  mockedLoadProvider.mockResolvedValue('openrouter');
+  mockedLoadProviderState.mockResolvedValue({
+    apiKey: null,
+    primaryModel: null,
+    fallbackModels: [],
+  });
   mockedSaveConfig.mockResolvedValue(undefined);
   mockedGetCached.mockResolvedValue(null);
 });
 
 describe('rendering stored configuration (TASK-092)', () => {
   it('shows the saved primary/fallback setup without revealing the key', async () => {
-    mockedLoadConfig.mockResolvedValue(configuredConfig());
+    mockedLoadProviderState.mockResolvedValue({
+      apiKey: STORED_KEY,
+      primaryModel: 'vendor/model-a',
+      fallbackModels: ['vendor/model-b'],
+    });
     mockedGetCached.mockResolvedValue(catalogSnapshot());
 
     await renderSettledScreen();
@@ -170,6 +180,7 @@ describe('model selection from the discovered catalog', () => {
 
     await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
     expect(mockedSaveConfig).toHaveBeenCalledWith({
+      provider: 'openrouter',
       apiKey: NEW_KEY,
       primaryModel: 'vendor/model-b',
       fallbackModels: ['vendor/claude-x', 'vendor/model-a'],
@@ -181,7 +192,11 @@ describe('model selection from the discovered catalog', () => {
   });
 
   it('keeps the stored key working when the field is left untouched', async () => {
-    mockedLoadConfig.mockResolvedValue(configuredConfig());
+    mockedLoadProviderState.mockResolvedValue({
+      apiKey: STORED_KEY,
+      primaryModel: 'vendor/model-a',
+      fallbackModels: ['vendor/model-b'],
+    });
 
     await renderSettledScreen();
 
@@ -193,7 +208,7 @@ describe('model selection from the discovered catalog', () => {
   });
 
   it('demotes a promoted primary out of the fallback queue', async () => {
-    mockedLoadConfig.mockResolvedValue({
+    mockedLoadProviderState.mockResolvedValue({
       apiKey: STORED_KEY,
       primaryModel: 'vendor/model-a',
       fallbackModels: ['vendor/model-b'],
@@ -222,7 +237,7 @@ describe('model selection from the discovered catalog', () => {
   });
 
   it('removes a single entry from the ordered chain before saving', async () => {
-    mockedLoadConfig.mockResolvedValue({
+    mockedLoadProviderState.mockResolvedValue({
       apiKey: STORED_KEY,
       primaryModel: 'vendor/model-a',
       fallbackModels: ['vendor/model-b', 'vendor/claude-x'],
@@ -272,7 +287,7 @@ describe('model catalog refresh', () => {
   it('downloads models without any API key and persists them via the cache layer', async () => {
     mockedGetCached.mockResolvedValue(null);
     const refreshed: ModelInfo[] = [catalogModel('fresh/new-model', 'Fresh Model')];
-    mockedListModels.mockResolvedValue(refreshed);
+    mockedListProviderModels.mockResolvedValue(refreshed);
     mockedRefresh.mockImplementation(async (_db, fetchModels) => ({
       models: await fetchModels(),
       fetchedAt: '2026-08-27T01:00:00.000Z',
@@ -286,9 +301,13 @@ describe('model catalog refresh', () => {
       expect(screen.getByTestId('openrouter-model-primary-fresh/new-model')).toBeOnTheScreen(),
     );
     // Discovery is keyless (TASK-AUDIT-004): no key configured or sent.
-    expect(mockedListModels).toHaveBeenCalledTimes(1);
-    expect(mockedListModels).toHaveBeenCalledWith();
-    expect(mockedRefresh).toHaveBeenCalledTimes(1);
+    expect(mockedListProviderModels).toHaveBeenCalledTimes(1);
+    expect(mockedListProviderModels).toHaveBeenCalledWith('openrouter', {apiKey: undefined});
+    expect(mockedRefresh).toHaveBeenCalledWith(
+      undefined,
+      expect.any(Function),
+      'openrouter',
+    );
     // Catalog source labels stay intact after refresh.
     expect(screen.queryByTestId('openrouter-models-empty')).toBeNull();
   });
@@ -311,7 +330,7 @@ describe('model catalog refresh', () => {
 
   it('refreshes the catalog before any API key has been configured', async () => {
     mockedGetCached.mockResolvedValue(null);
-    mockedListModels.mockResolvedValue([catalogModel('vendor/model-a', 'Alpha Model')]);
+    mockedListProviderModels.mockResolvedValue([catalogModel('vendor/model-a', 'Alpha Model')]);
     mockedRefresh.mockImplementation(async (_db, fetchModels) => ({
       models: await fetchModels(),
       fetchedAt: '2026-08-27T01:00:00.000Z',
@@ -326,11 +345,134 @@ describe('model catalog refresh', () => {
       expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
     );
     // Discovery is keyless: it succeeds with no key stored and none typed.
-    expect(mockedListModels).toHaveBeenCalledTimes(1);
-    expect(mockedListModels).toHaveBeenCalledWith();
+    expect(mockedListProviderModels).toHaveBeenCalledTimes(1);
+    expect(mockedListProviderModels).toHaveBeenCalledWith('openrouter', {apiKey: undefined});
     expect(mockedRefresh).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('openrouter-form-error')).toBeNull();
-    expect(screen.queryByText(/Enter your OpenRouter API key to download/)).toBeNull();
+  });
+
+  it('requires the provider key before discovery for auth-only catalogs', async () => {
+    mockedLoadProviderState.mockResolvedValue({
+      apiKey: null,
+      primaryModel: null,
+      fallbackModels: [],
+    });
+
+    await renderSettledScreen();
+    await user.press(screen.getByTestId('provider-chip-gemini'));
+    await waitFor(() =>
+      expect(String(screen.getByTestId('openrouter-api-key-input').props.placeholder)).toBe(
+        'AIza…',
+      ),
+    );
+
+    await user.press(screen.getByTestId('openrouter-models-refresh'));
+
+    const error = await screen.findByTestId('openrouter-form-error');
+    expect(error).toHaveTextContent(/Enter your Google Gemini API key/);
+    // No discovery call went out without credentials.
+    expect(mockedListProviderModels).not.toHaveBeenCalled();
+  });
+});
+
+describe('provider switching (TASK-AUDIT-013)', () => {
+  it('renders every registry-supported provider as a selectable chip', async () => {
+    await renderSettledScreen();
+
+    for (const id of ['openrouter', 'gemini', 'openai', 'ninerouter']) {
+      expect(screen.getByTestId(`provider-chip-${id}`)).toBeOnTheScreen();
+    }
+    expect(
+      screen.getByTestId('provider-chip-openrouter').props.accessibilityState,
+    ).toMatchObject({selected: true});
+  });
+
+  it('switches the editor onto the selected provider namespace', async () => {
+    // The cache layer is provider-namespaced: only OpenRouter has a
+    // snapshot in this scenario.
+    mockedGetCached.mockImplementation(async (_db, provider = 'openrouter') =>
+      provider === 'openrouter' ? catalogSnapshot() : null,
+    );
+
+    await renderSettledScreen();
+    await waitFor(() =>
+      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+    );
+
+    mockedListProviderModels.mockClear();
+    await user.press(screen.getByTestId('provider-chip-gemini'));
+
+    // The Gemini namespace state is loaded: no key, no models, fresh hint.
+    await waitFor(() =>
+      expect(mockedLoadProviderState).toHaveBeenLastCalledWith('gemini'),
+    );
+    await waitFor(() =>
+      expect(String(screen.getByTestId('openrouter-api-key-input').props.placeholder)).toBe(
+        'AIza…',
+      ),
+    );
+    expect(await screen.findByTestId('openrouter-models-empty')).toBeOnTheScreen();
+    expect(screen.queryByTestId('openrouter-fallback-chain')).toBeNull();
+  });
+
+  it('saves the edited provider selection with the configuration', async () => {
+    mockedGetCached.mockResolvedValue(catalogSnapshot());
+
+    await renderSettledScreen();
+    await user.press(screen.getByTestId('provider-chip-gemini'));
+    await waitFor(() =>
+      expect(String(screen.getByTestId('openrouter-api-key-input').props.placeholder)).toBe(
+        'AIza…',
+      ),
+    );
+
+    await user.type(screen.getByTestId('openrouter-api-key-input'), 'AIza-new-gemini-key');
+    await user.press(screen.getByTestId('openrouter-model-primary-vendor/model-b'));
+
+    await user.press(screen.getByTestId('openrouter-save'));
+
+    await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
+    expect(mockedSaveConfig).toHaveBeenCalledWith({
+      provider: 'gemini',
+      apiKey: 'AIza-new-gemini-key',
+      primaryModel: 'vendor/model-b',
+      fallbackModels: [],
+    });
+  });
+
+  it('rejects a save for a provider whose key was never entered', async () => {
+    await renderSettledScreen();
+
+    await user.press(screen.getByTestId('provider-chip-openai'));
+    await waitFor(() =>
+      expect(mockedLoadProviderState).toHaveBeenLastCalledWith('openai'),
+    );
+
+    await user.press(screen.getByTestId('openrouter-save'));
+
+    const error = await screen.findByTestId('openrouter-form-error');
+    expect(error).toHaveTextContent(/API key is required/);
+    expect(mockedSaveConfig).not.toHaveBeenCalled();
+  });
+
+  it('restores the edited models when switching back to the original provider', async () => {
+    mockedGetCached.mockResolvedValue(catalogSnapshot());
+
+    await renderSettledScreen();
+    await waitFor(() =>
+      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+    );
+
+    await user.press(screen.getByTestId('provider-chip-gemini'));
+    await waitFor(() =>
+      expect(mockedLoadProviderState).toHaveBeenLastCalledWith('gemini'),
+    );
+
+    await user.press(screen.getByTestId('provider-chip-openrouter'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+    );
   });
 });
 

@@ -7,12 +7,12 @@
  * resolution has already happened by the time an outcome is returned:
  * script one outcome per call in the order calls arrive.
  */
-import {OpenRouterError} from '../src/serverless/errors';
+import {LLMError} from '../src/serverless/errors';
 import type {
   CompletionRequest,
   CompletionResult,
+  LLMClient,
   ModelInfo,
-  OpenRouterClient,
   ServerlessStreamEvent,
   StreamCompletionOptions,
   StreamHandle,
@@ -64,7 +64,7 @@ function defaultModels(): ModelInfo[] {
   ];
 }
 
-export class FakeOpenRouterClient implements OpenRouterClient {
+export class FakeOpenRouterClient implements LLMClient {
   /** Every completion request, in call order. */
   readonly completeRequests: CompletionRequest[] = [];
   /** Every streaming request, in call order. */
@@ -72,9 +72,9 @@ export class FakeOpenRouterClient implements OpenRouterClient {
   /** Number of listModels() invocations, in call order. */
   private modelsCallCount = 0;
 
-  private completeOutcomes: Array<CompletionResult | OpenRouterError> = [];
+  private completeOutcomes: Array<CompletionResult | LLMError> = [];
   private streamOutcomes: StreamScript[] = [];
-  private modelsOutcomes: Array<ModelInfo[] | OpenRouterError> = [];
+  private modelsOutcomes: Array<ModelInfo[] | LLMError> = [];
 
   /** Total listModels() calls recorded so far. */
   get modelsCalls(): number {
@@ -82,7 +82,7 @@ export class FakeOpenRouterClient implements OpenRouterClient {
   }
 
   /** Script the next complete() results/errors; empty tail uses defaults. */
-  enqueueComplete(...outcomes: ReadonlyArray<CompletionResult | OpenRouterError>): this {
+  enqueueComplete(...outcomes: ReadonlyArray<CompletionResult | LLMError>): this {
     this.completeOutcomes.push(...outcomes);
     return this;
   }
@@ -94,7 +94,7 @@ export class FakeOpenRouterClient implements OpenRouterClient {
   }
 
   /** Script the next listModels() results/errors; empty tail uses defaults. */
-  enqueueModels(...outcomes: ReadonlyArray<ModelInfo[] | OpenRouterError>): this {
+  enqueueModels(...outcomes: ReadonlyArray<ModelInfo[] | LLMError>): this {
     this.modelsOutcomes.push(...outcomes);
     return this;
   }
@@ -108,7 +108,7 @@ export class FakeOpenRouterClient implements OpenRouterClient {
   async complete(request: CompletionRequest): Promise<CompletionResult> {
     this.completeRequests.push(request);
     const outcome = this.completeOutcomes.shift();
-    if (outcome instanceof OpenRouterError) {
+    if (outcome instanceof LLMError) {
       throw outcome;
     }
     if (outcome) {
@@ -144,7 +144,7 @@ export class FakeOpenRouterClient implements OpenRouterClient {
   async listModels(): Promise<ModelInfo[]> {
     this.modelsCallCount += 1;
     const outcome = this.modelsOutcomes.shift();
-    if (outcome instanceof OpenRouterError) {
+    if (outcome instanceof LLMError) {
       throw outcome;
     }
     return outcome ?? defaultModels();

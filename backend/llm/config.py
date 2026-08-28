@@ -1,11 +1,13 @@
 """Server-mode LLM/model configuration assembled from environment/settings.
 
-This module is the single place where the OpenRouter connection parameters and
-the ordered model chain (primary model first, then fallbacks) are read from
-Django settings. Providers and fallback logic consume the normalized
-:class:`ModelConfiguration` value instead of touching ``settings`` directly,
-so business logic never hard-codes model names — every model comes from the
-environment (see ``settings.py`` and ``.env.example``).
+This module is the single place where the configured provider, its connection
+parameters (API key and base URL resolved through :mod:`llm.provider_specs`)
+and the ordered model chain (primary model first, then fallbacks) are read
+from Django settings. Providers, the registry, and fallback logic consume the
+normalized :class:`ModelConfiguration` value instead of touching ``settings``
+directly, so business logic never hard-codes model names or vendor endpoints
+— every one of them comes from the environment (see ``settings.py`` and
+``.env.example``).
 """
 
 from __future__ import annotations
@@ -18,6 +20,8 @@ import httpx
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
+from llm.provider_specs import DEFAULT_PROVIDER_NAME, get_provider_spec
+
 logger = logging.getLogger("llm.config")
 
 _MISSING = object()
@@ -27,10 +31,12 @@ _MISSING = object()
 class ModelConfiguration:
     """Normalized server-mode LLM configuration.
 
+    ``provider`` selects the concrete integration (see :mod:`llm.registry`).
     ``primary_model`` is tried first; ``fallback_models`` follow in configured
     order. Blank and duplicate entries never reach this point.
     """
 
+    provider: str
     api_key: str
     base_url: str
     timeout_seconds: float
@@ -58,11 +64,17 @@ class ModelConfiguration:
 def load_model_configuration() -> ModelConfiguration:
     """Build a validated :class:`ModelConfiguration` from Django settings.
 
-    Model names are stripped; blank, duplicated, or primary-equal fallback
-    entries are dropped while preserving order. Missing or invalid values
-    raise :class:`~django.core.exceptions.ImproperlyConfigured` naming the
-    offending setting so misconfiguration is obvious at startup.
+    The provider is selected by ``LLM_PROVIDER`` (default ``openrouter``); the
+    API key and base URL are resolved through that provider's dedicated
+    settings (``<PREFIX>_API_KEY`` / ``<PREFIX>_BASE_URL``). Model names are
+    stripped; blank, duplicated, or primary-equal fallback entries are dropped
+    while preserving order. Missing or invalid values raise
+    :class:`~django.core.exceptions.ImproperlyConfigured` naming the offending
+    setting so misconfiguration is obvious at startup.
     """
+    raw_provider = str(_setting("LLM_PROVIDER", default=DEFAULT_PROVIDER_NAME))
+    spec = get_provider_spec(raw_provider)
+
     primary = _clean_model(_setting("LLM_PRIMARY_MODEL"))
     if not primary:
         raise ImproperlyConfigured("LLM_PRIMARY_MODEL must be set to a non-blank model name.")
@@ -75,8 +87,9 @@ def load_model_configuration() -> ModelConfiguration:
         fallbacks.append(model)
 
     configuration = ModelConfiguration(
-        api_key=str(_setting("OPENROUTER_API_KEY", default="")),
-        base_url=_required_text("OPENROUTER_BASE_URL").rstrip("/"),
+        provider=spec.name,
+        api_key=str(_setting(spec.api_key_setting, default="")),
+        base_url=_required_text(spec.base_url_setting).rstrip("/"),
         timeout_seconds=_timeout_seconds("LLM_REQUEST_TIMEOUT_SECONDS", 60.0),
         connect_timeout_seconds=_timeout_seconds("LLM_CONNECT_TIMEOUT_SECONDS", 10.0),
         read_timeout_seconds=_timeout_seconds("LLM_READ_TIMEOUT_SECONDS", 60.0),
@@ -84,7 +97,8 @@ def load_model_configuration() -> ModelConfiguration:
         fallback_models=tuple(fallbacks),
     )
     logger.debug(
-        "model configuration loaded: primary=%s fallbacks=%d",
+        "model configuration loaded: provider=%s primary=%s fallbacks=%d",
+        configuration.provider,
         configuration.primary_model,
         len(configuration.fallback_models),
     )

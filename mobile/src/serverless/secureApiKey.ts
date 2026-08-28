@@ -1,46 +1,65 @@
 /**
- * Secure storage for the user's personal OpenRouter API key
- * (SPEC TASK-093, serverless mode).
+ * Secure storage for the user's personal provider API keys
+ * (SPEC TASK-093, TASK-AUDIT-013; serverless mode).
  *
- * The key is held only in the device keychain/keystore via
- * react-native-keychain. It must NEVER be written to local SQLite or
- * AsyncStorage, and it must NEVER appear in logs. The model selection
- * lives next to it in the serverless settings table because that data
- * is not sensitive.
+ * Keys are held only in the device keychain/keystore via
+ * react-native-keychain. They must NEVER be written to local SQLite or
+ * AsyncStorage, and they must NEVER appear in logs. Model selection lives
+ * next to the keys in the serverless settings table because that data is
+ * not sensitive.
  *
- * The service identifier is namespaced so it cannot collide with the
- * authentication-token keychain entry (auth/secureStorage.ts).
+ * Each supported provider gets its own keychain namespace so keys cannot
+ * overwrite each other (and so Android's one-credential-per-service model
+ * stays correct). The OpenRouter namespace is unchanged from the original
+ * single-provider implementation (service `com.elearningmobile.serverless`,
+ * username `openrouter-api-key`) so existing installs keep working.
  */
 import * as Keychain from 'react-native-keychain';
+import type {ProviderId} from './types';
 
 const SERVERLESS_KEYCHAIN_SERVICE = 'com.elearningmobile.serverless';
 const SERVERLESS_KEYCHAIN_USERNAME = 'openrouter-api-key';
 
-/**
- * Save the user's OpenRouter API key into secure device storage. Any
- * previous key stored under the same service is replaced atomically by
- * the keychain, so this also implements "replace" semantics.
- */
-export async function saveServerlessApiKey(apiKey: string): Promise<void> {
-  const trimmed = apiKey.trim();
-  if (!trimmed) {
-    throw new Error('OpenRouter API key must not be empty.');
+/** Keychain namespace for one provider's key. */
+function keychainNamespace(provider: ProviderId): {service: string; username: string} {
+  if (provider === 'openrouter') {
+    // Historic namespace — never renamed, or stored keys become unreadable.
+    return {service: SERVERLESS_KEYCHAIN_SERVICE, username: SERVERLESS_KEYCHAIN_USERNAME};
   }
-  await Keychain.setGenericPassword(SERVERLESS_KEYCHAIN_USERNAME, trimmed, {
-    service: SERVERLESS_KEYCHAIN_SERVICE,
-  });
+  return {
+    service: `${SERVERLESS_KEYCHAIN_SERVICE}.${provider}`,
+    username: 'api-key',
+  };
 }
 
 /**
- * Read the saved OpenRouter API key. Returns null when no key is
- * stored, when the keychain has been cleared, or when the stored entry
- * is somehow empty. The caller is responsible for keeping the returned
- * value out of logs and ephemeral component state.
+ * Save the user's provider API key into secure device storage. Any
+ * previous key stored under the same namespace is replaced atomically by
+ * the keychain, so this also implements "replace" semantics.
  */
-export async function loadServerlessApiKey(): Promise<string | null> {
-  const credentials = await Keychain.getGenericPassword({
-    service: SERVERLESS_KEYCHAIN_SERVICE,
-  });
+export async function saveServerlessApiKey(
+  apiKey: string,
+  provider: ProviderId = 'openrouter',
+): Promise<void> {
+  const trimmed = apiKey.trim();
+  if (!trimmed) {
+    throw new Error('Provider API key must not be empty.');
+  }
+  const {service, username} = keychainNamespace(provider);
+  await Keychain.setGenericPassword(username, trimmed, {service});
+}
+
+/**
+ * Read the saved provider API key. Returns null when no key is stored,
+ * when the keychain has been cleared, or when the stored entry is somehow
+ * empty. The caller is responsible for keeping the returned value out of
+ * logs and ephemeral component state.
+ */
+export async function loadServerlessApiKey(
+  provider: ProviderId = 'openrouter',
+): Promise<string | null> {
+  const {service} = keychainNamespace(provider);
+  const credentials = await Keychain.getGenericPassword({service});
   if (!credentials) {
     return null;
   }
@@ -49,14 +68,17 @@ export async function loadServerlessApiKey(): Promise<string | null> {
 }
 
 /**
- * Permanently remove the saved OpenRouter API key from device storage.
+ * Permanently remove the saved provider API key from device storage.
  * Clearing an absent key is a no-op rather than an error.
  */
-export async function clearServerlessApiKey(): Promise<void> {
-  await Keychain.resetGenericPassword({service: SERVERLESS_KEYCHAIN_SERVICE});
+export async function clearServerlessApiKey(provider: ProviderId = 'openrouter'): Promise<void> {
+  const {service} = keychainNamespace(provider);
+  await Keychain.resetGenericPassword({service});
 }
 
-/** True when an OpenRouter API key is currently stored. */
-export async function hasServerlessApiKey(): Promise<boolean> {
-  return (await loadServerlessApiKey()) !== null;
+/** True when an API key is currently stored for the provider. */
+export async function hasServerlessApiKey(
+  provider: ProviderId = 'openrouter',
+): Promise<boolean> {
+  return (await loadServerlessApiKey(provider)) !== null;
 }

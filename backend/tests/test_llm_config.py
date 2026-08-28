@@ -9,6 +9,7 @@ from django.test import SimpleTestCase, override_settings
 
 from llm.config import ModelConfiguration, load_model_configuration
 from llm.fallback import FallbackProvider
+from llm.gemini import GeminiProvider
 from llm.openrouter import OpenRouterProvider
 
 LLM_DIR = Path(__file__).resolve().parents[1] / "llm"
@@ -18,19 +19,30 @@ _BUSINESS_MODULES = (
     "config.py",
     "exceptions.py",
     "fallback.py",
+    "gemini.py",
+    "ninerouter.py",
+    "openai.py",
+    "openai_compatible.py",
     "openrouter.py",
     "provider.py",
+    "provider_errors.py",
+    "provider_specs.py",
+    "registry.py",
     "types.py",
 )
 
+# Model-id fragments (vendor token followed by a version separator/digit,
+# e.g. "gpt-4o" or "claude/3.5") — bare vendor names like the "gemini"
+# provider id itself are not model names.
 _MODEL_NAME_PATTERN = re.compile(
-    r"\b(gpt|claude|gemini|llama|mistral|deepseek|qwen|grok)[-_/a-z0-9]*",
+    r"\b(gpt|claude|gemini|llama|mistral|deepseek|qwen|grok)([-_/]|\d)[a-z0-9_/.-]*",
     re.IGNORECASE,
 )
 
 
 def _configuration(**overrides: object) -> ModelConfiguration:
     values: dict[str, object] = {
+        "provider": "openrouter",
         "api_key": "sk-test",
         "base_url": "https://openrouter.ai/api/v1",
         "timeout_seconds": 30.0,
@@ -78,12 +90,68 @@ class LoadModelConfigurationTests(SimpleTestCase):
     def test_reads_documented_settings(self) -> None:
         config = load_model_configuration()
 
+        self.assertEqual(config.provider, "openrouter")
         self.assertEqual(config.api_key, "sk-or-v1-abc")
         self.assertEqual(config.base_url, "https://openrouter.ai/api/v1")
         self.assertEqual(config.timeout_seconds, 45.0)
         self.assertEqual(config.connect_timeout_seconds, 12.0)
         self.assertEqual(config.read_timeout_seconds, 45.0)
         self.assertEqual(config.model_chain, ("acme/primary", "acme/fb-1", "acme/fb-2"))
+
+    @override_settings(
+        LLM_PROVIDER="gemini",
+        GEMINI_API_KEY="gem-key-123",
+        LLM_PRIMARY_MODEL="acme/primary",
+        LLM_FALLBACK_MODELS=["acme/fb-1"],
+    )
+    def test_provider_selection_resolves_dedicated_settings(self) -> None:
+        config = load_model_configuration()
+
+        self.assertEqual(config.provider, "gemini")
+        self.assertEqual(config.api_key, "gem-key-123")
+        self.assertEqual(config.base_url, "https://generativelanguage.googleapis.com/v1beta")
+
+    @override_settings(
+        LLM_PROVIDER=" GEMINI ",
+        GEMINI_API_KEY="gem-key-123",
+        GEMINI_BASE_URL="https://gemini.example/v1beta",
+        LLM_PRIMARY_MODEL="acme/primary",
+    )
+    def test_provider_name_is_normalized(self) -> None:
+        config = load_model_configuration()
+
+        self.assertEqual(config.provider, "gemini")
+        self.assertEqual(config.base_url, "https://gemini.example/v1beta")
+
+    @override_settings(
+        LLM_PROVIDER="openai-compatible",
+        OPENAI_COMPATIBLE_API_KEY="sk-compat",
+        OPENAI_COMPATIBLE_BASE_URL="https://compat.example/v1",
+        LLM_PRIMARY_MODEL="acme/primary",
+    )
+    def test_generic_openai_compatible_provider_requires_explicit_base_url(self) -> None:
+        config = load_model_configuration()
+
+        self.assertEqual(config.provider, "openai-compatible")
+        self.assertEqual(config.base_url, "https://compat.example/v1")
+
+    @override_settings(
+        LLM_PROVIDER="openai-compatible",
+        OPENAI_COMPATIBLE_API_KEY="sk-compat",
+        OPENAI_COMPATIBLE_BASE_URL="   ",
+        LLM_PRIMARY_MODEL="acme/primary",
+    )
+    def test_blank_generic_provider_base_url_is_rejected(self) -> None:
+        with self.assertRaises(ImproperlyConfigured) as ctx:
+            load_model_configuration()
+        self.assertIn("OPENAI_COMPATIBLE_BASE_URL", str(ctx.exception))
+
+    @override_settings(LLM_PROVIDER="not-a-provider", LLM_PRIMARY_MODEL="acme/primary")
+    def test_unknown_provider_is_rejected_by_name(self) -> None:
+        with self.assertRaises(ImproperlyConfigured) as ctx:
+            load_model_configuration()
+        self.assertIn("LLM_PROVIDER", str(ctx.exception))
+        self.assertIn("not-a-provider", str(ctx.exception))
 
     @override_settings(
         OPENROUTER_API_KEY="sk",
@@ -192,6 +260,15 @@ class ProviderWiringTests(SimpleTestCase):
 
     @override_settings(
         OPENROUTER_API_KEY="sk-wiring",
+        LLM_PROVIDER="gemini",
+        LLM_PRIMARY_MODEL="wiring/primary",
+    )
+    def test_openrouter_provider_from_settings_rejects_provider_mismatch(self) -> None:
+        with self.assertRaises(ImproperlyConfigured):
+            OpenRouterProvider.from_settings()
+
+    @override_settings(
+        OPENROUTER_API_KEY="sk-wiring",
         OPENROUTER_BASE_URL="https://openrouter.ai/api/v1",
         LLM_REQUEST_TIMEOUT_SECONDS=12,
         LLM_CONNECT_TIMEOUT_SECONDS=6,
@@ -208,6 +285,25 @@ class ProviderWiringTests(SimpleTestCase):
         self.assertEqual(
             fallback.models,
             ("wiring/primary", "wiring/fb-1", "wiring/fb-2"),
+        )
+
+    @override_settings(
+        LLM_PROVIDER="gemini",
+        GEMINI_API_KEY="gem-wiring",
+        LLM_CONNECT_TIMEOUT_SECONDS=7,
+        LLM_READ_TIMEOUT_SECONDS=13,
+        LLM_PRIMARY_MODEL="wiring/primary",
+        LLM_FALLBACK_MODELS=["wiring/fb"],
+    )
+    def test_fallback_provider_from_settings_builds_selected_provider(self) -> None:
+        fallback = FallbackProvider.from_settings()
+        self.addCleanup(fallback.close)
+
+        assert isinstance(fallback.provider, GeminiProvider)
+        self.assertEqual(fallback.provider.api_key, "gem-wiring")
+        self.assertEqual(
+            fallback.models,
+            ("wiring/primary", "wiring/fb"),
         )
 
 
@@ -227,7 +323,13 @@ class NoHardcodedModelsTests(SimpleTestCase):
     def test_business_modules_do_not_read_llm_settings_directly(self) -> None:
         for filename in _BUSINESS_MODULES:
             source = (LLM_DIR / filename).read_text(encoding="utf-8")
-            for forbidden in ("settings.LLM_", "settings.OPENROUTER_"):
+            for forbidden in (
+                "settings.LLM_",
+                "settings.OPENROUTER_",
+                "settings.GEMINI_",
+                "settings.OPENAI_",
+                "settings.NINEROUTER_",
+            ):
                 self.assertNotIn(
                     forbidden,
                     source,

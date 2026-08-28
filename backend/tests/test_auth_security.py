@@ -369,7 +369,8 @@ class TestServerSecretHandling:
                 secret_key=_DEV_SECRET_KEY,
                 allowed_hosts=["x"],
                 database_password="db",
-                openrouter_api_key="key",
+                llm_provider="openrouter",
+                provider_api_key="key",
             )
 
     def test_settings_refuse_empty_secrets(self):
@@ -382,7 +383,8 @@ class TestServerSecretHandling:
                 secret_key="",
                 allowed_hosts=[],
                 database_password="",
-                openrouter_api_key="",
+                llm_provider="openrouter",
+                provider_api_key="",
             )
 
     def test_error_handler_does_not_leak_secrets(self):

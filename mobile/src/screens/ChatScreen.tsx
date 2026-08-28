@@ -101,7 +101,7 @@ import {
   getSession as getLocalSession,
   listSessions as listLocalSessions,
 } from '../db/sessionStore';
-import {createOpenRouterClient} from '../serverless/openrouterClient';
+import {createProviderClient} from '../serverless/providerRegistry';
 import {generateImprovement} from '../serverless/improvement';
 import {generateSuggestions} from '../serverless/suggestions';
 import {loadServerlessOpenRouterConfig} from '../serverless/settings';
@@ -110,7 +110,7 @@ import {
   streamServerlessTurn,
 } from '../serverless/chatStreaming';
 import {buildServerlessContext, updateSummaryIfNeeded} from '../serverless/conversationContext';
-import type {OpenRouterClient, ServerlessStreamEvent} from '../serverless/types';
+import type {LLMClient, ServerlessStreamEvent} from '../serverless/types';
 import {LocalConversationRepository} from '../db/conversationRepository';
 import {getLearningProfile} from '../db/profileStore';
 import type {LocalMessage} from '../db/types';
@@ -843,7 +843,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     (
       sid: number,
       startTurnFn: (
-        client: OpenRouterClient,
+        client: LLMClient,
         repository: LocalConversationRepository,
       ) => Promise<ChatStreamHandle>,
     ) => {
@@ -856,7 +856,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         if (sessionIdRef.current !== sid || streamingAssistantIdRef.current === null) {
           return;
         }
-        const client = createOpenRouterClient(config);
+        const client = createProviderClient(config);
         const repository = new LocalConversationRepository(getLocalDatabase);
         try {
           const handle = await startTurnFn(client, repository);
@@ -873,7 +873,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
 
   /** Shared serverless event pipeline: terminal outcomes drive turn state. */
   const serverlessOnEvent = useCallback(
-    (client: OpenRouterClient, repository: LocalConversationRepository, sid: number) =>
+    (client: LLMClient, repository: LocalConversationRepository, sid: number) =>
       (event: ServerlessStreamEvent): void => {
         if (event.type === 'completed') {
           // Post-turn summary maintenance (TASK-087) never blocks the
@@ -1006,7 +1006,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             if (!serverlessConfig) {
               return;
             }
-            const client = createOpenRouterClient(serverlessConfig);
+            const client = createProviderClient(serverlessConfig);
 
             // Load learning profile from local storage
             const db = await getLocalDatabase();
@@ -1110,7 +1110,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           if (!serverlessConfig) {
             return;
           }
-          const client = createOpenRouterClient(serverlessConfig);
+          const client = createProviderClient(serverlessConfig);
 
           // Load learning profile from local storage
           const db = await getLocalDatabase();

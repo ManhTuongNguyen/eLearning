@@ -23,7 +23,8 @@ jest.mock('../src/serverless/settings');
 jest.mock('../src/serverless/modelCatalog');
 jest.mock('../src/serverless/openrouterClient');
 
-const mockedLoadConfig = jest.mocked(serverlessSettings.loadServerlessOpenRouterConfig);
+const mockedLoadProvider = jest.mocked(serverlessSettings.loadServerlessProvider);
+const mockedLoadProviderState = jest.mocked(serverlessSettings.loadServerlessProviderState);
 const mockedGetCached = jest.mocked(modelCatalog.getCachedModelCatalog);
 
 function flattenStyle(style: unknown): Record<string, unknown> {
@@ -49,7 +50,12 @@ async function renderScreen() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockedLoadConfig.mockResolvedValue(null);
+  mockedLoadProvider.mockResolvedValue('openrouter');
+  mockedLoadProviderState.mockResolvedValue({
+    apiKey: null,
+    primaryModel: null,
+    fallbackModels: [],
+  });
   mockedGetCached.mockResolvedValue(null);
 });
 
