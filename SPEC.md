@@ -2375,7 +2375,7 @@ Acceptance criteria:
 
 ## TASK-119 — Run complete quality checks
 
-Status: `[ ]`
+Status: `[x]`
 
 Run all relevant checks.
 
