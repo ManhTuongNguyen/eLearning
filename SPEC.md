@@ -2189,7 +2189,7 @@ Test:
 
 ## TASK-109 — Mobile authentication tests
 
-Status: `[ ]`
+Status: `[x]`
 
 Test:
 
