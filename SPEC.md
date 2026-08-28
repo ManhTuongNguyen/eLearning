@@ -2267,7 +2267,7 @@ README must explain:
 
 ## TASK-114 — Document architecture
 
-Status: `[ ]`
+Status: `[x]`
 
 Document:
 

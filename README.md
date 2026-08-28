@@ -32,6 +32,10 @@ React Native → Local SQLite + OpenRouter directly
 | `docker/` | Backend Docker image definition (referenced by the root `docker-compose.yml`) |
 | `docs/` | Architecture notes and documentation |
 
+A detailed walkthrough of the system — modes, LLM provider abstraction,
+streaming, conversation memory, Celery and the vocabulary enrichment flow —
+lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ## Technology Stack
 
 **Backend:** Python · Django 6.x · Django REST Framework · PostgreSQL · Redis · Celery · SSE streaming · pytest · uv · Ruff · python-decouple · Docker Compose
