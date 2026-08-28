@@ -9,6 +9,11 @@
  * with no credentials, so it works before any key is configured and an
  * invalid key can never block it. Fallback order is edited in place with
  * move up/down controls.
+ *
+ * The top inset comes from useSafeAreaInsets (TASK-AUDIT-012) instead of a
+ * fixed oversized padding, so the header sits at the same spacing as the
+ * other pushed screens while devices that draw under the status bar
+ * (edge-to-edge Android) still clear it.
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
@@ -20,6 +25,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {toErrorMessage} from '../auth/AuthContext';
 import {getLocalDatabase} from '../db/database';
@@ -37,13 +43,16 @@ import {useTheme} from '../theme/ThemeContext';
 /** Upper bound of model rows rendered at once; the filter narrows further. */
 const MAX_VISIBLE_MODELS = 50;
 
-function createStyles(c: ThemeColors) {
+/** Spacing between the safe-area top inset and the header row (px). */
+const HEADER_TOP_SPACING = 24;
+
+export function createStyles(c: ThemeColors, topInset: number) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
       paddingHorizontal: 24,
-      paddingTop: 60,
+      paddingTop: topInset + HEADER_TOP_SPACING,
     },
     scroll: {
       paddingBottom: 32,
@@ -313,7 +322,11 @@ function modelLabel(model: ModelInfo): string {
 
 export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenProps) {
   const {colors} = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(
+    () => createStyles(colors, insets.top),
+    [colors, insets.top],
+  );
 
   const [loading, setLoading] = useState(true);
   /** Key already stored on-device; null when none saved yet. Never rendered. */

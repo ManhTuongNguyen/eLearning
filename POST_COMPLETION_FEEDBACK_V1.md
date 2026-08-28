@@ -729,7 +729,7 @@ Do not use arbitrary negative margins as the primary fix.
 
 ## TASK-AUDIT-012 — Fix excessive top margin on OpenRouter setup screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
