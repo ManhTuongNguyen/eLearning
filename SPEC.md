@@ -2233,7 +2233,7 @@ Test:
 
 ## TASK-112 — Mobile vocabulary tests
 
-Status: `[ ]`
+Status: `[x]`
 
 Test:
 
