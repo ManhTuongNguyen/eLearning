@@ -128,7 +128,7 @@ Never:
 
 ## TASK-AUDIT-001 — Fix 406 for chat SSE streaming
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P0`
 

@@ -13,6 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from api.negotiation import ServerSentEventNegotiation
 from conversations.chat import RetryService, UserMessageService, finalize_turn
 from conversations.improvement import ImprovementService
 from conversations.models import Message, Session
@@ -226,6 +227,7 @@ class MessageStreamView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    content_negotiation_class = ServerSentEventNegotiation
 
     def post(self, request, *args, **kwargs) -> object:
         serializer = ChatMessageSerializer(data=request.data)
@@ -264,6 +266,7 @@ class MessageRetryView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    content_negotiation_class = ServerSentEventNegotiation
 
     def post(self, request, *args, **kwargs) -> object:
         try:

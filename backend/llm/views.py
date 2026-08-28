@@ -9,6 +9,7 @@ from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from api.negotiation import ServerSentEventNegotiation
 from llm.fallback import FallbackProvider
 from llm.sse import sse_streaming_response
 from llm.streaming import StreamingCompletionService
@@ -73,6 +74,7 @@ class LLMStreamView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    content_negotiation_class = ServerSentEventNegotiation
 
     def post(self, request) -> object:
         serializer = StreamRequestSerializer(data=request.data)
