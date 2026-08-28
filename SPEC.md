@@ -2283,7 +2283,7 @@ Document:
 
 ## TASK-115 — Document API
 
-Status: `[ ]`
+Status: `[x]`
 
 Document major API endpoints and request/response behavior.
 

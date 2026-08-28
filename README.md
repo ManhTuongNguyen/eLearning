@@ -34,7 +34,9 @@ React Native → Local SQLite + OpenRouter directly
 
 A detailed walkthrough of the system — modes, LLM provider abstraction,
 streaming, conversation memory, Celery and the vocabulary enrichment flow —
-lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The server-mode REST
+API reference — endpoints, request/response behavior, SSE frames and the
+standard error format — lives in [`docs/API.md`](docs/API.md).
 
 ## Technology Stack
 
