@@ -4,8 +4,14 @@
  * states and keyboard handling.
  *
  * The screen loads an existing conversation through its `sessionId` route
- * param; without one it shows an empty state until a conversation is opened
- * or created (TASK-051). In server mode messages and session detail come
+ * param; without one — the post-login and post-restore landing state — it
+ * derives its state from the authoritative history (TASK-AUDIT-008): the
+ * most recent conversation replaces the param-less route in place, a
+ * confirmed-empty history shows the empty state (TASK-051), and a failed
+ * history lookup surfaces an error with retry instead of a false "empty"
+ * claim. The lookup re-runs whenever the route regains focus, so a check
+ * that settled while the user was elsewhere never leaves a stale state
+ * behind. In server mode messages and session detail come
  * from the backend API; in serverless mode (TASK-090) both are read from the
  * on-device SQLite database and no backend request is made (Rule 9). Sending
  * posts the turn to POST /api/v1/sessions/{id}/messages/stream/ (server
@@ -73,7 +79,13 @@ import type {NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
 import type {ChatStreamEvent, ChatStreamHandle} from '../api/chatStream';
 import {streamChatTurn, streamRetryTurn} from '../api/chatStream';
 import type {ChatMessage, MessageImprovement, MessageSuggestions, Session} from '../api/sessions';
-import {getMessageSuggestions, getSession, improveMessage, listMessages} from '../api/sessions';
+import {
+  getMessageSuggestions,
+  getSession,
+  improveMessage,
+  listMessages,
+  listSessions,
+} from '../api/sessions';
 import {saveVocabulary} from '../api/vocabulary';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import type {ChatScreenProps} from '../navigation/types';
@@ -85,7 +97,10 @@ import {useApplicationMode} from '../mode/ModeContext';
 import {getRuntimeApplicationMode} from '../mode/runtime';
 import {getLocalDatabase} from '../db/database';
 import {listMessages as listLocalMessages} from '../db/messageStore';
-import {getSession as getLocalSession} from '../db/sessionStore';
+import {
+  getSession as getLocalSession,
+  listSessions as listLocalSessions,
+} from '../db/sessionStore';
 import {createOpenRouterClient} from '../serverless/openrouterClient';
 import {generateImprovement} from '../serverless/improvement';
 import {generateSuggestions} from '../serverless/suggestions';
@@ -401,7 +416,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   // stable `styles` prop (TASK-103).
   const rowStyles = useMemo(() => createRowStyles(colors), [colors]);
 
-  const [loading, setLoading] = useState(sessionId !== undefined);
+  // The first frame is always the spinner (TASK-AUDIT-008): without a
+  // session the screen must check the authoritative history before it may
+  // claim any state, and with one it loads the conversation.
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [session, setSession] = useState<Session | null>(null);
@@ -409,6 +427,9 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const [exampleVisible, setExampleVisible] = useState(false);
   const [draft, setDraft] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  // TASK-AUDIT-008: bumped when the no-session route regains focus so the
+  // authoritative history lookup re-runs (see the focus listener below).
+  const [restoreKey, setRestoreKey] = useState(0);
   const [streaming, setStreaming] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   // TASK-060: the message whose long-press menu is open; null when closed.
@@ -589,7 +610,56 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setDetachedFromBottom(false);
     endTurn();
     if (sessionId === undefined) {
-      setLoading(false);
+      // TASK-AUDIT-008: this route is also the post-login and post-restore
+      // landing screen, so its state is derived from the authoritative
+      // history instead of claiming "No conversation yet" unconditionally.
+      // The most recent conversation replaces the param-less route in place
+      // (replace, not push — the empty landing has no back story); only a
+      // confirmed-empty history renders the empty state, and a failed
+      // lookup surfaces the error with retry. A fixed delay would only
+      // mask races; the authoritative answer is the point.
+      const run = ++restoreRunRef.current;
+      restoreInFlightRef.current = true;
+      setLoading(true);
+      (async () => {
+        try {
+          let mostRecent: number | undefined;
+          if (mode === 'serverless') {
+            // Serverless history lives on-device (TASK-090): the lookup
+            // reads the same local store the History screen renders.
+            const rows = await listLocalSessions(await getLocalDatabase());
+            mostRecent = rows[0]?.id;
+          } else {
+            // The backend lists sessions most-recently-updated first, so
+            // page one starts with the conversation last touched.
+            const page = await listSessions(authedRequestRef.current, 1);
+            mostRecent = page.results[0]?.id;
+          }
+          if (cancelled) {
+            return;
+          }
+          if (mostRecent === undefined) {
+            setLoading(false);
+            return;
+          }
+          if (restoreFocusedRef.current) {
+            navigation.replace('Chat', {sessionId: mostRecent});
+            return;
+          }
+          // The user navigated elsewhere before the lookup settled: the
+          // route stays in its loading state and the focus listener below
+          // re-runs the check when it becomes visible again.
+        } catch (err) {
+          if (!cancelled) {
+            setError(toErrorMessage(err));
+            setLoading(false);
+          }
+        } finally {
+          if (restoreRunRef.current === run) {
+            restoreInFlightRef.current = false;
+          }
+        }
+      })();
       return;
     }
 
@@ -642,7 +712,44 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       cancelled = true;
       endTurn();
     };
-  }, [sessionId, reloadKey, mode, resetMessages, endTurn, stopSpeech]);
+  }, [sessionId, reloadKey, restoreKey, mode, navigation, resetMessages, endTurn, stopSpeech]);
+
+  // TASK-AUDIT-008: fresh focus state for the no-session restore check —
+  // the navigation prop captured by the load effect's closure would answer
+  // `isFocused()` with the mount-time state, so focus/blur events keep a
+  // ref in sync and the async lookup reads the CURRENT visibility. When the
+  // screen regains focus while no check is running, the check re-runs: a
+  // lookup that settled while the user was elsewhere must not leave a stale
+  // state beneath the active screen, and conversations created while this
+  // screen sat in the stack are picked up on return. The mount-time check
+  // (already in flight) is not restarted.
+  // The landing route starts focused; the listener effect below replaces
+  // this initial value with the precise mount state before any lookup (an
+  // async continuation) can read it. Bare navigation stubs (tests) have no
+  // isFocused — the focused default keeps the restore path inert for them.
+  const restoreFocusedRef = useRef(true);
+  const restoreInFlightRef = useRef(false);
+  const restoreRunRef = useRef(0);
+  useEffect(() => {
+    if (sessionId !== undefined) {
+      return;
+    }
+    restoreFocusedRef.current = navigation.isFocused?.() ?? true;
+    const focusUnsubscribe = navigation.addListener?.('focus', () => {
+      restoreFocusedRef.current = true;
+      if (restoreInFlightRef.current) {
+        return;
+      }
+      setRestoreKey(key => key + 1);
+    });
+    const blurUnsubscribe = navigation.addListener?.('blur', () => {
+      restoreFocusedRef.current = false;
+    });
+    return () => {
+      focusUnsubscribe?.();
+      blurUnsubscribe?.();
+    };
+  }, [navigation, sessionId]);
 
   /**
    * Queue one streamed chunk for the assistant bubble of this turn. The
@@ -1367,7 +1474,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             No conversation yet
           </Text>
           <Text style={styles.emptyHint}>
-            Open a past conversation from History or start a new one to practice English.
+            Start a new conversation to practice English.
           </Text>
           <Pressable
             style={styles.retryButton}

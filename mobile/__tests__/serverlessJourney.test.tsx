@@ -41,6 +41,7 @@ import * as Keychain from 'react-native-keychain';
 import App from '../App';
 import * as authApi from '../src/api/auth';
 import * as profileApi from '../src/api/profile';
+import * as sessionsApi from '../src/api/sessions';
 import {getLocalDatabase, resetLocalDatabase} from '../src/db/database';
 import type {SqlDriver, SqlParam} from '../src/db/driver';
 import * as nativeDriver from '../src/db/nativeDriver';
@@ -55,6 +56,7 @@ import {getSpeechEngine} from '../src/tts/textToSpeech';
 import {FakeOpenRouterClient} from '../testing/fakeOpenRouter';
 
 jest.mock('../src/api/auth');
+jest.mock('../src/api/sessions');
 jest.mock('../src/api/profile', () => ({
   ...jest.requireActual('../src/api/profile'),
   getProfile: jest.fn(),
@@ -102,6 +104,7 @@ jest.mock('../src/serverless/openrouterClient', () => {
 
 const mockedAuth = jest.mocked(authApi);
 const mockedProfile = jest.mocked(profileApi);
+const mockedSessions = jest.mocked(sessionsApi);
 const mockedKeychain = Keychain as jest.Mocked<typeof Keychain> & {
   __resetKeychainStore: () => void;
 };
@@ -252,6 +255,15 @@ beforeEach(() => {
   setRuntimeApplicationMode('server');
   jest.clearAllMocks();
   mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
+  // The server-mode phase of these journeys boots into the no-session
+  // landing route, whose authoritative history check (TASK-AUDIT-008) goes
+  // through the substituted sessions module — never the real transport.
+  mockedSessions.listSessions.mockResolvedValue({
+    count: 0,
+    next: null,
+    previous: null,
+    results: [],
+  });
   lastAlertButtons = [];
   jest
     .spyOn(Alert, 'alert')

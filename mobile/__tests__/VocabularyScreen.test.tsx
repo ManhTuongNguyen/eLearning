@@ -21,6 +21,7 @@ import {
 
 import * as authApi from '../src/api/auth';
 import {ApiError} from '../src/api/client';
+import * as sessionsApi from '../src/api/sessions';
 import type {Paginated} from '../src/api/sessions';
 import * as vocabularyApi from '../src/api/vocabulary';
 import type {VocabularyItem} from '../src/api/vocabulary';
@@ -34,12 +35,14 @@ import {ThemeProvider} from '../src/theme/ThemeContext';
 import * as ankiShare from '../src/utils/ankiShare';
 
 jest.mock('../src/api/auth');
+jest.mock('../src/api/sessions');
 jest.mock('../src/api/vocabulary');
 jest.mock('../src/auth/secureStorage');
 jest.mock('../src/utils/ankiShare');
 
 const mockedAuth = jest.mocked(authApi);
 const mockedVocabulary = jest.mocked(vocabularyApi);
+const mockedSessions = jest.mocked(sessionsApi);
 const mockedStorage = jest.mocked(secureStorage);
 const mockedShare = jest.mocked(ankiShare);
 
@@ -104,6 +107,14 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
   mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  // The Chat underneath checks the authoritative history on the no-session
+  // landing route (TASK-AUDIT-008); default to an empty one.
+  mockedSessions.listSessions.mockResolvedValue({
+    count: 0,
+    next: null,
+    previous: null,
+    results: [],
+  });
 });
 
 describe('VocabularyScreen', () => {

@@ -52,6 +52,9 @@ jest.mock('../src/theme/system', () => ({
 }));
 
 jest.mock('../src/auth/AuthContext', () => ({
+  // toErrorMessage is part of the module surface the chat screen consumes
+  // (the TASK-AUDIT-008 history lookup surfaces failures through it).
+  toErrorMessage: () => 'The server is unreachable right now. Please try again later.',
   useAuth: () => ({
     user: {id: 1, username: 'alice', email: 'alice@example.com'},
     busy: false,

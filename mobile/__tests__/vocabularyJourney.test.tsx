@@ -145,9 +145,9 @@ function topScreenByTestId(
 /** Capture the word "early" out of the assistant message (sheet stays open). */
 async function captureWordFromMessage(): Promise<void> {
   await waitFor(() =>
-    expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen(),
+    expect(topScreenByTestId('chat-message-810')).toBeOnTheScreen(),
   );
-  await fireEvent(screen.getByTestId('chat-message-810'), 'longPress');
+  await fireEvent(topScreenByTestId('chat-message-810'), 'longPress');
   await fireEvent.press(screen.getByTestId('chat-menu-select-text'));
   expect(screen.getByTestId('chat-selection-input').props.value).toBe(
     MESSAGE_CONTENT,
@@ -178,10 +178,12 @@ describe('TASK-112 vocabulary journey', () => {
 
     await render(<App />);
 
-    // The restored session lands in the chat without a conversation open.
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    // The restored session lands in the chat; the most recent conversation
+    // is opened in place by the authoritative history check (TASK-AUDIT-008).
+    await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
 
-    // Enter the conversation through History.
+    // Enter the conversation through History as well (a second Chat instance
+    // on top — the capture flow below addresses the topmost one).
     await fireEvent.press(screen.getByTestId('chat-open-history'));
     const sessionRow = await screen.findByTestId('history-item-5');
     await fireEvent.press(sessionRow);

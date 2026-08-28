@@ -17,7 +17,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react-native';
-import {Pressable} from 'react-native';
+import {Pressable, Text} from 'react-native';
 
 import * as authApi from '../src/api/auth';
 import {ApiError} from '../src/api/client';
@@ -103,6 +103,7 @@ function ModeSwitchHarness() {
 async function renderHistory(options?: {
   withChatUnderneath?: boolean;
   withModeSwitcher?: boolean;
+  withChatBackStub?: boolean;
 }) {
   const Stack = createNativeStackNavigator<MainStackParamList>();
   const navigator = (
@@ -113,7 +114,17 @@ async function renderHistory(options?: {
           : undefined
       }>
       <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="History">
-        <Stack.Screen name="Chat" component={ChatScreen} />
+        {options?.withChatBackStub ? (
+          <Stack.Screen name="Chat">
+            {({navigation}) => (
+              <Pressable testID="chat-stub-back" onPress={() => navigation.goBack()}>
+                <Text>back</Text>
+              </Pressable>
+            )}
+          </Stack.Screen>
+        ) : (
+          <Stack.Screen name="Chat" component={ChatScreen} />
+        )}
         <Stack.Screen name="History" component={HistoryScreen} />
       </Stack.Navigator>
     </NavigationContainer>
@@ -309,6 +320,55 @@ describe('HistoryScreen', () => {
     await fireEvent.press(screen.getByTestId('history-back'));
 
     await waitFor(() => expect(screen.getByTestId('chat-no-session')).toBeOnTheScreen());
+  });
+
+  it('refreshes from the authoritative source when returning to a mounted History (TASK-AUDIT-008)', async () => {
+    let resolveRefresh: (page: Paginated<Session>) => void = () => {};
+    mockedSessions.listSessions
+      .mockResolvedValueOnce(sessionPage([makeSession({id: 42})]))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Paginated<Session>>(resolve => {
+            resolveRefresh = resolve;
+          }),
+      );
+    await renderHistory({withChatBackStub: true});
+
+    await screen.findByTestId('history-item-42');
+
+    // Leave to chat and return; the focus event triggers a silent refresh.
+    await fireEvent.press(screen.getByTestId('history-item-42'));
+    await screen.findByTestId('chat-stub-back');
+    await fireEvent.press(screen.getByTestId('chat-stub-back'));
+
+    // The silent refresh never wipes the visible rows behind a spinner.
+    expect(await screen.findByTestId('history-item-42')).toBeOnTheScreen();
+    expect(screen.queryByTestId('history-loading')).toBeNull();
+
+    resolveRefresh(
+      sessionPage([makeSession({id: 43, title: 'Brand new'}), makeSession({id: 42})]),
+    );
+
+    // The authoritative page replaces the visible list in place.
+    await waitFor(() => expect(renderedItemIds()).toEqual([43, 42]));
+    expect(mockedSessions.listSessions).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps visible rows and the empty truth when the returning refresh fails (TASK-AUDIT-008)', async () => {
+    mockedSessions.listSessions
+      .mockResolvedValueOnce(sessionPage([makeSession({id: 42})]))
+      .mockRejectedValueOnce(new ApiError(0, 'Network request failed.'));
+    await renderHistory({withChatBackStub: true});
+
+    await screen.findByTestId('history-item-42');
+    await fireEvent.press(screen.getByTestId('history-item-42'));
+    await screen.findByTestId('chat-stub-back');
+    await fireEvent.press(screen.getByTestId('chat-stub-back'));
+
+    // Rows survive the failed silent refresh — no false empty claim.
+    expect(await screen.findByTestId('history-item-42')).toBeOnTheScreen();
+    expect(screen.queryByTestId('history-empty')).toBeNull();
+    expect(screen.queryByTestId('history-loading')).toBeNull();
   });
 });
 

@@ -7,7 +7,14 @@
  * mode instead lists the on-device SQLite conversations through the local
  * repository, so server history disappears and local history appears with a
  * mode switch, without any backend traffic. The first page loads on mount
- * (and on retry); loading, empty and error states are all explicit.
+ * (and on retry); loading, empty and error states are all explicit. A
+ * mounted History also re-derives its state from the authoritative source
+ * whenever it regains focus (TASK-AUDIT-008): the refresh is silent — the
+ * rendered rows are never wiped behind a spinner — so returning to the
+ * screen picks up conversations created, renamed or deleted elsewhere and
+ * never shows a stale list. A failed silent refresh keeps visible rows and
+ * only escalates to the error banner when the screen is empty, so an empty
+ * state is always a true claim.
  * Failures never destroy rows that are already visible — pagination errors
  * surface as a banner above the list. Each row also offers an inline rename
  * editor: saving persists the title through the active backend and swaps the
@@ -274,11 +281,24 @@ export function HistoryScreen({navigation}: Props) {
   const authedRequestRef = useRef(authedRequest);
   authedRequestRef.current = authedRequest;
 
+  // TASK-AUDIT-008: one monotonic token arbitrates every list read (mount
+  // load, reload, focus refresh, pagination) — only the latest request may
+  // commit list state, so a slow stale response can never overwrite data
+  // from a newer one.
+  const listRequestRef = useRef(0);
+  // Mirror for the focus refresh's failure path, which must keep visible
+  // rows and only escalate an empty screen to the error banner.
+  const sessionsRef = useRef(sessions);
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+
   useEffect(() => {
     if (modeStatus !== 'ready') {
       return;
     }
     let cancelled = false;
+    const requestId = ++listRequestRef.current;
 
     setError(null);
     setSessions([]);
@@ -297,24 +317,24 @@ export function HistoryScreen({navigation}: Props) {
           // SQLite store. Local rows are already ordered most-recently-active
           // first and are delivered in one shot — no pagination.
           const rows = await localRepository.listSessions();
-          if (!cancelled) {
+          if (!cancelled && listRequestRef.current === requestId) {
             setSessions(rows.map(toSessionModel));
             setHasMore(false);
           }
           return;
         }
         const page = await listSessions(authedRequestRef.current, 1);
-        if (!cancelled) {
+        if (!cancelled && listRequestRef.current === requestId) {
           setSessions(page.results);
           setHasMore(page.next !== null);
           setLoadedPages(1);
         }
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && listRequestRef.current === requestId) {
           setError(toErrorMessage(err));
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && listRequestRef.current === requestId) {
           setLoading(false);
         }
       }
@@ -325,19 +345,83 @@ export function HistoryScreen({navigation}: Props) {
     };
   }, [localRepository, reloadKey, modeStatus, mode]);
 
+  /**
+   * TASK-AUDIT-008: silent authoritative refresh when the screen regains
+   * focus. Unlike the mount load it never wipes the rendered rows behind a
+   * spinner — the fresh page replaces the visible list in place. A failure
+   * keeps rows on screen and only an empty screen surfaces the error, so
+   * the empty state always reflects the authoritative store truthfully.
+   */
+  const refreshOnFocus = useCallback(async () => {
+    const requestId = ++listRequestRef.current;
+    try {
+      if (mode === 'serverless') {
+        const rows = await localRepository.listSessions();
+        if (listRequestRef.current === requestId) {
+          setSessions(rows.map(toSessionModel));
+          setHasMore(false);
+        }
+      } else {
+        const page = await listSessions(authedRequestRef.current, 1);
+        if (listRequestRef.current === requestId) {
+          setSessions(page.results);
+          setHasMore(page.next !== null);
+          setLoadedPages(1);
+        }
+      }
+      if (listRequestRef.current === requestId) {
+        setError(null);
+      }
+    } catch (err) {
+      if (listRequestRef.current === requestId && sessionsRef.current.length === 0) {
+        setError(toErrorMessage(err));
+      }
+    } finally {
+      // Settles a spinner this refresh may have superseded (never starts
+      // one): the focus refresh itself renders no loading state.
+      setLoading(false);
+    }
+  }, [localRepository, mode]);
+
+  // Returning to a mounted History re-derives its state from the
+  // authoritative source. The very first focus event is the mount itself,
+  // which the load effect above already owns.
+  const focusedOnceRef = useRef(false);
+  useEffect(() => {
+    const unsubscribe = navigation.addListener?.('focus', () => {
+      if (!focusedOnceRef.current) {
+        focusedOnceRef.current = true;
+        return;
+      }
+      if (modeStatus !== 'ready') {
+        return;
+      }
+      refreshOnFocus().catch(() => undefined);
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [modeStatus, navigation, refreshOnFocus]);
+
   /** Append the next page; failures keep the rendered rows and show why. */
   const handleLoadMore = useCallback(async () => {
     if (loading || loadingMore || !hasMore) {
       return;
     }
+    const requestId = ++listRequestRef.current;
     setLoadingMore(true);
     try {
       const page = await listSessions(authedRequestRef.current, loadedPages + 1);
+      if (listRequestRef.current !== requestId) {
+        return;
+      }
       setSessions(prev => [...prev, ...page.results]);
       setHasMore(page.next !== null);
       setLoadedPages(pages => pages + 1);
     } catch (err) {
-      setError(toErrorMessage(err));
+      if (listRequestRef.current === requestId) {
+        setError(toErrorMessage(err));
+      }
     } finally {
       setLoadingMore(false);
     }

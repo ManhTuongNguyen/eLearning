@@ -17,10 +17,13 @@ import {fireEvent, render, screen, waitFor} from '@testing-library/react-native'
 
 import App from '../App';
 import * as authApi from '../src/api/auth';
+import type {Session} from '../src/api/sessions';
+import * as sessionsApi from '../src/api/sessions';
 import * as profileApi from '../src/api/profile';
 import * as Keychain from 'react-native-keychain';
 
 jest.mock('../src/api/auth');
+jest.mock('../src/api/sessions');
 jest.mock('../src/api/profile', () => ({
   ...jest.requireActual('../src/api/profile'),
   getProfile: jest.fn(),
@@ -28,6 +31,7 @@ jest.mock('../src/api/profile', () => ({
 }));
 
 const mockedAuth = jest.mocked(authApi);
+const mockedSessions = jest.mocked(sessionsApi);
 const mockedProfile = jest.mocked(profileApi);
 const mockedKeychain = Keychain as jest.Mocked<typeof Keychain> & {
   __resetKeychainStore: () => void;
@@ -75,10 +79,29 @@ async function fillRegistrationForm() {
   await fireEvent.press(screen.getByTestId('register-submit'));
 }
 
+function makeSession(overrides: Partial<Session> = {}): Session {
+  return {
+    id: 9,
+    title: 'Traveling',
+    topic: 'Talking about favorite destinations.',
+    topic_hint: '',
+    learning_level: 'B1',
+    created_at: '2026-08-26T10:00:00Z',
+    ...overrides,
+  };
+}
+
+function sessionPage(results: Session[]): sessionsApi.Paginated<Session> {
+  return {count: results.length, next: null, previous: null, results};
+}
+
 beforeEach(() => {
   mockedKeychain.__resetKeychainStore();
   jest.clearAllMocks();
   mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
+  // The no-session landing route checks the authoritative history before it
+  // may claim the empty state (TASK-AUDIT-008); default to an empty one.
+  mockedSessions.listSessions.mockResolvedValue(sessionPage([]));
 });
 
 describe('TASK-109 registration journey', () => {
@@ -111,6 +134,31 @@ describe('TASK-109 login journey', () => {
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     expect(mockedAuth.login).toHaveBeenCalledWith('alice@example.com', 'secret');
     expect(await storedTokens()).toEqual(TOKENS);
+  });
+
+  it('opens the most recent existing conversation after login (TASK-AUDIT-008)', async () => {
+    mockedAuth.login.mockResolvedValue({...TOKENS, user: USER});
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 9}), makeSession({id: 7})]),
+    );
+    mockedSessions.listMessages.mockResolvedValue({
+      count: 0,
+      next: null,
+      previous: null,
+      results: [],
+    });
+    mockedSessions.getSession.mockResolvedValue(makeSession({id: 9}));
+    await render(launch(0));
+
+    await fillLoginForm('alice@example.com', 'secret');
+
+    // The landing route is replaced by the most recent conversation: the
+    // "No conversation yet" empty state is never claimed despite history
+    // existing on the server.
+    await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
+    expect(screen.queryByTestId('chat-no-session')).toBeNull();
+    expect(mockedSessions.listSessions).toHaveBeenCalledWith(expect.any(Function), 1);
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 9);
   });
 });
 

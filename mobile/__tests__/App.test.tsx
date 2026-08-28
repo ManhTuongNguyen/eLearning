@@ -4,9 +4,11 @@ import {fireEvent, render, screen, waitFor} from '@testing-library/react-native'
 import App from '../App';
 import * as authApi from '../src/api/auth';
 import * as profileApi from '../src/api/profile';
+import * as sessionsApi from '../src/api/sessions';
 import * as secureStorage from '../src/auth/secureStorage';
 
 jest.mock('../src/api/auth');
+jest.mock('../src/api/sessions');
 jest.mock('../src/api/profile', () => ({
   ...jest.requireActual('../src/api/profile'),
   getProfile: jest.fn(),
@@ -16,11 +18,20 @@ jest.mock('../src/auth/secureStorage');
 
 const mockedAuth = jest.mocked(authApi);
 const mockedProfile = jest.mocked(profileApi);
+const mockedSessions = jest.mocked(sessionsApi);
 const mockedStorage = jest.mocked(secureStorage);
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockedStorage.loadTokens.mockResolvedValue(null);
+  // The no-session landing route checks the authoritative history before it
+  // may claim the empty state (TASK-AUDIT-008); default to an empty one.
+  mockedSessions.listSessions.mockResolvedValue({
+    count: 0,
+    next: null,
+    previous: null,
+    results: [],
+  });
 });
 
 describe('App authentication flow', () => {

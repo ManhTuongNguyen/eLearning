@@ -92,6 +92,15 @@ beforeEach(() => {
   mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
   mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
   mockedSessions.listMessages.mockResolvedValue(emptyMessagesPage());
+  // ChatScreen (the post-create destination) checks the authoritative
+  // history on the no-session landing route (TASK-AUDIT-008); default to an
+  // empty one so cancel/back shows the empty state as before.
+  mockedSessions.listSessions.mockResolvedValue({
+    count: 0,
+    next: null,
+    previous: null,
+    results: [],
+  });
   // ChatScreen (the post-create destination) fetches the session detail for
   // its topic bar.
   mockedSessions.getSession.mockResolvedValue(makeSession());

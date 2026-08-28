@@ -551,7 +551,7 @@ Do not display a second confirmation step.
 
 ## TASK-AUDIT-008 — Fix history state after successful login
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

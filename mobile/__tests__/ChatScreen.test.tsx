@@ -19,10 +19,14 @@
  * TASK-078 read-aloud flow (Read aloud speaks the chosen message through
  * the injected engine double, the speaking bubble exposes a visible Stop
  * control, finishing or failing playback clears the state, starting
- * another message supersedes the first cleanly).
+ * another message supersedes the first cleanly), and the TASK-AUDIT-008
+ * no-session restore (the param-less landing route derives its state from
+ * the authoritative history: most-recent conversation opened in place,
+ * confirmed-empty history shows the empty state, failed lookup shows an
+ * error with retry, and regaining focus re-runs the check).
  */
 import React from 'react';
-import {View} from 'react-native';
+import {Pressable, Text, View} from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {
@@ -122,6 +126,14 @@ function pageOf(results: ChatMessage[]): Paginated<ChatMessage> {
   return {count: results.length, next: null, previous: null, results};
 }
 
+function emptySessionPage(): Paginated<Session> {
+  return {count: 0, next: null, previous: null, results: []};
+}
+
+function sessionPageOf(results: Session[]): Paginated<Session> {
+  return {count: results.length, next: null, previous: null, results};
+}
+
 async function renderChat(params?: MainStackParamList['Chat']) {
   const Stack = createNativeStackNavigator<MainStackParamList>();
 
@@ -135,7 +147,13 @@ async function renderChat(params?: MainStackParamList['Chat']) {
               <Stack.Screen name="NewConversation">
                 {() => <View testID="new-conversation-screen" />}
               </Stack.Screen>
-              <Stack.Screen name="History">{() => null}</Stack.Screen>
+              <Stack.Screen name="History">
+                {({navigation}) => (
+                  <Pressable testID="history-stub-back" onPress={() => navigation.goBack()}>
+                    <Text>back</Text>
+                  </Pressable>
+                )}
+              </Stack.Screen>
               <Stack.Screen name="Settings">{() => null}</Stack.Screen>
               <Stack.Screen name="Level">{() => null}</Stack.Screen>
             </Stack.Navigator>
@@ -182,6 +200,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
   mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  // The no-session landing route checks the authoritative history before it
+  // may claim the empty state (TASK-AUDIT-008); default to an empty one.
+  mockedSessions.listSessions.mockResolvedValue(emptySessionPage());
   mockedSessions.getSession.mockResolvedValue(makeSession());
   mockedSessions.getMessageSuggestions.mockResolvedValue({
     replies: ['Default reply one', 'Default reply two', 'Default reply three'],
@@ -648,12 +669,95 @@ describe('ChatScreen', () => {
     expect(mockedSessions.listMessages).toHaveBeenCalledTimes(2);
   });
 
-  it('shows the no-conversation state and skips fetching without a session param', async () => {
+  it('shows the no-conversation state only after the history lookup confirms it', async () => {
+    let resolveHistory: (page: Paginated<Session>) => void = () => {};
+    mockedSessions.listSessions.mockReturnValue(
+      new Promise<Paginated<Session>>(resolve => {
+        resolveHistory = resolve;
+      }),
+    );
+
     await renderChat(undefined);
+
+    // The authoritative lookup owns the spinner; the empty state is not
+    // claimed before the history answered.
+    expect(screen.getByTestId('chat-loading')).toBeOnTheScreen();
+    expect(screen.queryByTestId('chat-no-session')).toBeNull();
+
+    resolveHistory(emptySessionPage());
 
     expect(await screen.findByTestId('chat-no-session')).toBeOnTheScreen();
     expect(screen.queryByTestId('composer-input')).toBeNull();
+    expect(mockedSessions.listSessions).toHaveBeenCalledWith(expect.any(Function), 1);
+    // The empty claim came from the history lookup, not a skipped fetch.
     expect(mockedSessions.listMessages).not.toHaveBeenCalled();
+  });
+
+  it('opens the most recent conversation after login instead of the empty state (TASK-AUDIT-008)', async () => {
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPageOf([makeSession({id: 9}), makeSession({id: 7})]),
+    );
+    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({id: 501})]));
+
+    await renderChat(undefined);
+
+    // The param-less landing route is replaced in place by the most recent
+    // conversation — "No conversation yet" is never claimed.
+    expect(await screen.findByTestId('composer-input')).toBeOnTheScreen();
+    expect(screen.queryByTestId('chat-no-session')).toBeNull();
+    expect(mockedSessions.listSessions).toHaveBeenCalledWith(expect.any(Function), 1);
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 9);
+  });
+
+  it('shows an error instead of a false empty state when the history lookup fails (TASK-AUDIT-008)', async () => {
+    mockedSessions.listSessions
+      .mockRejectedValueOnce(new ApiError(0, 'Network request failed.'))
+      .mockResolvedValueOnce(sessionPageOf([makeSession({id: 9})]));
+    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({id: 501})]));
+
+    await renderChat(undefined);
+
+    expect(await screen.findByTestId('form-error')).toHaveTextContent(
+      /server is unreachable right now/i,
+    );
+    expect(screen.queryByTestId('chat-no-session')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('chat-retry'));
+
+    // The retry re-runs the lookup and lands in the recovered conversation.
+    expect(await screen.findByTestId('composer-input')).toBeOnTheScreen();
+    expect(mockedSessions.listSessions).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-runs the history check when the no-session screen regains focus (TASK-AUDIT-008)', async () => {
+    let resolveFirst: (page: Paginated<Session>) => void = () => {};
+    mockedSessions.listSessions
+      .mockReturnValueOnce(
+        new Promise<Paginated<Session>>(resolve => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockResolvedValue(sessionPageOf([makeSession({id: 9})]));
+    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({id: 501})]));
+
+    await renderChat(undefined);
+    expect(screen.getByTestId('chat-loading')).toBeOnTheScreen();
+
+    // The user navigates away before the lookup settles; the unfocused
+    // route neither replaces itself nor claims the empty state. The wait
+    // guarantees the History screen (and the focus change) is committed
+    // before the lookup's answer arrives.
+    await fireEvent.press(screen.getByTestId('chat-open-history'));
+    await screen.findByTestId('history-stub-back');
+    resolveFirst(sessionPageOf([makeSession({id: 9})]));
+
+    // Returning re-runs the check against the authoritative history and
+    // opens the most recent conversation in place of the stale landing.
+    await fireEvent.press(screen.getByTestId('history-stub-back'));
+
+    expect(await screen.findByTestId('composer-input')).toBeOnTheScreen();
+    expect(screen.queryByTestId('chat-no-session')).toBeNull();
+    expect(mockedSessions.listSessions).toHaveBeenCalledTimes(2);
   });
 
   it('hosts the full conversation shell inside the keyboard-avoiding root', async () => {

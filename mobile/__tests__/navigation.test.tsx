@@ -14,6 +14,7 @@ import * as authApi from '../src/api/auth';
 import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {AuthTokens} from '../src/auth/tokens';
+import * as sessionsApi from '../src/api/sessions';
 import * as vocabularyApi from '../src/api/vocabulary';
 import {saveApplicationMode} from '../src/mode/modeStorage';
 import {RootNavigator} from '../src/navigation/RootNavigator';
@@ -22,10 +23,12 @@ import {ModeProvider} from '../src/mode/ModeContext';
 import {ThemeProvider} from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
+jest.mock('../src/api/sessions');
 jest.mock('../src/api/vocabulary');
 jest.mock('../src/auth/secureStorage');
 
 const mockedAuth = jest.mocked(authApi);
+const mockedSessions = jest.mocked(sessionsApi);
 const mockedVocabulary = jest.mocked(vocabularyApi);
 const mockedStorage = jest.mocked(secureStorage);
 const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
@@ -74,6 +77,14 @@ async function renderAuthenticated(tokens?: AuthTokens) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedStorage.loadTokens.mockResolvedValue(null);
+  // The no-session landing route checks the authoritative history before it
+  // may claim the empty state (TASK-AUDIT-008); default to an empty one.
+  mockedSessions.listSessions.mockResolvedValue({
+    count: 0,
+    next: null,
+    previous: null,
+    results: [],
+  });
   mockedVocabulary.listVocabulary.mockResolvedValue({
     count: 0,
     next: null,

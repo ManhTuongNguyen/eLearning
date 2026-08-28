@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-28
-- **Current Phase**: TASK-AUDIT-007 complete; next task TASK-AUDIT-008 — Fix history state after successful login
+- **Current Phase**: TASK-AUDIT-008 complete; next task TASK-AUDIT-009 — Improve chat message width and alignment
 
 ## Current Active Task
   - **Task ID**:
@@ -138,3 +138,50 @@
   gate test asserts the typed ServerApiBlockedError message via the toast.
   Full suites: mobile pnpm test 629 passed; pnpm lint and pnpm typecheck
   clean.
+- TASK-AUDIT-008 (done): the post-login "No conversation yet" bug is fixed
+  at both of its sources. (1) ChatScreen's param-less landing route (the
+  post-login/post-restore destination) now derives its state from the
+  authoritative history instead of claiming the empty state: a page-1
+  listSessions lookup (server) or local listSessions read (serverless)
+  opens the most recent conversation by REPLACING the param-less route in
+  place (replace, not push — the empty landing has no back story), shows a
+  distinct loading spinner while checking, renders "No conversation yet"
+  only for a confirmed-empty history, and surfaces a failed lookup as the
+  error state + chat-retry (never a false empty claim). A stale closure
+  pitfall was caught by the tests: navigation.isFocused() from the effect
+  closure answers with the MOUNT-time focus state, so focus/blur listeners
+  keep restoreFocusedRef in sync and the async lookup reads the current
+  visibility; a focus event re-runs the check (restoreKey + in-flight/run
+  refs) so a lookup that settled while the user was elsewhere never leaves
+  a stale state, and conversations created while the landing sat in the
+  stack are picked up on return. Loading initial state is now always true
+  (no one-frame empty flash), and the empty hint was trimmed to
+  "Start a new conversation to practice English." since the state is only
+  reachable when history is genuinely empty. (2) HistoryScreen now
+  re-derives its state from the authoritative source whenever it REGAINS
+  focus (silent refreshOnFocus): the fresh page replaces the visible rows
+  in place — never a spinner wipe — so returning to a mounted History picks
+  up conversations created/renamed/deleted elsewhere and never shows a
+  stale list; a failed silent refresh keeps visible rows and only escalates
+  an empty screen to the error banner; all list reads (mount load, reload,
+  focus refresh, pagination) are arbitrated by one monotonic
+  listRequestRef so a slow stale response can never overwrite fresh data.
+- Regression coverage: ChatScreen.test.tsx — no-conversation state only
+  after the lookup confirms empty (pending lookup shows chat-loading),
+  most-recent conversation opened in place after login (TASK-AUDIT-008),
+  lookup failure shows form-error + retry and the retry lands in the
+  recovered conversation, deferred-resolve + refocus re-check opens the
+  most recent conversation (history-stub-back harness); HistoryScreen.test
+  .tsx — returning to a mounted History silently refreshes (rows stay
+  visible, no history-loading, authoritative page replaces in place) and a
+  failed returning refresh keeps rows without a false empty state
+  (chat-stub-back harness); authJourney.test.tsx end-to-end — login with
+  existing server conversations lands in the most recent conversation
+  (composer + listMessages(9)), chat-no-session never shown. Supporting
+  updates: sessions API mocked with empty-history defaults in
+  navigation/App/serverlessJourney/NewConversation/VocabularyScreen/auth
+  Journey suites (real fetch attempts previously absent would now occur),
+  vocabularyJourney capture flow uses the topmost Chat instance (the
+  auto-restored landing is a second mounted instance), theme.test AuthContext
+  mock completed with toErrorMessage. Full suites: mobile pnpm test 635
+  passed; pnpm lint and pnpm typecheck clean.
