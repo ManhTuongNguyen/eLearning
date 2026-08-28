@@ -1021,7 +1021,7 @@ Example:
 
 ## TASK-AUDIT-017 — Audit model discovery caching
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P2`
 

@@ -7,7 +7,10 @@
  * with the user's key otherwise —, fallback order is edited in place and
  * persisted through the settings store, and validation keeps an
  * incomplete configuration from being saved. Storage/catalog/HTTP seams
- * are module mocks — no SQLite or network participates here.
+ * are module mocks — no SQLite or network participates here. The catalog
+ * card is cache-driven (TASK-AUDIT-017): only the explicit refresh hits
+ * the network, loading/empty states stay distinct and aged snapshots are
+ * labelled without losing usability.
  *
  * TASK-AUDIT-016: the editor is serverless-only, so every mount runs under
  * a ModeProvider with serverless persisted; a server-mode mount renders the
@@ -30,7 +33,13 @@ import type {ModelInfo} from '../src/serverless/types';import {ThemeProvider} fr
 
 jest.mock('../src/db/database');
 jest.mock('../src/serverless/settings');
-jest.mock('../src/serverless/modelCatalog');
+// Only the two network/persistence seams are mocked; the staleness helpers
+// stay real so the catalog card's TASK-AUDIT-017 states run genuine logic.
+jest.mock('../src/serverless/modelCatalog', () => ({
+  ...jest.requireActual('../src/serverless/modelCatalog'),
+  getCachedModelCatalog: jest.fn(),
+  refreshModelCatalog: jest.fn(),
+}));
 jest.mock('../src/serverless/providerRegistry', () => ({
   ...jest.requireActual('../src/serverless/providerRegistry'),
   listProviderModels: jest.fn(),
@@ -528,6 +537,100 @@ describe('catalog usability', () => {
     expect(await screen.findByTestId('openrouter-model-count')).toHaveTextContent(
       /3 model\(s\)/,
     );
+  });
+});
+
+// TASK-AUDIT-017: the catalog card is purely cache-driven — mounting,
+// re-rendering and provider switching only read the local snapshot, the
+// explicit Refresh control is the single network path, loading/empty/cached
+// states stay distinct, and aged snapshots are labelled while remaining
+// fully usable offline.
+describe('model catalog caching (TASK-AUDIT-017)', () => {
+  it('never requests the catalog on mount, re-render or provider switch — only Refresh does', async () => {
+    mockedGetCached.mockResolvedValue(catalogSnapshot());
+
+    await renderSettledScreen();
+    await waitFor(() =>
+      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+    );
+
+    // A re-render driven by local UI state must not touch discovery.
+    await user.type(screen.getByTestId('openrouter-model-filter'), 'claude');
+
+    // Switching providers only reads the other namespace's local cache.
+    // 9Router is used because its discovery is keyless, so the trailing
+    // refresh below reaches the cache layer instead of a key guard.
+    await user.press(screen.getByTestId('provider-chip-ninerouter'));
+    await waitFor(() =>
+      expect(mockedLoadProviderState).toHaveBeenLastCalledWith('ninerouter'),
+    );
+
+    expect(mockedRefresh).not.toHaveBeenCalled();
+    expect(mockedListProviderModels).not.toHaveBeenCalled();
+
+    // The explicit refresh is the single path to the network.
+    mockedListProviderModels.mockResolvedValue([catalogModel('vendor/model-a', 'Alpha Model')]);
+    mockedRefresh.mockImplementation(async (_db, fetchModels) => ({
+      models: await fetchModels(),
+      fetchedAt: '2026-08-27T01:00:00.000Z',
+    }));
+    await user.press(screen.getByTestId('openrouter-models-refresh'));
+
+    await waitFor(() => expect(mockedRefresh).toHaveBeenCalledTimes(1));
+    expect(mockedListProviderModels).toHaveBeenCalledTimes(1);
+    expect(mockedListProviderModels).toHaveBeenCalledWith('ninerouter', {apiKey: undefined});
+  });
+
+  it('shows a distinct loading state until the cached catalog has loaded', async () => {
+    let resolveCached!: (snapshot: modelCatalog.CachedModelCatalog | null) => void;
+    mockedGetCached.mockImplementation(
+      () =>
+        new Promise<modelCatalog.CachedModelCatalog | null>(resolve => {
+          resolveCached = resolve;
+        }),
+    );
+
+    await renderScreen();
+
+    // While the local snapshot is being read the card neither shows the
+    // empty message nor any model rows.
+    expect(await screen.findByTestId('openrouter-models-catalog-loading')).toBeOnTheScreen();
+    expect(screen.queryByTestId('openrouter-models-empty')).toBeNull();
+
+    resolveCached(catalogSnapshot());
+    await waitFor(() =>
+      expect(screen.queryByTestId('openrouter-models-catalog-loading')).toBeNull(),
+    );
+    expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen();
+  });
+
+  it('labels an aged snapshot as stale while its models remain fully usable', async () => {
+    mockedGetCached.mockResolvedValue(catalogSnapshot(CATALOG, '2020-01-01T00:00:00.000Z'));
+
+    await renderSettledScreen();
+    await waitFor(() =>
+      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+    );
+
+    expect(screen.getByTestId('openrouter-models-stale')).toHaveTextContent(/May be outdated/);
+
+    // Staleness never removes functionality: rows stay selectable.
+    await user.press(screen.getByTestId('openrouter-model-primary-vendor/model-b'));
+    await waitFor(() =>
+      expect(checkedStateOf('openrouter-model-primary-vendor/model-b')).toBe(true),
+    );
+  });
+
+  it('does not label a freshly fetched snapshot as stale', async () => {
+    mockedGetCached.mockResolvedValue(catalogSnapshot(CATALOG, new Date().toISOString()));
+
+    await renderSettledScreen();
+    await waitFor(() =>
+      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+    );
+
+    expect(screen.queryByTestId('openrouter-models-stale')).toBeNull();
+    expect(screen.getByTestId('openrouter-model-count')).toBeOnTheScreen();
   });
 });
 

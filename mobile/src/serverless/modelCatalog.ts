@@ -12,6 +12,12 @@
  * success, so a failed refresh never destroys the previously cached
  * catalog — cached models stay available without any network access via
  * `getCachedModelCatalog`.
+ *
+ * TASK-AUDIT-017: snapshots carry the `fetchedAt` timestamp so staleness
+ * can be reported through `isModelCatalogStale`. A stale snapshot is never
+ * discarded or refetched implicitly — the models keep working offline and
+ * only an explicit user refresh goes back to the provider, so neither a
+ * screen mount nor a re-render can trigger a catalog request.
  */
 import type {SqlExecutor} from '../db/driver';
 import {nowIso} from '../db/driver';
@@ -94,4 +100,38 @@ export async function getCachedModelCatalog(
   provider: ProviderId = 'openrouter',
 ): Promise<CachedModelCatalog | null> {
   return parseCachedCatalog(await getSetting(db, modelCatalogSettingKey(provider)));
+}
+
+/** How long a snapshot stays fresh before the UI should offer a refresh. */
+export const MODEL_CATALOG_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Milliseconds elapsed since the snapshot was fetched from the provider,
+ * or null when the stored timestamp is unusable. A future timestamp (device
+ * clock moved back) clamps to zero instead of reporting a negative age.
+ */
+export function modelCatalogAgeMs(
+  snapshot: CachedModelCatalog,
+  nowMs: number = Date.now(),
+): number | null {
+  const fetchedMs = Date.parse(snapshot.fetchedAt);
+  if (Number.isNaN(fetchedMs)) {
+    return null;
+  }
+  return Math.max(0, nowMs - fetchedMs);
+}
+
+/**
+ * True when the snapshot is older than `maxAgeMs` or carries an unusable
+ * timestamp. Staleness never hides or drops cached models — they remain
+ * fully usable offline — it only asks the UI to advertise an explicit
+ * refresh so the catalog can be brought back up to date on demand.
+ */
+export function isModelCatalogStale(
+  snapshot: CachedModelCatalog,
+  nowMs: number = Date.now(),
+  maxAgeMs: number = MODEL_CATALOG_MAX_AGE_MS,
+): boolean {
+  const ageMs = modelCatalogAgeMs(snapshot, nowMs);
+  return ageMs === null || ageMs > maxAgeMs;
 }

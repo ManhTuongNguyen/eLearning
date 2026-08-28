@@ -14,6 +14,12 @@
  * (Gemini, OpenAI). Fallback order is edited in place with move up/down
  * controls.
  *
+ * The catalog card is purely cache-driven (TASK-AUDIT-017): mounting,
+ * re-rendering and provider switching only read the locally persisted
+ * snapshot, loading/empty states stay distinct, and the network is hit
+ * exclusively through the explicit Refresh control; snapshots older than
+ * the staleness window are labelled but remain usable offline.
+ *
  * The top inset comes from useSafeAreaInsets (TASK-AUDIT-012) instead of a
  * fixed oversized padding, so the header sits at the same spacing as the
  * other pushed screens while devices that draw under the status bar
@@ -35,7 +41,7 @@ import {toErrorMessage} from '../auth/AuthContext';
 import {getLocalDatabase} from '../db/database';
 import {useApplicationMode} from '../mode/ModeContext';
 import type {OpenRouterSettingsScreenProps} from '../navigation/types';
-import {getCachedModelCatalog, refreshModelCatalog} from '../serverless/modelCatalog';
+import {getCachedModelCatalog, isModelCatalogStale, refreshModelCatalog} from '../serverless/modelCatalog';
 import {
   listProviderModels,
   PROVIDER_DESCRIPTORS,
@@ -625,6 +631,21 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     return {models: sorted.slice(0, MAX_VISIBLE_MODELS), total: sorted.length};
   }, [models, filter]);
 
+  // TASK-AUDIT-017: the catalog card distinguishes loading (initial mount
+  // or provider switch still reading the local cache) from empty (nothing
+  // has been downloaded yet). No network is involved in either state.
+  const catalogLoading = loading || switching;
+
+  // TASK-AUDIT-017: a snapshot older than the staleness window keeps
+  // working (models stay selectable offline) but is labelled so the user
+  // knows the catalog may be outdated and can refresh explicitly.
+  const modelsStale = useMemo<boolean>(() => {
+    if (models === null || modelsUpdatedAt === null) {
+      return false;
+    }
+    return isModelCatalogStale({models, fetchedAt: modelsUpdatedAt});
+  }, [models, modelsUpdatedAt]);
+
   // TASK-AUDIT-016: once the persisted mode is known, a server-mode mount
   // renders the serverless-only notice and never the editor. All hooks run
   // above this return, so the conditional keeps the rules-of-hooks contract.
@@ -743,15 +764,24 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
           </View>
 
           {models === null ? (
-            <Text style={styles.emptyText} testID="openrouter-models-empty">
-              No models downloaded yet. Tap Refresh to load the available models from{' '}
-              {descriptor.label}.
-            </Text>
+            catalogLoading ? (
+              <Text style={styles.emptyText} testID="openrouter-models-catalog-loading">
+                Loading saved models…
+              </Text>
+            ) : (
+              <Text style={styles.emptyText} testID="openrouter-models-empty">
+                No models downloaded yet. Tap Refresh to load the available models from{' '}
+                {descriptor.label}.
+              </Text>
+            )
           ) : (
             <>
               {modelsUpdatedAt ? (
-                <Text style={styles.catalogMeta}>
-                  Cached locally{modelsUpdatedAt ? ` (updated ${modelsUpdatedAt})` : ''}.
+                <Text
+                  style={styles.catalogMeta}
+                  testID={modelsStale ? 'openrouter-models-stale' : undefined}>
+                  Cached locally (updated {modelsUpdatedAt}).
+                  {modelsStale ? ' May be outdated — tap Refresh to update.' : ''}
                 </Text>
               ) : null}
               <TextInput
