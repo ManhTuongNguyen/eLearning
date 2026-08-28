@@ -24,16 +24,17 @@ import React, {
 
 import * as authApi from '../api/auth';
 import type {RegisterInput} from '../api/auth';
-import {apiRequest, ApiError} from '../api/client';
-import type {RequestOptions} from '../api/client';
+import {ApiError} from '../api/client';
+import {createAuthedRequester} from './authedRequest';
+import type {AuthedRequestOptions} from './authedRequest';
 import {useOptionalApplicationMode} from '../mode/ModeContext';
 import {clearTokens, loadTokens, saveTokens} from './secureStorage';
 import type {AuthTokens, AuthUser} from './tokens';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
-/** Options for authenticated requests; the Bearer token is managed here. */
-export type AuthorizedRequestOptions = Omit<RequestOptions, 'token'>;
+/** Options for authenticated requests; the Bearer token is managed centrally. */
+export type AuthorizedRequestOptions = AuthedRequestOptions;
 
 export interface AuthContextValue {
   status: AuthStatus;
@@ -241,31 +242,19 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     [runAction],
   );
 
-  const authedRequest = useCallback(
-    async <T,>(path: string, options: AuthorizedRequestOptions = {}): Promise<T> => {
-      await restorePromiseRef.current;
-      const tokens = tokensRef.current;
-      if (!tokens) {
-        throw new ApiError(401, 'You are signed out. Please log in again.');
-      }
-      try {
-        return await apiRequest<T>(path, {...options, token: tokens.access});
-      } catch (err) {
-        // Only an authentication failure triggers transparent re-auth;
-        // network/validation/server errors surface untouched.
-        if (!(err instanceof ApiError) || err.status !== 401) {
-          throw err;
-        }
-        const access = await refreshAccess();
-        if (!access) {
-          // Session ended locally (RootNavigator is back at Login);
-          // surface the original authentication failure.
-          throw err;
-        }
-        // A single retry; a still-failing retry propagates without looping.
-        return apiRequest<T>(path, {...options, token: access});
-      }
-    },
+  const authedRequest = useMemo(
+    // TASK-AUDIT-005: the request flow itself lives in the central
+    // authedRequest module; the provider only supplies session hooks.
+    () =>
+      createAuthedRequester({
+        // The restore promise is created during the first render, before any
+        // request can run, so awaiting it here always observes a promise.
+        whenReady: async () => {
+          await restorePromiseRef.current;
+        },
+        getTokens: () => tokensRef.current,
+        refresh: refreshAccess,
+      }),
     [refreshAccess],
   );
 

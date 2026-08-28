@@ -188,7 +188,7 @@ describe('main stack navigation', () => {
     expect(await screen.findByTestId('vocabulary-empty')).toBeOnTheScreen();
     expect(focusedRouteName()).toBe('Vocabulary');
     await waitFor(() =>
-      expect(mockedVocabulary.listVocabulary).toHaveBeenCalledWith('token-a', 1),
+      expect(mockedVocabulary.listVocabulary).toHaveBeenCalledWith(expect.any(Function), 1),
     );
 
     await fireEvent.press(screen.getByTestId('vocabulary-back'));

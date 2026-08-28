@@ -109,7 +109,7 @@ describe('LevelScreen', () => {
       await waitFor(() => expect(screen.getByTestId(`level-${value}`)).toBeOnTheScreen());
     }
     expect(screen.getByText('Auto')).toBeOnTheScreen();
-    expect(mockedProfile.getProfile).toHaveBeenCalledWith('token-a');
+    expect(mockedProfile.getProfile).toHaveBeenCalledWith(expect.any(Function));
   });
 
   it('preselects the level stored on the server', async () => {
@@ -129,7 +129,7 @@ describe('LevelScreen', () => {
     await fireEvent.press(screen.getByTestId('level-C1'));
 
     await waitFor(() => expect(screen.getByText('Saved.')).toBeOnTheScreen());
-    expect(mockedProfile.updateProfile).toHaveBeenCalledWith('token-a', 'C1');
+    expect(mockedProfile.updateProfile).toHaveBeenCalledWith(expect.any(Function), 'C1');
     await waitFor(() => expect(checkedState('level-C1')).toBe(true));
     expect(checkedState('level-B1')).toBe(false);
   });
@@ -162,7 +162,7 @@ describe('LevelScreen', () => {
     await fireEvent.press(screen.getByTestId('level-A2'));
 
     await waitFor(() => expect(screen.getByText('Saved.')).toBeOnTheScreen());
-    expect(mockedProfile.updateProfile).toHaveBeenCalledWith('token-a', 'A2');
+    expect(mockedProfile.updateProfile).toHaveBeenCalledWith(expect.any(Function), 'A2');
   });
 
   it('pops back to the previous route on back', async () => {

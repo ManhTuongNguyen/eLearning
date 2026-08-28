@@ -127,8 +127,8 @@ function createStyles(c: ThemeColors) {
 }
 
 export function LevelScreen({navigation}: LevelScreenProps) {
-  const {getAccessToken} = useAuth();
-  const {mode} = useApplicationMode();
+  const {authedRequest} = useAuth();
+  const {status: modeStatus, mode} = useApplicationMode();
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [selected, setSelected] = useState<EnglishLevel | null>(null);
@@ -137,12 +137,14 @@ export function LevelScreen({navigation}: LevelScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // getAccessToken is read through a ref (TASK-048 gotcha): context value
+  // authedRequest is read through a ref (TASK-048 gotcha): context value
   // changes — including the auth status settling after the application mode
   // (TASK-AUDIT-003) — must not re-trigger the load/save effects below, so
   // they depend on the stable mode only and always read the latest getter.
-  const getAccessTokenRef = useRef(getAccessToken);
-  getAccessTokenRef.current = getAccessToken;
+  // TASK-AUDIT-005: profile calls go through the central authed requester
+  // (401 → one shared refresh → one retry).
+  const authedRequestRef = useRef(authedRequest);
+  authedRequestRef.current = authedRequest;
 
   // Reset the transient confirmations whenever the data source flips so a
   // mode switch cannot show a stale "Saved." from the other backend.
@@ -154,6 +156,12 @@ export function LevelScreen({navigation}: LevelScreenProps) {
 
   useEffect(() => {
     let cancelled = false;
+
+    // Nothing is fetched until the persisted mode has been restored, so a
+    // fast-mounted screen never touches the wrong backend mid-restore.
+    if (modeStatus !== 'ready') {
+      return;
+    }
 
     if (mode === 'serverless') {
       (async () => {
@@ -179,16 +187,8 @@ export function LevelScreen({navigation}: LevelScreenProps) {
     }
 
     (async () => {
-      const token = await getAccessTokenRef.current();
-      if (!token) {
-        if (!cancelled) {
-          setError('You need to sign in again to load your profile.');
-          setLoading(false);
-        }
-        return;
-      }
       try {
-        const profile = await getProfile(token);
+        const profile = await getProfile(authedRequestRef.current);
         if (!cancelled) {
           setSelected(profile.level);
         }
@@ -206,7 +206,7 @@ export function LevelScreen({navigation}: LevelScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [mode]);
+  }, [mode, modeStatus]);
 
   const handleSelect = useCallback(
     async (option: LevelOption) => {
@@ -233,14 +233,20 @@ export function LevelScreen({navigation}: LevelScreenProps) {
         return;
       }
 
-      const token = await getAccessTokenRef.current();
-      if (!token || saving !== null || option.value === selected) {
+      if (saving !== null || option.value === selected) {
+        setSaving(null);
+        return;
+      }
+
+      // A save before the mode settles could hit the wrong backend; the
+      // screen is still loading anyway.
+      if (modeStatus !== 'ready') {
         setSaving(null);
         return;
       }
 
       try {
-        const profile = await updateProfile(token, option.value);
+        const profile = await updateProfile(authedRequestRef.current, option.value);
         setSelected(profile.level);
         setSaved(true);
       } catch (err) {
@@ -250,7 +256,7 @@ export function LevelScreen({navigation}: LevelScreenProps) {
         setSaving(null);
       }
     },
-    [mode, saving, selected],
+    [mode, modeStatus, saving, selected],
   );
 
   return (

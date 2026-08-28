@@ -259,7 +259,7 @@ function StatusBadge({item, styles}: {item: VocabularyItem; styles: ReturnType<t
 }
 
 export function VocabularyScreen({navigation}: Props) {
-  const {getAccessToken} = useAuth();
+  const {getAccessToken, authedRequest} = useAuth();
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -276,6 +276,11 @@ export function VocabularyScreen({navigation}: Props) {
   // getAccessToken as a dependency (TASK-048 gotcha).
   const getAccessTokenRef = useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
+  // TASK-AUDIT-005: JSON endpoint calls go through the central authed
+  // requester (401 → one shared refresh → one retry); only the raw-CSV
+  // export keeps the plain access token.
+  const authedRequestRef = useRef(authedRequest);
+  authedRequestRef.current = authedRequest;
 
   useEffect(() => {
     let cancelled = false;
@@ -287,11 +292,7 @@ export function VocabularyScreen({navigation}: Props) {
     setLoading(true);
     (async () => {
       try {
-        const token = await getAccessTokenRef.current();
-        if (!token) {
-          throw new Error('You need to sign in again to see your vocabulary.');
-        }
-        const page = await listVocabulary(token, 1);
+        const page = await listVocabulary(authedRequestRef.current, 1);
         if (!cancelled) {
           setItems(page.results);
           setHasMore(page.next !== null);
@@ -320,11 +321,7 @@ export function VocabularyScreen({navigation}: Props) {
     }
     setLoadingMore(true);
     try {
-      const token = await getAccessTokenRef.current();
-      if (!token) {
-        throw new Error('You need to sign in again to see your vocabulary.');
-      }
-      const page = await listVocabulary(token, loadedPages + 1);
+      const page = await listVocabulary(authedRequestRef.current, loadedPages + 1);
       setItems(prev => [...prev, ...page.results]);
       setHasMore(page.next !== null);
       setLoadedPages(pages => pages + 1);

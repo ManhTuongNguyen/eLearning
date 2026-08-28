@@ -1,7 +1,8 @@
 /** Vocabulary endpoint bindings (SPEC TASK-066/070/071/072/074/075). */
 
 import {API_BASE_URL} from '../config';
-import {ApiError, apiRequest, normalizeApiError} from './client';
+import {ApiError, normalizeApiError} from './client';
+import type {AuthedRequester} from '../auth/authedRequest';
 import type {Paginated} from './sessions';
 
 /** Enrichment lifecycle of a saved expression (backend VocabularyItem.Status). */
@@ -30,19 +31,19 @@ export interface VocabularyItem {
  * means the expression is stored. A duplicate (same user + trimmed/
  * lowercased expression) returns 200 with the existing row unchanged; a new
  * one returns 201. Both are successes; failures are normalized ApiErrors.
+ * Runs through the central authed requester (TASK-AUDIT-005).
  */
 export function saveVocabulary(
-  token: string,
+  request: AuthedRequester,
   expression: string,
   sourceMessageId?: number,
 ): Promise<VocabularyItem> {
-  return apiRequest<VocabularyItem>('/api/v1/vocabulary/', {
+  return request<VocabularyItem>('/api/v1/vocabulary/', {
     method: 'POST',
     body:
       sourceMessageId === undefined
         ? {expression}
         : {expression, source_message_id: sourceMessageId},
-    token,
   });
 }
 
@@ -50,12 +51,15 @@ export function saveVocabulary(
  * GET /api/v1/vocabulary/ (TASK-071): the caller's saved expressions, newest
  * first, as a DRF paginated envelope. `status` exposes the asynchronous
  * enrichment lifecycle (`pending` → `complete` | `failed`) so the list
- * screen can show progress without refetching.
+ * screen can show progress without refetching. Runs through the central
+ * authed requester (TASK-AUDIT-005).
  */
-export function listVocabulary(token: string, page?: number): Promise<Paginated<VocabularyItem>> {
-  return apiRequest<Paginated<VocabularyItem>>(
+export function listVocabulary(
+  request: AuthedRequester,
+  page?: number,
+): Promise<Paginated<VocabularyItem>> {
+  return request<Paginated<VocabularyItem>>(
     `/api/v1/vocabulary/${page === undefined ? '' : `?page=${page}`}`,
-    {token},
   );
 }
 
@@ -65,10 +69,11 @@ export const VOCABULARY_EXPORT_FILENAME = 'anki-vocabulary.csv';
 /**
  * GET /api/v1/vocabulary/export/ (TASK-074): the caller's complete vocabulary
  * as Anki-compatible CSV text. Unlike the JSON bindings this response must
- * not be parsed as JSON, so it performs its own request and returns the raw
- * payload untouched while keeping apiRequest's error contract: network
- * failures become ApiError(0) and non-2xx responses are normalized through
- * the shared helper (DRF error bodies are still JSON here).
+ * not be parsed as JSON, so — unlike the requester-based bindings — it
+ * performs its own raw request and returns the payload untouched while
+ * keeping the error contract: network failures become ApiError(0) and
+ * non-2xx responses are normalized through the shared helper (DRF error
+ * bodies are still JSON here).
  */
 export async function exportVocabulary(token: string): Promise<string> {
   let response: Response;

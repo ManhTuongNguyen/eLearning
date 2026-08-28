@@ -395,7 +395,7 @@ Do not assume every optional field is present.
 
 ## TASK-AUDIT-005 — Implement one-time access-token refresh wrapper
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

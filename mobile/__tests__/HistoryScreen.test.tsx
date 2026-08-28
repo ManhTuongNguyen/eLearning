@@ -197,12 +197,17 @@ describe('HistoryScreen', () => {
 
   it('asks the user to sign in again when no access token is available', async () => {
     mockedStorage.loadTokens.mockResolvedValue(null);
+    // TASK-AUDIT-005: the screen hands the central authed requester to the
+    // binding; signed out, the wrapper rejects before any transport work —
+    // simulated here with the exact rejection the wrapper produces.
+    mockedSessions.listSessions.mockRejectedValue(
+      new ApiError(401, 'You are signed out. Please log in again.', {}, 'authentication'),
+    );
     await renderHistory();
 
     expect(await screen.findByTestId('form-error')).toHaveTextContent(
-      'You need to sign in again to see your history.',
+      'You are signed out. Please log in again.',
     );
-    expect(mockedSessions.listSessions).not.toHaveBeenCalled();
   });
 
   it('opens the tapped session in chat', async () => {
@@ -216,7 +221,7 @@ describe('HistoryScreen', () => {
 
     await screen.findByTestId('chat-screen');
     await waitFor(() =>
-      expect(mockedSessions.listMessages).toHaveBeenCalledWith('token-a', 42),
+      expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 42),
     );
   });
 
@@ -240,7 +245,7 @@ describe('HistoryScreen', () => {
     await fireEvent.press(loadMore);
 
     await waitFor(() =>
-      expect(mockedSessions.listSessions).toHaveBeenCalledWith('token-a', 2),
+      expect(mockedSessions.listSessions).toHaveBeenCalledWith(expect.any(Function), 2),
     );
     await waitFor(() => expect(renderedItemIds()).toEqual([12, 11, 10]));
     expect(screen.queryByTestId('history-load-more')).toBeNull();
@@ -333,7 +338,7 @@ describe('HistoryScreen rename (TASK-056)', () => {
     await fireEvent.press(screen.getByTestId('history-rename-save'));
 
     await waitFor(() =>
-      expect(mockedSessions.renameSession).toHaveBeenCalledWith('token-a', 42, 'Trips in Europe'),
+      expect(mockedSessions.renameSession).toHaveBeenCalledWith(expect.any(Function), 42, 'Trips in Europe'),
     );
     // The row swaps to the authoritative response; the editor closes.
     expect(await screen.findByText('Trips abroad')).toBeOnTheScreen();
@@ -472,7 +477,7 @@ describe('HistoryScreen delete (TASK-057)', () => {
     await fireEvent.press(screen.getByTestId('history-delete-confirm'));
 
     await waitFor(() =>
-      expect(mockedSessions.deleteSession).toHaveBeenCalledWith('token-a', 42),
+      expect(mockedSessions.deleteSession).toHaveBeenCalledWith(expect.any(Function), 42),
     );
     // The row vanishes from the list right away; the other row survives.
     await waitFor(() => expect(renderedItemIds()).toEqual([43]));
@@ -577,7 +582,7 @@ describe('HistoryScreen delete (TASK-057)', () => {
 
     expect(await screen.findByTestId('history-empty')).toBeOnTheScreen();
     expect(screen.queryAllByTestId(/^history-item-/)).toHaveLength(0);
-    expect(mockedSessions.deleteSession).toHaveBeenCalledWith('token-a', 5);
+    expect(mockedSessions.deleteSession).toHaveBeenCalledWith(expect.any(Function), 5);
   });
 });
 

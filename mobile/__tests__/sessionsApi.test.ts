@@ -8,6 +8,11 @@ import {
   listSessions,
   renameSession,
 } from '../src/api/sessions';
+import {apiRequest} from '../src/api/client';
+import type {AuthedRequester} from '../src/auth/authedRequest';
+
+/** Fixed-token requester standing in for the provider-built authed requester. */
+const requester: AuthedRequester = (path, options) => apiRequest(path, {...options, token: 'tok'});
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -41,7 +46,7 @@ describe('sessions api bindings', () => {
       }),
     );
 
-    const page = await listSessions('tok');
+    const page = await listSessions(requester);
     expect(page.count).toBe(25);
     expect(page.results[0]?.id).toBe(7);
     expect(page.results[0]?.learning_level).toBe('B2');
@@ -49,7 +54,7 @@ describe('sessions api bindings', () => {
     const [url] = fetchMock.mock.calls[0];
     expect(url).toBe('http://10.0.2.2:8000/api/v1/sessions/');
 
-    await listSessions('tok', 3);
+    await listSessions(requester, 3);
     expect(fetchMock.mock.calls[1]?.[0]).toBe('http://10.0.2.2:8000/api/v1/sessions/?page=3');
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       headers: {Authorization: 'Bearer tok'},
@@ -63,7 +68,7 @@ describe('sessions api bindings', () => {
         jsonResponse(201, {id: 1, title: 'Travel', topic_hint: '', learning_level: 'AUTO'}),
       );
 
-    await createSession('tok');
+    await createSession(requester);
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://10.0.2.2:8000/api/v1/sessions/',
@@ -80,7 +85,7 @@ describe('sessions api bindings', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jsonResponse(201, {id: 2}));
 
-    await createSession('tok', 'Traveling');
+    await createSession(requester, 'Traveling');
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://10.0.2.2:8000/api/v1/sessions/',
@@ -109,7 +114,7 @@ describe('sessions api bindings', () => {
       }),
     );
 
-    const created = await createSession('tok');
+    const created = await createSession(requester);
 
     // TASK-053 depends on this envelope surviving the typed binding.
     expect(created.sample_conversation?.turns).toHaveLength(2);
@@ -124,7 +129,7 @@ describe('sessions api bindings', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jsonResponse(200, {id: 42, title: 'Interview prep'}));
 
-    const session = await getSession('tok', 42);
+    const session = await getSession(requester, 42);
     expect(session.title).toBe('Interview prep');
     expect(fetchMock).toHaveBeenCalledWith(
       'http://10.0.2.2:8000/api/v1/sessions/42/',
@@ -137,7 +142,7 @@ describe('sessions api bindings', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jsonResponse(200, {id: 42, title: 'Renamed'}));
 
-    await renameSession('tok', 42, 'Renamed');
+    await renameSession(requester, 42, 'Renamed');
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://10.0.2.2:8000/api/v1/sessions/42/',
@@ -153,7 +158,7 @@ describe('sessions api bindings', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jsonResponse(204, null));
 
-    await expect(deleteSession('tok', 42)).resolves.toBeUndefined();
+    await expect(deleteSession(requester, 42)).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith(
       'http://10.0.2.2:8000/api/v1/sessions/42/',
       expect.objectContaining({
@@ -183,7 +188,7 @@ describe('sessions api bindings', () => {
       }),
     );
 
-    const page = await listMessages('tok', 9);
+    const page = await listMessages(requester, 9);
     expect(page.results.map(m => m.sequence)).toEqual([1, 2]);
     expect(page.results[1]).toMatchObject({role: 'assistant', status: 'failed'});
     expect(fetchMock).toHaveBeenCalledWith(
@@ -197,7 +202,7 @@ describe('sessions api bindings', () => {
       jsonResponse(200, {replies: ['First reply', 'Second reply', 'Third reply']}),
     );
 
-    const result = await getMessageSuggestions('tok', 9, 44);
+    const result = await getMessageSuggestions(requester, 9, 44);
 
     expect(result.replies).toEqual(['First reply', 'Second reply', 'Third reply']);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -215,7 +220,7 @@ describe('sessions api bindings', () => {
       jsonResponse(409, {detail: 'Suggestions require a completed, non-empty message.'}),
     );
 
-    await expect(getMessageSuggestions('tok', 9, 44)).rejects.toMatchObject({
+    await expect(getMessageSuggestions(requester, 9, 44)).rejects.toMatchObject({
       name: 'ApiError',
       status: 409,
       message: 'Suggestions require a completed, non-empty message.',
@@ -231,7 +236,7 @@ describe('sessions api bindings', () => {
       }),
     );
 
-    const result = await improveMessage('tok', 9, 44);
+    const result = await improveMessage(requester, 9, 44);
 
     expect(result).toEqual({
       original: 'I go to store yesterday.',
@@ -253,7 +258,7 @@ describe('sessions api bindings', () => {
       jsonResponse(409, {detail: 'Improvement requires a non-empty user message.'}),
     );
 
-    await expect(improveMessage('tok', 9, 44)).rejects.toMatchObject({
+    await expect(improveMessage(requester, 9, 44)).rejects.toMatchObject({
       name: 'ApiError',
       status: 409,
       message: 'Improvement requires a non-empty user message.',

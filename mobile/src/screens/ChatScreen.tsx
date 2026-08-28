@@ -380,7 +380,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   // in as a route param (TASK-053); sessions opened any other way have none.
   const sampleTurns = route.params?.sampleTurns;
   const hasSample = sampleTurns !== undefined && sampleTurns.length > 0;
-  const {getAccessToken} = useAuth();
+  const {getAccessToken, authedRequest} = useAuth();
   const {colors} = useTheme();
   const {mode} = useApplicationMode();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -439,6 +439,13 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   useEffect(() => {
     getAccessTokenRef.current = getAccessToken;
   }, [getAccessToken]);
+  // TASK-AUDIT-005: JSON endpoint calls go through the central authed
+  // requester (401 → one shared refresh → one retry); only the SSE turn
+  // streams keep the raw access token (their transport cannot replay).
+  const authedRequestRef = useRef(authedRequest);
+  useEffect(() => {
+    authedRequestRef.current = authedRequest;
+  }, [authedRequest]);
 
   // In-flight turn tracking: the abort handle plus the synthetic id of the
   // assistant bubble currently receiving deltas.
@@ -536,11 +543,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         setMessages([...rows].sort(bySequence));
         return;
       }
-      const token = await getAccessTokenRef.current();
-      if (!token || sessionIdRef.current !== sid) {
+      if (sessionIdRef.current !== sid) {
         return;
       }
-      const page = await listMessages(token, sid);
+      const page = await listMessages(authedRequestRef.current, sid);
       if (sessionIdRef.current !== sid) {
         return;
       }
@@ -602,17 +608,14 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           }
           return;
         }
-        const token = await getAccessTokenRef.current();
-        if (!token) {
-          throw new Error('You need to sign in again to open this conversation.');
-        }
+        const request = authedRequestRef.current;
         // The first page covers recent history; older pages arrive with the
         // history work (Phase 8 pagination UI). The session detail only
         // feeds the topic bar, so its failure resolves to null instead of
         // failing the conversation.
         const [page, detail] = await Promise.all([
-          listMessages(token, sessionId),
-          getSession(token, sessionId).catch(() => null),
+          listMessages(request, sessionId),
+          getSession(request, sessionId).catch(() => null),
         ]);
         if (!cancelled) {
           setMessages([...page.results].sort(bySequence));
@@ -929,21 +932,19 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             }
             setSuggestions({messageId, replies: [...result.replies]});
           } else {
-          // Server mode (TASK-061): ask the backend to generate suggestions.
-          let token: string | null = null;
-          try {
-            token = await getAccessTokenRef.current();
-          } catch {
-            token = null;
-          }
+          // Server mode (TASK-061): ask the backend to generate suggestions
+          // through the central authed requester (TASK-AUDIT-005).
           if (
-            !token ||
             sessionIdRef.current !== sid ||
             suggestionsRequestRef.current !== requestId
           ) {
             return;
           }
-          const result = await getMessageSuggestions(token, sid, messageId);
+          const result = await getMessageSuggestions(
+            authedRequestRef.current,
+            sid,
+            messageId,
+          );
           if (
             sessionIdRef.current !== sid ||
             suggestionsRequestRef.current !== requestId
@@ -1017,21 +1018,15 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           }
           setImprovement({...result, messageId});
         } else {
-        // Server mode (TASK-063): ask the backend to improve the message.
-        let token: string | null = null;
-        try {
-          token = await getAccessTokenRef.current();
-        } catch {
-          token = null;
-        }
+        // Server mode (TASK-063): ask the backend to improve the message
+        // through the central authed requester (TASK-AUDIT-005).
         if (
-          !token ||
           sessionIdRef.current !== sid ||
           improvementRequestRef.current !== requestId
         ) {
           return;
         }
-        const result = await improveMessage(token, sid, messageId);
+        const result = await improveMessage(authedRequestRef.current, sid, messageId);
         if (
           sessionIdRef.current !== sid ||
           improvementRequestRef.current !== requestId
@@ -1105,23 +1100,20 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     (async () => {
       try {
         const serverless = getRuntimeApplicationMode() === 'serverless';
-        let token: string | null = null;
-        if (!serverless) {
-          try {
-            token = await getAccessTokenRef.current();
-          } catch {
-            token = null;
-          }
-          if (!token || vocabSaveRequestRef.current !== requestId) {
-            return;
-          }
+        if (!serverless && vocabSaveRequestRef.current !== requestId) {
+          return;
         }
-        // Serverless mode has no server session (TASK-AUDIT-003): the save
-        // attempt goes through anyway so the runtime gate rejects it with
-        // its typed, user-visible error instead of a silent no-op. The gate
-        // throws before any transport work, so the placeholder token is
-        // never transmitted.
-        await saveVocabulary(token ?? '', expression, messageId > 0 ? messageId : undefined);
+        // Both modes call through the central authed requester
+        // (TASK-AUDIT-005). Serverless mode has no server session
+        // (TASK-AUDIT-003): the save attempt goes through anyway so the
+        // runtime gate rejects it with its typed, user-visible error
+        // instead of a silent no-op — the gate fires before any transport
+        // work, so nothing is ever transmitted.
+        await saveVocabulary(
+          authedRequestRef.current,
+          expression,
+          messageId > 0 ? messageId : undefined,
+        );
         if (vocabSaveRequestRef.current !== requestId) {
           return;
         }

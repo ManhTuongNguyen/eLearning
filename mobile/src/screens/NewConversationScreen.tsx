@@ -123,7 +123,7 @@ function createStyles(c: ThemeColors) {
 }
 
 export function NewConversationScreen({navigation}: NewConversationScreenProps) {
-  const {getAccessToken} = useAuth();
+  const {authedRequest} = useAuth();
   const {mode} = useApplicationMode();
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -164,11 +164,10 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
           navigation.replace('Chat', {sessionId: session.id});
           return;
         }
-        const token = await getAccessToken();
-        if (!token) {
-          throw new Error('You need to sign in again to start a conversation.');
-        }
-        const session = await createSession(token, rawHint.trim());
+        // TASK-AUDIT-005: creation goes through the central authed requester
+        // (401 → one shared refresh → one retry). Signed out, it rejects
+        // with the shared sign-in prompt before any transport work.
+        const session = await createSession(authedRequest, rawHint.trim());
         navigation.replace('Chat', {
           sessionId: session.id,
           sampleTurns: session.sample_conversation?.turns,
@@ -179,7 +178,7 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
         setCreating(false);
       }
     },
-    [creating, getAccessToken, mode, navigation],
+    [authedRequest, creating, mode, navigation],
   );
 
   return (

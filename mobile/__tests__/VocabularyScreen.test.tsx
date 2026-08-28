@@ -162,12 +162,17 @@ describe('VocabularyScreen', () => {
 
   it('asks the user to sign in again when no access token is available', async () => {
     mockedStorage.loadTokens.mockResolvedValue(null);
+    // TASK-AUDIT-005: the screen hands the central authed requester to the
+    // binding; signed out, the wrapper rejects before any transport work —
+    // simulated here with the exact rejection the wrapper produces.
+    mockedVocabulary.listVocabulary.mockRejectedValue(
+      new ApiError(401, 'You are signed out. Please log in again.', {}, 'authentication'),
+    );
     await renderVocabulary();
 
     expect(await screen.findByTestId('form-error')).toHaveTextContent(
-      'You need to sign in again to see your vocabulary.',
+      'You are signed out. Please log in again.',
     );
-    expect(mockedVocabulary.listVocabulary).not.toHaveBeenCalled();
   });
 
   it('marks pending rows as still enriching without enriched fields', async () => {
@@ -256,7 +261,7 @@ describe('VocabularyScreen', () => {
     await fireEvent.press(loadMore);
 
     await waitFor(() =>
-      expect(mockedVocabulary.listVocabulary).toHaveBeenCalledWith('token-a', 2),
+      expect(mockedVocabulary.listVocabulary).toHaveBeenCalledWith(expect.any(Function), 2),
     );
     await waitFor(() => expect(renderedItemIds()).toEqual([12, 11, 10]));
     expect(screen.queryByTestId('vocabulary-load-more')).toBeNull();

@@ -4,8 +4,13 @@
  * normalizing failures through the shared ApiError contract.
  */
 
-import {ApiError} from '../src/api/client';
+import {ApiError, apiRequest} from '../src/api/client';
 import {exportVocabulary, saveVocabulary} from '../src/api/vocabulary';
+import type {AuthedRequester} from '../src/auth/authedRequest';
+
+/** Fixed-token requester standing in for the provider-built authed requester. */
+const requester: AuthedRequester = (path, options) =>
+  apiRequest(path, {...options, token: 'tok'});
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -48,7 +53,7 @@ describe('vocabulary api bindings', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jsonResponse(201, SAVED_ITEM));
 
-    const item = await saveVocabulary('tok', 'the early bird', 810);
+    const item = await saveVocabulary(requester, 'the early bird', 810);
 
     expect(item.id).toBe(3);
     expect(item.status).toBe('pending');
@@ -67,7 +72,7 @@ describe('vocabulary api bindings', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jsonResponse(201, {...SAVED_ITEM, source_message: null}));
 
-    await saveVocabulary('tok', 'catch the worm');
+    await saveVocabulary(requester, 'catch the worm');
 
     const [, init] = fetchMock.mock.calls[0];
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
@@ -80,7 +85,7 @@ describe('vocabulary api bindings', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jsonResponse(200, SAVED_ITEM));
 
-    const item = await saveVocabulary('tok', 'The Early Bird', 810);
+    const item = await saveVocabulary(requester, 'The Early Bird', 810);
 
     expect(item.id).toBe(3);
     expect(item.expression).toBe('the early bird');

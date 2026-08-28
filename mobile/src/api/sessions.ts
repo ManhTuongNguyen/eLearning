@@ -1,6 +1,6 @@
 /** Conversation session and message endpoint bindings (SPEC TASK-030..034 APIs). */
 
-import {apiRequest} from './client';
+import type {AuthedRequester} from '../auth/authedRequest';
 import type {EnglishLevel} from './profile';
 
 /** Read representation of a conversation session (backend SessionSerializer). */
@@ -59,50 +59,59 @@ function pageQuery(page?: number): string {
   return page === undefined ? '' : `?page=${page}`;
 }
 
-export function listSessions(token: string, page?: number): Promise<Paginated<Session>> {
-  return apiRequest<Paginated<Session>>(`/api/v1/sessions/${pageQuery(page)}`, {token});
+/**
+ * Authenticated session/message endpoints (TASK-AUDIT-005): instead of a raw
+ * access token these bindings take the central `AuthedRequester`, so an
+ * expired token is detected, refreshed, and the original request retried
+ * once — transparently and in one place.
+ */
+
+export function listSessions(
+  request: AuthedRequester,
+  page?: number,
+): Promise<Paginated<Session>> {
+  return request<Paginated<Session>>(`/api/v1/sessions/${pageQuery(page)}`);
 }
 
-export function createSession(token: string, topicHint = ''): Promise<CreatedSession> {
-  return apiRequest<CreatedSession>('/api/v1/sessions/', {
+export function createSession(
+  request: AuthedRequester,
+  topicHint = '',
+): Promise<CreatedSession> {
+  return request<CreatedSession>('/api/v1/sessions/', {
     method: 'POST',
     body: topicHint ? {topic_hint: topicHint} : {},
-    token,
   });
 }
 
-export function getSession(token: string, sessionId: number): Promise<Session> {
-  return apiRequest<Session>(`/api/v1/sessions/${sessionId}/`, {token});
+export function getSession(request: AuthedRequester, sessionId: number): Promise<Session> {
+  return request<Session>(`/api/v1/sessions/${sessionId}/`);
 }
 
 export function renameSession(
-  token: string,
+  request: AuthedRequester,
   sessionId: number,
   title: string,
 ): Promise<Session> {
-  return apiRequest<Session>(`/api/v1/sessions/${sessionId}/`, {
+  return request<Session>(`/api/v1/sessions/${sessionId}/`, {
     method: 'PATCH',
     body: {title},
-    token,
   });
 }
 
 /** Server-side invalidation is not applicable; deletion cascades messages. */
-export function deleteSession(token: string, sessionId: number): Promise<void> {
-  return apiRequest<null>(`/api/v1/sessions/${sessionId}/`, {
+export function deleteSession(request: AuthedRequester, sessionId: number): Promise<void> {
+  return request<null>(`/api/v1/sessions/${sessionId}/`, {
     method: 'DELETE',
-    token,
   }).then(() => undefined);
 }
 
 export function listMessages(
-  token: string,
+  request: AuthedRequester,
   sessionId: number,
   page?: number,
 ): Promise<Paginated<ChatMessage>> {
-  return apiRequest<Paginated<ChatMessage>>(
+  return request<Paginated<ChatMessage>>(
     `/api/v1/sessions/${sessionId}/messages/${pageQuery(page)}`,
-    {token},
   );
 }
 
@@ -115,16 +124,16 @@ export interface MessageSuggestions {
  * POST /api/v1/sessions/{sid}/messages/{mid}/suggestions/ (TASK-061).
  * Read-only generation: nothing persists server-side. Invalid targets
  * (non-complete or blank messages) are 409; provider failures 503/502 —
- * all normalized by apiRequest.
+ * all normalized by the requester's error contract.
  */
 export function getMessageSuggestions(
-  token: string,
+  request: AuthedRequester,
   sessionId: number,
   messageId: number,
 ): Promise<MessageSuggestions> {
-  return apiRequest<MessageSuggestions>(
+  return request<MessageSuggestions>(
     `/api/v1/sessions/${sessionId}/messages/${messageId}/suggestions/`,
-    {method: 'POST', body: {}, token},
+    {method: 'POST', body: {}},
   );
 }
 
@@ -140,15 +149,15 @@ export interface MessageImprovement {
  * generation: the stored message is never modified server-side and `original`
  * is composed from the persisted row. Invalid targets (assistant rows or
  * blank messages) are 409; foreign/nonexistent ids are 404; provider
- * failures 503/502 — all normalized by apiRequest.
+ * failures 503/502 — all normalized by the requester's error contract.
  */
 export function improveMessage(
-  token: string,
+  request: AuthedRequester,
   sessionId: number,
   messageId: number,
 ): Promise<MessageImprovement> {
-  return apiRequest<MessageImprovement>(
+  return request<MessageImprovement>(
     `/api/v1/sessions/${sessionId}/messages/${messageId}/improve/`,
-    {method: 'POST', body: {}, token},
+    {method: 'POST', body: {}},
   );
 }

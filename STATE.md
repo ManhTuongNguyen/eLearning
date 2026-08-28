@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-28
-- **Current Phase**: TASK-AUDIT-004 complete; next task TASK-AUDIT-005 — Implement one-time access-token refresh wrapper
+- **Current Phase**: TASK-AUDIT-005 complete; next task TASK-AUDIT-006 — Add back navigation to Settings
 
 ## Current Active Task
   - **Task ID**:
@@ -69,3 +69,34 @@
   backfill; OpenRouterSettingsScreen.test.tsx refresh with no key stored or
   typed. Full suites: mobile pnpm test 625 passed; pnpm lint and pnpm
   typecheck clean.
+- TASK-AUDIT-005 (done): the one-time access-token refresh wrapper is now a
+  real central layer. auth/authedRequest.ts exports `createAuthedRequester`
+  (framework-free): execute request → detect 401 → single-flight refresh →
+  retry exactly once (original path+options retained, only the token is
+  swapped) → refresh failure rethrows the original 401; the retry result is
+  returned/thrown directly so no loop is possible, and the serverless gate
+  (assertServerApiAllowed) fires before any auth/transport work so
+  ServerApiBlockedError still surfaces in serverless even when signed out.
+  AuthProvider supplies the hooks (restore-gate whenReady, getTokens,
+  refreshAccess with its clearTokens/require-login side effects) — behavior
+  identical to the previous inline implementation (all 16 AuthContext tests
+  unchanged and green). Adoption: sessions.ts (8 bindings), profile.ts (2),
+  vocabulary.ts save/list now take `AuthedRequester` instead of
+  `token: string`, and every screen JSON call (Chat, History, Vocabulary,
+  Level, NewConversation) routes through it — previously screens resolved a
+  raw token and bypassed re-auth entirely, so a mid-session expiry surfaced
+  as an error. Raw token remains only where the wrapper cannot apply: SSE
+  streamChatTurn/streamRetryTurn and the raw-CSV exportVocabulary.
+  Screen signed-out guards were dropped (the wrapper's signed-out
+  ApiError(401) 'You are signed out. Please log in again.' replaces the
+  per-screen 'You need to sign in again...' throws); LevelScreen additionally
+  gained the explicit modeStatus gate (its old token-fetch suspension
+  implicitly masked server-branch fetches before mode restore — the tests
+  caught it).
+- Regression coverage: authedRequest.test.ts (7 unit tests on the wrapper:
+  normal request, 401→refresh→retry success with preserved method/body,
+  refresh failure clears session + rethrows, retried 401 propagates without
+  looping, non-401 untouched, signed-out rejection, 3 concurrent 401s share
+  exactly one refresh); API binding tests use a fixed-token requester;
+  screen/journey tests assert the requester arg. Full suites: mobile pnpm
+  test 632 passed; pnpm lint and pnpm typecheck clean.

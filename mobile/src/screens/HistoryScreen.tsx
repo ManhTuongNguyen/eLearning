@@ -244,7 +244,7 @@ function createStyles(c: ThemeColors) {
 }
 
 export function HistoryScreen({navigation}: Props) {
-  const {getAccessToken} = useAuth();
+  const {authedRequest} = useAuth();
   const {colors} = useTheme();
   // TASK-090: the active application mode selects the history data source.
   // Nothing is fetched until the persisted mode has been restored, so a
@@ -267,10 +267,12 @@ export function HistoryScreen({navigation}: Props) {
   const [deleting, setDeleting] = useState(false);
 
   // AuthContext's value object is recreated on every auth-state change, so
-  // the load effect reads the token through a latest ref instead of taking
-  // getAccessToken as a dependency (TASK-048 gotcha).
-  const getAccessTokenRef = useRef(getAccessToken);
-  getAccessTokenRef.current = getAccessToken;
+  // the callbacks read the authed requester through a latest ref instead of
+  // taking it as a dependency (TASK-048 gotcha). TASK-AUDIT-005: JSON
+  // endpoint calls go through the central authed requester (401 → one
+  // shared refresh → one retry).
+  const authedRequestRef = useRef(authedRequest);
+  authedRequestRef.current = authedRequest;
 
   useEffect(() => {
     if (modeStatus !== 'ready') {
@@ -301,11 +303,7 @@ export function HistoryScreen({navigation}: Props) {
           }
           return;
         }
-        const token = await getAccessTokenRef.current();
-        if (!token) {
-          throw new Error('You need to sign in again to see your history.');
-        }
-        const page = await listSessions(token, 1);
+        const page = await listSessions(authedRequestRef.current, 1);
         if (!cancelled) {
           setSessions(page.results);
           setHasMore(page.next !== null);
@@ -334,11 +332,7 @@ export function HistoryScreen({navigation}: Props) {
     }
     setLoadingMore(true);
     try {
-      const token = await getAccessTokenRef.current();
-      if (!token) {
-        throw new Error('You need to sign in again to see your history.');
-      }
-      const page = await listSessions(token, loadedPages + 1);
+      const page = await listSessions(authedRequestRef.current, loadedPages + 1);
       setSessions(prev => [...prev, ...page.results]);
       setHasMore(page.next !== null);
       setLoadedPages(pages => pages + 1);
@@ -389,11 +383,7 @@ export function HistoryScreen({navigation}: Props) {
           ),
         );
       } else {
-        const token = await getAccessTokenRef.current();
-        if (!token) {
-          throw new Error('You need to sign in again to see your history.');
-        }
-        const updated = await renameSession(token, sessionId, trimmed);
+        const updated = await renameSession(authedRequestRef.current, sessionId, trimmed);
         setSessions(prev =>
           prev.map(session => (session.id === updated.id ? {...session, ...updated} : session)),
         );
@@ -440,11 +430,7 @@ export function HistoryScreen({navigation}: Props) {
       if (mode === 'serverless') {
         await localRepository.deleteSession(sessionId);
       } else {
-        const token = await getAccessTokenRef.current();
-        if (!token) {
-          throw new Error('You need to sign in again to see your history.');
-        }
-        await deleteSession(token, sessionId);
+        await deleteSession(authedRequestRef.current, sessionId);
       }
       setSessions(prev => prev.filter(session => session.id !== sessionId));
       setDeletingId(null);

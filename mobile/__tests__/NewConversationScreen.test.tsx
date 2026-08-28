@@ -116,11 +116,11 @@ describe('NewConversationScreen', () => {
     await fireEvent.press(screen.getByTestId('new-conversation-start'));
 
     await waitFor(() =>
-      expect(mockedSessions.createSession).toHaveBeenCalledWith('token-a', 'Traveling'),
+      expect(mockedSessions.createSession).toHaveBeenCalledWith(expect.any(Function), 'Traveling'),
     );
     // The stack swapped to Chat carrying the new session id.
     await screen.findByTestId('chat-screen');
-    expect(mockedSessions.listMessages).toHaveBeenCalledWith('token-a', 42);
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 42);
   });
 
   it('creates a session when Start is pressed with an untouched (empty) input', async () => {
@@ -130,9 +130,9 @@ describe('NewConversationScreen', () => {
 
     await fireEvent.press(screen.getByTestId('new-conversation-start'));
 
-    await waitFor(() => expect(mockedSessions.createSession).toHaveBeenCalledWith('token-a', ''));
+    await waitFor(() => expect(mockedSessions.createSession).toHaveBeenCalledWith(expect.any(Function), ''));
     await screen.findByTestId('chat-screen');
-    expect(mockedSessions.listMessages).toHaveBeenCalledWith('token-a', 7);
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 7);
   });
 
   it('lets AI choose a topic even when a hint has been typed', async () => {
@@ -143,9 +143,9 @@ describe('NewConversationScreen', () => {
     await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), 'Cooking');
     await fireEvent.press(screen.getByTestId('new-conversation-auto'));
 
-    await waitFor(() => expect(mockedSessions.createSession).toHaveBeenCalledWith('token-a', ''));
+    await waitFor(() => expect(mockedSessions.createSession).toHaveBeenCalledWith(expect.any(Function), ''));
     await screen.findByTestId('chat-screen');
-    expect(mockedSessions.listMessages).toHaveBeenCalledWith('token-a', 9);
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 9);
   });
 
   it('shows an inline error and stays on the form when creation fails', async () => {
@@ -191,7 +191,7 @@ describe('NewConversationScreen', () => {
     // Settling swaps this screen for the created conversation.
     await screen.findByTestId('chat-screen');
     expect(screen.queryByTestId('new-conversation-loading')).toBeNull();
-    expect(mockedSessions.listMessages).toHaveBeenCalledWith('token-a', 42);
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 42);
   });
 
   it('dismisses back to chat via the cancel control', async () => {
@@ -255,7 +255,7 @@ describe('NewConversationScreen', () => {
 
     await screen.findByTestId('chat-screen');
     await waitFor(() =>
-      expect(mockedSessions.listMessages).toHaveBeenCalledWith('token-a', 7),
+      expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 7),
     );
     expect(screen.queryByTestId('chat-show-example')).toBeNull();
   });

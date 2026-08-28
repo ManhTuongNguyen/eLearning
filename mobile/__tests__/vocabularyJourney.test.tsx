@@ -186,7 +186,7 @@ describe('TASK-112 vocabulary journey', () => {
     await fireEvent.press(screen.getByTestId('chat-open-history'));
     const sessionRow = await screen.findByTestId('history-item-5');
     await fireEvent.press(sessionRow);
-    expect(mockedSessions.listMessages).toHaveBeenCalledWith('access-1', 5);
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 5);
 
     // Text selection flow: long-press → Select text → capture "early".
     await captureWordFromMessage();
@@ -205,7 +205,7 @@ describe('TASK-112 vocabulary journey', () => {
       });
 
       expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledTimes(1);
-      expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledWith('access-1', 'early', 810);
+      expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledWith(expect.any(Function), 'early', 810);
       expect(screen.queryByTestId('chat-vocab-modal')).toBeNull();
       expect(screen.getByTestId('chat-toast')).toHaveTextContent('Saved to vocabulary');
 
@@ -223,7 +223,7 @@ describe('TASK-112 vocabulary journey', () => {
     await fireEvent.press(screen.getByTestId('settings-open-vocabulary'));
 
     // The saved expression is in the list, still enriching.
-    expect(mockedVocabulary.listVocabulary).toHaveBeenCalledWith('access-1', 1);
+    expect(mockedVocabulary.listVocabulary).toHaveBeenCalledWith(expect.any(Function), 1);
     const savedRow = await screen.findByTestId('vocabulary-item-42');
     expect(within(savedRow).getByText('early')).toBeOnTheScreen();
     expect(within(savedRow).getByTestId('vocab-badge-pending')).toHaveTextContent(

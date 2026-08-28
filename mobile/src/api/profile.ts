@@ -1,6 +1,6 @@
 /** Learning profile endpoint bindings (SPEC TASK-017 API). */
 
-import {apiRequest} from './client';
+import type {AuthedRequester} from '../auth/authedRequest';
 
 export type EnglishLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'AUTO';
 
@@ -24,14 +24,18 @@ export interface LearningProfile {
   level: EnglishLevel;
 }
 
-export function getProfile(token: string): Promise<LearningProfile> {
-  return apiRequest<LearningProfile>('/api/v1/profile/', {token});
+/** Runs through the central authed requester (TASK-AUDIT-005). */
+export function getProfile(request: AuthedRequester): Promise<LearningProfile> {
+  return request<LearningProfile>('/api/v1/profile/');
 }
 
-export function updateProfile(token: string, level: EnglishLevel): Promise<LearningProfile> {
-  return apiRequest<LearningProfile>('/api/v1/profile/', {
+/** Runs through the central authed requester (TASK-AUDIT-005). */
+export function updateProfile(
+  request: AuthedRequester,
+  level: EnglishLevel,
+): Promise<LearningProfile> {
+  return request<LearningProfile>('/api/v1/profile/', {
     method: 'PATCH',
     body: {level},
-    token,
   });
 }

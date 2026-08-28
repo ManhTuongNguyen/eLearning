@@ -234,7 +234,7 @@ describe('ChatScreen', () => {
 
     resolveMessages(emptyPage());
     await waitFor(() => expect(screen.queryByTestId('chat-loading')).toBeNull());
-    expect(mockedSessions.listMessages).toHaveBeenCalledWith('token-a', 5);
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 5);
   });
 
   it('renders an in-conversation empty state when the session has no messages', async () => {
@@ -699,7 +699,7 @@ describe('ChatScreen', () => {
     await waitFor(() => expect(screen.getByTestId('chat-topic')).toBeOnTheScreen());
 
     // Compact by default: only the title line, never the full description.
-    expect(mockedSessions.getSession).toHaveBeenCalledWith('token-a', 5);
+    expect(mockedSessions.getSession).toHaveBeenCalledWith(expect.any(Function), 5);
     expect(screen.getByTestId('chat-topic-title')).toHaveTextContent('Traveling');
     expect(screen.queryByTestId('chat-topic-text')).toBeNull();
     expect(
@@ -1316,7 +1316,7 @@ describe('ChatScreen', () => {
       // The menu dismissed and the read-only endpoint was asked for exactly
       // this conversation + message with the current token.
       expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
-      expect(mockedSessions.getMessageSuggestions).toHaveBeenCalledWith('token-a', 5, 802);
+      expect(mockedSessions.getMessageSuggestions).toHaveBeenCalledWith(expect.any(Function), 5, 802);
       expect(mockedStream).not.toHaveBeenCalled();
       expect(screen.getByTestId('chat-suggestions-loading')).toBeOnTheScreen();
 
@@ -1380,7 +1380,7 @@ describe('ChatScreen', () => {
       await fireEvent.press(screen.getByTestId('chat-menu-suggest-replies'));
       await expectChips(REPLIES);
       expect(screen.queryByText('Old B')).toBeNull();
-      expect(mockedSessions.getMessageSuggestions).toHaveBeenLastCalledWith('token-a', 5, 801);
+      expect(mockedSessions.getMessageSuggestions).toHaveBeenLastCalledWith(expect.any(Function), 5, 801);
     });
 
     it('clears the suggestion strip when the user sends a message', async () => {
@@ -1477,7 +1477,7 @@ describe('ChatScreen', () => {
       // The menu dismissed and the read-only endpoint was asked for exactly
       // this conversation + message with the current token.
       expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
-      expect(mockedSessions.improveMessage).toHaveBeenCalledWith('token-a', 5, 801);
+      expect(mockedSessions.improveMessage).toHaveBeenCalledWith(expect.any(Function), 5, 801);
       expect(mockedStream).not.toHaveBeenCalled();
       expect(screen.getByTestId('chat-improvement-loading')).toBeOnTheScreen();
 
@@ -1597,7 +1597,7 @@ describe('ChatScreen', () => {
       expect(within(original).getByText("She don't like it.")).toBeTruthy();
       // The previous result is fully replaced, not appended.
       expect(within(original).queryByText(IMPROVEMENT.improved)).toBeNull();
-      expect(mockedSessions.improveMessage).toHaveBeenLastCalledWith('token-a', 5, 803);
+      expect(mockedSessions.improveMessage).toHaveBeenLastCalledWith(expect.any(Function), 5, 803);
     });
   });
 
@@ -1778,7 +1778,7 @@ describe('ChatScreen', () => {
       // expression and its source message — no enrichment round-trip.
       expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledTimes(1);
       expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledWith(
-        'token-a',
+        expect.any(Function),
         'early',
         810,
       );
