@@ -29,7 +29,7 @@ React Native → Local SQLite + OpenRouter directly
 | --- | --- |
 | `backend/` | Django 6.x REST API, Celery workers, LLM provider abstraction |
 | `mobile/` | React Native (TypeScript) application |
-| `docker/` | Docker and Docker Compose configuration for development services |
+| `docker/` | Backend Docker image definition (referenced by the root `docker-compose.yml`) |
 | `docs/` | Architecture notes and documentation |
 
 ## Technology Stack
@@ -38,38 +38,124 @@ React Native → Local SQLite + OpenRouter directly
 
 **Frontend:** React Native (New Architecture) · TypeScript · pnpm · React Navigation · NativeWind · Reanimated · Jest · React Native Testing Library
 
+## Prerequisites
+
+| Tool | Version | Used for | Notes |
+| --- | --- | --- | --- |
+| [uv](https://docs.astral.sh/uv/) | latest | Python/venv + dependency management for the backend | Install: `curl -LsSf https://astral.sh/uv/install.sh \| sh` (Windows: `powershell -c "irm https://astral.sh/uv/install.ps1 \| iex"`). uv provisions the Python interpreter itself. |
+| Node.js | >= 20 | Mobile build runtime | |
+| [pnpm](https://pnpm.io/) | latest | Mobile package manager | Enable via `corepack enable pnpm` (ships with Node 20+). The mobile app requires `node-linker=hoisted`, already configured in `mobile/.npmrc`. |
+| Docker + Compose | 24+ | PostgreSQL, Redis, backend and Celery worker services | Any Compose v2-capable install (`docker compose version`). |
+| JDK | 17+ | Android Gradle builds | Set `JAVA_HOME`. |
+| Android SDK | recent API level | Building/installing on a device or emulator | Set `ANDROID_HOME` (e.g. `~/Android/Sdk`); easiest via [Android Studio](https://developer.android.com/studio). |
+
+The backend also needs a PostgreSQL server and Redis instance for full fidelity — both are provided by Docker Compose (see [Running the backend](#running-the-backend)).
+
+## Environment configuration
+
+Copy the example environment file at the repository root and fill in real values — never commit `.env`:
+
+```bash
+cp .env.example .env
+```
+
+`.env.example` documents every variable. The most important ones:
+
+| Variable | Purpose |
+| --- | --- |
+| `DJANGO_SECRET_KEY` | Django signing key; generate with `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` |
+| `DJANGO_DEBUG` / `DJANGO_ALLOWED_HOSTS` | Server mode; production-required variables are enforced at startup when `DJANGO_DEBUG=False` |
+| `POSTGRES_*` | Database credentials used by Django, Docker Compose and pytest |
+| `DB_ENGINE` | `postgresql` (default) or `sqlite3` for a no-Docker quick start |
+| `REDIS_URL` / `CELERY_*` | Redis connection and Celery broker/result backends |
+| `OPENROUTER_API_KEY` | Server-side LLM key — never sent to the mobile application |
+| `LLM_PRIMARY_MODEL` / `LLM_FALLBACK_MODELS` | Server-mode model chain (see [LLM model configuration](#llm-model-configuration)) |
+| `JWT_*` | Access/refresh token lifetimes |
+
+The mobile app needs no `.env`; server-mode API base URL and serverless settings (user OpenRouter key, models) are configured in the app (Settings → serverless OpenRouter settings; the key is stored in secure device storage).
+
 ## Development
 
 The project uses an autonomous Loop Engineering workflow tracked in [`SPEC.md`](SPEC.md) (executable backlog), [`ROADMAP.md`](ROADMAP.md) (product/architecture goals), and [`STATE.md`](STATE.md) (loop execution state).
 
-### Backend
+### Running the backend
+
+Option A — everything in Docker (recommended first run):
+
+```bash
+docker compose up --build
+```
+
+This starts `postgres` (PostgreSQL 17), `redis` (Redis 8), `backend` (Django — applies migrations and serves on `http://localhost:8000`) and `worker` (Celery), with health checks gating startup order. Intra-network hostnames (`postgres`, `redis`) are injected automatically; your `.env` still supplies credentials.
+
+Option B — native Python with data services in Docker:
+
+```bash
+docker compose up -d postgres redis
+cd backend
+uv sync                           # creates .venv, installs locked dependencies
+uv run python manage.py migrate
+uv run python manage.py runserver # http://localhost:8000
+```
+
+In a second terminal, run the Celery worker (vocabulary enrichment, conversation summarization):
 
 ```bash
 cd backend
-uv sync
+uv run celery -A config worker --loglevel=info
 ```
 
-Quality gates (run individually):
+Local debugging without Docker at all: set `DB_ENGINE=sqlite3` in `.env` (or pass it per command). The health endpoint `GET /api/v1/health/` reports infrastructure status.
+
+### Running mobile
 
 ```bash
+cd mobile
+pnpm install
+pnpm start          # Metro dev server (keep running)
+pnpm android        # builds debug APK, installs and launches on a connected device/emulator
+```
+
+Requires JDK 17+ (`JAVA_HOME`) and the Android SDK (`ANDROID_HOME`); for an emulator, Metro reachability is handled automatically by `run-android` (`adb reverse tcp:8081 tcp:8081`). The app targets the New Architecture (`newArchEnabled=true`) and Hermes. Debug builds load JS from Metro; a production bundle is produced by `cd android && ./gradlew assembleRelease`. See [`mobile/README.md`](mobile/README.md) for details on local SQLite storage, application modes and secure key storage.
+
+### Running tests
+
+Backend — pytest + pytest-django against an isolated database (`test_elearning`, see `POSTGRES_TEST_DB`); it is created and destroyed per run and never touches the development database. Start Postgres first (`docker compose up -d postgres redis`):
+
+```bash
+cd backend
+uv run pytest
+```
+
+Without Docker services available, fall back to SQLite (a few DB-fidelity tests are excluded):
+
+```bash
+DB_ENGINE=sqlite3 uv run pytest
+```
+
+All backend quality gates at once, CI-style, from the repository root:
+
+```bash
+make quality
+```
+
+Individual gates:
+
+```bash
+cd backend
 uv run ruff check .             # lint
 uv run ruff format --check .    # formatting check (apply: uv run ruff format .)
 uv run pytest                   # tests (pytest + pytest-django)
 uv run python manage.py check   # Django system checks
 ```
 
-Tests run against an isolated PostgreSQL database (`test_elearning`, see
-`POSTGRES_TEST_DB`); it is created and destroyed per run and never touches the
-development database. Without Docker services available, fall back to SQLite:
+Mobile — Jest with React Native Testing Library (no device required):
 
 ```bash
-DB_ENGINE=sqlite3 uv run pytest
-```
-
-Or all at once, CI-style, from the repository root:
-
-```bash
-make quality
+cd mobile
+pnpm test           # jest
+pnpm typecheck      # tsc --noEmit (strict mode)
+pnpm lint           # eslint
 ```
 
 ### User model
@@ -142,31 +228,3 @@ strips names and drops blank/duplicate entries. Only retryable failures
 invalid configuration raises `ImproperlyConfigured` naming the offending
 variable at startup. Valid catalog ids are listed at
 https://openrouter.ai/api/v1/models.
-
-### Mobile
-
-```bash
-cd mobile
-pnpm install
-pnpm typecheck
-pnpm test
-```
-
-Run on Android (requires JDK 17+ and `ANDROID_HOME` pointing at the Android SDK):
-
-```bash
-cd mobile
-pnpm start          # Metro, keep running
-pnpm android        # builds debug APK, installs and launches on a connected device/emulator
-```
-
-The app targets the New Architecture (`newArchEnabled=true`) and Hermes. Debug builds load JS from Metro; a production bundle is produced by `assembleRelease`. See `mobile/README.md` for details.
-
-### Infrastructure
-
-Docker Compose provides `backend`, `postgres`, `redis`, and `worker` services. See `.env.example` for required environment variables; copy it to `.env` and fill in real values.
-
-```bash
-cp .env.example .env
-docker compose -f docker/docker-compose.yml up
-```

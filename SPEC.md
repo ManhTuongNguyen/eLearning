@@ -2249,7 +2249,7 @@ Test:
 
 ## TASK-113 — Document local development
 
-Status: `[ ]`
+Status: `[x]`
 
 README must explain:
 
