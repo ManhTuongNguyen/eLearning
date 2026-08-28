@@ -1041,7 +1041,7 @@ The application should not request the complete model catalog unnecessarily on e
 
 ## TASK-AUDIT-018 — Add regression coverage for audited bugs
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P2`
 
