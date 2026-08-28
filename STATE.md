@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-28
-- **Current Phase**: TASK-AUDIT-006 complete; next task TASK-AUDIT-007 — Simplify vocabulary save flow
+- **Current Phase**: TASK-AUDIT-007 complete; next task TASK-AUDIT-008 — Fix history state after successful login
 
 ## Current Active Task
   - **Task ID**:
@@ -114,3 +114,27 @@
   [Chat, Settings] and settings-back collapses it to [Chat] with the
   settings-screen gone. Full suites: mobile pnpm test 635 passed; pnpm
   lint and pnpm typecheck clean.
+- TASK-AUDIT-007 (done): the vocabulary save flow no longer shows the
+  redundant second confirmation. Pressing `Save word` in the selection sheet
+  closes it and fires the save immediately (saveVocabularySelection now
+  performs the whole round-trip that the removed confirmVocabularySave
+  owned): POST /api/v1/vocabulary/ through the central authed requester,
+  source-message attribution for real rows only, same stale-response guard
+  (vocabSaveRequestRef + session-change invalidation). Success flashes the
+  existing self-dismissing 'Saved to vocabulary' toast; failure now surfaces
+  the normalized toErrorMessage as an alert toast (role="alert",
+  errorText-colored toast variant) instead of the popup's inline error —
+  still useful feedback, still async with respect to enrichment. ChatScreen
+  state trimmed to toast only (VocabToast {text, kind}); VocabularySaveSheet
+  component and its test file deleted.
+- Regression coverage: ChatScreen.test.tsx 'vocabulary save flow
+  (TASK-070, TASK-AUDIT-007)' — Save word calls the API immediately with
+  expression+source (no popup ever), selection-sheet Cancel never calls the
+  API, success toast auto-dismisses (fake timers), failure → alert toast
+  with the friendly unreachable-server copy and re-save succeeds from a
+  fresh selection; selection describe asserts immediate save on confirm.
+  vocabularyJourney.test.tsx both journeys updated (no chat-vocab-modal,
+  success toast dismissal, failure toast + empty list). serverlessJourney
+  gate test asserts the typed ServerApiBlockedError message via the toast.
+  Full suites: mobile pnpm test 629 passed; pnpm lint and pnpm typecheck
+  clean.

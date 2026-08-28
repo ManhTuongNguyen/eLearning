@@ -4,9 +4,9 @@
  * Full-journey coverage against the REAL application tree (App →
  * RootNavigator → MainNavigator → real screens): an authenticated user
  * opens a conversation from History, long-presses an assistant message,
- * captures a word through the text-selection sheet (TASK-069), confirms
- * through the save popup (TASK-070) which calls the vocabulary API
- * immediately and flashes a self-dismissing toast, then reaches the
+ * captures a word through the text-selection sheet (TASK-069) and saves it
+ * immediately (TASK-AUDIT-007 — no confirmation popup; the vocabulary API
+ * call fires at once and a self-dismissing toast confirms), then reaches the
  * vocabulary list through Settings where the saved expression renders
  * with its enrichment status and the export action hands the Anki CSV
  * to the native share seam behind a confirmation toast (TASK-075).
@@ -142,7 +142,7 @@ function topScreenByTestId(
   return matches[matches.length - 1];
 }
 
-/** Capture the word "early" out of the assistant message. */
+/** Capture the word "early" out of the assistant message (sheet stays open). */
 async function captureWordFromMessage(): Promise<void> {
   await waitFor(() =>
     expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen(),
@@ -156,7 +156,6 @@ async function captureWordFromMessage(): Promise<void> {
   expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent(
     'early',
   );
-  await fireEvent.press(screen.getByTestId('chat-selection-save'));
 }
 
 beforeEach(() => {
@@ -191,17 +190,14 @@ describe('TASK-112 vocabulary journey', () => {
     // Text selection flow: long-press → Select text → capture "early".
     await captureWordFromMessage();
 
-    // The save popup previews exactly the captured expression.
-    expect(screen.getByTestId('chat-vocab-modal')).toBeOnTheScreen();
-    expect(screen.getByTestId('chat-vocab-expression')).toHaveTextContent('early');
-
-    // Saving is immediate: one API call with the trimmed expression and
-    // its source message, closed popup, instant confirmation toast that
-    // dismisses itself — enrichment is never awaited here (ROADMAP §9).
+    // Pressing Save word starts the save immediately (TASK-AUDIT-007):
+    // no confirmation popup, one API call with the trimmed expression and
+    // its source message, then a self-dismissing confirmation toast —
+    // enrichment is never awaited here (ROADMAP §9).
     jest.useFakeTimers();
     try {
       await act(async () => {
-        fireEvent.press(screen.getByTestId('chat-vocab-save'));
+        fireEvent.press(screen.getByTestId('chat-selection-save'));
       });
 
       expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledTimes(1);
@@ -243,7 +239,7 @@ describe('TASK-112 vocabulary journey', () => {
     expect(mockedShare.shareAnkiCsv).toHaveBeenCalledTimes(1);
   });
 
-  it('a failed save keeps the popup open for retry and the vocabulary list stays empty', async () => {
+  it('a failed save surfaces an error toast and the vocabulary list stays empty', async () => {
     await seedKeychain(TOKENS);
     mockedAuth.getMe.mockResolvedValue(USER);
     mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
@@ -262,13 +258,16 @@ describe('TASK-112 vocabulary journey', () => {
     await fireEvent.press(await screen.findByTestId('history-item-5'));
 
     await captureWordFromMessage();
-    await fireEvent.press(screen.getByTestId('chat-vocab-save'));
+    await fireEvent.press(screen.getByTestId('chat-selection-save'));
 
-    // The popup stays open with the failure alert and Save available;
-    // no toast flashes.
-    expect(await screen.findByTestId('chat-vocab-error')).toBeOnTheScreen();
-    expect(screen.getByTestId('chat-vocab-save')).toBeOnTheScreen();
-    expect(screen.queryByTestId('chat-toast')).toBeNull();
+    // The failure surfaces as an alert toast (no confirmation popup ever
+    // appears); nothing is stored and no success toast flashes.
+    expect(await screen.findByTestId('chat-toast')).toBeOnTheScreen();
+    expect(screen.getByTestId('chat-toast')).toHaveTextContent(
+      'Network request failed.',
+    );
+    expect(screen.getByTestId('chat-toast-text').props.role).toBe('alert');
+    expect(screen.queryByTestId('chat-vocab-modal')).toBeNull();
     expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledTimes(1);
 
     // Nothing was stored: the vocabulary list renders its empty state.

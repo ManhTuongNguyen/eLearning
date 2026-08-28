@@ -456,14 +456,14 @@ describe('TASK-117 serverless journey', () => {
       ),
     );
     await pressTop('chat-selection-save');
-    await waitFor(() => expect(top('chat-vocab')).toBeOnTheScreen());
-    await pressTop('chat-vocab-save');
     await waitFor(() =>
-      expect(within(top('chat-screen')).getByTestId('chat-vocab-error')).toBeOnTheScreen(),
+      expect(within(top('chat-screen')).getByTestId('chat-toast')).toBeOnTheScreen(),
     );
     expect(
-      within(top('chat-screen')).getByTestId('chat-vocab-error').props.children,
-    ).toBe('Serverless mode is active: your data stays on this device and server APIs are unavailable.');
+      within(top('chat-screen')).getByText(
+        'Serverless mode is active: your data stays on this device and server APIs are unavailable.',
+      ),
+    ).toBeOnTheScreen();
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(xhrConstructorSpy).not.toHaveBeenCalled();

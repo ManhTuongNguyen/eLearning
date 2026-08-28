@@ -500,7 +500,7 @@ The Settings screen does not provide an expected navigator/back action.
 
 ## TASK-AUDIT-007 — Simplify vocabulary save flow
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
