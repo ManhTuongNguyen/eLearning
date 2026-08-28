@@ -257,6 +257,30 @@ class TestRequestAssembly:
             assert f"turn {index}" not in contents
         assert contents[1:-1] == [f"turn {i}" for i in range(9, 13)]
 
+    def test_context_size_bounded_with_summary_and_advanced_boundary(
+        self, service, settings, session, user
+    ):
+        settings.CONTEXT_RECENT_MESSAGE_WINDOW = 5
+        seed_history(session, 14)
+        Session.objects.filter(pk=session.pk).update(
+            summary="Rolling summary of turns 1-9.", summary_message_boundary=9
+        )
+
+        prepared = service.create_turn(session_id=session.pk, user=user, text="new turn")
+
+        messages = prepared.request.messages
+        # Context size boundary: system + window + current, no matter how much
+        # history exists — the summarized head never re-enters the request.
+        assert len(messages) == 1 + 5 + 1
+        contents = [m.content for m in messages]
+        for index in range(1, 10):  # turns 1-9 covered by the rolling summary
+            assert f"turn {index}" not in contents
+        assert contents[1:-1] == [f"turn {i}" for i in range(10, 15)]
+        assert contents[-1] == "new turn"
+        # The stored rolling summary is reused verbatim for this turn.
+        assert SUMMARY_HEADER in messages[0].content
+        assert "Rolling summary of turns 1-9." in messages[0].content
+
     def test_failed_and_pending_assistant_rows_excluded_from_history(self, service, session, user):
         Message.append(session, role=Message.Role.USER, content="before failure")
         Message.append(

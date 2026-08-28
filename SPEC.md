@@ -2110,7 +2110,7 @@ Acceptance criteria:
 
 ## TASK-104 — Optimize conversation context
 
-Status: `[ ]`
+Status: `[x]`
 
 Verify that the LLM context builder does not send unnecessary data.
 
