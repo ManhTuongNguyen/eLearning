@@ -2158,7 +2158,7 @@ Mock OpenRouter.
 
 ## TASK-107 — Backend memory tests
 
-Status: `[ ]`
+Status: `[x]`
 
 Test:
 
