@@ -868,7 +868,7 @@ Server provider credentials must never be bundled into mobile.
 
 ## TASK-AUDIT-014 — Reduce oversized screen files
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

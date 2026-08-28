@@ -61,6 +61,13 @@
  * MessageRow with stable prop identities, so a delta flush re-renders only
  * the streaming bubble while every untouched row bails out, and the FlatList
  * virtualization bounds keep long conversations mounted in a bounded window.
+ *
+ * Responsibilities (TASK-AUDIT-014): the screen coordinates navigation,
+ * layout, presentation and interaction wiring only. The turn-streaming
+ * pipeline lives in `useChatTurns`, suggestion/improvement generation in
+ * their hooks, the vocabulary save flow in `useVocabularySave`, the
+ * scroll-follow behavior in `useFollowBottom` and the mode-branched
+ * conversation reads in `services/conversationSource`.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -74,91 +81,41 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import type {NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
 
-import type {ChatStreamEvent, ChatStreamHandle} from '../api/chatStream';
-import {streamChatTurn, streamRetryTurn} from '../api/chatStream';
-import type {ChatMessage, MessageImprovement, MessageSuggestions, Session} from '../api/sessions';
-import {
-  getMessageSuggestions,
-  getSession,
-  improveMessage,
-  listMessages,
-  listSessions,
-} from '../api/sessions';
-import {saveVocabulary} from '../api/vocabulary';
+import type {ChatMessage, Session} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
+import {
+  useMessageImprovement,
+} from '../hooks/useMessageImprovement';
+import {
+  useMessageSuggestions,
+} from '../hooks/useMessageSuggestions';
+import {
+  useVocabularySave,
+  VOCAB_TOAST_DURATION_MS,
+} from '../hooks/useVocabularySave';
+import {useChatTurns} from '../hooks/useChatTurns';
+import {useFollowBottom} from '../hooks/useFollowBottom';
 import type {ChatScreenProps} from '../navigation/types';
-import {copyText} from '../utils/clipboard';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
-import {useSpeechPlayback} from '../tts/useSpeechPlayback';
 import {useApplicationMode} from '../mode/ModeContext';
-import {getRuntimeApplicationMode} from '../mode/runtime';
-import {getLocalDatabase} from '../db/database';
-import {listMessages as listLocalMessages} from '../db/messageStore';
+import {listFirstSessionPage, loadConversation} from '../services/conversationSource';
 import {
-  getSession as getLocalSession,
-  listSessions as listLocalSessions,
-} from '../db/sessionStore';
-import {createProviderClient} from '../serverless/providerRegistry';
-import {generateImprovement} from '../serverless/improvement';
-import {generateSuggestions} from '../serverless/suggestions';
-import {loadServerlessOpenRouterConfig} from '../serverless/settings';
-import {
-  retryServerlessTurn,
-  streamServerlessTurn,
-} from '../serverless/chatStreaming';
-import {buildServerlessContext, updateSummaryIfNeeded} from '../serverless/conversationContext';
-import type {LLMClient, ServerlessStreamEvent} from '../serverless/types';
-import {LocalConversationRepository} from '../db/conversationRepository';
-import {getLearningProfile} from '../db/profileStore';
-import type {LocalMessage} from '../db/types';
+  CHAT_LIST_INITIAL_NUM_TO_RENDER,
+  CHAT_LIST_MAX_TO_RENDER_PER_BATCH,
+  CHAT_LIST_WINDOW_SIZE,
+} from './streamingUx';
 import {ImprovementSheet} from './ImprovementSheet';
 import {MessageActionsMenu} from './MessageActionsMenu';
 import type {MessageAction} from './MessageActionsMenu';
 import {MessageRow, createRowStyles} from './MessageRow';
 import {SampleConversationModal} from './SampleConversationModal';
 import {TextSelectionSheet} from './TextSelectionSheet';
-import {
-  DeltaBuffer,
-  isNearBottom,
-  CHAT_LIST_INITIAL_NUM_TO_RENDER,
-  CHAT_LIST_MAX_TO_RENDER_PER_BATCH,
-  CHAT_LIST_WINDOW_SIZE,
-  STICK_TO_BOTTOM_THRESHOLD_PX,
-  STREAM_FLUSH_INTERVAL_MS,
-} from './streamingUx';
+import {copyText} from '../utils/clipboard';
+import type {ThemeColors} from '../theme/colors';
+import {useTheme} from '../theme/ThemeContext';
+import {useSpeechPlayback} from '../tts/useSpeechPlayback';
 
-function bySequence(a: ChatMessage, b: ChatMessage): number {
-  return a.sequence - b.sequence;
-}
-
-/**
- * Serverless turns (TASK-086) speak the same application event language as
- * the backend SSE protocol except for the terminal failure shape; map it so
- * one shared turn pipeline serves both modes.
- */
-function toChatEvent(event: ServerlessStreamEvent): ChatStreamEvent {
-  if (event.type === 'failed') {
-    return {type: 'error', message: event.message, retryable: event.retryable};
-  }
-  return event;
-}
-
-/** Shown when a serverless turn starts without an OpenRouter configuration. */
-const NO_SERVERLESS_CONFIG_MESSAGE =
-  'Add your OpenRouter API key in Settings to chat without the server.';
-
-/** How long the vocabulary save toast stays visible (TASK-070). */
-export const VOCAB_TOAST_DURATION_MS = 2500;
-
-/**
- * TASK-070 toast payload; the kind picks the semantic role (status vs.
- * alert) and the text color (TASK-AUDIT-007 made it carry failure
- * feedback too, since the confirmation popup is gone).
- */
-type VocabToast = {text: string; kind: 'success' | 'error'};
+export {VOCAB_TOAST_DURATION_MS};
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -430,184 +387,90 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   // TASK-AUDIT-008: bumped when the no-session route regains focus so the
   // authoritative history lookup re-runs (see the focus listener below).
   const [restoreKey, setRestoreKey] = useState(0);
-  const [streaming, setStreaming] = useState(false);
-  const [streamError, setStreamError] = useState<string | null>(null);
   // TASK-060: the message whose long-press menu is open; null when closed.
   const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null);
-  // TASK-061: the suggestion set currently displayed (tied to its source
-  // message), plus loading/error for the generation round-trip.
-  const [suggestions, setSuggestions] = useState<MessageSuggestions & {
-    messageId: number;
-  } | null>(null);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
-  // TASK-064: the improvement result currently displayed (tied to its
-  // source message), plus loading/error for the generation round-trip. The
-  // sheet is visible exactly while one of these three states is active.
-  const [improvement, setImprovement] = useState<MessageImprovement & {
-    messageId: number;
-  } | null>(null);
-  const [improvementLoading, setImprovementLoading] = useState(false);
-  const [improvementError, setImprovementError] = useState<string | null>(null);
   // TASK-069: the message whose content is being combed for vocabulary in
   // the text-selection sheet; null while no sheet is open.
   const [selectionMessage, setSelectionMessage] = useState<ChatMessage | null>(null);
-  // TASK-070: transient toast after an immediate vocabulary save — a
-  // success confirmation or the normalized failure message (TASK-AUDIT-007
-  // removed the confirmation popup); auto-dismissed after a fixed delay.
-  const [toast, setToast] = useState<VocabToast | null>(null);
+
   // TASK-078: single-playback speech controller; speakingMessageId drives
   // the visible playback state on the bubble currently being read aloud.
   const {speakingId: speakingMessageId, speak, stop: stopSpeech} = useSpeechPlayback();
 
+  // TASK-050: scroll-follow behavior (stick to the tail, detach on scroll
+  // up, jump-to-latest pill).
+  const {
+    listRef,
+    detachedFromBottom,
+    handleContentSizeChange,
+    handleScroll,
+    jumpToLatest,
+    resetFollow,
+  } = useFollowBottom<ChatMessage>();
+
+  // Turn pipeline (TASK-050/054/086): optimistic rows, buffered deltas,
+  // terminal outcomes and aborts for both modes.
+  const {
+    streaming,
+    streamError,
+    clearStreamError,
+    endTurn,
+    sendUserTurn,
+    retryFailedTurn,
+  } = useChatTurns({sessionId, mode, getAccessToken, authedRequest, setMessages});
+
+  // TASK-061/088: suggested replies for one selected message.
+  const {
+    suggestions,
+    suggestionsLoading,
+    suggestionsError,
+    startSuggestions,
+    clearSuggestions,
+    invalidateSuggestions,
+  } = useMessageSuggestions({sessionId, mode, authedRequest, messages, session});
+
+  // TASK-064/089: improvement sheet for one selected user message.
+  const {
+    improvement,
+    improvementLoading,
+    improvementError,
+    startImprovement,
+    invalidateImprovement,
+  } = useMessageImprovement({sessionId, mode, authedRequest, messages});
+
+  // TASK-069/070: immediate vocabulary save + self-dismissing toast.
+  const {toast, saveVocabularySelection, invalidateVocabSave} = useVocabularySave({
+    authedRequest,
+  });
+
   // Latest-ref seam: the load effect keys on (session, reload) only, so an
   // auth-state transition never refetches the conversation behind the user's
   // back — the next opened session uses the fresh closure.
-  const getAccessTokenRef = useRef(getAccessToken);
-  useEffect(() => {
-    getAccessTokenRef.current = getAccessToken;
-  }, [getAccessToken]);
-  // TASK-AUDIT-005: JSON endpoint calls go through the central authed
-  // requester (401 → one shared refresh → one retry); only the SSE turn
-  // streams keep the raw access token (their transport cannot replay).
   const authedRequestRef = useRef(authedRequest);
   useEffect(() => {
     authedRequestRef.current = authedRequest;
   }, [authedRequest]);
 
-  // In-flight turn tracking: the abort handle plus the synthetic id of the
-  // assistant bubble currently receiving deltas.
-  const streamHandleRef = useRef<ChatStreamHandle | null>(null);
-  const streamingAssistantIdRef = useRef<number | null>(null);
-  const sessionIdRef = useRef(sessionId);
-  useEffect(() => {
-    sessionIdRef.current = sessionId;
-  }, [sessionId]);
-
-  // TASK-061/088: ref for live messages access inside async callbacks without
-  // adding them to useCallback dependencies.
-  const messagesRef = useRef(messages);
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
-
-  // TASK-088: ref for live session access (needed for topic in serverless mode)
-  const sessionRef = useRef(session);
-  useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
-
-  // TASK-061: monotonically increasing request id; responses apply only
-  // when both the session and no newer request superseded them. TASK-064
-  // shares the pattern (own counter) so dismissing its sheet can also
-  // invalidate an in-flight request.
-  const suggestionsRequestRef = useRef(0);
-  const improvementRequestRef = useRef(0);
-  // TASK-070 shares the same stale-response guard: switching sessions
-  // invalidates any in-flight save request.
-  const vocabSaveRequestRef = useRef(0);
-
-  // TASK-050: delta commits run through a DeltaBuffer so token bursts cause
-  // at most one message-list update per tick instead of one per SSE event.
-  // The flush closure reads the live target id from the ref, so a tick that
-  // lands after turn cleanup finds nothing to update.
-  const deltaBuffer = useMemo(
-    () =>
-      new DeltaBuffer(chunk => {
-        const targetId = streamingAssistantIdRef.current;
-        if (targetId === null) {
-          return;
-        }
-        setMessages(prev =>
-          prev.map(message =>
-            message.id === targetId
-              ? {...message, content: message.content + chunk}
-              : message,
-          ),
-        );
-      }, STREAM_FLUSH_INTERVAL_MS),
-    [],
-  );
-
-  // Scroll-follow state: nearBottomRef is read inside callbacks without
-  // re-rendering; the detached flag drives the jump-to-latest pill and
-  // flips only at the threshold boundary.
-  const listRef = useRef<FlatList<ChatMessage> | null>(null);
-  const nearBottomRef = useRef(true);
-  const [detachedFromBottom, setDetachedFromBottom] = useState(false);
-
   const resetMessages = useCallback(() => {
     setMessages(prev => (prev.length > 0 ? [] : prev));
-  }, []);
-
-  /** Cancel any in-flight turn; safe to call when nothing is running. */
-  const endTurn = useCallback(() => {
-    streamHandleRef.current?.abort();
-    streamHandleRef.current = null;
-    streamingAssistantIdRef.current = null;
-    deltaBuffer.discard();
-    setStreaming(false);
-  }, [deltaBuffer]);
-
-  /**
-   * Silent canonical refresh after a turn settles: replaces optimistic rows
-   * (synthetic negative ids) with the persisted ones. Never flips the
-   * loading spinner; failures keep whatever is already rendered.
-   */
-  const refreshMessages = useCallback(async () => {
-    const sid = sessionIdRef.current;
-    if (sid === undefined) {
-      return;
-    }
-    try {
-      if (getRuntimeApplicationMode() === 'serverless') {
-        // Serverless rows persist locally before the terminal event reaches
-        // the consumer, so the canonical reload reads the local database.
-        const db = await getLocalDatabase();
-        const rows = await listLocalMessages(db, sid);
-        if (sessionIdRef.current !== sid) {
-          return;
-        }
-        setMessages([...rows].sort(bySequence));
-        return;
-      }
-      if (sessionIdRef.current !== sid) {
-        return;
-      }
-      const page = await listMessages(authedRequestRef.current, sid);
-      if (sessionIdRef.current !== sid) {
-        return;
-      }
-      setMessages([...page.results].sort(bySequence));
-    } catch {
-      // Best-effort sync; turn-level errors already have a visible banner.
-    }
   }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     setError(null);
-    setStreamError(null);
+    clearStreamError();
     resetMessages();
     setSession(null);
     setTopicExpanded(false);
     setExampleVisible(false);
     setMenuMessage(null);
-    suggestionsRequestRef.current += 1;
-    setSuggestions(null);
-    setSuggestionsLoading(false);
-    setSuggestionsError(null);
-    improvementRequestRef.current += 1;
-    setImprovement(null);
-    setImprovementLoading(false);
-    setImprovementError(null);
+    invalidateSuggestions();
+    invalidateImprovement();
     setSelectionMessage(null);
-    vocabSaveRequestRef.current += 1;
-    setToast(null);
+    invalidateVocabSave();
     stopSpeech();
-    nearBottomRef.current = true;
-    setDetachedFromBottom(false);
+    resetFollow();
     endTurn();
     if (sessionId === undefined) {
       // TASK-AUDIT-008: this route is also the post-login and post-restore
@@ -623,21 +486,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       setLoading(true);
       (async () => {
         try {
-          let mostRecent: number | undefined;
-          if (mode === 'serverless') {
-            // Serverless history lives on-device (TASK-090): the lookup
-            // reads the same local store the History screen renders.
-            const rows = await listLocalSessions(await getLocalDatabase());
-            mostRecent = rows[0]?.id;
-          } else {
-            // The backend lists sessions most-recently-updated first, so
-            // page one starts with the conversation last touched.
-            const page = await listSessions(authedRequestRef.current, 1);
-            mostRecent = page.results[0]?.id;
-          }
+          const firstPage = await listFirstSessionPage(mode, authedRequestRef.current);
           if (cancelled) {
             return;
           }
+          const mostRecent = firstPage.results[0]?.id;
           if (mostRecent === undefined) {
             setLoading(false);
             return;
@@ -666,34 +519,14 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setLoading(true);
     (async () => {
       try {
-        if (mode === 'serverless') {
-          // TASK-090: serverless conversations live in the on-device SQLite
-          // database; no backend traffic happens in this mode (Rule 9). The
-          // local session detail only feeds the topic bar, so its failure
-          // resolves to null instead of failing the conversation.
-          const db = await getLocalDatabase();
-          const [rows, localSession] = await Promise.all([
-            listLocalMessages(db, sessionId),
-            getLocalSession(db, sessionId).catch(() => null),
-          ]);
-          if (!cancelled) {
-            setMessages([...rows].sort(bySequence));
-            setSession(localSession);
-          }
-          return;
-        }
-        const request = authedRequestRef.current;
-        // The first page covers recent history; older pages arrive with the
-        // history work (Phase 8 pagination UI). The session detail only
-        // feeds the topic bar, so its failure resolves to null instead of
-        // failing the conversation.
-        const [page, detail] = await Promise.all([
-          listMessages(request, sessionId),
-          getSession(request, sessionId).catch(() => null),
-        ]);
+        // Mode-branched reads live behind the conversation source, so the
+        // screen neither branches on storage nor duplicates the request
+        // shape (the first page covers recent history; older pages arrive
+        // with the history work — Phase 8 pagination UI).
+        const snapshot = await loadConversation(mode, sessionId, authedRequestRef.current);
         if (!cancelled) {
-          setMessages([...page.results].sort(bySequence));
-          setSession(detail);
+          setMessages(snapshot.messages);
+          setSession(snapshot.session);
         }
       } catch (err) {
         if (!cancelled) {
@@ -712,7 +545,21 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       cancelled = true;
       endTurn();
     };
-  }, [sessionId, reloadKey, restoreKey, mode, navigation, resetMessages, endTurn, stopSpeech]);
+  }, [
+    sessionId,
+    reloadKey,
+    restoreKey,
+    mode,
+    navigation,
+    resetMessages,
+    clearStreamError,
+    invalidateSuggestions,
+    invalidateImprovement,
+    invalidateVocabSave,
+    resetFollow,
+    endTurn,
+    stopSpeech,
+  ]);
 
   // TASK-AUDIT-008: fresh focus state for the no-session restore check —
   // the navigation prop captured by the load effect's closure would answer
@@ -751,560 +598,17 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     };
   }, [navigation, sessionId]);
 
-  /**
-   * Queue one streamed chunk for the assistant bubble of this turn. The
-   * text is committed on the next flush tick (or earlier via flushNow), so
-   * arrival frequency never dictates render frequency.
-   */
-  const appendDelta = useCallback(
-    (delta: string) => {
-      if (streamingAssistantIdRef.current === null) {
-        return;
-      }
-      deltaBuffer.push(delta);
-    },
-    [deltaBuffer],
-  );
-
-  /**
-   * Turn failed: drop optimistic rows, surface the reason and re-sync with
-   * the server (a committed user row / failed assistant row reappears; for
-   * TASK-054 retries every row is persisted, so nothing is dropped and the
-   * resync restores the still-failed row). Buffered-but-unflushed deltas
-   * die here — they must never land after the rows are gone.
-   */
-  const failTurn = useCallback(
-    (message: string) => {
-      streamHandleRef.current = null;
-      streamingAssistantIdRef.current = null;
-      deltaBuffer.discard();
-      setStreaming(false);
-      setStreamError(message);
-      setMessages(prev => (prev.some(m => m.id < 0) ? prev.filter(m => m.id > 0) : prev));
-      refreshMessages();
-    },
-    [deltaBuffer, refreshMessages],
-  );
-
-  const completeTurn = useCallback(
-    (text: string) => {
-      // The completed frame carries the authoritative full text, so any
-      // still-buffered deltas are superseded rather than appended.
-      deltaBuffer.discard();
-      const targetId = streamingAssistantIdRef.current;
-      setMessages(prev =>
-        targetId === null
-          ? prev
-          : prev.map(message =>
-              message.id === targetId
-                ? {...message, status: 'complete', content: text}
-                : message,
-            ),
-      );
-      streamHandleRef.current = null;
-      streamingAssistantIdRef.current = null;
-      setStreaming(false);
-      // Swap the optimistic echo pair for the persisted rows (real ids).
-      refreshMessages();
-    },
-    [deltaBuffer, refreshMessages],
-  );
-
-  /** One shared SSE event pipeline for fresh turns and retries alike. */
-  const handleTurnEvent = useCallback(
-    (event: ChatStreamEvent): void => {
-      switch (event.type) {
-        case 'start':
-          break;
-        case 'delta':
-          appendDelta(event.text);
-          break;
-        case 'completed':
-          completeTurn(event.text);
-          break;
-        case 'error':
-          failTurn(event.message);
-          break;
-      }
-    },
-    [appendDelta, completeTurn, failTurn],
-  );
-
-  /**
-   * Serverless turn driver (TASK-086): resolves the OpenRouter client from
-   * the on-device configuration, runs one local turn through the shared
-   * event pipeline and keeps the abort handle for screen-level cleanup.
-   * Between the configuration read and the handle assignment the optimistic
-   * turn may already have ended (navigation, a fast terminal event), so a
-   * stale handle is never stored; terminal events are persisted before
-   * delivery, which keeps the post-completion canonical reload exact.
-   */
-  const startServerlessTurn = useCallback(
-    (
-      sid: number,
-      startTurnFn: (
-        client: LLMClient,
-        repository: LocalConversationRepository,
-      ) => Promise<ChatStreamHandle>,
-    ) => {
-      (async () => {
-        const config = await loadServerlessOpenRouterConfig();
-        if (!config) {
-          failTurn(NO_SERVERLESS_CONFIG_MESSAGE);
-          return;
-        }
-        if (sessionIdRef.current !== sid || streamingAssistantIdRef.current === null) {
-          return;
-        }
-        const client = createProviderClient(config);
-        const repository = new LocalConversationRepository(getLocalDatabase);
-        try {
-          const handle = await startTurnFn(client, repository);
-          if (streamingAssistantIdRef.current !== null) {
-            streamHandleRef.current = handle;
-          }
-        } catch (err) {
-          failTurn(toErrorMessage(err));
-        }
-      })();
-    },
-    [failTurn],
-  );
-
-  /** Shared serverless event pipeline: terminal outcomes drive turn state. */
-  const serverlessOnEvent = useCallback(
-    (client: LLMClient, repository: LocalConversationRepository, sid: number) =>
-      (event: ServerlessStreamEvent): void => {
-        if (event.type === 'completed') {
-          // Post-turn summary maintenance (TASK-087) never blocks the
-          // user-facing stream and never fails the turn.
-          updateSummaryIfNeeded(repository, client, sid).catch(() => undefined);
-        }
-        handleTurnEvent(toChatEvent(event));
-      },
-    [handleTurnEvent],
-  );
-
-  const startTurn = useCallback(
-    (sid: number, text: string) => {
-      (async () => {
-        if (mode === 'serverless') {
-          startServerlessTurn(sid, (client, repository) =>
-            streamServerlessTurn({
-              sessionId: sid,
-              text,
-              openDb: getLocalDatabase,
-              stream: options => client.streamCompletion(options),
-              buildRequest: buildServerlessContext,
-              onEvent: serverlessOnEvent(client, repository, sid),
-            }),
-          );
-          return;
-        }
-        let token: string | null = null;
-        try {
-          token = await getAccessTokenRef.current();
-        } catch {
-          token = null;
-        }
-        if (sessionIdRef.current !== sid) {
-          return;
-        }
-        if (!token) {
-          failTurn('You need to sign in again to send messages.');
-          return;
-        }
-        streamHandleRef.current = streamChatTurn({
-          token,
-          sessionId: sid,
-          text,
-          onEvent: handleTurnEvent,
-          onError: err => {
-            failTurn(toErrorMessage(err));
-          },
-        });
-      })();
-    },
-    [failTurn, handleTurnEvent, mode, serverlessOnEvent, startServerlessTurn],
-  );
-
-  const startRetry = useCallback(
-    (sid: number, messageId: number) => {
-      (async () => {
-        if (mode === 'serverless') {
-          startServerlessTurn(sid, (client, repository) =>
-            retryServerlessTurn({
-              sessionId: sid,
-              messageId,
-              openDb: getLocalDatabase,
-              stream: options => client.streamCompletion(options),
-              buildRequest: buildServerlessContext,
-              onEvent: serverlessOnEvent(client, repository, sid),
-            }),
-          );
-          return;
-        }
-        let token: string | null = null;
-        try {
-          token = await getAccessTokenRef.current();
-        } catch {
-          token = null;
-        }
-        if (sessionIdRef.current !== sid) {
-          return;
-        }
-        if (!token) {
-          failTurn('You need to sign in again to send messages.');
-          return;
-        }
-        streamHandleRef.current = streamRetryTurn({
-          token,
-          sessionId: sid,
-          messageId,
-          onEvent: handleTurnEvent,
-          onError: err => {
-            failTurn(toErrorMessage(err));
-          },
-        });
-      })();
-    },
-    [failTurn, handleTurnEvent, mode, serverlessOnEvent, startServerlessTurn],
-  );
-
-/**
-     * TASK-061: generate three suggested replies for one selected message
-     * through the read-only suggestions endpoint. Nothing auto-sends — the
-     * replies land as chips above the composer and tapping one merely fills
-     * the draft. Stale responses (session switched or a newer request
-     * started) are dropped instead of overwriting newer state.
-     */
-    const startSuggestions = useCallback((sid: number, messageId: number) => {
-      const requestId = ++suggestionsRequestRef.current;
-      setSuggestions(null);
-      setSuggestionsError(null);
-      setSuggestionsLoading(true);
-      (async () => {
-        try {
-          if (mode === 'serverless') {
-            // Serverless mode (TASK-088): generate suggestions locally with an
-            // LLM call using the user's own OpenRouter key. No backend involved.
-            const currentSession = sessionIdRef.current;
-            const currentMessages = messagesRef.current;
-            const currentSessionObj = sessionRef.current;
-            const userMessage = currentMessages.find(m => m.id === messageId);
-            const sessionTopic = currentSessionObj?.topic;
-            if (
-              currentSession === undefined ||
-              !userMessage ||
-              !sessionTopic
-            ) {
-              return;
-            }
-
-            // Load serverless OpenRouter configuration and create client
-            const serverlessConfig = await loadServerlessOpenRouterConfig();
-            if (!serverlessConfig) {
-              return;
-            }
-            const client = createProviderClient(serverlessConfig);
-
-            // Load learning profile from local storage
-            const db = await getLocalDatabase();
-            const profile = await getLearningProfile(db);
-
-            // Convert ChatMessage[] to LocalMessage[] for history
-            const history: readonly LocalMessage[] = currentMessages
-              .filter(m => m.sequence < userMessage.sequence)
-              .map(m => ({
-                id: m.id,
-                session_id: currentSession,
-                role: m.role,
-                status: m.status,
-                content: m.content,
-                sequence: m.sequence,
-                created_at: m.created_at,
-              }));
-
-            const result = await generateSuggestions(client, {
-              level: profile.level,
-              topic: {
-                title: sessionTopic,
-                description: '',
-              },
-              selectedMessage: userMessage.content,
-              history,
-            });
-
-            if (
-              sessionIdRef.current !== currentSession ||
-              suggestionsRequestRef.current !== requestId
-            ) {
-              return;
-            }
-            setSuggestions({messageId, replies: [...result.replies]});
-          } else {
-          // Server mode (TASK-061): ask the backend to generate suggestions
-          // through the central authed requester (TASK-AUDIT-005).
-          if (
-            sessionIdRef.current !== sid ||
-            suggestionsRequestRef.current !== requestId
-          ) {
-            return;
-          }
-          const result = await getMessageSuggestions(
-            authedRequestRef.current,
-            sid,
-            messageId,
-          );
-          if (
-            sessionIdRef.current !== sid ||
-            suggestionsRequestRef.current !== requestId
-          ) {
-            return;
-          }
-          setSuggestions({...result, messageId});
-        }
-      } catch (err) {
-        if (
-          sessionIdRef.current === sid &&
-          suggestionsRequestRef.current === requestId
-        ) {
-          setSuggestionsError(toErrorMessage(err));
-        }
-      } finally {
-        if (suggestionsRequestRef.current === requestId) {
-          setSuggestionsLoading(false);
-        }
-      }
-    })();
-  }, [mode]);
-
-  /**
-   * TASK-064/089: improve one selected user message. Server mode asks the
-   * read-only improvement endpoint; serverless mode generates locally
-   * through the user's own OpenRouter key — no backend request either way.
-   * The result lands in a bottom sheet that shows the original verbatim,
-   * the suggested rewrite and a short explanation; nothing about the stored
-   * message changes. Stale responses (session switched, newer request
-   * started, or the sheet explicitly dismissed) are dropped instead of
-   * reopening stale UI.
-   */
-  const startImprovement = useCallback((sid: number, messageId: number) => {
-    const requestId = ++improvementRequestRef.current;
-    setImprovement(null);
-    setImprovementError(null);
-    setImprovementLoading(true);
-    (async () => {
-      try {
-        if (mode === 'serverless') {
-          // Serverless mode (TASK-089): correct the message locally with an
-          // LLM call using the user's own OpenRouter key. No backend involved.
-          const currentSession = sessionIdRef.current;
-          const userMessage = messagesRef.current.find(m => m.id === messageId);
-          if (currentSession === undefined || !userMessage) {
-            return;
-          }
-
-          // Load serverless OpenRouter configuration and create client
-          const serverlessConfig = await loadServerlessOpenRouterConfig();
-          if (!serverlessConfig) {
-            return;
-          }
-          const client = createProviderClient(serverlessConfig);
-
-          // Load learning profile from local storage
-          const db = await getLocalDatabase();
-          const profile = await getLearningProfile(db);
-
-          const result = await generateImprovement(client, {
-            level: profile.level,
-            originalMessage: userMessage.content,
-          });
-
-          if (
-            sessionIdRef.current !== currentSession ||
-            improvementRequestRef.current !== requestId
-          ) {
-            return;
-          }
-          setImprovement({...result, messageId});
-        } else {
-        // Server mode (TASK-063): ask the backend to improve the message
-        // through the central authed requester (TASK-AUDIT-005).
-        if (
-          sessionIdRef.current !== sid ||
-          improvementRequestRef.current !== requestId
-        ) {
-          return;
-        }
-        const result = await improveMessage(authedRequestRef.current, sid, messageId);
-        if (
-          sessionIdRef.current !== sid ||
-          improvementRequestRef.current !== requestId
-        ) {
-          return;
-        }
-        setImprovement({...result, messageId});
-        }
-      } catch (err) {
-        if (
-          sessionIdRef.current === sid &&
-          improvementRequestRef.current === requestId
-        ) {
-          setImprovementError(toErrorMessage(err));
-        }
-      } finally {
-        if (improvementRequestRef.current === requestId) {
-          setImprovementLoading(false);
-        }
-      }
-    })();
-  }, [mode]);
-
-  /** Sheet dismissal also invalidates any in-flight improvement request. */
-  const closeImprovement = useCallback(() => {
-    improvementRequestRef.current += 1;
-    setImprovement(null);
-    setImprovementError(null);
-    setImprovementLoading(false);
-  }, []);
-
-  /** TASK-069: dismissing the selection sheet never captures anything. */
-  const closeTextSelection = useCallback(() => {
-    setSelectionMessage(null);
-  }, []);
-
-  /**
-   * TASK-069/070: the vocabulary save flow's entry point — the selection
-   * sheet hands its confirmed trimmed expression here and closes, and the
-   * save starts immediately (TASK-AUDIT-007 removed the redundant TASK-070
-   * confirmation popup).
-   *
-   * The endpoint returns as soon as the row is stored — enrichment happens
-   * asynchronously server-side and is never awaited here — so success
-   * flashes the confirmation toast, while failure surfaces the normalized
-   * error as an alert toast (same auto-dismiss contract). Stale responses
-   * (a session switched mid-flight) are dropped. Optimistic rows carry
-   * synthetic negative ids that are not real Message pks, so they are sent
-   * without source attribution.
-   */
-  const saveVocabularySelection = useCallback(
-    (selectedText: string) => {
-      if (selectionMessage === null) {
-        return;
-      }
-      setSelectionMessage(null);
-      const requestId = ++vocabSaveRequestRef.current;
-      const messageId = selectionMessage.id;
-      (async () => {
-        try {
-          const serverless = getRuntimeApplicationMode() === 'serverless';
-          if (!serverless && vocabSaveRequestRef.current !== requestId) {
-            return;
-          }
-          // Both modes call through the central authed requester
-          // (TASK-AUDIT-005). Serverless mode has no server session
-          // (TASK-AUDIT-003): the save attempt goes through anyway so the
-          // runtime gate rejects it with its typed, user-visible error
-          // instead of a silent no-op — the gate fires before any transport
-          // work, so nothing is ever transmitted.
-          await saveVocabulary(
-            authedRequestRef.current,
-            selectedText,
-            messageId > 0 ? messageId : undefined,
-          );
-          if (vocabSaveRequestRef.current !== requestId) {
-            return;
-          }
-          setToast({text: 'Saved to vocabulary', kind: 'success'});
-        } catch (err) {
-          if (vocabSaveRequestRef.current === requestId) {
-            setToast({text: toErrorMessage(err), kind: 'error'});
-          }
-        }
-      })();
-    },
-    [selectionMessage],
-  );
-
-  // TASK-070: the save toast (success or failure) dismisses itself after a
-  // fixed delay.
-  useEffect(() => {
-    if (toast === null) {
-      return;
-    }
-    const timer = setTimeout(() => setToast(null), VOCAB_TOAST_DURATION_MS);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
-  /**
-   * Retry one failed assistant row (TASK-054): the backend re-arms that
-   * exact row in place, so locally it becomes the streaming target — same
-   * pending spinner, same buffered deltas — and completion flips it to
-   * complete. A failure keeps the row failed after resync, leaving the
-   * control available for another attempt.
-   */
-  const handleRetry = useCallback(
-    (message: ChatMessage) => {
-      if (sessionId === undefined || streaming) {
-        return;
-      }
-      setStreamError(null);
-      streamingAssistantIdRef.current = message.id;
-      setMessages(prev =>
-        prev.map(row =>
-          row.id === message.id ? {...row, status: 'pending', content: ''} : row,
-        ),
-      );
-      setStreaming(true);
-      startRetry(sessionId, message.id);
-    },
-    [sessionId, streaming, startRetry],
-  );
-
   const handleSend = useCallback(() => {
     const text = draft.trim();
     if (!text || sessionId === undefined || streaming) {
       return;
     }
     setDraft('');
-    setStreamError(null);
     // Stale suggestion chips would offer replies to a conversation that has
     // moved on; sending dismisses them along with any leftover error state.
-    setSuggestions(null);
-    setSuggestionsError(null);
-
-    // Optimistic local echo + pending assistant bubble with stable
-    // synthetic ids; sequences continue chronologically past the last row.
-    const echoId = -Date.now();
-    const replyId = echoId - 1;
-    streamingAssistantIdRef.current = replyId;
-    setMessages(prev => {
-      const last = prev.length > 0 ? prev[prev.length - 1] : null;
-      const baseSequence = last ? last.sequence + 1 : 1;
-      const now = new Date().toISOString();
-      const userEcho: ChatMessage = {
-        id: echoId,
-        role: 'user',
-        status: 'complete',
-        content: text,
-        sequence: baseSequence,
-        created_at: now,
-      };
-      const placeholder: ChatMessage = {
-        id: replyId,
-        role: 'assistant',
-        status: 'pending',
-        content: '',
-        sequence: baseSequence + 1,
-        created_at: now,
-      };
-      return [...prev, userEcho, placeholder];
-    });
-
-    setStreaming(true);
-    startTurn(sessionId, text);
-  }, [draft, sessionId, streaming, startTurn]);
+    clearSuggestions();
+    sendUserTurn(sessionId, text);
+  }, [draft, sessionId, streaming, clearSuggestions, sendUserTurn]);
 
   const canSend = draft.trim().length > 0 && !streaming;
 
@@ -1332,6 +636,17 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const handleRowLongPress = useCallback((message: ChatMessage) => {
     setMenuMessage(message);
   }, []);
+
+  /** Retry one failed assistant row through the shared turn pipeline. */
+  const handleRetry = useCallback(
+    (message: ChatMessage) => {
+      if (sessionId === undefined || streaming) {
+        return;
+      }
+      retryFailedTurn(sessionId, message);
+    },
+    [sessionId, streaming, retryFailedTurn],
+  );
 
   /**
    * TASK-060 menu selection. Copy runs through the clipboard seam, Suggest
@@ -1364,45 +679,26 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     [menuMessage, sessionId, startImprovement, startSuggestions, toggleSpeech],
   );
 
-  /** Follow the conversation tail; no-op when the list is not mounted. */
-  const stickToBottom = useCallback((animated: boolean) => {
-    listRef.current?.scrollToEnd({animated});
+  /** TASK-069: dismissing the selection sheet never captures anything. */
+  const closeTextSelection = useCallback(() => {
+    setSelectionMessage(null);
   }, []);
 
   /**
-   * Content growth (streamed deltas, optimistic rows) keeps the viewport
-   * pinned to the newest message — but only while the user is still reading
-   * there. An intentional scroll up has already cleared the sticky flag, so
-   * growth never yanks the view.
+   * TASK-069/070: the vocabulary save flow's entry point — the selection
+   * sheet hands its confirmed trimmed expression here and closes, and the
+   * save starts immediately (the toast flow lives in `useVocabularySave`).
    */
-  const handleContentSizeChange = useCallback(() => {
-    if (nearBottomRef.current) {
-      stickToBottom(false);
-    }
-  }, [stickToBottom]);
-
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
-      const near = isNearBottom(
-        {
-          offsetY: contentOffset.y,
-          contentHeight: contentSize.height,
-          viewportHeight: layoutMeasurement.height,
-        },
-        STICK_TO_BOTTOM_THRESHOLD_PX,
-      );
-      nearBottomRef.current = near;
-      setDetachedFromBottom(!near);
+  const handleSaveSelection = useCallback(
+    (selectedText: string) => {
+      if (selectionMessage === null) {
+        return;
+      }
+      setSelectionMessage(null);
+      saveVocabularySelection(selectedText, selectionMessage.id);
     },
-    [],
+    [selectionMessage, saveVocabularySelection],
   );
-
-  const jumpToLatest = useCallback(() => {
-    nearBottomRef.current = true;
-    setDetachedFromBottom(false);
-    stickToBottom(true);
-  }, [stickToBottom]);
 
   const renderMessage = useCallback(
     ({item}: {item: ChatMessage}) => (
@@ -1590,7 +886,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
                     // Insertion only — a suggestion is a draft, never an
                     // automatic send (ROADMAP §8).
                     setDraft(reply);
-                    setSuggestions(null);
+                    clearSuggestions();
                   }}
                   testID={`chat-suggestion-${index}`}
                   accessibilityRole="button"
@@ -1634,7 +930,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             loading={improvementLoading}
             error={improvementError}
             result={improvement}
-            onClose={closeImprovement}
+            onClose={invalidateImprovement}
           />
           <MessageActionsMenu
             visible={menuMessage !== null}
@@ -1648,7 +944,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             visible={selectionMessage !== null}
             content={selectionMessage?.content ?? ''}
             onClose={closeTextSelection}
-            onSave={saveVocabularySelection}
+            onSave={handleSaveSelection}
           />
           {toast !== null ? (
             <View

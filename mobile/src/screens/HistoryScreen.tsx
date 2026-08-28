@@ -23,6 +23,11 @@
  * entry control swaps THAT row into an inline confirmation step, and a
  * confirmed DELETE removes the session from local state immediately —
  * failures keep the confirmation open with an explanation.
+ *
+ * Responsibilities (TASK-AUDIT-014): the screen owns the list state, the
+ * mode-branched persistence flows and their error handling; the row UI —
+ * plain row, rename editor and delete confirmation — lives in
+ * `HistorySessionRow`.
  */
 import React, {
   useCallback,
@@ -37,7 +42,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
@@ -49,6 +53,7 @@ import type {LocalSession} from '../db/types';
 import {useApplicationMode} from '../mode/ModeContext';
 import type {MainStackParamList} from '../navigation/types';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import {HistorySessionRow} from './HistorySessionRow';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 
@@ -128,103 +133,6 @@ function createStyles(c: ThemeColors) {
     },
     retryButtonText: {
       color: c.textPrimary,
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    row: {
-      backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.border,
-      borderRadius: 12,
-      paddingVertical: 14,
-      paddingHorizontal: 16,
-      marginBottom: 10,
-    },
-    rowTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: c.textPrimary,
-    },
-    rowTopic: {
-      fontSize: 13,
-      color: c.textSecondary,
-      marginTop: 4,
-    },
-    renameLink: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: c.accent,
-      alignSelf: 'flex-start',
-    },
-    rowActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 16,
-      marginTop: 10,
-    },
-    deleteLink: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: c.danger,
-      alignSelf: 'flex-start',
-    },
-    confirmText: {
-      fontSize: 14,
-      color: c.textPrimary,
-      marginBottom: 12,
-    },
-    editor: {
-      gap: 10,
-    },
-    editorInput: {
-      borderWidth: 1,
-      borderColor: c.borderStrong,
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      fontSize: 15,
-      color: c.textPrimary,
-      backgroundColor: c.background,
-    },
-    editorActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-    },
-    saveButton: {
-      backgroundColor: c.primary,
-      borderRadius: 8,
-      paddingVertical: 8,
-      paddingHorizontal: 18,
-    },
-    buttonDisabled: {
-      opacity: 0.5,
-    },
-    saveButtonText: {
-      color: c.onPrimary,
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    cancelButton: {
-      borderWidth: 1,
-      borderColor: c.borderStrong,
-      borderRadius: 8,
-      paddingVertical: 8,
-      paddingHorizontal: 18,
-    },
-    cancelButtonText: {
-      color: c.textPrimary,
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    deleteButton: {
-      backgroundColor: c.danger,
-      borderRadius: 8,
-      paddingVertical: 8,
-      paddingHorizontal: 18,
-    },
-    deleteButtonText: {
-      color: c.onPrimary,
       fontSize: 14,
       fontWeight: '600',
     },
@@ -568,122 +476,30 @@ export function HistoryScreen({navigation}: Props) {
           data={sessions}
           keyExtractor={item => String(item.id)}
           extraData={[renamingId, draftTitle, savingRename, deletingId, deleting]}
-          renderItem={({item}) =>
-            renamingId === item.id ? (
-              <View style={[styles.row, styles.editor]} testID={`history-editor-${item.id}`}>
-                <TextInput
-                  style={styles.editorInput}
-                  value={draftTitle}
-                  onChangeText={setDraftTitle}
-                  editable={!savingRename}
-                  autoFocus
-                  accessibilityLabel="Conversation name"
-                  testID="history-rename-input"
-                />
-                <View style={styles.editorActions}>
-                  <Pressable
-                    style={[
-                      styles.saveButton,
-                      (savingRename || draftTitle.trim() === '') && styles.buttonDisabled,
-                    ]}
-                    disabled={savingRename || draftTitle.trim() === ''}
-                    onPress={() => {
-                      handleRenameSave();
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Save conversation name"
-                    accessibilityState={{disabled: savingRename || draftTitle.trim() === ''}}
-                    testID="history-rename-save">
-                    <Text style={styles.saveButtonText}>
-                      {savingRename ? 'Saving…' : 'Save'}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.cancelButton, savingRename && styles.buttonDisabled]}
-                    disabled={savingRename}
-                    onPress={() => {
-                      cancelRename();
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancel renaming"
-                    accessibilityState={{disabled: savingRename}}
-                    testID="history-rename-cancel">
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : deletingId === item.id ? (
-              <View style={styles.row} testID={`history-confirm-${item.id}`}>
-                <Text style={styles.confirmText}>
-                  Delete “{item.title}”? This cannot be undone.
-                </Text>
-                <View style={styles.editorActions}>
-                  <Pressable
-                    style={[styles.deleteButton, deleting && styles.buttonDisabled]}
-                    disabled={deleting}
-                    onPress={() => {
-                      handleDeleteConfirm();
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Confirm deleting ${item.title}`}
-                    accessibilityState={{disabled: deleting}}
-                    testID="history-delete-confirm">
-                    <Text style={styles.deleteButtonText}>
-                      {deleting ? 'Deleting…' : 'Delete'}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.cancelButton, deleting && styles.buttonDisabled]}
-                    disabled={deleting}
-                    onPress={() => {
-                      cancelDelete();
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Keep this conversation"
-                    accessibilityState={{disabled: deleting}}
-                    testID="history-delete-cancel">
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : (
-              <Pressable
-                style={styles.row}
-                onPress={() => {
-                  navigation.navigate('Chat', {sessionId: item.id});
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Open conversation ${item.title}`}
-                testID={`history-item-${item.id}`}>
-                <Text style={styles.rowTitle}>{item.title}</Text>
-                {item.topic ? (
-                  <Text style={styles.rowTopic} numberOfLines={1}>
-                    {item.topic}
-                  </Text>
-                ) : null}
-                <View style={styles.rowActions}>
-                  <Pressable
-                    onPress={() => {
-                      startRename(item);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Rename conversation ${item.title}`}
-                    testID={`history-rename-${item.id}`}>
-                    <Text style={styles.renameLink}>Rename</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      startDelete(item);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Delete conversation ${item.title}`}
-                    testID={`history-delete-${item.id}`}>
-                    <Text style={styles.deleteLink}>Delete</Text>
-                  </Pressable>
-                </View>
-              </Pressable>
-            )
-          }
+          renderItem={({item}) => (
+            <HistorySessionRow
+              session={item}
+              renaming={renamingId === item.id}
+              confirmingDelete={deletingId === item.id}
+              draftTitle={draftTitle}
+              savingRename={savingRename}
+              deleting={deleting}
+              onDraftTitleChange={setDraftTitle}
+              onRenameSave={handleRenameSave}
+              onRenameCancel={cancelRename}
+              onDeleteConfirm={handleDeleteConfirm}
+              onDeleteCancel={cancelDelete}
+              onStartRename={() => {
+                startRename(item);
+              }}
+              onStartDelete={() => {
+                startDelete(item);
+              }}
+              onOpen={() => {
+                navigation.navigate('Chat', {sessionId: item.id});
+              }}
+            />
+          )}
           ListFooterComponent={
             hasMore ? (
               <Pressable
