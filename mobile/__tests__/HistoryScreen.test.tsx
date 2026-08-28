@@ -17,13 +17,14 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react-native';
+import {Pressable} from 'react-native';
 
 import * as authApi from '../src/api/auth';
 import {ApiError} from '../src/api/client';
 import * as sessionsApi from '../src/api/sessions';
 import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
 import {AuthProvider} from '../src/auth/AuthContext';
-import {ModeProvider} from '../src/mode/ModeContext';
+import {ModeProvider, useApplicationMode} from '../src/mode/ModeContext';
 import {saveApplicationMode} from '../src/mode/modeStorage';
 import {setRuntimeApplicationMode} from '../src/mode/runtime';
 import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
@@ -85,7 +86,24 @@ function renderedItemIds(): number[] {
     .map(testId => Number(testId.replace('history-item-', '')));
 }
 
-async function renderHistory(options?: {withChatUnderneath?: boolean}) {
+/** TASK-118 harness: flips the application mode from inside the provider. */
+function ModeSwitchHarness() {
+  const {setMode} = useApplicationMode();
+  return (
+    <>
+      <Pressable
+        testID="mode-switch-serverless"
+        onPress={() => setMode('serverless')}
+      />
+      <Pressable testID="mode-switch-server" onPress={() => setMode('server')} />
+    </>
+  );
+}
+
+async function renderHistory(options?: {
+  withChatUnderneath?: boolean;
+  withModeSwitcher?: boolean;
+}) {
   const Stack = createNativeStackNavigator<MainStackParamList>();
   const navigator = (
     <NavigationContainer
@@ -104,7 +122,10 @@ async function renderHistory(options?: {withChatUnderneath?: boolean}) {
   return render(
     <ModeProvider>
       <ThemeProvider>
-        <AuthProvider>{navigator}</AuthProvider>
+        <AuthProvider>
+          {options?.withModeSwitcher ? <ModeSwitchHarness /> : null}
+          {navigator}
+        </AuthProvider>
       </ThemeProvider>
     </ModeProvider>,
   );
@@ -671,5 +692,38 @@ describe('HistoryScreen serverless (TASK-090)', () => {
     await waitFor(() => expect(renderedItemIds()).toEqual([43]));
     expect(screen.queryByTestId('form-error')).toBeNull();
     expect(mockedSessions.deleteSession).not.toHaveBeenCalled();
+  });
+
+  // TASK-118: server history and serverless history are disjoint stores —
+  // switching modes swaps the visible list between them without any
+  // cross-mode fetch, so neither store is ever shown through the other.
+  it('shows server and serverless histories as disjoint lists when switching modes', async () => {
+    // Start in server mode: the beforeEach persisted serverless, so this
+    // test overrides the stored choice before the provider restores it.
+    await saveApplicationMode('server');
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPage([makeSession({id: 11, title: 'Server chat'})]),
+    );
+    mockLocalRepository.listSessions.mockResolvedValue([
+      makeLocalSession({id: 303, title: 'Local chat'}),
+    ]);
+
+    await renderHistory({withModeSwitcher: true});
+    await screen.findByTestId('history-item-11');
+    expect(mockedSessions.listSessions).toHaveBeenCalledTimes(1);
+
+    await fireEvent.press(screen.getByTestId('mode-switch-serverless'));
+    await screen.findByTestId('history-item-303');
+    // Server rows are replaced by local rows — never shown together.
+    expect(screen.queryByTestId('history-item-11')).toBeNull();
+    // The swap re-reads local data only; the backend is not fetched again.
+    expect(mockedSessions.listSessions).toHaveBeenCalledTimes(1);
+    expect(mockLocalRepository.listSessions).toHaveBeenCalledTimes(1);
+
+    await fireEvent.press(screen.getByTestId('mode-switch-server'));
+    await screen.findByTestId('history-item-11');
+    // Switching back restores the server list without touching local data.
+    expect(screen.queryByTestId('history-item-303')).toBeNull();
+    expect(mockLocalRepository.listSessions).toHaveBeenCalledTimes(1);
   });
 });

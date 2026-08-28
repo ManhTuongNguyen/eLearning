@@ -2354,7 +2354,7 @@ Acceptance criteria:
 
 ## TASK-118 — Validate mode isolation
 
-Status: `[ ]`
+Status: `[x]`
 
 Verify:
 
