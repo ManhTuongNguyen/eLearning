@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-28
-- **Current Phase**: TASK-AUDIT-010 complete; next task TASK-AUDIT-011 — Fix excessive top margin on Learning Level screen
+- **Current Phase**: TASK-AUDIT-011 complete; next task TASK-AUDIT-012 — Fix excessive top margin on OpenRouter setup screen
 
 ## Current Active Task
   - **Task ID**:

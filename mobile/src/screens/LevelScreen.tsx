@@ -6,6 +6,11 @@
  * reads and writes the on-device SQLite profile through profileStore, so no
  * backend traffic happens while serverless is active. Selections persist
  * immediately in both modes; errors keep the last confirmed value selected.
+ *
+ * The top inset comes from useSafeAreaInsets (TASK-AUDIT-011) instead of a
+ * fixed oversized padding, so the header sits at the same spacing as the
+ * other pushed screens while devices that draw under the status bar
+ * (edge-to-edge Android) still clear it.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -16,6 +21,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {getProfile, LEVELS, updateProfile} from '../api/profile';
 import type {EnglishLevel, LevelOption} from '../api/profile';
@@ -27,13 +33,16 @@ import type {LevelScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 
-function createStyles(c: ThemeColors) {
+/** Spacing between the safe-area top inset and the header row (px). */
+const HEADER_TOP_SPACING = 24;
+
+export function createStyles(c: ThemeColors, topInset: number) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
       paddingHorizontal: 24,
-      paddingTop: 60,
+      paddingTop: topInset + HEADER_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
@@ -130,7 +139,11 @@ export function LevelScreen({navigation}: LevelScreenProps) {
   const {authedRequest} = useAuth();
   const {status: modeStatus, mode} = useApplicationMode();
   const {colors} = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(
+    () => createStyles(colors, insets.top),
+    [colors, insets.top],
+  );
   const [selected, setSelected] = useState<EnglishLevel | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<EnglishLevel | null>(null);

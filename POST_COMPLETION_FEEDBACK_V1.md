@@ -707,7 +707,7 @@ Do not introduce a large configuration framework for a single URL.
 
 ## TASK-AUDIT-011 — Fix excessive top margin on Learning Level screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
