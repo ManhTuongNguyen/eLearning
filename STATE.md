@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-28
-- **Current Phase**: TASK-AUDIT-008 complete; next task TASK-AUDIT-009 — Improve chat message width and alignment
+- **Current Phase**: TASK-AUDIT-009 complete; next task TASK-AUDIT-010 — Remove hard-coded backend server configuration
 
 ## Current Active Task
   - **Task ID**:
@@ -185,3 +185,23 @@
   auto-restored landing is a second mounted instance), theme.test AuthContext
   mock completed with toErrorMessage. Full suites: mobile pnpm test 635
   passed; pnpm lint and pnpm typecheck clean.
+- TASK-AUDIT-009 (done): chat bubbles no longer collapse to ~55% width.
+  Root cause: the bubble's `maxWidth: '82%'` sat on the Pressable inside the
+  previously UNSTYLED inner View wrapper — an auto-width flex item of the row —
+  so the percentage resolved against a content-driven width instead of the
+  screen: bubbles rendered far narrower than intended and short words
+  ("Hello") wrapped mid-word. Fix in MessageRow.tsx: the width cap moved to a
+  new `bubbleWrapper` style applied to the wrapper flex item (whose parent
+  row has a definite width) — `maxWidth: '85%'` + `flexShrink: 1` so long
+  content shrinks to the cap while short content keeps a hug-fit bubble;
+  `bubble` lost its maxWidth and fills the capped wrapper (cross-axis
+  stretch). User rows keep `justifyContent: 'flex-end'` (right edge,
+  16px listContent inset); assistant rows stay flex-start. Text wrapping
+  untouched (no numberOfLines anywhere) — Android TextView force-breaks
+  over-long words/URLs at the wrapper cap, so nothing overflows the screen.
+  Regression coverage: new mobile/__tests__/messageRowLayout.test.tsx (5
+  tests, RNTL instance-tree style flattening): cap lives on the wrapper not
+  the bubble, user rows right-aligned, assistant rows left-aligned, text
+  wrapping enabled (numberOfLines undefined, no width/maxWidth on the Text),
+  long content renders inside the capped wrapper. Full suites: mobile pnpm
+  test 640 passed; pnpm lint and pnpm typecheck clean.

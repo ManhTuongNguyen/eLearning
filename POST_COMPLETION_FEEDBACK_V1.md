@@ -597,7 +597,7 @@ The history screen must derive its state from the authoritative repository/query
 
 ## TASK-AUDIT-009 — Improve chat message width and alignment
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

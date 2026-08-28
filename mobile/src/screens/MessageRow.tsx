@@ -30,8 +30,11 @@ export function createRowStyles(c: ThemeColors) {
     rowUser: {
       justifyContent: 'flex-end',
     },
+    bubbleWrapper: {
+      maxWidth: '85%',
+      flexShrink: 1,
+    },
     bubble: {
-      maxWidth: '82%',
       borderRadius: 16,
       paddingHorizontal: 14,
       paddingVertical: 10,
@@ -144,7 +147,7 @@ function MessageRowImpl({
   const menuEligible = item.status === 'complete' && item.content.trim().length > 0;
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
-      <View>
+      <View style={styles.bubbleWrapper}>
         <Pressable
           style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
           testID={`chat-message-${item.id}`}
