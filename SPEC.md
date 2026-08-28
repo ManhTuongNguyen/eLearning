@@ -2174,7 +2174,7 @@ This task is especially important.
 
 ## TASK-108 — Backend vocabulary integration tests
 
-Status: `[ ]`
+Status: `[x]`
 
 Test:
 
