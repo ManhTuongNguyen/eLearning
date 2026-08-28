@@ -2203,7 +2203,7 @@ Test:
 
 ## TASK-110 — Mobile chat tests
 
-Status: `[ ]`
+Status: `[x]`
 
 Test:
 
