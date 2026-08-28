@@ -28,7 +28,7 @@ import {createSession} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
 import {getLocalDatabase} from '../db/database';
 import {useApplicationMode} from '../mode/ModeContext';
-import {createOpenRouterClient} from '../serverless/openrouterClient';
+import {createProviderClient} from '../serverless/providerRegistry';
 import {createServerlessSession} from '../serverless/topicGeneration';
 import {loadServerlessOpenRouterConfig} from '../serverless/settings';
 import type {NewConversationScreenProps} from '../navigation/types';
@@ -146,15 +146,17 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
       setError(null);
       try {
         if (mode === 'serverless') {
-          // TASK-085: topic generation runs directly through OpenRouter with
-          // the user's own key; nothing touches the backend (Rule 9).
+          // TASK-085: topic generation runs directly against the user's
+          // configured provider (registry-selected: OpenRouter, Gemini,
+          // OpenAI, 9Router) with their own key; nothing touches the
+          // backend (Rule 9).
           const config = await loadServerlessOpenRouterConfig();
           if (!config) {
             throw new Error(
-              'Add your OpenRouter API key in Settings to chat without the server.',
+              'Add your provider API key in Settings to chat without the server.',
             );
           }
-          const client = createOpenRouterClient(config);
+          const client = createProviderClient(config);
           const db = await getLocalDatabase();
           const session = await createServerlessSession(
             db,

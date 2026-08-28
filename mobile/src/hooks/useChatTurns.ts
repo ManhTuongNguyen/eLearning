@@ -48,9 +48,9 @@ function toChatEvent(event: ServerlessStreamEvent): ChatStreamEvent {
   return event;
 }
 
-/** Shown when a serverless turn starts without an OpenRouter configuration. */
+/** Shown when a serverless turn starts without a provider configuration. */
 const NO_SERVERLESS_CONFIG_MESSAGE =
-  'Add your OpenRouter API key in Settings to chat without the server.';
+  'Add your provider API key in Settings to chat without the server.';
 
 /** Inputs the turn pipeline reads from its host screen. */
 export interface UseChatTurnsOptions {

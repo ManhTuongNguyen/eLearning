@@ -4,7 +4,10 @@
  * session id, loading/disabled state while creating, error banner + retry
  * readiness, and the cancel/back dismissal. Also covers the TASK-053 hand-
  * off: the creation response's sample conversation rides into Chat as a
- * route param and powers the example overlay.
+ * route param and powers the example overlay. Serverless creation
+ * (TASK-AUDIT-013/019) is covered against the real sql.js database and the
+ * real provider registry: a persisted Gemini configuration must reach the
+ * Gemini endpoint — never OpenRouter or the backend.
  */
 import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
@@ -15,6 +18,8 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Keychain from 'react-native-keychain';
 
 import * as authApi from '../src/api/auth';
 import {ApiError} from '../src/api/client';
@@ -30,6 +35,11 @@ import {AuthProvider} from '../src/auth/AuthContext';
 import {ModeProvider} from '../src/mode/ModeContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
+import {resetLocalDatabase} from '../src/db/database';
+import * as nativeDriver from '../src/db/nativeDriver';
+import {saveApplicationMode} from '../src/mode/modeStorage';
+import {getRuntimeApplicationMode} from '../src/mode/runtime';
+import {saveServerlessOpenRouterConfig} from '../src/serverless/settings';
 import {ChatScreen} from '../src/screens/ChatScreen';
 import {NewConversationScreen} from '../src/screens/NewConversationScreen';
 import {ThemeProvider} from '../src/theme/ThemeContext';
@@ -38,9 +48,41 @@ jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
 jest.mock('../src/auth/secureStorage');
 
+/**
+ * Route the application's local database to real in-memory SQL (sql.js)
+ * through the nativeDriver seam, so the serverless settings store and topic
+ * persistence run against actual SQL semantics. Server-mode tests in this
+ * file never touch the local database.
+ */
+jest.mock('../src/db/nativeDriver', () => {
+  const {openSqlJsDriver} = require('../testing/sqlJsDriver');
+  let mockDbPromise: Promise<unknown> | null = null;
+  return {
+    LOCAL_DB_NAME: 'elearning-serverless.db',
+    openNativeDriver: () => {
+      if (mockDbPromise === null) {
+        mockDbPromise = openSqlJsDriver();
+      }
+      return mockDbPromise;
+    },
+    __resetLocalDriver: () => {
+      mockDbPromise = null;
+    },
+  };
+});
+
 const mockedAuth = jest.mocked(authApi);
 const mockedSessions = jest.mocked(sessionsApi);
 const mockedStorage = jest.mocked(secureStorage);
+const mockedNativeDriver = nativeDriver as typeof nativeDriver & {
+  __resetLocalDriver: () => void;
+};
+
+/** Valid topic payload the fake provider responses carry. */
+const VALID_TOPIC_JSON = JSON.stringify({
+  title: 'Ordering Coffee Abroad',
+  description: 'You order drinks at a busy café in London. Practise polite requests.',
+});
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -267,5 +309,78 @@ describe('NewConversationScreen', () => {
       expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 7),
     );
     expect(screen.queryByTestId('chat-show-example')).toBeNull();
+  });
+});
+
+describe('serverless creation honors the configured provider (TASK-AUDIT-013/019)', () => {
+  const GEMINI_KEY = 'test-gemini-key';
+  const GEMINI_MODEL = 'gemini-nano-test';
+
+  /** Minimal Gemini generateContent success body carrying the topic JSON. */
+  function geminiTopicResponse(): Response {
+    return {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          candidates: [
+            {
+              content: {parts: [{text: VALID_TOPIC_JSON}]},
+              finishReason: 'stop',
+            },
+          ],
+          modelVersion: GEMINI_MODEL,
+        }),
+      headers: {get: () => null},
+    } as unknown as Response;
+  }
+
+  it('routes serverless topic generation through the selected provider, not OpenRouter', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch');
+    const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
+      __resetAsyncStorageStore: () => void;
+    };
+    const keychain = Keychain as jest.Mocked<typeof Keychain> & {
+      __resetKeychainStore: () => void;
+    };
+    keychain.__resetKeychainStore();
+    asyncStorage.__resetAsyncStorageStore();
+    mockedNativeDriver.__resetLocalDriver();
+    resetLocalDatabase();
+
+    // Persist the serverless mode and a Gemini provider configuration the
+    // same way the settings screen does (keychain key + settings-table ids).
+    await saveApplicationMode('serverless');
+    await saveServerlessOpenRouterConfig({
+      provider: 'gemini',
+      apiKey: GEMINI_KEY,
+      primaryModel: GEMINI_MODEL,
+    });
+    fetchSpy.mockResolvedValue(geminiTopicResponse());
+
+    await renderScreen();
+    await waitFor(() => expect(getRuntimeApplicationMode()).toBe('serverless'));
+    await screen.findByTestId('new-conversation-screen');
+
+    await fireEvent.press(screen.getByTestId('new-conversation-auto'));
+
+    // The topic request reached Google's Gemini endpoint with the stored key.
+    await screen.findByTestId('chat-screen');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    );
+    expect((init?.headers as Record<string, string>)['x-goog-api-key']).toBe(GEMINI_KEY);
+    // No request went to OpenRouter and nothing touched the backend.
+    expect(fetchSpy.mock.calls.some(([target]) => String(target).includes('openrouter.ai'))).toBe(
+      false,
+    );
+    expect(mockedSessions.createSession).not.toHaveBeenCalled();
+
+    keychain.__resetKeychainStore();
+    asyncStorage.__resetAsyncStorageStore();
+    mockedNativeDriver.__resetLocalDriver();
+    resetLocalDatabase();
   });
 });
