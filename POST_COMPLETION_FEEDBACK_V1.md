@@ -190,7 +190,7 @@ Prefer a narrowly scoped renderer/content-negotiation/view solution appropriate 
 
 ## TASK-AUDIT-002 — Fix 406 for CSV export
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P0`
 

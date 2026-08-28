@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from api.negotiation import CsvNegotiation
 from conversations.models import Message
 from vocabulary.csv_export import build_anki_csv
 from vocabulary.models import VocabularyItem
@@ -106,12 +107,16 @@ class VocabularyExportView(APIView):
 
     The response is served as an attachment (``text/csv`` with a
     ``Content-Disposition`` filename) so mobile share/save workflows receive a
-    ready-to-import file instead of inline text. CSV generation is pure string
+    ready-to-import file instead of inline text. The mobile client sends
+    ``Accept: text/csv``, which no registered DRF renderer declares, so
+    :class:`~api.negotiation.CsvNegotiation` accepts it (mirroring the SSE
+    endpoints); error responses stay JSON. CSV generation is pure string
     work over one queryset, so no pagination is applied: exports are meant to
     be complete.
     """
 
     permission_classes = [IsAuthenticated]
+    content_negotiation_class = CsvNegotiation
 
     def get(self, request, *args, **kwargs) -> HttpResponse:
         items = VocabularyItem.objects.filter(user=request.user)

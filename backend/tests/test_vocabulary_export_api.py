@@ -4,7 +4,10 @@ Covers authenticated-only access, per-user scoping (the export contains only
 the caller's saved expressions), download response contract (``text/csv``
 content type and attachment filename), newest-first row order matching the
 list endpoint, RFC 4180 escaping and Unicode surviving the full HTTP
-round-trip, and an empty-vocabulary export that yields just the header row.
+round-trip, an empty-vocabulary export that yields just the header row, and
+the ``Accept: text/csv`` content-negotiation regression (TASK-AUDIT-002): the
+mobile client sends that header (mobile/src/api/vocabulary.ts) and the export
+used to answer with HTTP 406 before the handler could run.
 """
 
 import csv
@@ -27,6 +30,8 @@ EMAIL = "alice@example.com"
 PASSWORD = "pw-123456"
 
 CSV_HEADER = "Front,Back,Example,Pronunciation"
+
+CSV_ACCEPT = "text/csv"
 
 
 def make_item(user, expression="set off", **overrides):
@@ -184,3 +189,65 @@ class TestUserScoping:
 class TestRouting:
     def test_export_is_mounted_on_the_documented_path(self):
         assert reverse("vocabulary:vocabulary-export") == EXPORT_URL
+
+
+class TestNegotiation:
+    """GET /api/v1/vocabulary/export/ with Accept: text/csv (TASK-AUDIT-002).
+
+    DRF negotiates in ``APIView.initial()`` before authentication and the
+    handler run, and no registered renderer declares ``text/csv``, so the
+    export answered the mobile client's exact request with HTTP 406.
+    :class:`~api.negotiation.CsvNegotiation` accepts the CSV media type;
+    errors stay plain DRF JSON and unrelated media types still fail with 406.
+    """
+
+    def test_csv_accept_exports_instead_of_406(self, authed_api, user):
+        make_item(user, expression="serendipity")
+
+        response = authed_api.get(EXPORT_URL, HTTP_ACCEPT=CSV_ACCEPT)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response["Content-Type"] == "text/csv"
+        assert response["Content-Disposition"] == 'attachment; filename="anki-vocabulary.csv"'
+
+    def test_csv_accept_export_round_trips_escaping_and_unicode(self, authed_api, user):
+        make_item(
+            user,
+            expression='set, "off" — café',
+            definition="sense one\nsense two, with a comma",
+            pronunciation="/ˈɒf/",
+        )
+
+        response = authed_api.get(EXPORT_URL, HTTP_ACCEPT=CSV_ACCEPT)
+
+        rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"), newline="")))
+        assert rows == [
+            ["Front", "Back", "Example", "Pronunciation"],
+            ['set, "off" — café', "sense one\nsense two, with a comma", "", "/ˈɒf/"],
+        ]
+
+    def test_csv_accept_anonymous_is_401_json_not_406(self, api, user):
+        make_item(user)
+
+        response = api.get(EXPORT_URL, HTTP_ACCEPT=CSV_ACCEPT)
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response["Content-Type"].startswith("application/json")
+        assert "detail" in response.json()
+
+    def test_csv_accept_with_q_parameter_is_accepted(self, authed_api):
+        response = authed_api.get(EXPORT_URL, HTTP_ACCEPT="text/csv;q=0.9")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response["Content-Type"] == "text/csv"
+
+    def test_text_wildcard_accept_is_accepted(self, authed_api):
+        response = authed_api.get(EXPORT_URL, HTTP_ACCEPT="text/*")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response["Content-Type"] == "text/csv"
+
+    def test_unrelated_invalid_accept_is_still_406(self, authed_api):
+        response = authed_api.get(EXPORT_URL, HTTP_ACCEPT="application/xml")
+
+        assert response.status_code == status.HTTP_406_NOT_ACCEPTABLE
