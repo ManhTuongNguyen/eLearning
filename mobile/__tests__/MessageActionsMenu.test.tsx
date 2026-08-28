@@ -1,9 +1,10 @@
 /**
  * Message actions menu tests (SPEC TASK-060): role-driven action matrix
- * (user rows gain Improve my English; assistant rows do not), dismissal
- * through the Close control, backdrop tap and Android back, and the
- * accessibility surface (labeled buttons per action, accessibility modal
- * container).
+ * (user rows gain Improve my English; assistant rows do not), the
+ * TASK-AUDIT-016 mode gate that hides the server-only Select text entry,
+ * dismissal through the Close control, backdrop tap and Android back, and
+ * the accessibility surface (labeled buttons per action, accessibility
+ * modal container).
  */
 import React from 'react';
 import {act, fireEvent, render, screen, within} from '@testing-library/react-native';
@@ -15,6 +16,7 @@ import {ThemeProvider} from '../src/theme/ThemeContext';
 interface MenuOverrides {
   visible?: boolean;
   role?: 'user' | 'assistant';
+  vocabularyEnabled?: boolean;
   onClose?: () => void;
   onSelect?: (action: MessageAction) => void;
 }
@@ -25,6 +27,7 @@ async function renderMenu(overrides: MenuOverrides = {}) {
       <MessageActionsMenu
         visible={overrides.visible ?? true}
         role={overrides.role ?? 'assistant'}
+        vocabularyEnabled={overrides.vocabularyEnabled}
         onClose={overrides.onClose ?? (() => undefined)}
         onSelect={overrides.onSelect ?? (() => undefined)}
       />
@@ -73,6 +76,21 @@ describe('MessageActionsMenu', () => {
       'Copy',
       'Read aloud',
     ]);
+  });
+
+  // TASK-AUDIT-016: serverless mode has no server vocabulary flow, so the
+  // Select text entry disappears for both roles while the rest stay put.
+  it('hides Select text when the vocabulary flow is unavailable (serverless)', async () => {
+    for (const role of ['user', 'assistant'] as const) {
+      await renderMenu({role, vocabularyEnabled: false});
+
+      expect(visibleActionLabels()).toEqual(
+        role === 'user'
+          ? ['Suggest replies', 'Improve my English', 'Copy', 'Read aloud']
+          : ['Suggest replies', 'Copy', 'Read aloud'],
+      );
+      expect(screen.queryByTestId('chat-menu-select-text')).toBeNull();
+    }
   });
 
   it('exposes every action as a labeled button inside an accessibility modal', async () => {

@@ -983,7 +983,7 @@ Screens must not implement their own token refresh logic.
 
 ## TASK-AUDIT-016 — Audit all mode-dependent UI
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P2`
 

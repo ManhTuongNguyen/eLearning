@@ -8,10 +8,19 @@
  * persisted through the settings store, and validation keeps an
  * incomplete configuration from being saved. Storage/catalog/HTTP seams
  * are module mocks — no SQLite or network participates here.
+ *
+ * TASK-AUDIT-016: the editor is serverless-only, so every mount runs under
+ * a ModeProvider with serverless persisted; a server-mode mount renders the
+ * mode notice without reading any serverless configuration.
  */
 import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {render, screen, userEvent, waitFor} from '@testing-library/react-native';
 
+import {ModeProvider} from '../src/mode/ModeContext';
+import {saveApplicationMode} from '../src/mode/modeStorage';
+import {setRuntimeApplicationMode} from '../src/mode/runtime';
+import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
 import type {OpenRouterSettingsScreenProps} from '../src/navigation/types';
 import {OpenRouterSettingsScreen} from '../src/screens/OpenRouterSettingsScreen';
 import * as modelCatalog from '../src/serverless/modelCatalog';
@@ -33,6 +42,9 @@ const mockedSaveConfig = jest.mocked(serverlessSettings.saveServerlessOpenRouter
 const mockedGetCached = jest.mocked(modelCatalog.getCachedModelCatalog);
 const mockedRefresh = jest.mocked(modelCatalog.refreshModelCatalog);
 const mockedListProviderModels = jest.mocked(providerRegistry.listProviderModels);
+const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
+  __resetAsyncStorageStore: () => void;
+};
 
 // One configured userEvent instance; its internal act handling drives
 // deterministic commits across every interaction below.
@@ -79,11 +91,14 @@ async function renderScreen(): Promise<OpenRouterSettingsScreenProps> {
   } as unknown as OpenRouterSettingsScreenProps;
 
   // @testing-library/react-native v14 render() is asynchronous; awaiting it
-  // binds the shared `screen` handle before any query runs.
+  // binds the shared `screen` handle before any query runs. ModeProvider is
+  // part of the real application tree, so the screen mounts under it here.
   await render(
-    <ThemeProvider>
-      <OpenRouterSettingsScreen {...props} />
-    </ThemeProvider>,
+    <ModeProvider>
+      <ThemeProvider>
+        <OpenRouterSettingsScreen {...props} />
+      </ThemeProvider>
+    </ModeProvider>,
   );
   return props;
 }
@@ -99,10 +114,15 @@ async function renderSettledScreen(): Promise<OpenRouterSettingsScreenProps> {
   return props;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  asyncStorage.__resetAsyncStorageStore();
   jest.clearAllMocks();
   // Defaults describe a fresh unconfigured device on the historic default
-  // provider with no cached catalog; tests override through the seams.
+  // provider with no cached catalog; tests override through the seams. The
+  // editor only operates in serverless mode (TASK-AUDIT-016), so the shared
+  // harness persists it the way a real serverless launch would.
+  await saveApplicationMode('serverless');
+  setRuntimeApplicationMode('serverless');
   mockedLoadProvider.mockResolvedValue('openrouter');
   mockedLoadProviderState.mockResolvedValue({
     apiKey: null,
@@ -111,6 +131,10 @@ beforeEach(() => {
   });
   mockedSaveConfig.mockResolvedValue(undefined);
   mockedGetCached.mockResolvedValue(null);
+});
+
+afterEach(() => {
+  setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
 });
 
 describe('rendering stored configuration (TASK-092)', () => {
@@ -504,5 +528,39 @@ describe('catalog usability', () => {
     expect(await screen.findByTestId('openrouter-model-count')).toHaveTextContent(
       /3 model\(s\)/,
     );
+  });
+});
+
+// TASK-AUDIT-016: the editor is serverless-only. A server-mode mount must
+// show the mode notice and never touch serverless configuration storage.
+describe('OpenRouterSettingsScreen in server mode (TASK-AUDIT-016)', () => {
+  it('renders the serverless-only notice instead of the editor', async () => {
+    await saveApplicationMode('server');
+    setRuntimeApplicationMode('server');
+
+    await renderScreen();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('openrouter-mode-notice')).toBeOnTheScreen(),
+    );
+    expect(screen.getByText(/serverless feature/)).toBeOnTheScreen();
+    expect(screen.queryByTestId('openrouter-api-key-input')).toBeNull();
+    expect(screen.queryByTestId('openrouter-save')).toBeNull();
+    expect(screen.queryByTestId('openrouter-models-refresh')).toBeNull();
+  });
+
+  it('reads no serverless configuration in server mode', async () => {
+    await saveApplicationMode('server');
+    setRuntimeApplicationMode('server');
+
+    await renderScreen();
+    await waitFor(() =>
+      expect(screen.getByTestId('openrouter-mode-notice')).toBeOnTheScreen(),
+    );
+
+    expect(mockedLoadProvider).not.toHaveBeenCalled();
+    expect(mockedLoadProviderState).not.toHaveBeenCalled();
+    expect(mockedGetCached).not.toHaveBeenCalled();
+    expect(mockedListProviderModels).not.toHaveBeenCalled();
   });
 });

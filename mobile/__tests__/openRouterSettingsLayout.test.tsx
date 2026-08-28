@@ -1,7 +1,12 @@
 import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {render, screen, waitFor} from '@testing-library/react-native';
 import {initialWindowMetrics} from 'react-native-safe-area-context';
 
+import {ModeProvider} from '../src/mode/ModeContext';
+import {saveApplicationMode} from '../src/mode/modeStorage';
+import {setRuntimeApplicationMode} from '../src/mode/runtime';
+import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
 import type {OpenRouterSettingsScreenProps} from '../src/navigation/types';
 import {OpenRouterSettingsScreen} from '../src/screens/OpenRouterSettingsScreen';
 import * as modelCatalog from '../src/serverless/modelCatalog';
@@ -26,6 +31,9 @@ jest.mock('../src/serverless/openrouterClient');
 const mockedLoadProvider = jest.mocked(serverlessSettings.loadServerlessProvider);
 const mockedLoadProviderState = jest.mocked(serverlessSettings.loadServerlessProviderState);
 const mockedGetCached = jest.mocked(modelCatalog.getCachedModelCatalog);
+const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
+  __resetAsyncStorageStore: () => void;
+};
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   const entries = Array.isArray(style) ? style : [style];
@@ -41,15 +49,22 @@ async function renderScreen() {
     route: {key: 'openrouter-settings-test', name: 'OpenRouterSettings', params: undefined},
   } as unknown as OpenRouterSettingsScreenProps;
 
+  // The layout test targets the editor body, which only exists in
+  // serverless mode (TASK-AUDIT-016), so mount under the real providers.
   await render(
-    <ThemeProvider>
-      <OpenRouterSettingsScreen {...props} />
-    </ThemeProvider>,
+    <ModeProvider>
+      <ThemeProvider>
+        <OpenRouterSettingsScreen {...props} />
+      </ThemeProvider>
+    </ModeProvider>,
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  asyncStorage.__resetAsyncStorageStore();
   jest.clearAllMocks();
+  await saveApplicationMode('serverless');
+  setRuntimeApplicationMode('serverless');
   mockedLoadProvider.mockResolvedValue('openrouter');
   mockedLoadProviderState.mockResolvedValue({
     apiKey: null,
@@ -61,6 +76,7 @@ beforeEach(() => {
 
 afterEach(() => {
   metrics.insets.top = 0;
+  setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
 });
 
 describe('OpenRouterSettingsScreen layout (TASK-AUDIT-012)', () => {

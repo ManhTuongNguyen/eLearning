@@ -13,6 +13,12 @@
  * hands it to the native share/save sheet and confirms through a
  * self-dismissing toast, while failures show a retryable alert line without
  * touching the rendered list.
+ *
+ * TASK-AUDIT-016: saved vocabulary is a server feature, so the screen is
+ * mode-safe — nothing is fetched until the persisted application mode has
+ * been restored, and a serverless application sees a clear server-only
+ * notice instead of an API call that could only be rejected by the
+ * server-API gate.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -28,6 +34,7 @@ import {exportVocabulary} from '../api/vocabulary';
 import type {VocabularyItem} from '../api/vocabulary';
 import {listVocabulary} from '../api/vocabulary';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
+import {useApplicationMode} from '../mode/ModeContext';
 import type {VocabularyScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
@@ -260,6 +267,10 @@ function StatusBadge({item, styles}: {item: VocabularyItem; styles: ReturnType<t
 
 export function VocabularyScreen({navigation}: Props) {
   const {authedRequest} = useAuth();
+  // TASK-AUDIT-016: the vocabulary feature is server-only, so the screen
+  // waits for the persisted mode to be restored and renders a server-only
+  // notice in serverless mode instead of issuing a doomed API call.
+  const {status: modeStatus, mode} = useApplicationMode();
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -281,6 +292,18 @@ export function VocabularyScreen({navigation}: Props) {
 
   useEffect(() => {
     let cancelled = false;
+
+    // Nothing is fetched until the persisted mode has been restored, so a
+    // fast-mounted screen never touches the wrong backend mid-restore
+    // (same contract as LevelScreen). Serverless mode never fetches at all:
+    // it settles the spinner and lets the server-only notice take over.
+    if (modeStatus !== 'ready') {
+      return;
+    }
+    if (mode !== 'server') {
+      setLoading(false);
+      return;
+    }
 
     setError(null);
     setItems([]);
@@ -309,7 +332,7 @@ export function VocabularyScreen({navigation}: Props) {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [mode, modeStatus, reloadKey]);
 
   /** Append the next page; failures keep the rendered rows and show why. */
   const handleLoadMore = useCallback(async () => {
@@ -366,46 +389,54 @@ export function VocabularyScreen({navigation}: Props) {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  // The export control belongs to the server-only feature set; it is hidden
+  // alongside the list while serverless is active (TASK-AUDIT-016). Before
+  // the persisted mode is known the body shows the plain loading spinner.
+  const serverVocabulary = modeStatus === 'ready' && mode === 'server';
+  const serverlessNotice = modeStatus === 'ready' && !serverVocabulary;
+
   return (
     <View style={styles.container} testID="vocabulary-screen">
       <View style={styles.header}>
         <Text style={styles.title}>Vocabulary</Text>
         <View style={styles.headerActions}>
-          <Pressable
-            style={[styles.exportLink, exporting && styles.exportLinkDisabled]}
-            onPress={() => {
-              handleExport();
-            }}
-            disabled={exporting}
-            accessibilityRole="button"
-            accessibilityLabel="Export your vocabulary as an Anki-compatible CSV file"
-            accessibilityState={{disabled: exporting, busy: exporting}}
-            testID="vocabulary-export">
-            {exporting ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : null}
-            <Text style={styles.actionLinkText}>
-              {exporting ? 'Exporting…' : 'Export CSV'}
-            </Text>
-          </Pressable>
+          {serverVocabulary ? (
+            <Pressable
+              style={[styles.exportLink, exporting && styles.exportLinkDisabled]}
+              onPress={() => {
+                handleExport();
+              }}
+              disabled={exporting}
+              accessibilityRole="button"
+              accessibilityLabel="Export your vocabulary as an Anki-compatible CSV file"
+              accessibilityState={{disabled: exporting, busy: exporting}}
+              testID="vocabulary-export">
+              {exporting ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : null}
+              <Text style={styles.actionLinkText}>
+                {exporting ? 'Exporting…' : 'Export CSV'}
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable onPress={() => navigation.goBack()} testID="vocabulary-back">
             <Text style={styles.backLink}>Close</Text>
           </Pressable>
         </View>
       </View>
 
-      {exportError !== null ? (
+      {serverVocabulary && exportError !== null ? (
         <Text role="alert" style={styles.exportError} testID="vocabulary-export-error">
           {exportError}
         </Text>
       ) : null}
 
-      {error !== null ? (
+      {serverVocabulary && error !== null ? (
         <Text role="alert" style={styles.error} testID="form-error">
           {error}
         </Text>
       ) : null}
-      {!loading && error !== null && items.length === 0 ? (
+      {serverVocabulary && !loading && error !== null && items.length === 0 ? (
         <Pressable
           style={styles.retryButton}
           onPress={() => {
@@ -418,12 +449,19 @@ export function VocabularyScreen({navigation}: Props) {
         </Pressable>
       ) : null}
 
-      {loading ? (
+      {serverlessNotice ? (
+        <View style={styles.centered} testID="vocabulary-mode-notice">
+          <Text style={styles.stateText}>
+            Saved vocabulary lives with your server account. Switch to server
+            mode to save words and export them as Anki flashcards.
+          </Text>
+        </View>
+      ) : loading ? (
         <View style={styles.centered} testID="vocabulary-loading">
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.stateText}>Loading your saved words…</Text>
         </View>
-      ) : items.length === 0 && error === null ? (
+      ) : !serverVocabulary ? null : items.length === 0 && error === null ? (
         <View style={styles.centered} testID="vocabulary-empty">
           <Text style={styles.stateText}>
             No saved words yet. Select text in a chat to save it here.
@@ -481,7 +519,7 @@ export function VocabularyScreen({navigation}: Props) {
         />
       )}
 
-      {toast !== null ? (
+      {serverVocabulary && toast !== null ? (
         <View pointerEvents="none" style={styles.toast} testID="vocabulary-toast">
           <Text role="status" style={styles.toastText}>
             {toast}

@@ -13,6 +13,10 @@
  * improvement sheet → TASK-064, text selection → TASK-069, speech →
  * TASK-078) while Copy already works via the clipboard seam in the chat
  * screen.
+ *
+ * TASK-AUDIT-016: Select text feeds the server-only vocabulary flow, so
+ * serverless applications hide it (`vocabularyEnabled`) instead of offering
+ * an action that could only ever fail against the server-API gate.
  */
 import React, {useMemo} from 'react';
 import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
@@ -105,6 +109,12 @@ interface MessageActionsMenuProps {
   visible: boolean;
   /** Role of the message the menu was opened for; drives the action list. */
   role: 'user' | 'assistant';
+  /**
+   * Whether the server-backed vocabulary flow (Select text) is available;
+   * serverless mode hides it (TASK-AUDIT-016). Defaults to true for the
+   * server-mode applications that are the menu's original context.
+   */
+  vocabularyEnabled?: boolean;
   /** Dismissal callback (Close button, backdrop tap and Android back). */
   onClose: () => void;
   /** Selection callback; the parent closes the menu and runs the action. */
@@ -114,12 +124,19 @@ interface MessageActionsMenuProps {
 export function MessageActionsMenu({
   visible,
   role,
+  vocabularyEnabled = true,
   onClose,
   onSelect,
 }: MessageActionsMenuProps) {
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const actions = useMemo(() => actionsForRole(role), [role]);
+  const actions = useMemo(
+    () =>
+      actionsForRole(role).filter(
+        item => vocabularyEnabled || item.action !== 'select-text',
+      ),
+    [role, vocabularyEnabled],
+  );
 
   if (!visible) {
     return null;

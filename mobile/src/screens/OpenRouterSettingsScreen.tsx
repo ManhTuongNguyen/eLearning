@@ -33,6 +33,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {toErrorMessage} from '../auth/AuthContext';
 import {getLocalDatabase} from '../db/database';
+import {useApplicationMode} from '../mode/ModeContext';
 import type {OpenRouterSettingsScreenProps} from '../navigation/types';
 import {getCachedModelCatalog, refreshModelCatalog} from '../serverless/modelCatalog';
 import {
@@ -85,6 +86,19 @@ export function createStyles(c: ThemeColors, topInset: number) {
     },
     headerSpacer: {
       width: 48,
+    },
+    modeNotice: {
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 12,
+      backgroundColor: c.surface,
+      padding: 16,
+      gap: 8,
+    },
+    modeNoticeText: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.textSecondary,
     },
     sectionLabel: {
       fontSize: 13,
@@ -357,6 +371,10 @@ function modelLabel(model: ModelInfo): string {
 export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenProps) {
   const {colors} = useTheme();
   const insets = useSafeAreaInsets();
+  // TASK-AUDIT-016: this editor configures the serverless provider stack,
+  // so it is only operable in serverless mode; server-mode mounts see a
+  // notice instead of serverless-only configuration controls.
+  const {status: modeStatus, mode} = useApplicationMode();
   const styles = useMemo(
     () => createStyles(colors, insets.top),
     [colors, insets.top],
@@ -384,8 +402,18 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
 
   // Load the persisted provider plus its stored state and cached catalog;
   // all local reads, so nothing here touches the network or leaks the key.
+  // Nothing loads until the persisted mode has been restored, and a server
+  // mode application never reads serverless configuration at all
+  // (TASK-AUDIT-016).
   useEffect(() => {
     let cancelled = false;
+    if (modeStatus !== 'ready') {
+      return;
+    }
+    if (mode !== 'serverless') {
+      setLoading(false);
+      return;
+    }
     (async () => {
       try {
         const db = await getLocalDatabase();
@@ -415,7 +443,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [modeStatus, mode]);
 
   /**
    * Resolve the key that applies right now: a freshly typed draft wins,
@@ -596,6 +624,34 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     );
     return {models: sorted.slice(0, MAX_VISIBLE_MODELS), total: sorted.length};
   }, [models, filter]);
+
+  // TASK-AUDIT-016: once the persisted mode is known, a server-mode mount
+  // renders the serverless-only notice and never the editor. All hooks run
+  // above this return, so the conditional keeps the rules-of-hooks contract.
+  if (modeStatus === 'ready' && mode !== 'serverless') {
+    return (
+      <View style={styles.container} testID="openrouter-settings-screen">
+        <View style={styles.header}>
+          <Pressable
+            accessibilityLabel="Go back"
+            hitSlop={8}
+            onPress={() => navigation.goBack()}
+            testID="openrouter-back">
+            <Text style={styles.backText}>‹ Back</Text>
+          </Pressable>
+          <Text style={styles.title}>AI provider</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.modeNotice} testID="openrouter-mode-notice">
+          <Text style={styles.modeNoticeText}>
+            Direct AI connections are a serverless feature. Switch the
+            application to serverless mode to configure a provider, API key
+            and models on this device.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container} testID="openrouter-settings-screen">

@@ -12,6 +12,7 @@
 import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   fireEvent,
   render,
@@ -27,6 +28,9 @@ import * as vocabularyApi from '../src/api/vocabulary';
 import type {VocabularyItem} from '../src/api/vocabulary';
 import {AuthProvider} from '../src/auth/AuthContext';
 import {ModeProvider} from '../src/mode/ModeContext';
+import {saveApplicationMode} from '../src/mode/modeStorage';
+import {setRuntimeApplicationMode} from '../src/mode/runtime';
+import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen} from '../src/screens/ChatScreen';
@@ -45,6 +49,9 @@ const mockedVocabulary = jest.mocked(vocabularyApi);
 const mockedSessions = jest.mocked(sessionsApi);
 const mockedStorage = jest.mocked(secureStorage);
 const mockedShare = jest.mocked(ankiShare);
+const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
+  __resetAsyncStorageStore: () => void;
+};
 
 function makeItem(overrides: Partial<VocabularyItem> = {}): VocabularyItem {
   return {
@@ -104,6 +111,7 @@ async function renderVocabulary(options?: {withChatUnderneath?: boolean}) {
 }
 
 beforeEach(() => {
+  asyncStorage.__resetAsyncStorageStore();
   jest.clearAllMocks();
   mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
   mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
@@ -115,6 +123,10 @@ beforeEach(() => {
     previous: null,
     results: [],
   });
+});
+
+afterEach(() => {
+  setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
 });
 
 describe('VocabularyScreen', () => {
@@ -417,5 +429,60 @@ describe('VocabularyScreen', () => {
       expect(mockedShare.shareAnkiCsv).toHaveBeenCalledWith(EXPORT_CSV);
       expect(screen.queryByTestId('vocabulary-retry')).toBeNull();
     });
+  });
+});
+
+// TASK-AUDIT-016: saved vocabulary is a server feature, so a serverless
+// mount must render the mode notice and never issue a vocabulary request.
+describe('VocabularyScreen in serverless mode (TASK-AUDIT-016)', () => {
+  it('renders the server-only notice instead of the list or export', async () => {
+    await saveApplicationMode('serverless');
+    setRuntimeApplicationMode('serverless');
+
+    await renderVocabulary();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('vocabulary-mode-notice')).toBeOnTheScreen(),
+    );
+    expect(screen.getByText(/Saved vocabulary lives with your server account/)).toBeOnTheScreen();
+    expect(screen.queryByTestId('vocabulary-export')).toBeNull();
+    expect(screen.queryByTestId('vocabulary-loading')).toBeNull();
+    expect(screen.queryByTestId('vocabulary-list')).toBeNull();
+    expect(screen.queryByTestId('vocabulary-empty')).toBeNull();
+  });
+
+  it('issues no vocabulary API calls in serverless mode', async () => {
+    await saveApplicationMode('serverless');
+    setRuntimeApplicationMode('serverless');
+
+    await renderVocabulary();
+    await waitFor(() =>
+      expect(screen.getByTestId('vocabulary-mode-notice')).toBeOnTheScreen(),
+    );
+
+    expect(mockedVocabulary.listVocabulary).not.toHaveBeenCalled();
+    expect(mockedVocabulary.exportVocabulary).not.toHaveBeenCalled();
+    expect(mockedShare.shareAnkiCsv).not.toHaveBeenCalled();
+  });
+
+  it('keeps the server vocabulary flow intact after switching back to server mode', async () => {
+    mockedVocabulary.listVocabulary.mockResolvedValue(
+      itemPage([makeItem({id: 9, expression: 'run into'})]),
+    );
+
+    await saveApplicationMode('serverless');
+    setRuntimeApplicationMode('serverless');
+    const {unmount} = await renderVocabulary();
+    await waitFor(() =>
+      expect(screen.getByTestId('vocabulary-mode-notice')).toBeOnTheScreen(),
+    );
+    unmount();
+
+    await saveApplicationMode('server');
+    setRuntimeApplicationMode('server');
+    await renderVocabulary();
+
+    expect(await screen.findByTestId('vocabulary-item-9')).toBeOnTheScreen();
+    expect(mockedVocabulary.listVocabulary).toHaveBeenCalled();
   });
 });

@@ -935,6 +935,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           <MessageActionsMenu
             visible={menuMessage !== null}
             role={menuMessage?.role ?? 'assistant'}
+            // TASK-AUDIT-016: the vocabulary flow is server-only, so the
+            // Select text entry disappears while serverless is active
+            // instead of offering a save that could only fail.
+            vocabularyEnabled={mode === 'server'}
             onClose={() => {
               setMenuMessage(null);
             }}

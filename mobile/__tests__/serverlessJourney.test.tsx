@@ -186,13 +186,6 @@ async function sqlRows(
   return result.rows;
 }
 
-/** Simulate a native selection span over the pinned selection input. */
-async function selectRange(start: number, end: number): Promise<void> {
-  await fireEvent(top('chat-selection-input'), 'selectionChange', {
-    nativeEvent: {selection: {start, end}},
-  });
-}
-
 /** Confirm the native clear-data dialog captured by the Alert spy. */
 async function confirmClearLocalData(): Promise<void> {
   lastAlertButtons = [];
@@ -441,7 +434,7 @@ describe('TASK-117 serverless journey', () => {
     expect(xhrConstructorSpy).not.toHaveBeenCalled();
   });
 
-  it('keeps serverless vocabulary functionality unavailable', async () => {
+  it('keeps serverless vocabulary functionality unavailable (TASK-AUDIT-016)', async () => {
     const fake = new FakeOpenRouterClient();
     const view = await bootConfiguredServerlessApp(fake);
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
@@ -456,26 +449,19 @@ describe('TASK-117 serverless journey', () => {
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     await startConversationWithReply(fake);
 
-    // Selecting text and saving hits the server-API gate with a clear error.
+    // The message menu no longer offers Select text in serverless mode:
+    // saving words is a server-only flow, so the entry disappears instead
+    // of presenting an action that could only fail against the gate.
     await fireEvent(top('chat-message-2'), 'longPress');
     await waitFor(() => expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen());
-    await pressTop('chat-menu-select-text');
-    await waitFor(() => expect(screen.getByTestId('chat-selection')).toBeOnTheScreen());
-    await selectRange(0, 5);
-    await waitFor(() =>
-      expect(within(top('chat-screen')).getByTestId('chat-selection-preview')).toHaveTextContent(
-        USER_TEXT.slice(0, 5),
-      ),
-    );
-    await pressTop('chat-selection-save');
-    await waitFor(() =>
-      expect(within(top('chat-screen')).getByTestId('chat-toast')).toBeOnTheScreen(),
-    );
-    expect(
-      within(top('chat-screen')).getByText(
-        'Serverless mode is active: your data stays on this device and server APIs are unavailable.',
-      ),
-    ).toBeOnTheScreen();
+    expect(screen.queryByTestId('chat-menu-select-text')).toBeNull();
+    // The rest of the menu keeps working.
+    expect(screen.getByTestId('chat-menu-copy')).toBeOnTheScreen();
+    expect(screen.getByTestId('chat-menu-suggest-replies')).toBeOnTheScreen();
+    await pressTop('chat-menu-copy');
+
+    // And the selection sheet can never be reached through the UI.
+    expect(screen.queryByTestId('chat-selection')).toBeNull();
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(xhrConstructorSpy).not.toHaveBeenCalled();
