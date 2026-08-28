@@ -58,9 +58,14 @@ export async function buildServerlessContext(
     created_at: String(row.created_at ?? ''),
   }));
 
-  // Select only the recent window (excludes the current user message which
-  // is already in turn.userMessage and passed separately to buildContext)
-  const recentMessages = selectRecentMessages(messages);
+  // Select only the recent window from the PRIOR history: the current user
+  // message is passed separately to buildContext (backend chat.py builds the
+  // window with `sequence__lt=before_sequence`), so it can never be
+  // duplicated nor crowded out by the committed turn rows. The pending
+  // assistant slot and any incomplete rows are dropped later by the context
+  // builder's complete-status rule.
+  const priorMessages = messages.filter(msg => msg.sequence < turn.userMessage.sequence);
+  const recentMessages = selectRecentMessages(priorMessages);
 
   return buildContext({
     level: turn.session.learning_level,

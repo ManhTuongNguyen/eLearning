@@ -2218,7 +2218,7 @@ Test:
 
 ## TASK-111 — Mobile serverless tests
 
-Status: `[ ]`
+Status: `[x]`
 
 Test:
 
