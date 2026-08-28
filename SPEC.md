@@ -2295,7 +2295,7 @@ Do not attempt to manually duplicate every serializer implementation.
 
 ## TASK-116 — Validate complete server-mode user journey
 
-Status: `[ ]`
+Status: `[x]`
 
 Verify:
 
