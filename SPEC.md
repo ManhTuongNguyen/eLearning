@@ -2127,7 +2127,7 @@ Acceptance criteria:
 
 ## TASK-105 — Backend authentication integration tests
 
-Status: `[ ]`
+Status: `[x]`
 
 Test:
 
