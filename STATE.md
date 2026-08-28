@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-28
-- **Current Phase**: TASK-AUDIT-009 complete; next task TASK-AUDIT-010 — Remove hard-coded backend server configuration
+- **Current Phase**: TASK-AUDIT-010 complete; next task TASK-AUDIT-011 — Fix excessive top margin on Learning Level screen
 
 ## Current Active Task
   - **Task ID**:
@@ -185,6 +185,35 @@
   auto-restored landing is a second mounted instance), theme.test AuthContext
   mock completed with toErrorMessage. Full suites: mobile pnpm test 635
   passed; pnpm lint and pnpm typecheck clean.
+- TASK-AUDIT-010 (done): the backend URL is no longer hard-coded. Introduced
+  the smallest RN env mechanism (babel-only `react-native-dotenv` 4.1.1,
+  no native module): `mobile/babel.config.js` registers the plugin with
+  `moduleName: '@env'` and `allowUndefined: false` (missing vars fail the
+  bundle instead of silently inlining `undefined`). `src/config.ts` now
+  imports `API_BASE_URL` from `@env` — zero URLs in source — and exports
+  `resolveApiBaseUrl` (validated, trailing-slash-stripped) plus the typed
+  `API_BASE_URL: string`; `src/env.d.ts` declares the `@env` module surface
+  (`string | undefined` in, validated `string` out) and a missing/empty/
+  non-http value throws the actionable "API_BASE_URL is not configured"
+  error instead of a confusing first-fetch failure. Env files: committed
+  `mobile/.env.example` (documents API_BASE_URL + mode-file selection),
+  committed `mobile/.env.test` (mock URL `http://test.local:8000`; jest sets
+  NODE_ENV=test so it overrides the base — root .gitignore gained
+  `!mobile/.env.test`), local uncommitted `mobile/.env` keeps the previous
+  dev value (`http://10.0.2.2:8000`) so the existing workflow is unchanged.
+  Mode selection: debug bundles -> .env.development, release -> .env.production
+  (Metro sets NODE_ENV from the dev flag), jest -> .env.test. Tests are now
+  env-agnostic: sessionsApi/vocabularyApi expectations build URLs from the
+  imported config instead of hard-coded strings (13 literal URLs removed);
+  new config.test.ts pins the .env.test contract + resolver behavior
+  (trim/trailing slashes/http(s) rejection). README gained a Configuration
+  section (one-time `cp .env.example .env`, 10.0.2.2 emulator alias, Metro
+  cache reset note, secrets never belong in .env since values are inlined).
+- Regression coverage: config.test.ts (5 tests: .env.test value + normalized
+  http(s) shape; resolver accept/trim, trailing-slash strip, missing/empty/
+  non-http rejection with actionable message); chatStream/sessionsApi/
+  vocabularyApi suites pass with the env-driven URL. Full suites: mobile
+  pnpm test 645 passed (3 stable runs); pnpm lint and pnpm typecheck clean.
 - TASK-AUDIT-009 (done): chat bubbles no longer collapse to ~55% width.
   Root cause: the bubble's `maxWidth: '82%'` sat on the Pressable inside the
   previously UNSTYLED inner View wrapper — an auto-width flex item of the row —

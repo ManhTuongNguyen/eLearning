@@ -5,6 +5,7 @@
  */
 
 import {ApiError, apiRequest} from '../src/api/client';
+import {API_BASE_URL} from '../src/config';
 import {exportVocabulary, saveVocabulary} from '../src/api/vocabulary';
 import type {AuthedRequester} from '../src/auth/authedRequest';
 
@@ -58,7 +59,7 @@ describe('vocabulary api bindings', () => {
     expect(item.id).toBe(3);
     expect(item.status).toBe('pending');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.2.2:8000/api/v1/vocabulary/',
+      `${API_BASE_URL}/api/v1/vocabulary/`,
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({expression: 'the early bird', source_message_id: 810}),
@@ -106,7 +107,7 @@ describe('exportVocabulary (TASK-074 binding)', () => {
     await expect(exportVocabulary('tok')).resolves.toBe(csv);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.2.2:8000/api/v1/vocabulary/export/',
+      `${API_BASE_URL}/api/v1/vocabulary/export/`,
       {
         method: 'GET',
         headers: {Accept: 'text/csv', Authorization: 'Bearer tok'},

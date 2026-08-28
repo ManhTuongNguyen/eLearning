@@ -9,6 +9,7 @@ import {
   renameSession,
 } from '../src/api/sessions';
 import {apiRequest} from '../src/api/client';
+import {API_BASE_URL} from '../src/config';
 import type {AuthedRequester} from '../src/auth/authedRequest';
 
 /** Fixed-token requester standing in for the provider-built authed requester. */
@@ -31,7 +32,7 @@ describe('sessions api bindings', () => {
     const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse(200, {
         count: 25,
-        next: 'http://10.0.2.2:8000/api/v1/sessions/?page=2',
+        next: `${API_BASE_URL}/api/v1/sessions/?page=2`,
         previous: null,
         results: [
           {
@@ -52,10 +53,10 @@ describe('sessions api bindings', () => {
     expect(page.results[0]?.learning_level).toBe('B2');
 
     const [url] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://10.0.2.2:8000/api/v1/sessions/');
+    expect(url).toBe(`${API_BASE_URL}/api/v1/sessions/`);
 
     await listSessions(requester, 3);
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('http://10.0.2.2:8000/api/v1/sessions/?page=3');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${API_BASE_URL}/api/v1/sessions/?page=3`);
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       headers: {Authorization: 'Bearer tok'},
     });
@@ -71,7 +72,7 @@ describe('sessions api bindings', () => {
     await createSession(requester);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.2.2:8000/api/v1/sessions/',
+      `${API_BASE_URL}/api/v1/sessions/`,
       expect.objectContaining({
         method: 'POST',
         body: '{}',
@@ -88,7 +89,7 @@ describe('sessions api bindings', () => {
     await createSession(requester, 'Traveling');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.2.2:8000/api/v1/sessions/',
+      `${API_BASE_URL}/api/v1/sessions/`,
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({topic_hint: 'Traveling'}),
@@ -132,7 +133,7 @@ describe('sessions api bindings', () => {
     const session = await getSession(requester, 42);
     expect(session.title).toBe('Interview prep');
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.2.2:8000/api/v1/sessions/42/',
+      `${API_BASE_URL}/api/v1/sessions/42/`,
       expect.objectContaining({method: 'GET'}),
     );
   });
@@ -145,7 +146,7 @@ describe('sessions api bindings', () => {
     await renameSession(requester, 42, 'Renamed');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.2.2:8000/api/v1/sessions/42/',
+      `${API_BASE_URL}/api/v1/sessions/42/`,
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({title: 'Renamed'}),
@@ -160,7 +161,7 @@ describe('sessions api bindings', () => {
 
     await expect(deleteSession(requester, 42)).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.2.2:8000/api/v1/sessions/42/',
+      `${API_BASE_URL}/api/v1/sessions/42/`,
       expect.objectContaining({
         method: 'DELETE',
         headers: expect.objectContaining({Authorization: 'Bearer tok'}),
@@ -192,7 +193,7 @@ describe('sessions api bindings', () => {
     expect(page.results.map(m => m.sequence)).toEqual([1, 2]);
     expect(page.results[1]).toMatchObject({role: 'assistant', status: 'failed'});
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.2.2:8000/api/v1/sessions/9/messages/',
+      `${API_BASE_URL}/api/v1/sessions/9/messages/`,
       expect.objectContaining({method: 'GET'}),
     );
   });
@@ -206,7 +207,7 @@ describe('sessions api bindings', () => {
 
     expect(result.replies).toEqual(['First reply', 'Second reply', 'Third reply']);
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.2.2:8000/api/v1/sessions/9/messages/44/suggestions/',
+      `${API_BASE_URL}/api/v1/sessions/9/messages/44/suggestions/`,
       expect.objectContaining({
         method: 'POST',
         body: '{}',
@@ -244,7 +245,7 @@ describe('sessions api bindings', () => {
       explanation: 'Use the past tense "went" and add the article "the".',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.2.2:8000/api/v1/sessions/9/messages/44/improve/',
+      `${API_BASE_URL}/api/v1/sessions/9/messages/44/improve/`,
       expect.objectContaining({
         method: 'POST',
         body: '{}',

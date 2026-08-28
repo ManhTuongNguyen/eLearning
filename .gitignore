@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+# Committed jest env (mock values only, never secrets).
+!mobile/.env.test
 
 # --- Python / backend ---
 __pycache__/

@@ -30,6 +30,18 @@ pnpm android        # build + install + launch on a connected device/emulator
 
 Debug builds fetch JS from Metro. For an emulator on the same machine, Metro is reachable via `adb reverse tcp:8081 tcp:8081` (done automatically by `run-android`).
 
+## Configuration (backend server URL)
+
+The backend base URL is environment-driven (`src/config.ts` reads it from the virtual `@env` module via the `react-native-dotenv` babel plugin) — it is never hard-coded in application source.
+
+```bash
+cp .env.example .env   # one-time setup; .env is gitignored
+```
+
+- **`API_BASE_URL`** — base URL of the Django backend. The Android emulator uses `http://10.0.2.2:8000` (the emulator's alias for the host loopback, where Docker Compose publishes the backend); a physical device on the same network needs the host's LAN IP.
+- File selection follows the build mode: `.env` is the base, `.env.development` applies to debug bundles, `.env.test` (committed, mock values only) applies to jest runs, and `.env.production` applies to release bundles. A missing `API_BASE_URL` fails the bundle instead of producing `undefined` URLs.
+- `.env` values are inlined into the JS bundle at build time, so only public configuration belongs there — never API keys or other secrets. Changes to `.env` files require a Metro cache reset (`pnpm start -- --reset-cache`) to take effect.
+
 ## Commands
 
 ```bash

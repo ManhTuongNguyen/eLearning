@@ -663,7 +663,7 @@ The exact percentage is not prescribed. Choose a natural mobile-chat width that 
 
 ## TASK-AUDIT-010 — Remove hard-coded backend server configuration
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
