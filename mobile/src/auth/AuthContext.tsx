@@ -6,6 +6,11 @@
  * once after a single-flight access-token refresh when the backend answers
  * 401, and ends the local session (returning the user to Login via
  * RootNavigator) when refresh credentials are no longer accepted.
+ *
+ * The startup restore is application-mode aware (TASK-AUDIT-003): while
+ * serverless mode is active it is skipped entirely, so initializing the
+ * serverless app never reads credentials or contacts the backend; stored
+ * credentials are left untouched for a later switch back to server mode.
  */
 import React, {
   createContext,
@@ -21,6 +26,7 @@ import * as authApi from '../api/auth';
 import type {RegisterInput} from '../api/auth';
 import {apiRequest, ApiError} from '../api/client';
 import type {RequestOptions} from '../api/client';
+import {useOptionalApplicationMode} from '../mode/ModeContext';
 import {clearTokens, loadTokens, saveTokens} from './secureStorage';
 import type {AuthTokens, AuthUser} from './tokens';
 
@@ -54,6 +60,11 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Application mode (TASK-AUDIT-003): serverless is independent of server
+  // authentication, so the session restore waits for the mode to settle and
+  // is skipped entirely while serverless — no keychain reads and no backend
+  // requests are made merely to initialize the serverless application.
+  const applicationMode = useOptionalApplicationMode();
   const tokensRef = useRef<AuthTokens | null>(null);
   const restorePromiseRef = useRef<Promise<void> | null>(null);
   const restoreResolverRef = useRef<(() => void) | null>(null);
@@ -104,6 +115,19 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   }, []);
 
   useEffect(() => {
+    // Until the persisted mode is known the restore decision cannot be made;
+    // RootNavigator keeps showing the splash during this window.
+    if (applicationMode && applicationMode.status === 'loading') {
+      return undefined;
+    }
+    if (applicationMode && applicationMode.mode === 'serverless') {
+      // Serverless initialization never touches server authentication.
+      // Existing credentials stay stored so switching back to server mode
+      // can restore the normal session flow.
+      setStatus(prev => (prev === 'loading' ? 'unauthenticated' : prev));
+      restoreResolverRef.current?.();
+      return undefined;
+    }
     let cancelled = false;
 
     async function restore() {
@@ -152,7 +176,7 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     return () => {
       cancelled = true;
     };
-  }, [refreshAccess]);
+  }, [applicationMode, refreshAccess]);
 
   const applyLoginResponse = useCallback(async (response: authApi.LoginResponse) => {
     const tokens: AuthTokens = {access: response.access, refresh: response.refresh};

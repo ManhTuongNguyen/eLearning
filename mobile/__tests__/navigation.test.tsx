@@ -1,10 +1,13 @@
 /**
  * Navigation structure tests (SPEC TASK-043): the root switch between auth
  * stack and main stack, in-stack navigation, and direct assertions on the
- * navigation state itself.
+ * navigation state itself. Includes the mode-aware root switch
+ * (TASK-AUDIT-003): a restored serverless selection mounts the main
+ * application without ever routing through login.
  */
 import React from 'react';
 import {NavigationContainer, createNavigationContainerRef} from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 
 import * as authApi from '../src/api/auth';
@@ -12,6 +15,7 @@ import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {AuthTokens} from '../src/auth/tokens';
 import * as vocabularyApi from '../src/api/vocabulary';
+import {saveApplicationMode} from '../src/mode/modeStorage';
 import {RootNavigator} from '../src/navigation/RootNavigator';
 import type {AuthStackParamList, MainStackParamList} from '../src/navigation/types';
 import {ModeProvider} from '../src/mode/ModeContext';
@@ -24,6 +28,9 @@ jest.mock('../src/auth/secureStorage');
 const mockedAuth = jest.mocked(authApi);
 const mockedVocabulary = jest.mocked(vocabularyApi);
 const mockedStorage = jest.mocked(secureStorage);
+const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
+  __resetAsyncStorageStore: () => void;
+};
 
 type RootParamList = AuthStackParamList & MainStackParamList;
 
@@ -70,6 +77,7 @@ beforeEach(() => {
     previous: null,
     results: [],
   });
+  asyncStorage.__resetAsyncStorageStore();
 });
 
 describe('root switch', () => {
@@ -107,6 +115,33 @@ describe('root switch', () => {
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('login-identifier')).toBeNull();
     expect(focusedRouteName()).toBe('Chat');
+  });
+
+  it('a restored serverless mode mounts the main application without authentication (TASK-AUDIT-003)', async () => {
+    await saveApplicationMode('serverless');
+    const {focusedRouteName} = await renderRoot();
+
+    // Cold start lands directly in the main application: no login screen is
+    // ever shown and no authentication request is made.
+    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    expect(screen.queryByTestId('login-identifier')).toBeNull();
+    expect(focusedRouteName()).toBe('Chat');
+    expect(mockedStorage.loadTokens).not.toHaveBeenCalled();
+    expect(mockedAuth.getMe).not.toHaveBeenCalled();
+  });
+
+  it('a serverless user with stored credentials still bypasses the auth stack (TASK-AUDIT-003)', async () => {
+    await saveApplicationMode('serverless');
+    mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
+    mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+    const {focusedRouteName} = await renderRoot();
+
+    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    expect(screen.queryByTestId('login-identifier')).toBeNull();
+    expect(focusedRouteName()).toBe('Chat');
+    // Serverless initialization makes no authentication requests; stored
+    // credentials are simply left untouched.
+    expect(mockedAuth.getMe).not.toHaveBeenCalled();
   });
 });
 

@@ -4,8 +4,10 @@
  * Server mode exposes the server-backed learning-level and vocabulary
  * entries; serverless replaces them with an OpenRouter status card that
  * reports configuration presence without ever revealing the API key value.
- * Account identity, theme segments, application-mode switcher and logout are
- * visible in both modes.
+ * Account identity and logout are server-mode only (TASK-AUDIT-003):
+ * serverless mode is independent of server accounts, so no account
+ * information is displayed there. Theme segments and the application-mode
+ * switcher are visible in both modes.
  */
 import React from 'react';
 import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
@@ -112,17 +114,22 @@ afterEach(() => {
 });
 
 describe('controls present in every mode', () => {
-  it.each(['server', 'serverless'] as const)(
-    'shows the signed-in account identity in %s mode',
-    async mode => {
-      await renderSettings(mode);
+  it('shows the signed-in account identity in server mode', async () => {
+    await renderSettings('server');
 
-      expect(screen.getByTestId('settings-account-email')).toHaveTextContent(
-        'alice@example.com',
-      );
-      expect(screen.getByText('Signed in as')).toBeOnTheScreen();
-    },
-  );
+    expect(screen.getByTestId('settings-account-email')).toHaveTextContent(
+      'alice@example.com',
+    );
+    expect(screen.getByText('Signed in as')).toBeOnTheScreen();
+  });
+
+  it('hides all account information in serverless mode (TASK-AUDIT-003)', async () => {
+    await renderSettings('serverless');
+
+    expect(screen.queryByTestId('settings-account-section')).toBeNull();
+    expect(screen.queryByText('Signed in as')).toBeNull();
+    expect(screen.queryByTestId('settings-account-email')).toBeNull();
+  });
 
   it.each(['server', 'serverless'] as const)(
     'shows the three theme choices and marks system as the default in %s mode',
@@ -152,6 +159,12 @@ describe('controls present in every mode', () => {
     fireEvent.press(screen.getByTestId('settings-logout'));
 
     expect(mockLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the server logout control in serverless mode (TASK-AUDIT-003)', async () => {
+    await renderSettings('serverless');
+
+    expect(screen.queryByTestId('settings-logout')).toBeNull();
   });
 });
 

@@ -238,7 +238,7 @@ Do not disable DRF content negotiation globally.
 
 ## TASK-AUDIT-003 — Correct serverless mode entry and persistence
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P0`
 

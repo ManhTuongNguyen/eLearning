@@ -201,12 +201,15 @@ async function confirmClearLocalData(): Promise<void> {
   });
 }
 
-/** Boot the app in a fully configured serverless mode (pre-seeded stores). */
+/**
+ * Boot the app in a fully configured serverless mode (pre-seeded stores).
+ *
+ * TASK-AUDIT-003: no server credentials are involved — a serverless cold
+ * start boots straight into the main application without any authentication.
+ */
 async function bootConfiguredServerlessApp(
   fake: FakeOpenRouterClient,
 ): Promise<ReactTestRendererLike> {
-  await seedAuthKeychain();
-  mockedAuth.getMe.mockResolvedValue(USER);
   await saveApplicationMode('serverless');
   await saveServerlessOpenRouterConfig({
     apiKey: API_KEY,
@@ -468,6 +471,10 @@ describe('TASK-117 serverless journey', () => {
 
   it('clear local data removes all local data but leaves the server account intact', async () => {
     const fake = new FakeOpenRouterClient();
+    // Server credentials exist on the device from an earlier server session;
+    // serverless mode must not use them, but clearing local data must not
+    // remove them either.
+    await seedAuthKeychain();
     await bootConfiguredServerlessApp(fake);
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     await startConversationWithReply(fake);
@@ -501,16 +508,55 @@ describe('TASK-117 serverless journey', () => {
     // The secure API key was removed along with the data.
     expect(await Keychain.getGenericPassword({service: SERVERLESS_SERVICE})).toBe(false);
 
-    // Auth credentials and the account identity survive untouched.
+    // Auth credentials survive untouched even though serverless mode never
+    // read them (no authentication request was made during the session).
     const auth = await Keychain.getGenericPassword({service: AUTH_SERVICE});
     expect(auth).toBeTruthy();
     expect(JSON.parse((auth as {password: string}).password)).toEqual(TOKENS);
-    expect(screen.getByTestId('settings-account-email')).toHaveTextContent(USER.email);
+    expect(mockedAuth.getMe).not.toHaveBeenCalled();
     expect(getRuntimeApplicationMode()).toBe('serverless');
 
     // Clearing never contacted the server.
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(xhrConstructorSpy).not.toHaveBeenCalled();
     expect(mockedAuth.logout).not.toHaveBeenCalled();
+  });
+
+  it('cold start with persisted serverless mode boots straight into the app without login (TASK-AUDIT-003)', async () => {
+    const fake = new FakeOpenRouterClient();
+    // No auth keychain seeding at all: serverless is independent of server
+    // authentication. Only the mode flag and OpenRouter config are stored.
+    await saveApplicationMode('serverless');
+    await saveServerlessOpenRouterConfig({
+      apiKey: API_KEY,
+      primaryModel: 'vendor/model-a',
+      fallbackModels: [],
+    });
+    mockedClientModule.__setFake(fake);
+
+    const view = await render(launch(launchCount++));
+
+    // The main application mounts directly; the login screen is never shown.
+    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    expect(screen.queryByTestId('login-identifier')).toBeNull();
+    expect(getRuntimeApplicationMode()).toBe('serverless');
+
+    // No authentication request was made merely to initialize the app.
+    expect(mockedAuth.getMe).not.toHaveBeenCalled();
+
+    // No server-only account UI exists in serverless mode.
+    await pressTop('chat-open-settings');
+    await waitFor(() => expect(top('settings-screen')).toBeOnTheScreen());
+    expect(screen.queryByTestId('settings-account-section')).toBeNull();
+    expect(screen.queryByText('Signed in as')).toBeNull();
+    expect(screen.queryByTestId('settings-logout')).toBeNull();
+
+    // Closing and reopening keeps serverless mode active without login.
+    await view.rerender(launch(launchCount++));
+    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    expect(screen.queryByTestId('login-identifier')).toBeNull();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(xhrConstructorSpy).not.toHaveBeenCalled();
   });
 });

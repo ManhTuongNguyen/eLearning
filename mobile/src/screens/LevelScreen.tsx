@@ -7,7 +7,7 @@
  * backend traffic happens while serverless is active. Selections persist
  * immediately in both modes; errors keep the last confirmed value selected.
  */
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -137,6 +137,13 @@ export function LevelScreen({navigation}: LevelScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // getAccessToken is read through a ref (TASK-048 gotcha): context value
+  // changes — including the auth status settling after the application mode
+  // (TASK-AUDIT-003) — must not re-trigger the load/save effects below, so
+  // they depend on the stable mode only and always read the latest getter.
+  const getAccessTokenRef = useRef(getAccessToken);
+  getAccessTokenRef.current = getAccessToken;
+
   // Reset the transient confirmations whenever the data source flips so a
   // mode switch cannot show a stale "Saved." from the other backend.
   useEffect(() => {
@@ -172,7 +179,7 @@ export function LevelScreen({navigation}: LevelScreenProps) {
     }
 
     (async () => {
-      const token = await getAccessToken();
+      const token = await getAccessTokenRef.current();
       if (!token) {
         if (!cancelled) {
           setError('You need to sign in again to load your profile.');
@@ -199,7 +206,7 @@ export function LevelScreen({navigation}: LevelScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [mode, getAccessToken]);
+  }, [mode]);
 
   const handleSelect = useCallback(
     async (option: LevelOption) => {
@@ -226,7 +233,7 @@ export function LevelScreen({navigation}: LevelScreenProps) {
         return;
       }
 
-      const token = await getAccessToken();
+      const token = await getAccessTokenRef.current();
       if (!token || saving !== null || option.value === selected) {
         setSaving(null);
         return;
@@ -243,7 +250,7 @@ export function LevelScreen({navigation}: LevelScreenProps) {
         setSaving(null);
       }
     },
-    [getAccessToken, mode, saving, selected],
+    [mode, saving, selected],
   );
 
   return (

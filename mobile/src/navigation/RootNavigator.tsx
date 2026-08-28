@@ -4,20 +4,31 @@
  * authenticated users the main application stack. Swapping whole navigators
  * keeps each flow's state isolated, so logout always lands on Login and
  * login always lands on Chat.
+ *
+ * Mode-aware routing (TASK-AUDIT-003): serverless mode is independent of
+ * server authentication, so a restored serverless selection mounts the main
+ * application stack directly — the login flow is never shown on cold start
+ * — while server mode keeps the authentication-gated behavior.
  */
 import React from 'react';
 
 import {useAuth} from '../auth/AuthContext';
+import {useApplicationMode} from '../mode/ModeContext';
 import {SplashScreen} from '../screens/SplashScreen';
 import {AuthNavigator} from './AuthNavigator';
 import {MainNavigator} from './MainNavigator';
 
 export function RootNavigator() {
-  const {status} = useAuth();
+  const {status: modeStatus, mode} = useApplicationMode();
+  const {status: authStatus} = useAuth();
 
-  if (status === 'loading') {
+  if (modeStatus === 'loading' || authStatus === 'loading') {
     return <SplashScreen />;
   }
 
-  return status === 'authenticated' ? <MainNavigator /> : <AuthNavigator />;
+  if (mode === 'serverless') {
+    return <MainNavigator />;
+  }
+
+  return authStatus === 'authenticated' ? <MainNavigator /> : <AuthNavigator />;
 }

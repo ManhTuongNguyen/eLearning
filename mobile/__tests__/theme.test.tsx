@@ -305,10 +305,12 @@ describe('settings theme switcher', () => {
 describe('screens consume theme tokens', () => {
   it('the login screen background follows the active palette', async () => {
     await render(
-      <ThemeProvider>
-        <LoginScreen {...loginProps} />
-        <ModeControls />
-      </ThemeProvider>,
+      <ModeProvider>
+        <ThemeProvider>
+          <LoginScreen {...loginProps} />
+          <ModeControls />
+        </ThemeProvider>
+      </ModeProvider>,
     );
 
     expect(backgroundOf('login-screen')).toBe(lightColors.background);

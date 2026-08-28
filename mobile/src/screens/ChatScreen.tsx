@@ -1104,16 +1104,24 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setVocabError(null);
     (async () => {
       try {
+        const serverless = getRuntimeApplicationMode() === 'serverless';
         let token: string | null = null;
-        try {
-          token = await getAccessTokenRef.current();
-        } catch {
-          token = null;
+        if (!serverless) {
+          try {
+            token = await getAccessTokenRef.current();
+          } catch {
+            token = null;
+          }
+          if (!token || vocabSaveRequestRef.current !== requestId) {
+            return;
+          }
         }
-        if (!token || vocabSaveRequestRef.current !== requestId) {
-          return;
-        }
-        await saveVocabulary(token, expression, messageId > 0 ? messageId : undefined);
+        // Serverless mode has no server session (TASK-AUDIT-003): the save
+        // attempt goes through anyway so the runtime gate rejects it with
+        // its typed, user-visible error instead of a silent no-op. The gate
+        // throws before any transport work, so the placeholder token is
+        // never transmitted.
+        await saveVocabulary(token ?? '', expression, messageId > 0 ? messageId : undefined);
         if (vocabSaveRequestRef.current !== requestId) {
           return;
         }

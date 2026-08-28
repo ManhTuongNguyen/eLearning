@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-28
-- **Current Phase**: TASK-AUDIT-002 complete; next task TASK-AUDIT-003 — Correct serverless mode entry and persistence
+- **Current Phase**: TASK-AUDIT-003 complete; next task TASK-AUDIT-004 — Fix OpenRouter model discovery without token validation
 
 ## Current Active Task
   - **Task ID**:
@@ -26,7 +26,25 @@
   (`extra_media_type = text/csv`); `ServerSentEventNegotiation` now subclasses the
   base unchanged in behavior. Applied per-view on `VocabularyExportView`; success
   responses remain the raw `text/csv` HttpResponse, errors stay DRF JSON.
-- Regression coverage: backend/tests/test_vocabulary_export_api.py::TestNegotiation
-  (6 tests; verified 4/6 fail with the fix reverted — q-params, `text/*`, and the
-  406-guard cases pass by default negotiation). Full suites: backend pytest 1057
-  passed, mobile pnpm test 614 passed; ruff check/format clean; manage.py check clean.
+- TASK-AUDIT-003 (done): serverless entry/persistence. RootNavigator is now
+  mode-aware: once the persisted mode is restored, `serverless` mounts the main
+  stack directly (never the auth stack) regardless of auth status; server mode
+  keeps the auth-gated switch. AuthProvider consumes an optional mode context
+  (`useOptionalApplicationMode`, new export in mode/ModeContext.tsx): restore
+  waits for the mode to settle and is skipped entirely while serverless — no
+  keychain reads, no getMe/refresh requests; stored credentials stay untouched
+  for a later switch back to server. LoginScreen gained a serverless entry
+  (`login-serverless`, "Continue without an account") explaining on-device data
+  + direct provider requests; pressing it flips the mode and the root navigator
+  re-renders into the main stack. SettingsScreen now renders the account card
+  and logout only in server mode. Supporting fixes: LevelScreen moved to the
+  getAccessTokenRef pattern (TASK-048 convention) so auth-status settling no
+  longer re-triggers local profile loads; ChatScreen's vocabulary save now goes
+  through the runtime gate in serverless so the typed ServerApiBlockedError is
+  surfaced instead of a silent no-op when no token exists.
+- Regression coverage: navigation.test.tsx serverless root-switch (cold start
+  bypasses login, no loadTokens/getMe), LoginScreen.test.tsx serverless entry
+  (mode flip + persistence), SettingsScreen.test.tsx account/logout hidden in
+  serverless, serverlessJourney.test.tsx cold-start test (no auth keychain, no
+  fetch/XHR, account UI absent, restart keeps serverless). Full suites: mobile
+  pnpm test 620 passed; pnpm lint and pnpm typecheck clean.

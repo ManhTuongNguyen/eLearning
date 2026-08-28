@@ -83,3 +83,12 @@ export function useApplicationMode(): ModeContextValue {
   }
   return context;
 }
+
+/**
+ * Optional variant for consumers that must also work without a ModeProvider
+ * (standalone AuthProvider mounts): returns undefined instead of throwing,
+ * letting the consumer fall back to server-mode behavior.
+ */
+export function useOptionalApplicationMode(): ModeContextValue | undefined {
+  return useContext(ModeContext);
+}

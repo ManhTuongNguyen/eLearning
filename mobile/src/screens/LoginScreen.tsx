@@ -1,5 +1,9 @@
-/** Login screen: username-or-email + password against the backend API. */
-import React, {useMemo, useState} from 'react';
+/**
+ * Login screen: username-or-email + password against the backend API, plus
+ * the serverless entry point (TASK-AUDIT-003): users can enable serverless
+ * mode directly here, without any account.
+ */
+import React, {useCallback, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,6 +16,7 @@ import {
 } from 'react-native';
 
 import {useAuth} from '../auth/AuthContext';
+import {useApplicationMode} from '../mode/ModeContext';
 import type {LoginScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
@@ -78,17 +83,47 @@ function createStyles(c: ThemeColors) {
       color: c.accent,
       fontWeight: '600',
     },
+    serverlessSection: {
+      marginTop: 20,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      gap: 4,
+    },
+    serverlessTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.textPrimary,
+      textAlign: 'center',
+    },
+    serverlessDescription: {
+      fontSize: 13,
+      color: c.textSecondary,
+      textAlign: 'center',
+      lineHeight: 18,
+    },
   });
 }
 
 export function LoginScreen({navigation}: LoginScreenProps) {
   const {login, busy, error} = useAuth();
+  const {setMode} = useApplicationMode();
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
 
   const canSubmit = identifier.trim().length > 0 && password.length > 0 && !busy;
+
+  // TASK-AUDIT-003: serverless mode is entered straight from the login
+  // screen without any account. Switching the application mode re-renders
+  // the root navigator into the main stack — no navigation call needed.
+  const enterServerless = useCallback(() => {
+    setMode('serverless');
+  }, [setMode]);
 
   return (
     <KeyboardAvoidingView
@@ -143,6 +178,19 @@ export function LoginScreen({navigation}: LoginScreenProps) {
           testID="login-switch-register">
           <Text style={styles.switchText}>
             No account yet? <Text style={styles.switchLink}>Register</Text>
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={enterServerless}
+          style={styles.serverlessSection}
+          accessibilityRole="button"
+          accessibilityLabel="Continue without an account"
+          testID="login-serverless">
+          <Text style={styles.serverlessTitle}>Continue without an account</Text>
+          <Text style={styles.serverlessDescription}>
+            Serverless mode keeps your conversations on this device and sends
+            AI requests directly to your configured provider.
           </Text>
         </Pressable>
       </View>

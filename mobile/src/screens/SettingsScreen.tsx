@@ -3,14 +3,15 @@
  * preference control, showing only the options that are relevant to the
  * active application mode (TASK-080).
  *
- * Always shown: signed-in account identity, application-mode switcher
- * (TASK-090), theme selection (TASK-044), local data clearing (TASK-094,
- * serverless mode only) and logout (TASK-015). Server mode adds rows
- * backed by server features — learning level editing (TASK-018) and the
- * saved vocabulary list (TASK-072). Serverless mode replaces them with
- * an OpenRouter settings card that opens the local AI configuration
+ * Server mode shows: signed-in account identity, logout (TASK-015), and the
+ * server-backed rows — learning level editing (TASK-018) and the saved
+ * vocabulary list (TASK-072). Serverless mode (TASK-AUDIT-003) is
+ * independent of server accounts: no account identity, no server logout —
+ * instead an OpenRouter settings card opens the local AI configuration
  * editor (TASK-092): the key itself is stored in secure storage and is
- * never displayed.
+ * never displayed. Both modes keep the theme selection (TASK-044), the
+ * application-mode switcher (TASK-090) and — serverless only — local data
+ * clearing (TASK-094).
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -482,17 +483,19 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Settings</Text>
 
-        <View style={styles.accountRow} testID="settings-account-section">
-          <View style={styles.avatar}>
-            <Text style={styles.avatarInitial}>{avatarInitial}</Text>
+        {appMode === 'server' ? (
+          <View style={styles.accountRow} testID="settings-account-section">
+            <View style={styles.avatar}>
+              <Text style={styles.avatarInitial}>{avatarInitial}</Text>
+            </View>
+            <View style={styles.accountTexts}>
+              <Text style={styles.accountHint}>Signed in as</Text>
+              <Text style={styles.accountEmail} numberOfLines={1} testID="settings-account-email">
+                {email || 'Unknown account'}
+              </Text>
+            </View>
           </View>
-          <View style={styles.accountTexts}>
-            <Text style={styles.accountHint}>Signed in as</Text>
-            <Text style={styles.accountEmail} numberOfLines={1} testID="settings-account-email">
-              {email || 'Unknown account'}
-            </Text>
-          </View>
-        </View>
+        ) : null}
 
         {serverRows.length > 0 ? (
           <View style={styles.rowGroup}>
@@ -660,19 +663,23 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
           </View>
         ) : null}
 
-        <Pressable
-          style={[styles.button, busy && styles.buttonDisabled]}
-          disabled={busy}
-          onPress={() => {
-            logout();
-          }}
-          testID="settings-logout">
-          {busy ? (
-            <ActivityIndicator color={colors.onPrimary} />
-          ) : (
-            <Text style={styles.buttonText}>Log out</Text>
-          )}
-        </Pressable>
+        {/* Server logout: serverless mode has no server account to end
+            (TASK-AUDIT-003), so the control is hidden in that mode. */}
+        {appMode === 'server' ? (
+          <Pressable
+            style={[styles.button, busy && styles.buttonDisabled]}
+            disabled={busy}
+            onPress={() => {
+              logout();
+            }}
+            testID="settings-logout">
+            {busy ? (
+              <ActivityIndicator color={colors.onPrimary} />
+            ) : (
+              <Text style={styles.buttonText}>Log out</Text>
+            )}
+          </Pressable>
+        ) : null}
       </ScrollView>
     </View>
   );
