@@ -2141,7 +2141,7 @@ Test:
 
 ## TASK-106 — Backend conversation integration tests
 
-Status: `[ ]`
+Status: `[x]`
 
 Test:
 
