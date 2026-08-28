@@ -63,8 +63,14 @@ export interface PreparedTurn {
   assistantMessage: LocalMessage;
 }
 
-/** Assembles the LLM request for one prepared turn (TASK-087 strategy). */
-export type TurnRequestBuilder = (turn: PreparedTurn) => CompletionRequest;
+/**
+ * Assembles the LLM request for one prepared turn (TASK-087 strategy).
+ * May be asynchronous: the real context builder reads the session's
+ * rolling summary and message window from the database.
+ */
+export type TurnRequestBuilder = (
+  turn: PreparedTurn,
+) => CompletionRequest | Promise<CompletionRequest>;
 
 /** Streaming seam so tests script outcomes directly (client.streamCompletion). */
 export type StreamFn = (options: StreamCompletionOptions) => StreamHandle;
@@ -155,7 +161,7 @@ async function prepareNewTurn(
     const turn: PreparedTurn = {session, userMessage, assistantMessage};
     // Assembled inside the transaction like backend chat.py: a failing
     // builder rolls the whole turn back.
-    return {turn, request: buildRequest(turn)};
+    return {turn, request: await buildRequest(turn)};
   });
 }
 
@@ -186,7 +192,7 @@ async function prepareRetry(
       userMessage,
       assistantMessage: {...target, status: 'pending', content: ''},
     };
-    return {turn, request: buildRequest(turn)};
+    return {turn, request: await buildRequest(turn)};
   });
 }
 

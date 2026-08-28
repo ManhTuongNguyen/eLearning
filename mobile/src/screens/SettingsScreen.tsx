@@ -12,7 +12,7 @@
  * editor (TASK-092): the key itself is stored in secure storage and is
  * never displayed.
  */
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -412,15 +412,18 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
     );
   };
 
-  useEffect(() => {
-    if (appMode !== 'serverless') {
-      return;
-    }
-    let cancelled = false;
+  /**
+   * Read the OpenRouter configuration card state from on-device storage.
+   * The request counter follows the screen's stale-response-guard pattern:
+   * only the newest read may apply its result.
+   */
+  const openRouterStatusRequestRef = useRef(0);
+  const loadOpenRouterStatus = useCallback((): void => {
+    const requestId = ++openRouterStatusRequestRef.current;
     setOpenRouterStatus('loading');
     loadServerlessOpenRouterConfig()
       .then(config => {
-        if (!cancelled) {
+        if (openRouterStatusRequestRef.current === requestId) {
           setOpenRouterStatus({
             hasApiKey: config !== null && config.apiKey.length > 0,
             primaryModel: config?.primaryModel ?? null,
@@ -430,14 +433,25 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
       })
       .catch(() => {
         // A storage failure only degrades the card to "not configured".
-        if (!cancelled) {
+        if (openRouterStatusRequestRef.current === requestId) {
           setOpenRouterStatus({hasApiKey: false, primaryModel: null, fallbackCount: 0});
         }
       });
+  }, []);
+
+  // Reload when the mode flips to serverless and, on real navigators, every
+  // time the screen regains focus — returning from the OpenRouter editor
+  // must refresh the card. Bare navigation stubs (tests) skip the listener.
+  useEffect(() => {
+    if (appMode !== 'serverless') {
+      return;
+    }
+    loadOpenRouterStatus();
+    const unsubscribe = navigation.addListener?.('focus', loadOpenRouterStatus);
     return () => {
-      cancelled = true;
+      unsubscribe?.();
     };
-  }, [appMode]);
+  }, [appMode, navigation, loadOpenRouterStatus]);
 
   /** Server-feature rows: hidden entirely while serverless is active. */
   const serverRows: SettingsRow[] = useMemo(() => {

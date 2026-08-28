@@ -1,13 +1,16 @@
 /**
  * New conversation screen (SPEC TASK-051): optional topic hint plus the two
  * start actions from ROADMAP §6 — "Start" with whatever hint the user typed
- * and "Let AI choose a topic" which always sends an empty hint. Both create
- * the session through POST /api/v1/sessions/ and land in Chat; a blank
- * Start behaves exactly like the auto action, so empty input works too.
- * The creation response carries the generated sample conversation (TASK-053),
- * which is handed to Chat as a route param since no endpoint can refetch it.
- * Creation shows a spinner and disables both buttons; failures surface in
- * an inline banner and leave the form ready to retry.
+ * and "Let AI choose a topic" which always sends an empty hint. In server
+ * mode both create the session through POST /api/v1/sessions/; in serverless
+ * mode (TASK-085) the topic is generated directly through OpenRouter with
+ * the user's own key and persisted in the local SQLite database — no backend
+ * traffic happens (ROADMAP Rule 9). Both land in Chat; a blank Start behaves
+ * exactly like the auto action, so empty input works too.
+ * The server-mode creation response carries the generated sample conversation
+ * (TASK-053), which is handed to Chat as a route param since no endpoint can
+ * refetch it. Creation shows a spinner and disables both buttons; failures
+ * surface in an inline banner and leave the form ready to retry.
  */
 import React, {useCallback, useMemo, useState} from 'react';
 import {
@@ -23,6 +26,11 @@ import {
 
 import {createSession} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
+import {getLocalDatabase} from '../db/database';
+import {useApplicationMode} from '../mode/ModeContext';
+import {createOpenRouterClient} from '../serverless/openrouterClient';
+import {createServerlessSession} from '../serverless/topicGeneration';
+import {loadServerlessOpenRouterConfig} from '../serverless/settings';
 import type {NewConversationScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
@@ -116,6 +124,7 @@ function createStyles(c: ThemeColors) {
 
 export function NewConversationScreen({navigation}: NewConversationScreenProps) {
   const {getAccessToken} = useAuth();
+  const {mode} = useApplicationMode();
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -136,6 +145,25 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
       setCreating(true);
       setError(null);
       try {
+        if (mode === 'serverless') {
+          // TASK-085: topic generation runs directly through OpenRouter with
+          // the user's own key; nothing touches the backend (Rule 9).
+          const config = await loadServerlessOpenRouterConfig();
+          if (!config) {
+            throw new Error(
+              'Add your OpenRouter API key in Settings to chat without the server.',
+            );
+          }
+          const client = createOpenRouterClient(config);
+          const db = await getLocalDatabase();
+          const session = await createServerlessSession(
+            db,
+            request => client.complete(request),
+            rawHint.trim(),
+          );
+          navigation.replace('Chat', {sessionId: session.id});
+          return;
+        }
         const token = await getAccessToken();
         if (!token) {
           throw new Error('You need to sign in again to start a conversation.');
@@ -151,7 +179,7 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
         setCreating(false);
       }
     },
-    [creating, getAccessToken, navigation],
+    [creating, getAccessToken, mode, navigation],
   );
 
   return (

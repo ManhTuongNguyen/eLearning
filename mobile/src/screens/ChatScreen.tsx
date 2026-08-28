@@ -5,8 +5,12 @@
  *
  * The screen loads an existing conversation through its `sessionId` route
  * param; without one it shows an empty state until a conversation is opened
- * or created (TASK-051). Sending posts the turn to
- * POST /api/v1/sessions/{id}/messages/stream/ and consumes the SSE reply:
+ * or created (TASK-051). In server mode messages and session detail come
+ * from the backend API; in serverless mode (TASK-090) both are read from the
+ * on-device SQLite database and no backend request is made (Rule 9). Sending
+ * posts the turn to POST /api/v1/sessions/{id}/messages/stream/ (server
+ * mode) or streams it directly through OpenRouter via the local turn
+ * service (TASK-086) and consumes the reply:
  * deltas land in a DeltaBuffer so token bursts commit at most once per tick
  * (TASK-050 render throttling), completion finalizes it and a silent reload
  * swaps optimistic rows for persisted ones. Error frames and transport
@@ -77,11 +81,21 @@ import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 import {useSpeechPlayback} from '../tts/useSpeechPlayback';
 import {useApplicationMode} from '../mode/ModeContext';
+import {getRuntimeApplicationMode} from '../mode/runtime';
 import {getLocalDatabase} from '../db/database';
+import {listMessages as listLocalMessages} from '../db/messageStore';
+import {getSession as getLocalSession} from '../db/sessionStore';
 import {createOpenRouterClient} from '../serverless/openrouterClient';
 import {generateImprovement} from '../serverless/improvement';
 import {generateSuggestions} from '../serverless/suggestions';
 import {loadServerlessOpenRouterConfig} from '../serverless/settings';
+import {
+  retryServerlessTurn,
+  streamServerlessTurn,
+} from '../serverless/chatStreaming';
+import {buildServerlessContext, updateSummaryIfNeeded} from '../serverless/conversationContext';
+import type {OpenRouterClient, ServerlessStreamEvent} from '../serverless/types';
+import {LocalConversationRepository} from '../db/conversationRepository';
 import {getLearningProfile} from '../db/profileStore';
 import type {LocalMessage} from '../db/types';
 import {ImprovementSheet} from './ImprovementSheet';
@@ -104,6 +118,22 @@ import {
 function bySequence(a: ChatMessage, b: ChatMessage): number {
   return a.sequence - b.sequence;
 }
+
+/**
+ * Serverless turns (TASK-086) speak the same application event language as
+ * the backend SSE protocol except for the terminal failure shape; map it so
+ * one shared turn pipeline serves both modes.
+ */
+function toChatEvent(event: ServerlessStreamEvent): ChatStreamEvent {
+  if (event.type === 'failed') {
+    return {type: 'error', message: event.message, retryable: event.retryable};
+  }
+  return event;
+}
+
+/** Shown when a serverless turn starts without an OpenRouter configuration. */
+const NO_SERVERLESS_CONFIG_MESSAGE =
+  'Add your OpenRouter API key in Settings to chat without the server.';
 
 /** How long the vocabulary save confirmation toast stays visible (TASK-070). */
 export const VOCAB_TOAST_DURATION_MS = 2500;
@@ -495,6 +525,17 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       return;
     }
     try {
+      if (getRuntimeApplicationMode() === 'serverless') {
+        // Serverless rows persist locally before the terminal event reaches
+        // the consumer, so the canonical reload reads the local database.
+        const db = await getLocalDatabase();
+        const rows = await listLocalMessages(db, sid);
+        if (sessionIdRef.current !== sid) {
+          return;
+        }
+        setMessages([...rows].sort(bySequence));
+        return;
+      }
       const token = await getAccessTokenRef.current();
       if (!token || sessionIdRef.current !== sid) {
         return;
@@ -545,6 +586,22 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     setLoading(true);
     (async () => {
       try {
+        if (mode === 'serverless') {
+          // TASK-090: serverless conversations live in the on-device SQLite
+          // database; no backend traffic happens in this mode (Rule 9). The
+          // local session detail only feeds the topic bar, so its failure
+          // resolves to null instead of failing the conversation.
+          const db = await getLocalDatabase();
+          const [rows, localSession] = await Promise.all([
+            listLocalMessages(db, sessionId),
+            getLocalSession(db, sessionId).catch(() => null),
+          ]);
+          if (!cancelled) {
+            setMessages([...rows].sort(bySequence));
+            setSession(localSession);
+          }
+          return;
+        }
         const token = await getAccessTokenRef.current();
         if (!token) {
           throw new Error('You need to sign in again to open this conversation.');
@@ -578,7 +635,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       cancelled = true;
       endTurn();
     };
-  }, [sessionId, reloadKey, resetMessages, endTurn, stopSpeech]);
+  }, [sessionId, reloadKey, mode, resetMessages, endTurn, stopSpeech]);
 
   /**
    * Queue one streamed chunk for the assistant bubble of this turn. The
@@ -659,9 +716,77 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     [appendDelta, completeTurn, failTurn],
   );
 
+  /**
+   * Serverless turn driver (TASK-086): resolves the OpenRouter client from
+   * the on-device configuration, runs one local turn through the shared
+   * event pipeline and keeps the abort handle for screen-level cleanup.
+   * Between the configuration read and the handle assignment the optimistic
+   * turn may already have ended (navigation, a fast terminal event), so a
+   * stale handle is never stored; terminal events are persisted before
+   * delivery, which keeps the post-completion canonical reload exact.
+   */
+  const startServerlessTurn = useCallback(
+    (
+      sid: number,
+      startTurnFn: (
+        client: OpenRouterClient,
+        repository: LocalConversationRepository,
+      ) => Promise<ChatStreamHandle>,
+    ) => {
+      (async () => {
+        const config = await loadServerlessOpenRouterConfig();
+        if (!config) {
+          failTurn(NO_SERVERLESS_CONFIG_MESSAGE);
+          return;
+        }
+        if (sessionIdRef.current !== sid || streamingAssistantIdRef.current === null) {
+          return;
+        }
+        const client = createOpenRouterClient(config);
+        const repository = new LocalConversationRepository(getLocalDatabase);
+        try {
+          const handle = await startTurnFn(client, repository);
+          if (streamingAssistantIdRef.current !== null) {
+            streamHandleRef.current = handle;
+          }
+        } catch (err) {
+          failTurn(toErrorMessage(err));
+        }
+      })();
+    },
+    [failTurn],
+  );
+
+  /** Shared serverless event pipeline: terminal outcomes drive turn state. */
+  const serverlessOnEvent = useCallback(
+    (client: OpenRouterClient, repository: LocalConversationRepository, sid: number) =>
+      (event: ServerlessStreamEvent): void => {
+        if (event.type === 'completed') {
+          // Post-turn summary maintenance (TASK-087) never blocks the
+          // user-facing stream and never fails the turn.
+          updateSummaryIfNeeded(repository, client, sid).catch(() => undefined);
+        }
+        handleTurnEvent(toChatEvent(event));
+      },
+    [handleTurnEvent],
+  );
+
   const startTurn = useCallback(
     (sid: number, text: string) => {
       (async () => {
+        if (mode === 'serverless') {
+          startServerlessTurn(sid, (client, repository) =>
+            streamServerlessTurn({
+              sessionId: sid,
+              text,
+              openDb: getLocalDatabase,
+              stream: options => client.streamCompletion(options),
+              buildRequest: buildServerlessContext,
+              onEvent: serverlessOnEvent(client, repository, sid),
+            }),
+          );
+          return;
+        }
         let token: string | null = null;
         try {
           token = await getAccessTokenRef.current();
@@ -686,12 +811,25 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         });
       })();
     },
-    [failTurn, handleTurnEvent],
+    [failTurn, handleTurnEvent, mode, serverlessOnEvent, startServerlessTurn],
   );
 
   const startRetry = useCallback(
     (sid: number, messageId: number) => {
       (async () => {
+        if (mode === 'serverless') {
+          startServerlessTurn(sid, (client, repository) =>
+            retryServerlessTurn({
+              sessionId: sid,
+              messageId,
+              openDb: getLocalDatabase,
+              stream: options => client.streamCompletion(options),
+              buildRequest: buildServerlessContext,
+              onEvent: serverlessOnEvent(client, repository, sid),
+            }),
+          );
+          return;
+        }
         let token: string | null = null;
         try {
           token = await getAccessTokenRef.current();
@@ -716,7 +854,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         });
       })();
     },
-    [failTurn, handleTurnEvent],
+    [failTurn, handleTurnEvent, mode, serverlessOnEvent, startServerlessTurn],
   );
 
 /**

@@ -2326,7 +2326,7 @@ Acceptance criteria:
 
 ## TASK-117 — Validate complete serverless journey
 
-Status: `[ ]`
+Status: `[x]`
 
 Verify:
 
