@@ -161,6 +161,21 @@ describe('controls present in every mode', () => {
     expect(mockLogout).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['server', 'serverless'] as const)(
+    'shows the back affordance and pops the stack when pressed in %s mode (TASK-AUDIT-006)',
+    async mode => {
+      const props = await renderSettings(mode);
+
+      expect(screen.getByTestId('settings-back')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Go back')).toBeOnTheScreen();
+
+      fireEvent.press(screen.getByTestId('settings-back'));
+
+      expect(props.navigation.goBack).toHaveBeenCalledTimes(1);
+      expect(props.navigation.navigate).not.toHaveBeenCalled();
+    },
+  );
+
   it('hides the server logout control in serverless mode (TASK-AUDIT-003)', async () => {
     await renderSettings('serverless');
 

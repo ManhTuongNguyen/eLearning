@@ -480,7 +480,7 @@ Do not start multiple refresh operations if one is already in progress.
 
 ## TASK-AUDIT-006 — Add back navigation to Settings
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

@@ -12,6 +12,10 @@
  * never displayed. Both modes keep the theme selection (TASK-044), the
  * application-mode switcher (TASK-090) and — serverless only — local data
  * clearing (TASK-094).
+ *
+ * The screen is pushed onto the main stack from Chat, so the header carries
+ * the same ‹ Back affordance as the other pushed screens (TASK-AUDIT-006);
+ * the Android system back button pops the stack identically.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -79,6 +83,22 @@ function createStyles(c: ThemeColors) {
       flex: 1,
       backgroundColor: c.background,
     },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 24,
+      paddingTop: 24,
+      paddingBottom: 8,
+    },
+    backText: {
+      fontSize: 16,
+      color: c.accent,
+      fontWeight: '600',
+    },
+    headerSpacer: {
+      width: 48,
+    },
     content: {
       alignItems: 'center',
       gap: 20,
@@ -89,7 +109,6 @@ function createStyles(c: ThemeColors) {
       fontSize: 26,
       fontWeight: '700',
       color: c.textPrimary,
-      alignSelf: 'flex-start',
     },
     sectionLabel: {
       fontSize: 13,
@@ -480,9 +499,18 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
 
   return (
     <View style={styles.container} testID="settings-screen">
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.header}>
+        <Pressable
+          accessibilityLabel="Go back"
+          hitSlop={8}
+          onPress={() => navigation.goBack()}
+          testID="settings-back">
+          <Text style={styles.backText}>‹ Back</Text>
+        </Pressable>
         <Text style={styles.title}>Settings</Text>
-
+        <View style={styles.headerSpacer} />
+      </View>
+      <ScrollView contentContainerStyle={styles.content}>
         {appMode === 'server' ? (
           <View style={styles.accountRow} testID="settings-account-section">
             <View style={styles.avatar}>

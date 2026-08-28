@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-28
-- **Current Phase**: TASK-AUDIT-005 complete; next task TASK-AUDIT-006 — Add back navigation to Settings
+- **Current Phase**: TASK-AUDIT-006 complete; next task TASK-AUDIT-007 — Simplify vocabulary save flow
 
 ## Current Active Task
   - **Task ID**:
@@ -100,3 +100,17 @@
   exactly one refresh); API binding tests use a fixed-token requester;
   screen/journey tests assert the requester arg. Full suites: mobile pnpm
   test 632 passed; pnpm lint and pnpm typecheck clean.
+- TASK-AUDIT-006 (done): SettingsScreen now carries the same header back
+  affordance as every other pushed screen (Level/OpenRouterSettings
+  pattern): a `‹ Back` Pressable calling navigation.goBack() with testID
+  `settings-back` and accessibilityLabel "Go back"; the "Settings" title
+  moved into the header row (title style keeps fontSize 26, dropped its
+  now-unneeded alignSelf). Android system back needs no BackHandler — the
+  native stack pops by default, identical to goBack(); no duplicate stack
+  entries are possible since goBack pops rather than navigates.
+- Regression coverage: SettingsScreen.test.tsx back affordance renders and
+  pops in both modes (goBack called once, navigate untouched); navigation
+  test asserts via stack state that Chat -> Settings is exactly
+  [Chat, Settings] and settings-back collapses it to [Chat] with the
+  settings-screen gone. Full suites: mobile pnpm test 635 passed; pnpm
+  lint and pnpm typecheck clean.

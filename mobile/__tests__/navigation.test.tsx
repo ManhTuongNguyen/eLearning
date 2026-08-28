@@ -45,6 +45,9 @@ async function renderRoot() {
     return state.routes[state.index]?.name;
   };
 
+  const stackRouteNames = (): string[] =>
+    ref.current?.getRootState()?.routes.map(route => route.name) ?? [];
+
   await render(
     <ModeProvider>
       <ThemeProvider>
@@ -57,7 +60,7 @@ async function renderRoot() {
     </ModeProvider>,
   );
 
-  return {focusedRouteName};
+  return {focusedRouteName, stackRouteNames};
 }
 
 async function renderAuthenticated(tokens?: AuthTokens) {
@@ -157,6 +160,24 @@ describe('main stack navigation', () => {
     await fireEvent.press(screen.getByTestId('history-back'));
 
     await waitFor(() => expect(focusedRouteName()).toBe('Chat'));
+  });
+
+  it('returns from Settings to Chat through the header back affordance without duplicating stack entries (TASK-AUDIT-006)', async () => {
+    const {focusedRouteName, stackRouteNames} = await renderAuthenticated();
+    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+
+    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
+    expect(focusedRouteName()).toBe('Settings');
+    // Exactly one Settings entry sits on top of Chat.
+    expect(stackRouteNames()).toEqual(['Chat', 'Settings']);
+
+    await fireEvent.press(screen.getByTestId('settings-back'));
+
+    await waitFor(() => expect(focusedRouteName()).toBe('Chat'));
+    expect(screen.queryByTestId('settings-screen')).toBeNull();
+    // goBack popped the entry instead of pushing another route.
+    expect(stackRouteNames()).toEqual(['Chat']);
   });
 
   it('reaches Settings and returns to it after editing the learning level', async () => {
