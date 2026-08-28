@@ -54,7 +54,18 @@ describe('FakeOpenRouterClient', () => {
         {text: 'Third.', model: 'm3', finishReason: 'stop', requestId: null},
       )
       .enqueueModels(new OpenRouterAvailabilityError('catalog down'), [
-        {id: 'only-model', name: 'Only', description: null, contextLength: 128, created: null},
+        {
+          id: 'only-model',
+          name: 'Only',
+          canonicalSlug: null,
+          description: null,
+          contextLength: 128,
+          created: null,
+          architecture: null,
+          pricing: null,
+          topProvider: null,
+          supportedParameters: [],
+        },
       ]);
 
     await expect(fake.complete(REQUEST)).resolves.toMatchObject({text: 'First.'});

@@ -2,10 +2,13 @@
  * Mobile-side OpenRouter client for serverless mode (SPEC TASK-083).
  *
  * This module is the only place on mobile that knows OpenRouter's HTTP
- * surface (chat completions, SSE streaming, model catalog). It talks to
- * OpenRouter directly with the user's own API key — the key is only ever
- * placed in the Authorization header toward openrouter.ai and never reaches
- * the eLearning backend. Every failure is normalized into the hierarchy in
+ * surface (chat completions, SSE streaming, model catalog). Chat requests
+ * talk to OpenRouter directly with the user's own API key — the key is only
+ * ever placed in the Authorization header toward openrouter.ai and never
+ * reaches the eLearning backend. Model discovery is deliberately keyless
+ * (TASK-AUDIT-004): the public /models endpoint is called without any
+ * Authorization header so browsing/selecting models never depends on token
+ * validation. Every failure is normalized into the hierarchy in
  * ./errors before it escapes, mirroring backend llm/openrouter.py.
  *
  * Model fallback mirrors backend llm/fallback.py: an ordered chain
@@ -39,6 +42,7 @@ import {
   type ServerlessStreamEvent,
   type StreamCompletionOptions,
   type StreamHandle,
+  normalizeModelEntry,
 } from './types';
 
 export const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
@@ -85,31 +89,9 @@ function extractErrorMessage(bodyText: string): string {
   return snippet || 'unrecognized error body';
 }
 
-/** Normalize one model-catalog entry; malformed entries are skipped. */
-function parseModelEntry(entry: unknown): ModelInfo | null {
-  if (typeof entry !== 'object' || entry === null) {
-    return null;
-  }
-  const record = entry as Record<string, unknown>;
-  const id = record.id;
-  if (typeof id !== 'string' || !id.trim()) {
-    return null;
-  }
-  const intOrNull = (value: unknown): number | null =>
-    typeof value === 'number' && Number.isInteger(value) ? value : null;
-  return {
-    id: id.trim(),
-    name: typeof record.name === 'string' ? record.name : '',
-    description: typeof record.description === 'string' ? record.description : null,
-    contextLength: intOrNull(record.context_length),
-    created: intOrNull(record.created),
-  };
-}
-
-/** GET {baseUrl}/models and normalize the payload; failures are pre-normalized. */
+/** GET {baseUrl}/models without credentials and normalize the payload. */
 async function requestModelCatalog(
   baseUrl: string,
-  headers: Record<string, string>,
   timeoutMs: number,
 ): Promise<ModelInfo[]> {
   const controller = new AbortController();
@@ -117,7 +99,6 @@ async function requestModelCatalog(
   try {
     const response = await fetch(`${baseUrl}/models`, {
       method: 'GET',
-      headers,
       signal: controller.signal,
     });
     const bodyText = await response.text();
@@ -139,7 +120,7 @@ async function requestModelCatalog(
     }
     const catalog: ModelInfo[] = [];
     for (const entry of entries) {
-      const parsed = parseModelEntry(entry);
+      const parsed = normalizeModelEntry(entry);
       if (parsed) {
         catalog.push(parsed);
       }
@@ -160,27 +141,25 @@ async function requestModelCatalog(
   }
 }
 
-/** Options for fetching the model catalog without a full client config. */
+/** Options for fetching the model catalog; discovery needs no credentials. */
 export interface OpenRouterModelListingOptions {
-  /** The user's personal API key; only ever sent toward openrouter.ai. */
-  apiKey: string;
   baseUrl?: string;
   timeoutMs?: number;
 }
 
 /**
- * Retrieve the model catalog using only an API key (SPEC TASK-092). Needed
- * while settings are being configured — before any primary model exists,
- * `createOpenRouterClient` cannot be constructed yet. Same normalized result
- * and error hierarchy as `OpenRouterClient.listModels()`.
+ * Retrieve the model catalog directly from OpenRouter's public /models
+ * endpoint (TASK-AUDIT-004). Discovery is fully separated from
+ * authenticated provider requests: no user API key is required, none is
+ * sent, and an invalid or expired key can therefore never block model
+ * discovery — models can be browsed before a key is configured at all.
+ * The key remains mandatory for actual LLM calls through
+ * `createOpenRouterClient`. Same normalized result and error hierarchy as
+ * `OpenRouterClient.listModels()`.
  */
 export async function listOpenRouterModels(
-  options: OpenRouterModelListingOptions,
+  options: OpenRouterModelListingOptions = {},
 ): Promise<ModelInfo[]> {
-  const apiKey = options.apiKey.trim();
-  if (!apiKey) {
-    throw new Error('An OpenRouter API key is required.');
-  }
   const baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).trim().replace(/\/+$/, '');
   if (!baseUrl) {
     throw new Error('The OpenRouter base URL must be a non-empty string.');
@@ -189,11 +168,7 @@ export async function listOpenRouterModels(
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new Error('The OpenRouter timeout must be greater than zero.');
   }
-  return requestModelCatalog(
-    baseUrl,
-    {Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json'},
-    timeoutMs,
-  );
+  return requestModelCatalog(baseUrl, timeoutMs);
 }
 
 /**
@@ -614,9 +589,9 @@ export function createOpenRouterClient(config: OpenRouterClientConfig): OpenRout
     };
   }
 
-  /** Retrieve the model catalog through the shared catalog request. */
+  /** Retrieve the model catalog through the shared keyless catalog request. */
   const listModels = (): Promise<ModelInfo[]> =>
-    requestModelCatalog(baseUrl, authHeaders(), timeoutMs);
+    requestModelCatalog(baseUrl, timeoutMs);
 
   return {complete, streamCompletion, listModels};
 }

@@ -4,9 +4,11 @@
  * only in secure storage via saveServerlessOpenRouterConfig (TASK-088/093)
  * — it is never rendered, logged or sent anywhere except OpenRouter's
  * Authorization header. Models come from the locally cached catalog
- * (TASK-084) or a direct refresh through listOpenRouterModels, which works
- * with just a key while no primary model is selected yet. Fallback order is
- * edited in place with move up/down controls.
+ * (TASK-084) or a direct keyless refresh through listOpenRouterModels
+ * (TASK-AUDIT-004): discovery hits OpenRouter's public /models endpoint
+ * with no credentials, so it works before any key is configured and an
+ * invalid key can never block it. Fallback order is edited in place with
+ * move up/down controls.
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
@@ -378,17 +380,12 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     }
     setError(null);
     setSaved(false);
-    const apiKey = resolveApiKey();
-    if (!apiKey) {
-      setError('Enter your OpenRouter API key to download the model list.');
-      return;
-    }
     setRefreshing(true);
     try {
       const db = await getLocalDatabase();
-      const snapshot = await refreshModelCatalog(db, () =>
-        listOpenRouterModels({apiKey}),
-      );
+      // Discovery is keyless (TASK-AUDIT-004): the public /models endpoint
+      // needs no credentials, so the catalog loads before any key exists.
+      const snapshot = await refreshModelCatalog(db, () => listOpenRouterModels());
       setModels(snapshot.models);
       setModelsUpdatedAt(snapshot.fetchedAt);
     } catch (err) {
@@ -397,7 +394,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
     } finally {
       setRefreshing(false);
     }
-  }, [refreshing, resolveApiKey]);
+  }, [refreshing]);
 
   const choosePrimary = useCallback((id: string) => {
     setError(null);
@@ -553,8 +550,8 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
 
           {models === null ? (
             <Text style={styles.emptyText} testID="openrouter-models-empty">
-              No models downloaded yet. Enter your API key and tap Refresh to load the
-              available models from OpenRouter.
+              No models downloaded yet. Tap Refresh to load the available models
+              from OpenRouter.
             </Text>
           ) : (
             <>

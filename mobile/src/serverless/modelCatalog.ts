@@ -12,7 +12,7 @@
 import type {SqlExecutor} from '../db/driver';
 import {nowIso} from '../db/driver';
 import {getSetting, setSetting} from '../db/settingsStore';
-import type {ModelInfo} from './types';
+import {normalizeModelInfo, type ModelInfo} from './types';
 
 /** Settings key holding the serialized catalog snapshot. */
 export const MODEL_CATALOG_SETTING_KEY = 'model_catalog';
@@ -22,15 +22,6 @@ export interface CachedModelCatalog {
   models: ModelInfo[];
   /** ISO-8601 timestamp of when the snapshot was fetched from OpenRouter. */
   fetchedAt: string;
-}
-
-/** Validate one parsed ModelInfo-shaped value from the cache payload. */
-function isModelInfo(value: unknown): value is ModelInfo {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-  const record = value as Record<string, unknown>;
-  return typeof record.id === 'string' && record.id.trim().length > 0;
 }
 
 /** Parse a stored catalog snapshot; anything unusable resolves to null. */
@@ -50,10 +41,21 @@ function parseCachedCatalog(raw: string | null): CachedModelCatalog | null {
   const record = payload as Record<string, unknown>;
   const models = record.models;
   const fetchedAt = record.fetchedAt;
-  if (!Array.isArray(models) || !models.every(isModelInfo) || typeof fetchedAt !== 'string') {
+  if (!Array.isArray(models) || typeof fetchedAt !== 'string') {
     return null;
   }
-  return {models, fetchedAt};
+  // Re-coerce every entry so snapshots written by older app versions —
+  // before the extended ModelInfo fields existed — are backfilled onto the
+  // full normalized shape; an unusable entry still voids the whole cache.
+  const normalized: ModelInfo[] = [];
+  for (const entry of models) {
+    const parsed = normalizeModelInfo(entry);
+    if (!parsed) {
+      return null;
+    }
+    normalized.push(parsed);
+  }
+  return {models: normalized, fetchedAt};
 }
 
 /**

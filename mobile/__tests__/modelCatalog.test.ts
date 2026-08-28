@@ -10,11 +10,28 @@ import type {SqlDriver} from '../src/db/driver';
 import {openSqlJsDriver} from '../testing/sqlJsDriver';
 import {FakeOpenRouterClient} from '../testing/fakeOpenRouter';
 import {OpenRouterAvailabilityError} from '../src/serverless/errors';
+import type {ModelInfo} from '../src/serverless/types';
 import {
   MODEL_CATALOG_SETTING_KEY,
   getCachedModelCatalog,
   refreshModelCatalog,
 } from '../src/serverless/modelCatalog';
+
+/** Full normalized ModelInfo with the optional catalog fields defaulted. */
+function model(id: string, name: string, contextLength: number | null = null): ModelInfo {
+  return {
+    id,
+    name,
+    canonicalSlug: null,
+    description: null,
+    contextLength,
+    created: null,
+    architecture: null,
+    pricing: null,
+    topProvider: null,
+    supportedParameters: [],
+  };
+}
 
 describe('serverless model discovery (TASK-084)', () => {
   let db: SqlDriver;
@@ -29,10 +46,7 @@ describe('serverless model discovery (TASK-084)', () => {
 
   test('refresh persists the fetched catalog with a timestamp', async () => {
     const fake = new FakeOpenRouterClient();
-    fake.enqueueModels([
-      {id: 'vendor/model-a', name: 'Model A', description: null, contextLength: 8192, created: 1},
-      {id: 'vendor/model-b', name: '', description: null, contextLength: null, created: null},
-    ]);
+    fake.enqueueModels([model('vendor/model-a', 'Model A', 8192), model('vendor/model-b', '')]);
 
     const snapshot = await refreshModelCatalog(db, () => fake.listModels());
 
@@ -44,12 +58,10 @@ describe('serverless model discovery (TASK-084)', () => {
 
   test('a later refresh replaces the previous snapshot', async () => {
     const fake = new FakeOpenRouterClient();
-    fake.enqueueModels([{id: 'old/model', name: 'Old', description: null, contextLength: null, created: null}]);
+    fake.enqueueModels([model('old/model', 'Old')]);
     await refreshModelCatalog(db, () => fake.listModels());
 
-    const updated = [
-      {id: 'new/model', name: 'New', description: 'Fresh', contextLength: 4096, created: 2},
-    ];
+    const updated = [model('new/model', 'New', 4096)];
     fake.clearScripts();
     fake.enqueueModels(updated);
     const second = await refreshModelCatalog(db, () => fake.listModels());
@@ -60,7 +72,7 @@ describe('serverless model discovery (TASK-084)', () => {
 
   test('cached models remain readable without any network activity', async () => {
     const fake = new FakeOpenRouterClient();
-    fake.enqueueModels([{id: 'vendor/model-a', name: 'Model A', description: null, contextLength: null, created: null}]);
+    fake.enqueueModels([model('vendor/model-a', 'Model A')]);
     const stored = await refreshModelCatalog(db, () => fake.listModels());
 
     // A brand-new adapter proves reading the cache never calls OpenRouter.
@@ -72,7 +84,7 @@ describe('serverless model discovery (TASK-084)', () => {
 
   test('a failed refresh keeps the previous cache and rethrows the error', async () => {
     const fake = new FakeOpenRouterClient();
-    fake.enqueueModels([{id: 'vendor/model-a', name: 'Model A', description: null, contextLength: null, created: null}]);
+    fake.enqueueModels([model('vendor/model-a', 'Model A')]);
     const original = await refreshModelCatalog(db, () => fake.listModels());
 
     fake.clearScripts();
@@ -105,5 +117,38 @@ describe('serverless model discovery (TASK-084)', () => {
       await expect(getCachedModelCatalog(db)).resolves.toBeNull();
       await db.execute('DELETE FROM settings WHERE key = ?', [MODEL_CATALOG_SETTING_KEY]);
     }
+  });
+
+  test('legacy snapshots written before the extended ModelInfo fields are re-normalized', async () => {
+    // Old-shape entry: only the original five fields, everything extended
+    // missing. It must read back onto the full normalized shape.
+    await db.execute('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)', [
+      MODEL_CATALOG_SETTING_KEY,
+      JSON.stringify({
+        models: [
+          {id: 'vendor/legacy', name: 'Legacy', description: null, contextLength: 1024, created: 5},
+        ],
+        fetchedAt: '2026-01-01T00:00:00.000Z',
+      }),
+      new Date().toISOString(),
+    ]);
+
+    await expect(getCachedModelCatalog(db)).resolves.toEqual({
+      models: [
+        {
+          id: 'vendor/legacy',
+          name: 'Legacy',
+          canonicalSlug: null,
+          description: null,
+          contextLength: 1024,
+          created: 5,
+          architecture: null,
+          pricing: null,
+          topProvider: null,
+          supportedParameters: [],
+        },
+      ],
+      fetchedAt: '2026-01-01T00:00:00.000Z',
+    });
   });
 });

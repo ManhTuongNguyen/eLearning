@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Last Run Timestamp**: 2026-08-28
-- **Current Phase**: TASK-AUDIT-003 complete; next task TASK-AUDIT-004 — Fix OpenRouter model discovery without token validation
+- **Current Phase**: TASK-AUDIT-004 complete; next task TASK-AUDIT-005 — Implement one-time access-token refresh wrapper
 
 ## Current Active Task
   - **Task ID**:
@@ -48,3 +48,24 @@
   serverless, serverlessJourney.test.tsx cold-start test (no auth keychain, no
   fetch/XHR, account UI absent, restart keeps serverless). Full suites: mobile
   pnpm test 620 passed; pnpm lint and pnpm typecheck clean.
+- TASK-AUDIT-004 (done): OpenRouter model discovery is now fully separated
+  from token validation. openrouterClient.ts `requestModelCatalog` sends no
+  Authorization header at all — the public GET /models endpoint is called
+  keylessly — so `listOpenRouterModels()` needs no apiKey option and
+  `OpenRouterClient.listModels()` is keyless too; `createOpenRouterClient`
+  still enforces the key for actual LLM calls. OpenRouterSettingsScreen
+  refreshes the catalog with no key gate ("Tap Refresh" copy instead of the
+  key prompt). ModelInfo (types.ts) gained normalized canonicalSlug,
+  architecture (modality/input/output modalities/tokenizer), pricing
+  (prompt/completion/inputCacheRead) and topProvider (contextLength/
+  maxCompletionTokens) + supportedParameters, all coerced safely with
+  null/[] defaults: `normalizeModelEntry` parses the wire payload,
+  `normalizeModelInfo` re-coerces cached snapshots so pre-extension entries
+  read back complete (modelCatalog.parseCachedCatalog now backfills instead
+  of trusting stale shapes; unusable entries still void the cache).
+- Regression coverage: openrouterClient.test.ts keyless GET (no headers) with
+  the documented hy4-preview payload, partial/malformed optional fields,
+  error-hierarchy + option validation; modelCatalog.test.ts legacy-snapshot
+  backfill; OpenRouterSettingsScreen.test.tsx refresh with no key stored or
+  typed. Full suites: mobile pnpm test 625 passed; pnpm lint and pnpm
+  typecheck clean.

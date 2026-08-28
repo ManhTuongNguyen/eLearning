@@ -1,7 +1,8 @@
 /**
  * Serverless OpenRouter settings editor tests (SPEC TASK-092): the screen
  * renders the stored configuration without ever revealing the API key,
- * models are chosen from the discovered catalog, fallback order is edited
+ * models are chosen from the discovered catalog — refreshed keylessly from
+ * OpenRouter's public endpoint (TASK-AUDIT-004) —, fallback order is edited
  * in place and persisted through the settings store, and validation keeps
  * an incomplete configuration from being saved. Storage/catalog/HTTP seams
  * are module mocks — no SQLite or network participates here.
@@ -35,10 +36,26 @@ const user = userEvent.setup();
 const STORED_KEY = 'sk-or-v1-stored-secret-value';
 const NEW_KEY = 'sk-or-v1-new-key';
 
+/** Full normalized ModelInfo with the optional catalog fields defaulted. */
+function catalogModel(id: string, name: string): ModelInfo {
+  return {
+    id,
+    name,
+    canonicalSlug: null,
+    description: null,
+    contextLength: null,
+    created: null,
+    architecture: null,
+    pricing: null,
+    topProvider: null,
+    supportedParameters: [],
+  };
+}
+
 const CATALOG: ModelInfo[] = [
-  {id: 'vendor/model-a', name: 'Alpha Model', description: null, contextLength: null, created: null},
-  {id: 'vendor/model-b', name: 'Beta Model', description: null, contextLength: null, created: null},
-  {id: 'vendor/claude-x', name: 'Claude X', description: null, contextLength: null, created: null},
+  catalogModel('vendor/model-a', 'Alpha Model'),
+  catalogModel('vendor/model-b', 'Beta Model'),
+  catalogModel('vendor/claude-x', 'Claude X'),
 ];
 
 function catalogSnapshot(models = CATALOG, fetchedAt = '2026-08-27T00:00:00.000Z') {
@@ -252,11 +269,9 @@ describe('validation guards', () => {
 });
 
 describe('model catalog refresh', () => {
-  it('downloads models with the resolved key and persists them via the cache layer', async () => {
+  it('downloads models without any API key and persists them via the cache layer', async () => {
     mockedGetCached.mockResolvedValue(null);
-    const refreshed: ModelInfo[] = [
-      {id: 'fresh/new-model', name: 'Fresh Model', description: null, contextLength: null, created: null},
-    ];
+    const refreshed: ModelInfo[] = [catalogModel('fresh/new-model', 'Fresh Model')];
     mockedListModels.mockResolvedValue(refreshed);
     mockedRefresh.mockImplementation(async (_db, fetchModels) => ({
       models: await fetchModels(),
@@ -265,13 +280,14 @@ describe('model catalog refresh', () => {
 
     await renderSettledScreen();
 
-    await user.type(screen.getByTestId('openrouter-api-key-input'), NEW_KEY);
     await user.press(screen.getByTestId('openrouter-models-refresh'));
 
     await waitFor(() =>
       expect(screen.getByTestId('openrouter-model-primary-fresh/new-model')).toBeOnTheScreen(),
     );
-    expect(mockedListModels).toHaveBeenCalledWith({apiKey: NEW_KEY});
+    // Discovery is keyless (TASK-AUDIT-004): no key configured or sent.
+    expect(mockedListModels).toHaveBeenCalledTimes(1);
+    expect(mockedListModels).toHaveBeenCalledWith();
     expect(mockedRefresh).toHaveBeenCalledTimes(1);
     // Catalog source labels stay intact after refresh.
     expect(screen.queryByTestId('openrouter-models-empty')).toBeNull();
@@ -286,7 +302,6 @@ describe('model catalog refresh', () => {
       expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
     );
 
-    await user.type(screen.getByTestId('openrouter-api-key-input'), NEW_KEY);
     await user.press(screen.getByTestId('openrouter-models-refresh'));
 
     const error = await screen.findByTestId('openrouter-form-error');
@@ -294,15 +309,28 @@ describe('model catalog refresh', () => {
     expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen();
   });
 
-  it('needs a key before refreshing when none exists yet', async () => {
+  it('refreshes the catalog before any API key has been configured', async () => {
+    mockedGetCached.mockResolvedValue(null);
+    mockedListModels.mockResolvedValue([catalogModel('vendor/model-a', 'Alpha Model')]);
+    mockedRefresh.mockImplementation(async (_db, fetchModels) => ({
+      models: await fetchModels(),
+      fetchedAt: '2026-08-27T01:00:00.000Z',
+    }));
+
     await renderSettledScreen();
+    expect(await screen.findByTestId('openrouter-models-empty')).toBeOnTheScreen();
 
     await user.press(screen.getByTestId('openrouter-models-refresh'));
 
-    const error = await screen.findByTestId('openrouter-form-error');
-    expect(error).toHaveTextContent(/api key/i);
-    expect(mockedListModels).not.toHaveBeenCalled();
-    expect(mockedRefresh).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+    );
+    // Discovery is keyless: it succeeds with no key stored and none typed.
+    expect(mockedListModels).toHaveBeenCalledTimes(1);
+    expect(mockedListModels).toHaveBeenCalledWith();
+    expect(mockedRefresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('openrouter-form-error')).toBeNull();
+    expect(screen.queryByText(/Enter your OpenRouter API key to download/)).toBeNull();
   });
 });
 

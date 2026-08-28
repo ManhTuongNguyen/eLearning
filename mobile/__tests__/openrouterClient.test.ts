@@ -1,9 +1,11 @@
 /**
  * Serverless OpenRouter client tests (SPEC TASK-083). Covers configuration
  * validation, the ordered model-fallback chain, HTTP status → normalized
- * error mapping, SSE streaming over a scripted fake XMLHttpRequest, direct
- * model discovery, and the guarantee that user requests only ever target
- * openrouter.ai (the API key never reaches the eLearning backend).
+ * error mapping, SSE streaming over a scripted fake XMLHttpRequest, keyless
+ * direct model discovery (TASK-AUDIT-004: no Authorization header is ever
+ * sent to the public /models endpoint), and the guarantee that user
+ * requests only ever target openrouter.ai (the API key never reaches the
+ * eLearning backend). All external OpenRouter HTTP calls are mocked.
  */
 import type {ServerlessStreamEvent} from '../src/serverless/types';
 import {
@@ -11,6 +13,7 @@ import {
   DEFAULT_TIMEOUT_MS,
   buildModelChain,
   createOpenRouterClient,
+  listOpenRouterModels,
 } from '../src/serverless/openrouterClient';
 import {
   OpenRouterAuthenticationError,
@@ -393,7 +396,7 @@ describe('complete', () => {
 });
 
 describe('listModels', () => {
-  it('GETs the catalog with auth and normalizes well-formed entries', async () => {
+  it('GETs the catalog without any credentials and normalizes well-formed entries', async () => {
     const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse(200, {
         data: [
@@ -416,27 +419,56 @@ describe('listModels', () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${DEFAULT_BASE_URL}/models`);
     expect(fetchMock.mock.calls[0][1]?.method).toBe('GET');
-    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
-      Authorization: 'Bearer sk-or-user-key',
-    });
+    // Discovery is keyless (TASK-AUDIT-004): no Authorization header at all,
+    // so an invalid/expired user key can never block model discovery.
+    expect(fetchMock.mock.calls[0][1]?.headers).toBeUndefined();
     expect(models).toEqual([
       {
         id: 'vendor/model-a',
         name: 'Model A',
+        canonicalSlug: null,
         description: 'First.',
         contextLength: 8192,
         created: 1700000000,
+        architecture: null,
+        pricing: null,
+        topProvider: null,
+        supportedParameters: [],
       },
-      {id: 'vendor/model-b', name: '', description: null, contextLength: null, created: null},
-      {id: 'vendor/model-c', name: '', description: null, contextLength: null, created: null},
+      {
+        id: 'vendor/model-b',
+        name: '',
+        canonicalSlug: null,
+        description: null,
+        contextLength: null,
+        created: null,
+        architecture: null,
+        pricing: null,
+        topProvider: null,
+        supportedParameters: [],
+      },
+      {
+        id: 'vendor/model-c',
+        name: '',
+        canonicalSlug: null,
+        description: null,
+        contextLength: null,
+        created: null,
+        architecture: null,
+        pricing: null,
+        topProvider: null,
+        supportedParameters: [],
+      },
     ]);
   });
 
   it('normalizes catalog failures like any other HTTP error', async () => {
     jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(401, {error: {message: 'bad key'}}));
-    await expect(makeClient().listModels()).rejects.toBeInstanceOf(OpenRouterAuthenticationError);
+      .mockResolvedValue(jsonResponse(500, {error: {message: 'catalog down'}}));
+    await expect(makeClient().listModels()).rejects.toBeInstanceOf(
+      OpenRouterAvailabilityError,
+    );
 
     jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, {nope: true}));
     await expect(makeClient().listModels()).rejects.toBeInstanceOf(OpenRouterResponseError);
@@ -445,6 +477,143 @@ describe('listModels', () => {
   it('reports transport failures as retryable request errors', async () => {
     jest.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('down'));
     await expect(makeClient().listModels()).rejects.toBeInstanceOf(OpenRouterRequestError);
+  });
+});
+
+describe('listOpenRouterModels (TASK-AUDIT-004 keyless discovery)', () => {
+  it('discovers models without any API key and normalizes every documented field', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(200, {
+        data: [
+          {
+            id: 'tencent/hy4-preview',
+            canonical_slug: 'tencent/hy4-preview-20260827',
+            name: 'Tencent: Hy4 preview',
+            context_length: 1048576,
+            architecture: {
+              modality: 'text->text',
+              input_modalities: ['text'],
+              output_modalities: ['text'],
+              tokenizer: 'Other',
+            },
+            pricing: {
+              prompt: '0.000000834',
+              completion: '0.000002501',
+              input_cache_read: '0.000000042',
+            },
+            top_provider: {
+              context_length: 1048576,
+              max_completion_tokens: 64000,
+            },
+            supported_parameters: [
+              'include_reasoning',
+              'max_completion_tokens',
+              'max_tokens',
+              'reasoning',
+              'reasoning_effort',
+              'response_format',
+              'stop',
+              'structured_outputs',
+              'temperature',
+              'tool_choice',
+              'tools',
+            ],
+          },
+        ],
+      }),
+    );
+
+    const models = await listOpenRouterModels();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe(`${DEFAULT_BASE_URL}/models`);
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('GET');
+    // No API key is required — and none is sent — for model discovery.
+    expect(fetchMock.mock.calls[0][1]?.headers).toBeUndefined();
+    expect(models).toEqual([
+      {
+        id: 'tencent/hy4-preview',
+        name: 'Tencent: Hy4 preview',
+        canonicalSlug: 'tencent/hy4-preview-20260827',
+        description: null,
+        contextLength: 1048576,
+        created: null,
+        architecture: {
+          modality: 'text->text',
+          inputModalities: ['text'],
+          outputModalities: ['text'],
+          tokenizer: 'Other',
+        },
+        pricing: {
+          prompt: '0.000000834',
+          completion: '0.000002501',
+          inputCacheRead: '0.000000042',
+        },
+        topProvider: {
+          contextLength: 1048576,
+          maxCompletionTokens: 64000,
+        },
+        supportedParameters: [
+          'include_reasoning',
+          'max_completion_tokens',
+          'max_tokens',
+          'reasoning',
+          'reasoning_effort',
+          'response_format',
+          'stop',
+          'structured_outputs',
+          'temperature',
+          'tool_choice',
+          'tools',
+        ],
+      },
+    ]);
+  });
+
+  it('tolerates missing and malformed optional fields without assuming presence', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(200, {
+        data: [
+          {
+            id: 'vendor/minimal',
+            architecture: 'garbage',
+            pricing: {prompt: 42},
+            top_provider: {context_length: 'nope'},
+            supported_parameters: ['temperature', 7, null],
+          },
+        ],
+      }),
+    );
+
+    await expect(listOpenRouterModels()).resolves.toEqual([
+      {
+        id: 'vendor/minimal',
+        name: '',
+        canonicalSlug: null,
+        description: null,
+        contextLength: null,
+        created: null,
+        architecture: null,
+        pricing: {prompt: null, completion: null, inputCacheRead: null},
+        topProvider: {contextLength: null, maxCompletionTokens: null},
+        supportedParameters: ['temperature'],
+      },
+    ]);
+  });
+
+  it('still normalizes HTTP and transport failures onto the shared error hierarchy', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse(200, {nope: true}));
+    await expect(listOpenRouterModels()).rejects.toBeInstanceOf(OpenRouterResponseError);
+
+    jest.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('down'));
+    await expect(listOpenRouterModels()).rejects.toBeInstanceOf(OpenRouterRequestError);
+  });
+
+  it('rejects invalid listing options synchronously', async () => {
+    await expect(listOpenRouterModels({baseUrl: '   '})).rejects.toThrow(/base url/i);
+    await expect(listOpenRouterModels({timeoutMs: 0})).rejects.toThrow(/timeout/i);
   });
 });
 

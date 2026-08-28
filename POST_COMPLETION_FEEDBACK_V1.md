@@ -308,7 +308,7 @@ When serverless mode is active:
 
 ## TASK-AUDIT-004 — Fix OpenRouter model discovery without token validation
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P0`
 

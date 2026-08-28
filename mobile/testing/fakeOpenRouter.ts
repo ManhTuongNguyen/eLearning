@@ -37,8 +37,30 @@ const FAKE_MODEL = 'fake/model';
 
 function defaultModels(): ModelInfo[] {
   return [
-    {id: 'vendor/model-a', name: 'Model A', description: null, contextLength: null, created: null},
-    {id: 'vendor/model-b', name: 'Model B', description: null, contextLength: null, created: null},
+    {
+      id: 'vendor/model-a',
+      name: 'Model A',
+      canonicalSlug: null,
+      description: null,
+      contextLength: null,
+      created: null,
+      architecture: null,
+      pricing: null,
+      topProvider: null,
+      supportedParameters: [],
+    },
+    {
+      id: 'vendor/model-b',
+      name: 'Model B',
+      canonicalSlug: null,
+      description: null,
+      contextLength: null,
+      created: null,
+      architecture: null,
+      pricing: null,
+      topProvider: null,
+      supportedParameters: [],
+    },
   ];
 }
 
