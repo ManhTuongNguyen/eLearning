@@ -20,7 +20,7 @@
     "react-native-blob-util": "^0.24.10",
     "react-native-keychain": "^10.0.0",
     "react-native-safe-area-context": "^5.5.2",
-    "react-native-screens": "^4.27.0",
+    "react-native-screens": "4.25.0",
     "react-native-share": "^12.3.1",
     "react-native-sqlite-storage": "^6.0.1"
   },

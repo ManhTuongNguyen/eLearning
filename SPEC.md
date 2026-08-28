@@ -2407,7 +2407,7 @@ Acceptance criteria:
 
 ## TASK-120 — Final MVP audit
 
-Status: `[ ]`
+Status: `[x]`
 
 Compare the implementation against `ROADMAP.md`.
 
