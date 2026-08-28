@@ -948,7 +948,7 @@ Do not introduce a global state library solely to shorten one file.
 
 ## TASK-AUDIT-015 — Unify HTTP request and authentication behavior
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

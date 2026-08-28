@@ -1,10 +1,23 @@
-import {ApiError, apiRequest} from '../src/api/client';
+import {
+  ApiError,
+  apiRequest,
+  backendRequestHeaders,
+  DEFAULT_REQUEST_TIMEOUT_MS,
+} from '../src/api/client';
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
+  } as unknown as Response;
+}
+
+function textResponse(status: number, body: string): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => body,
   } as unknown as Response;
 }
 
@@ -275,6 +288,98 @@ it('categorizes timeout error (AbortError) as timeout', async () => {
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/999/'));
       expect(error.category).toBe('validation');
+    });
+  });
+
+  describe('unified transport concerns (TASK-AUDIT-015)', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('returns text bodies untouched and omits the JSON content type for text requests', async () => {
+      const csv = 'Front,Back,Example,Pronunciation\n"set off","phrasal verb",,\n';
+      const fetchMock = jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(textResponse(200, csv));
+
+      await expect(
+        apiRequest<string>('/api/v1/vocabulary/export/', {
+          accept: 'text/csv',
+          responseType: 'text',
+          token: 't',
+        }),
+      ).resolves.toBe(csv);
+
+      const [, init] = fetchMock.mock.calls[0];
+      expect(init?.headers).toEqual({Accept: 'text/csv', Authorization: 'Bearer t'});
+      // Every JSON/text request carries the shared deadline signal.
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('normalizes JSON error bodies on text responses through the shared contract', async () => {
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(textResponse(401, JSON.stringify({detail: 'Invalid token.'})));
+
+      const error = await expectApiError(
+        apiRequest('/api/v1/vocabulary/export/', {accept: 'text/csv', responseType: 'text'}),
+      );
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error.status).toBe(401);
+      expect(error.message).toBe('Invalid token.');
+      expect(error.category).toBe('authentication');
+    });
+
+    it('falls back to the generic message when a text error body is not JSON', async () => {
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(textResponse(503, '<html>gateway down</html>'));
+
+      const error = await expectApiError(
+        apiRequest('/api/v1/vocabulary/export/', {accept: 'text/csv', responseType: 'text'}),
+      );
+
+      expect(error.status).toBe(503);
+      expect(error.message).toBe('Request failed (503).');
+    });
+
+    it('aborts a request past its deadline and surfaces the shared timeout error', async () => {
+      jest.spyOn(globalThis, 'fetch').mockImplementation(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              const abortError = new Error('Aborted');
+              abortError.name = 'AbortError';
+              reject(abortError);
+            });
+          }),
+      );
+
+      await expect(
+        apiRequest('/api/v1/sessions/', {timeoutMs: 10}),
+      ).rejects.toMatchObject({
+        name: 'ApiError',
+        status: 0,
+        category: 'timeout',
+        message: 'The request timed out. Please try again.',
+      });
+    });
+
+    it('exposes the shared deadline constant and single header builder', () => {
+      expect(DEFAULT_REQUEST_TIMEOUT_MS).toBe(60000);
+      expect(
+        backendRequestHeaders('tok', 'text/event-stream', 'application/json'),
+      ).toEqual({
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer tok',
+      });
+      // No token → no Authorization header; no content type → no header.
+      expect(backendRequestHeaders(null, 'text/csv')).toEqual({Accept: 'text/csv'});
+      expect(backendRequestHeaders(undefined, 'application/json')).toEqual({
+        Accept: 'application/json',
+      });
     });
   });
 });

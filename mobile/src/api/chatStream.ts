@@ -18,13 +18,17 @@
  *
  * Transport: React Native's fetch buffers response bodies before they
  * resolve, so incremental reads go through XMLHttpRequest, whose progress
- * events expose the accumulating `responseText` as bytes arrive. The handle
- * returned by streamChatTurn/streamRetryTurn aborts the underlying request;
- * leaving a chat screen must call it so no turn outlives its UI.
+ * events expose the accumulating `responseText` as bytes arrive. This is
+ * the explicitly appropriate streaming path (TASK-AUDIT-015): a stream
+ * cannot be buffered and replayed like a JSON request, so it stays outside
+ * apiRequest while reusing the shared header builder and the backend
+ * timeout policy. The handle returned by streamChatTurn/streamRetryTurn
+ * aborts the underlying request; leaving a chat screen must call it so no
+ * turn outlives its UI.
  */
 import {assertServerApiAllowed} from '../mode/runtime';
 import {API_BASE_URL} from '../config';
-import {ApiError, normalizeApiError} from './client';
+import {ApiError, backendRequestHeaders, DEFAULT_REQUEST_TIMEOUT_MS, normalizeApiError} from './client';
 
 /** Normalized application events carried by the SSE frames. */
 export type ChatStreamEvent =
@@ -182,13 +186,17 @@ function consumeSseStream(options: ConsumeStreamOptions): ChatStreamHandle {
 
   const xhr = new XMLHttpRequest();
   xhr.open('POST', options.url);
-  if (options.body !== null) {
-    xhr.setRequestHeader('Content-Type', 'application/json');
+  // Headers and the deadline come from the shared backend contract
+  // (TASK-AUDIT-015): Authorization formatting lives in client.ts only.
+  const headers = backendRequestHeaders(
+    options.token,
+    'text/event-stream',
+    options.body !== null ? 'application/json' : undefined,
+  );
+  for (const [name, value] of Object.entries(headers)) {
+    xhr.setRequestHeader(name, value);
   }
-  xhr.setRequestHeader('Accept', 'text/event-stream');
-  xhr.setRequestHeader('Authorization', `Bearer ${options.token}`);
-  // 60s total timeout for the SSE connection (matches backend streaming timeout)
-  xhr.timeout = 60000;
+  xhr.timeout = DEFAULT_REQUEST_TIMEOUT_MS;
 
   // Cursor into the accumulating responseText plus the tail of a possibly
   // half-delivered frame across progress boundaries.

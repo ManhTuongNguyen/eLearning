@@ -358,7 +358,9 @@ describe('VocabularyScreen', () => {
       await fireEvent.press(screen.getByTestId('vocabulary-export'));
 
       await waitFor(() =>
-        expect(mockedVocabulary.exportVocabulary).toHaveBeenCalledWith('token-a'),
+        // TASK-AUDIT-015: the export rides the central authed requester
+        // (refresh + retry included) instead of a raw access token.
+        expect(mockedVocabulary.exportVocabulary).toHaveBeenCalledWith(expect.any(Function)),
       );
       expect(mockedShare.shareAnkiCsv).toHaveBeenCalledWith(EXPORT_CSV);
       expect(await screen.findByTestId('vocabulary-toast')).toHaveTextContent(

@@ -232,7 +232,9 @@ describe('TASK-112 vocabulary journey', () => {
     // share seam, then confirms with its own toast.
     await fireEvent.press(screen.getByTestId('vocabulary-export'));
     await waitFor(() =>
-      expect(mockedVocabulary.exportVocabulary).toHaveBeenCalledWith('access-1'),
+      // TASK-AUDIT-015: the export rides the central authed requester
+      // (refresh + retry included) instead of a raw access token.
+      expect(mockedVocabulary.exportVocabulary).toHaveBeenCalledWith(expect.any(Function)),
     );
     await waitFor(() => expect(mockedShare.shareAnkiCsv).toHaveBeenCalledWith(EXPORT_CSV));
     expect(await screen.findByTestId('vocabulary-toast')).toHaveTextContent(

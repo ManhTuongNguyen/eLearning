@@ -1,7 +1,25 @@
-/** HTTP client for the backend API with normalized error handling. */
+/**
+ * HTTP client for the backend API with normalized error handling.
+ *
+ * Single predictable owner (TASK-AUDIT-015) of the backend transport
+ * concerns: base URL assembly, request header construction (including the
+ * Authorization format), JSON/text body handling, request deadlines
+ * (timeouts), and error normalization. The one-time token refresh/retry
+ * lives in auth/authedRequest.ts, which drives this wrapper; the SSE stream
+ * transport (api/chatStream.ts) is deliberately separate — XMLHttpRequest
+ * progress events are the only incremental read path in React Native — but
+ * reuses the header builder and the shared timeout constant so every
+ * backend request keeps one wire contract.
+ */
 
 import {assertServerApiAllowed} from '../mode/runtime';
 import {API_BASE_URL} from '../config';
+
+/**
+ * Request deadline for backend calls, matching the backend LLM read timeout
+ * and the SSE stream timeout, so every transport shares one policy.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
 
 /** Category of API failure for programmatic handling. */
 export type ApiErrorCategory =
@@ -36,6 +54,35 @@ export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
   token?: string;
+  /** Overrides the Accept header for non-JSON responses (e.g. CSV export). */
+  accept?: string;
+  /** Parse the response body as raw text instead of JSON. */
+  responseType?: 'json' | 'text';
+  /**
+   * Request deadline in milliseconds; defaults to DEFAULT_REQUEST_TIMEOUT_MS,
+   * 0 disables the deadline. Expiry surfaces as a timeout-category ApiError.
+   */
+  timeoutMs?: number;
+}
+
+/**
+ * Build the canonical backend request headers. The only place the
+ * Authorization header format is defined (TASK-AUDIT-015); apiRequest and
+ * the XHR-based SSE transport both construct their headers through this.
+ */
+export function backendRequestHeaders(
+  token: string | null | undefined,
+  accept: string,
+  contentType?: string,
+): Record<string, string> {
+  const headers: Record<string, string> = {Accept: accept};
+  if (contentType) {
+    headers['Content-Type'] = contentType;
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -43,13 +90,24 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   // gate fires before any request is opened so local data cannot leak out.
   assertServerApiAllowed();
 
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
-  if (options.token) {
-    headers.Authorization = `Bearer ${options.token}`;
-  }
+  const headers = backendRequestHeaders(
+    options.token,
+    options.accept ?? 'application/json',
+    // JSON requests always declare the content type, even bodyless ones,
+    // preserving the wire contract this client has always sent.
+    options.responseType === 'text' ? undefined : 'application/json',
+  );
+
+  // The deadline is enforced with an AbortController so a hung connection
+  // surfaces as the same timeout category as a server-reported 408/504.
+  const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer =
+    timeoutMs > 0
+      ? setTimeout(() => {
+          controller.abort();
+        }, timeoutMs)
+      : null;
 
   let response: Response;
   try {
@@ -57,6 +115,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       method: options.method ?? 'GET',
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: controller.signal,
     });
   } catch (err) {
     // Distinguish timeout from general network failure when possible.
@@ -66,6 +125,26 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       throw new ApiError(0, 'The request timed out. Please try again.', {}, 'timeout');
     }
     throw new ApiError(0, 'Network request failed. Check your connection and try again.', {}, 'network');
+  } finally {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+  }
+
+  if (options.responseType === 'text') {
+    // Non-JSON success payloads (CSV export) return untouched; DRF error
+    // bodies are still JSON, so the shared normalization keeps applying.
+    const text = await response.text();
+    if (!response.ok) {
+      let payload: unknown = null;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
+      }
+      throw normalizeApiError(response.status, payload);
+    }
+    return text as T;
   }
 
   const payload = await readPayload(response);

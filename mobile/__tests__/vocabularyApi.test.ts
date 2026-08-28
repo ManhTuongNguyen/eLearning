@@ -7,6 +7,7 @@
 import {ApiError, apiRequest} from '../src/api/client';
 import {API_BASE_URL} from '../src/config';
 import {exportVocabulary, saveVocabulary} from '../src/api/vocabulary';
+import {createAuthedRequester} from '../src/auth/authedRequest';
 import type {AuthedRequester} from '../src/auth/authedRequest';
 
 /** Fixed-token requester standing in for the provider-built authed requester. */
@@ -93,26 +94,63 @@ describe('vocabulary api bindings', () => {
   });
 });
 
-describe('exportVocabulary (TASK-074 binding)', () => {
+describe('exportVocabulary (TASK-074 binding, TASK-AUDIT-015 unification)', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  it('fetches the export endpoint and returns the raw CSV text untouched', async () => {
+  /** Authed requester harness with refreshable tokens (mirrors AuthProvider). */
+  function makeRefreshableRequester(initialAccess = 'expired'): {
+    request: AuthedRequester;
+    refresh: jest.Mock<Promise<string | null>, []>;
+    currentAccess: () => string;
+  } {
+    let tokens = {access: initialAccess, refresh: 'refresh-1'};
+    const refresh = jest.fn(async (): Promise<string | null> => {
+      tokens = {access: 'fresh', refresh: 'refresh-1'};
+      return 'fresh';
+    });
+    const request: AuthedRequester = createAuthedRequester({
+      whenReady: async () => undefined,
+      getTokens: () => tokens,
+      refresh,
+    });
+    return {request, refresh, currentAccess: () => tokens.access};
+  }
+
+  it('fetches the export endpoint through the central wrapper and returns the raw CSV text untouched', async () => {
     const csv = 'Front,Back,Example,Pronunciation\n"set off","phrasal verb",,\n';
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(textResponse(200, csv));
 
-    await expect(exportVocabulary('tok')).resolves.toBe(csv);
+    await expect(exportVocabulary(requester)).resolves.toBe(csv);
 
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE_URL}/api/v1/vocabulary/export/`,
-      {
+      expect.objectContaining({
         method: 'GET',
         headers: {Accept: 'text/csv', Authorization: 'Bearer tok'},
-      },
+      }),
     );
+  });
+
+  it('retries once with the refreshed token when the access token expired', async () => {
+    const csv = 'Front,Back\n"set off","phrasal verb"\n';
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(textResponse(401, JSON.stringify({detail: 'Invalid token.'})))
+      .mockResolvedValueOnce(textResponse(200, csv));
+    const harness = makeRefreshableRequester('expired');
+
+    await expect(exportVocabulary(harness.request)).resolves.toBe(csv);
+
+    expect(harness.refresh).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      headers: {Authorization: 'Bearer fresh'},
+    });
+    expect(harness.currentAccess()).toBe('fresh');
   });
 
   it('normalizes DRF JSON error bodies through the shared ApiError contract', async () => {
@@ -122,9 +160,7 @@ describe('exportVocabulary (TASK-074 binding)', () => {
         textResponse(401, JSON.stringify({detail: 'Invalid token.'})),
       );
 
-    const error = await exportVocabulary('expired').catch(
-      (err: unknown) => err,
-    );
+    const error = await exportVocabulary(requester).catch((err: unknown) => err);
 
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(401);
@@ -136,7 +172,7 @@ describe('exportVocabulary (TASK-074 binding)', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(textResponse(503, '<html>gateway down</html>'));
 
-    const error = await exportVocabulary('tok').catch((err: unknown) => err);
+    const error = await exportVocabulary(requester).catch((err: unknown) => err);
 
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(503);
@@ -146,7 +182,7 @@ describe('exportVocabulary (TASK-074 binding)', () => {
   it('maps network failures to the offline ApiError', async () => {
     jest.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('offline'));
 
-    const error = await exportVocabulary('tok').catch((err: unknown) => err);
+    const error = await exportVocabulary(requester).catch((err: unknown) => err);
 
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(0);

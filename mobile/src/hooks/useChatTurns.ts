@@ -101,6 +101,20 @@ export function useChatTurns(options: UseChatTurnsOptions): UseChatTurnsResult {
     authedRequestRef.current = authedRequest;
   }, [authedRequest]);
 
+  /**
+   * Single owner of the raw token hand-off to the SSE transport
+   * (TASK-AUDIT-015): streams cannot be buffered and replayed, so they
+   * deliberately receive the current access token instead of the refresh
+   * wrapper — shared by fresh turns and retries alike.
+   */
+  const resolveStreamToken = useCallback(async (): Promise<string | null> => {
+    try {
+      return await getAccessTokenRef.current();
+    } catch {
+      return null;
+    }
+  }, []);
+
   // In-flight turn tracking: the abort handle plus the synthetic id of the
   // assistant bubble currently receiving deltas.
   const streamHandleRef = useRef<ChatStreamHandle | null>(null);
@@ -330,12 +344,7 @@ export function useChatTurns(options: UseChatTurnsOptions): UseChatTurnsResult {
           );
           return;
         }
-        let token: string | null = null;
-        try {
-          token = await getAccessTokenRef.current();
-        } catch {
-          token = null;
-        }
+        const token = await resolveStreamToken();
         if (sessionIdRef.current !== sid) {
           return;
         }
@@ -354,7 +363,7 @@ export function useChatTurns(options: UseChatTurnsOptions): UseChatTurnsResult {
         });
       })();
     },
-    [failTurn, handleTurnEvent, mode, serverlessOnEvent, startServerlessTurn],
+    [failTurn, handleTurnEvent, mode, resolveStreamToken, serverlessOnEvent, startServerlessTurn],
   );
 
   const startRetry = useCallback(
@@ -373,12 +382,7 @@ export function useChatTurns(options: UseChatTurnsOptions): UseChatTurnsResult {
           );
           return;
         }
-        let token: string | null = null;
-        try {
-          token = await getAccessTokenRef.current();
-        } catch {
-          token = null;
-        }
+        const token = await resolveStreamToken();
         if (sessionIdRef.current !== sid) {
           return;
         }
@@ -397,7 +401,7 @@ export function useChatTurns(options: UseChatTurnsOptions): UseChatTurnsResult {
         });
       })();
     },
-    [failTurn, handleTurnEvent, mode, serverlessOnEvent, startServerlessTurn],
+    [failTurn, handleTurnEvent, mode, resolveStreamToken, serverlessOnEvent, startServerlessTurn],
   );
 
   /**

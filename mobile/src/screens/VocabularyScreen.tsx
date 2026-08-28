@@ -259,7 +259,7 @@ function StatusBadge({item, styles}: {item: VocabularyItem; styles: ReturnType<t
 }
 
 export function VocabularyScreen({navigation}: Props) {
-  const {getAccessToken, authedRequest} = useAuth();
+  const {authedRequest} = useAuth();
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -272,13 +272,10 @@ export function VocabularyScreen({navigation}: Props) {
   const [reloadKey, setReloadKey] = useState(0);
 
   // AuthContext's value object is recreated on every auth-state change, so
-  // the load effect reads the token through a latest ref instead of taking
-  // getAccessToken as a dependency (TASK-048 gotcha).
-  const getAccessTokenRef = useRef(getAccessToken);
-  getAccessTokenRef.current = getAccessToken;
-  // TASK-AUDIT-005: JSON endpoint calls go through the central authed
-  // requester (401 → one shared refresh → one retry); only the raw-CSV
-  // export keeps the plain access token.
+  // effects and callbacks read the requester through a latest ref instead
+  // of taking it as a dependency (TASK-048 gotcha). TASK-AUDIT-015: every
+  // endpoint call — JSON and the text CSV export alike — flows through the
+  // central authed requester, so this screen never touches tokens itself.
   const authedRequestRef = useRef(authedRequest);
   authedRequestRef.current = authedRequest;
 
@@ -351,11 +348,7 @@ export function VocabularyScreen({navigation}: Props) {
     setExporting(true);
     setExportError(null);
     try {
-      const token = await getAccessTokenRef.current();
-      if (!token) {
-        throw new Error('You need to sign in again to see your vocabulary.');
-      }
-      await shareAnkiCsv(await exportVocabulary(token));
+      await shareAnkiCsv(await exportVocabulary(authedRequestRef.current));
       setToast('Vocabulary exported — choose where to save or share it');
     } catch (err) {
       setExportError(toErrorMessage(err));

@@ -1,7 +1,5 @@
 /** Vocabulary endpoint bindings (SPEC TASK-066/070/071/072/074/075). */
 
-import {API_BASE_URL} from '../config';
-import {ApiError, normalizeApiError} from './client';
 import type {AuthedRequester} from '../auth/authedRequest';
 import type {Paginated} from './sessions';
 
@@ -69,31 +67,14 @@ export const VOCABULARY_EXPORT_FILENAME = 'anki-vocabulary.csv';
 /**
  * GET /api/v1/vocabulary/export/ (TASK-074): the caller's complete vocabulary
  * as Anki-compatible CSV text. Unlike the JSON bindings this response must
- * not be parsed as JSON, so — unlike the requester-based bindings — it
- * performs its own raw request and returns the payload untouched while
- * keeping the error contract: network failures become ApiError(0) and
- * non-2xx responses are normalized through the shared helper (DRF error
- * bodies are still JSON here).
+ * not be parsed as JSON, so it rides the central wrapper's `responseType:
+ * 'text'` path — same base URL, auth header, error normalization, deadline,
+ * and (TASK-AUDIT-015) the central authed requester, so an expired access
+ * token is refreshed and the export retried once instead of failing.
  */
-export async function exportVocabulary(token: string): Promise<string> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}/api/v1/vocabulary/export/`, {
-      method: 'GET',
-      headers: {Accept: 'text/csv', Authorization: `Bearer ${token}`},
-    });
-  } catch {
-    throw new ApiError(0, 'Network request failed. Check your connection and try again.');
-  }
-  const text = await response.text();
-  if (!response.ok) {
-    let payload: unknown = null;
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = null;
-    }
-    throw normalizeApiError(response.status, payload);
-  }
-  return text;
+export function exportVocabulary(request: AuthedRequester): Promise<string> {
+  return request<string>('/api/v1/vocabulary/export/', {
+    accept: 'text/csv',
+    responseType: 'text',
+  });
 }
