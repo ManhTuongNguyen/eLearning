@@ -17,6 +17,7 @@ import {
 
 import {useAuth} from '../auth/AuthContext';
 import {useApplicationMode} from '../mode/ModeContext';
+import {SecretInput} from '../components/SecretInput';
 import type {LoginScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
@@ -145,11 +146,8 @@ export function LoginScreen({navigation}: LoginScreenProps) {
           onChangeText={setIdentifier}
           testID="login-identifier"
         />
-        <TextInput
-          style={styles.input}
+        <SecretInput
           placeholder="Password"
-          placeholderTextColor={colors.textMuted}
-          secureTextEntry
           value={password}
           onChangeText={setPassword}
           testID="login-password"

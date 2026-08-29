@@ -38,6 +38,7 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {toErrorMessage} from '../auth/AuthContext';
+import {SecretInput} from '../components/SecretInput';
 import {getLocalDatabase} from '../db/database';
 import {useApplicationMode} from '../mode/ModeContext';
 import type {OpenRouterSettingsScreenProps} from '../navigation/types';
@@ -719,19 +720,18 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
 
         <Text style={styles.sectionLabel}>API key</Text>
         <View style={styles.card}>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
+          <SecretInput
             onChangeText={value => {
               setApiKeyDraft(value);
               setSaved(false);
               setError(null);
             }}
             placeholder={storedKey ? '••••••••••••  saved' : descriptor.keyPlaceholder}
-            secureTextEntry
-            style={styles.input}
-            testID="openrouter-api-key-input"
             value={apiKeyDraft}
+            testID="openrouter-api-key-input"
+            textContentType="none"
+            inputStyle={styles.input}
+            showBorder={false}
           />
           <Text style={styles.hint}>
             {storedKey
