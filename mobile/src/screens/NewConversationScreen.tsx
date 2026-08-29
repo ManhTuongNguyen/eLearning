@@ -1,15 +1,18 @@
 /**
- * New conversation screen (SPEC TASK-051): optional topic hint plus the two
- * start actions from ROADMAP §6 — "Start" with whatever hint the user typed
- * and "Let AI choose a topic" which always sends an empty hint. In server
- * mode both create the session through POST /api/v1/sessions/; in serverless
- * mode (TASK-085) the topic is generated directly through OpenRouter with
- * the user's own key and persisted in the local SQLite database — no backend
+ * New conversation screen (SPEC TASK-051): a single start action whose label
+ * and style follow the optional topic hint from ROADMAP §6 — when the user
+ * typed a non-empty hint the action is the primary "Start" button that ships
+ * the hint to the backend; when the hint is blank the same control re-skins
+ * to the secondary "Let AI choose a topic" style and sends an empty hint
+ * (the server / provider picks the topic). In server mode both paths create
+ * the session through POST /api/v1/sessions/; in serverless mode (TASK-085)
+ * the topic is generated directly through the configured provider with the
+ * user's own key and persisted in the local SQLite database — no backend
  * traffic happens (ROADMAP Rule 9). Both land in Chat; a blank Start behaves
  * exactly like the auto action, so empty input works too.
  * The server-mode creation response carries the generated sample conversation
  * (TASK-053), which is handed to Chat as a route param since no endpoint can
- * refetch it. Creation shows a spinner and disables both buttons; failures
+ * refetch it. Creation shows a spinner and disables the action; failures
  * surface in an inline banner and leave the form ready to retry.
  */
 import React, {useCallback, useMemo, useState} from 'react';
@@ -88,7 +91,6 @@ function createStyles(c: ThemeColors) {
       borderRadius: 10,
       paddingVertical: 14,
       alignItems: 'center',
-      marginTop: 12,
     },
     buttonDisabled: {
       opacity: 0.5,
@@ -211,28 +213,32 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
         testID="new-conversation-hint"
       />
 
-      <Pressable
-        style={[styles.primaryButton, creating && styles.buttonDisabled]}
-        disabled={creating}
-        onPress={() => {
-          handleCreate(hint);
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Start conversation with your topic hint"
-        testID="new-conversation-start">
-        <Text style={styles.primaryButtonText}>Start</Text>
-      </Pressable>
-      <Pressable
-        style={[styles.secondaryButton, creating && styles.buttonDisabled]}
-        disabled={creating}
-        onPress={() => {
-          handleCreate('');
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Let AI choose a topic"
-        testID="new-conversation-auto">
-        <Text style={styles.secondaryButtonText}>Let AI choose a topic</Text>
-      </Pressable>
+      {(() => {
+        const hintEmpty = hint.trim().length === 0;
+        const buttonStyle = hintEmpty
+          ? [styles.secondaryButton, creating && styles.buttonDisabled]
+          : [styles.primaryButton, creating && styles.buttonDisabled];
+        const textStyle = hintEmpty
+          ? styles.secondaryButtonText
+          : styles.primaryButtonText;
+        const label = hintEmpty ? 'Let AI choose a topic' : 'Start';
+        const a11yLabel = hintEmpty
+          ? 'Let AI choose a topic'
+          : 'Start conversation with your topic hint';
+        return (
+          <Pressable
+            style={buttonStyle}
+            disabled={creating}
+            onPress={() => {
+              handleCreate(hint);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={a11yLabel}
+            testID="new-conversation-start">
+            <Text style={textStyle}>{label}</Text>
+          </Pressable>
+        );
+      })()}
 
       {error !== null ? (
         <Text role="alert" style={styles.error} testID="form-error">

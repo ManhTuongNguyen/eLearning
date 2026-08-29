@@ -1,13 +1,15 @@
 /**
- * New conversation screen tests (SPEC TASK-051): optional topic hint, Start,
- * Let-AI-choose, empty-input behavior, navigation into Chat with the created
- * session id, loading/disabled state while creating, error banner + retry
- * readiness, and the cancel/back dismissal. Also covers the TASK-053 hand-
- * off: the creation response's sample conversation rides into Chat as a
- * route param and powers the example overlay. Serverless creation
- * (TASK-AUDIT-013/019) is covered against the real sql.js database and the
- * real provider registry: a persisted Gemini configuration must reach the
- * Gemini endpoint — never OpenRouter or the backend.
+ * New conversation screen tests (SPEC TASK-051): optional topic hint, the
+ * single Start action whose label and style adapt to whether the hint is
+ * non-empty (primary "Start") or blank (secondary "Let AI choose a topic"),
+ * empty-input behavior, navigation into Chat with the created session id,
+ * loading/disabled state while creating, error banner + retry readiness,
+ * and the cancel/back dismissal. Also covers the TASK-053 hand-off: the
+ * creation response's sample conversation rides into Chat as a route param
+ * and powers the example overlay. Serverless creation (TASK-AUDIT-013/019)
+ * is covered against the real sql.js database and the real provider
+ * registry: a persisted Gemini configuration must reach the Gemini endpoint
+ * — never OpenRouter or the backend.
  */
 import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
@@ -149,13 +151,13 @@ beforeEach(() => {
 });
 
 describe('NewConversationScreen', () => {
-  it('renders the hint input, both start actions and the cancel control', async () => {
+  it('renders the hint input, the single start action and the cancel control', async () => {
     await renderScreen();
 
     expect(await screen.findByTestId('new-conversation-screen')).toBeOnTheScreen();
     expect(screen.getByTestId('new-conversation-hint')).toBeOnTheScreen();
     expect(screen.getByTestId('new-conversation-start')).toBeOnTheScreen();
-    expect(screen.getByTestId('new-conversation-auto')).toBeOnTheScreen();
+    expect(screen.queryByTestId('new-conversation-auto')).toBeNull();
     expect(screen.getByTestId('new-conversation-back')).toBeOnTheScreen();
   });
 
@@ -186,13 +188,14 @@ describe('NewConversationScreen', () => {
     expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 7);
   });
 
-  it('lets AI choose a topic even when a hint has been typed', async () => {
+  it('sends an empty hint when the user clears the input before pressing Start', async () => {
     mockedSessions.createSession.mockResolvedValue(makeSession({id: 9, topic_hint: ''}));
     await renderScreen();
     await screen.findByTestId('new-conversation-screen');
 
     await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), 'Cooking');
-    await fireEvent.press(screen.getByTestId('new-conversation-auto'));
+    await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), '');
+    await fireEvent.press(screen.getByTestId('new-conversation-start'));
 
     await waitFor(() => expect(mockedSessions.createSession).toHaveBeenCalledWith(expect.any(Function), ''));
     await screen.findByTestId('chat-screen');
@@ -206,19 +209,18 @@ describe('NewConversationScreen', () => {
     await renderScreen();
     await screen.findByTestId('new-conversation-screen');
 
-    await fireEvent.press(screen.getByTestId('new-conversation-auto'));
+    await fireEvent.press(screen.getByTestId('new-conversation-start'));
 
     expect(await screen.findByTestId('form-error')).toHaveTextContent(
       'Topic hint is too long.',
     );
     expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen();
     expect(screen.queryByTestId('chat-loading')).toBeNull();
-    // The form recovers: both actions are enabled again for a retry.
+    // The form recovers: the action is enabled again for a retry.
     expect(screen.getByTestId('new-conversation-start')).toBeEnabled();
-    expect(screen.getByTestId('new-conversation-auto')).toBeEnabled();
   });
 
-  it('shows a creating spinner and disables both actions until the request settles', async () => {
+  it('shows a creating spinner and disables the start action until the request settles', async () => {
     let resolveCreate: (session: Session) => void = () => {};
     mockedSessions.createSession.mockImplementation(
       () =>
@@ -229,10 +231,9 @@ describe('NewConversationScreen', () => {
     await renderScreen();
     await screen.findByTestId('new-conversation-screen');
 
-    await fireEvent.press(screen.getByTestId('new-conversation-auto'));
+    await fireEvent.press(screen.getByTestId('new-conversation-start'));
     expect(await screen.findByTestId('new-conversation-loading')).toBeOnTheScreen();
     expect(screen.getByTestId('new-conversation-start')).toBeDisabled();
-    expect(screen.getByTestId('new-conversation-auto')).toBeDisabled();
 
     // A second press during creation must not fire another request.
     await fireEvent.press(screen.getByTestId('new-conversation-start'));
@@ -283,7 +284,7 @@ describe('NewConversationScreen', () => {
     await renderScreen();
     await screen.findByTestId('new-conversation-screen');
 
-    await fireEvent.press(screen.getByTestId('new-conversation-auto'));
+    await fireEvent.press(screen.getByTestId('new-conversation-start'));
 
     // The created conversation opens and exposes the example entry point.
     await screen.findByTestId('chat-screen');
@@ -309,6 +310,76 @@ describe('NewConversationScreen', () => {
       expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 7),
     );
     expect(screen.queryByTestId('chat-show-example')).toBeNull();
+  });
+});
+
+describe('NewConversationScreen dynamic start action', () => {
+  it('uses the primary Start label and style when a non-empty hint is typed', async () => {
+    await renderScreen();
+    await screen.findByTestId('new-conversation-screen');
+
+    await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), 'Traveling');
+
+    const action = screen.getByTestId('new-conversation-start');
+    expect(screen.getByText('Start')).toBeOnTheScreen();
+    expect(screen.queryByText('Let AI choose a topic')).toBeNull();
+    expect(action.props.accessibilityLabel).toBe(
+      'Start conversation with your topic hint',
+    );
+  });
+
+  it('switches to the secondary Let-AI-choose label and style when the hint is empty', async () => {
+    await renderScreen();
+    await screen.findByTestId('new-conversation-screen');
+
+    // Render with no input: the action should advertise AI topic selection.
+    const action = screen.getByTestId('new-conversation-start');
+    expect(screen.getByText('Let AI choose a topic')).toBeOnTheScreen();
+    expect(screen.queryByText('Start')).toBeNull();
+    expect(action.props.accessibilityLabel).toBe('Let AI choose a topic');
+  });
+
+  it('switches to the secondary label when the user clears the hint', async () => {
+    await renderScreen();
+    await screen.findByTestId('new-conversation-screen');
+
+    await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), 'Cooking');
+    expect(screen.getByText('Start')).toBeOnTheScreen();
+
+    await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), '');
+    expect(screen.getByText('Let AI choose a topic')).toBeOnTheScreen();
+    expect(screen.queryByText('Start')).toBeNull();
+  });
+
+  it('switches back to the primary label when the user types again', async () => {
+    await renderScreen();
+    await screen.findByTestId('new-conversation-screen');
+
+    await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), 'Traveling');
+    expect(screen.getByText('Start')).toBeOnTheScreen();
+
+    await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), '');
+    expect(screen.getByText('Let AI choose a topic')).toBeOnTheScreen();
+
+    await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), 'Cooking');
+    expect(screen.getByText('Start')).toBeOnTheScreen();
+    expect(screen.queryByText('Let AI choose a topic')).toBeNull();
+  });
+
+  it('treats whitespace-only input as empty and sends an empty hint', async () => {
+    mockedSessions.createSession.mockResolvedValue(makeSession({id: 11}));
+    await renderScreen();
+    await screen.findByTestId('new-conversation-screen');
+
+    await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), '   ');
+    expect(screen.getByText('Let AI choose a topic')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByTestId('new-conversation-start'));
+
+    await waitFor(() =>
+      expect(mockedSessions.createSession).toHaveBeenCalledWith(expect.any(Function), ''),
+    );
+    await screen.findByTestId('chat-screen');
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 11);
   });
 });
 
@@ -362,7 +433,7 @@ describe('serverless creation honors the configured provider (TASK-AUDIT-013/019
     await waitFor(() => expect(getRuntimeApplicationMode()).toBe('serverless'));
     await screen.findByTestId('new-conversation-screen');
 
-    await fireEvent.press(screen.getByTestId('new-conversation-auto'));
+    await fireEvent.press(screen.getByTestId('new-conversation-start'));
 
     // The topic request reached Google's Gemini endpoint with the stored key.
     await screen.findByTestId('chat-screen');

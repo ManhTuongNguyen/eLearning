@@ -230,7 +230,7 @@ async function startConversationWithReply(fake: FakeOpenRouterClient): Promise<v
   await waitFor(() =>
     expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen(),
   );
-  await pressTop('new-conversation-auto');
+  await pressTop('new-conversation-start');
   await waitFor(() => expect(screen.getByTestId('chat-topic-title')).toBeOnTheScreen());
   fake.enqueueStream({type: 'success', deltas: [ASSISTANT_TEXT]});
   await fireEvent.changeText(top('composer-input'), USER_TEXT);
@@ -343,7 +343,7 @@ describe('TASK-117 serverless journey', () => {
       finishReason: 'stop',
       requestId: 'topic-1',
     });
-    await pressTop('new-conversation-auto');
+    await pressTop('new-conversation-start');
     await waitFor(() => expect(screen.getByTestId('chat-topic-title')).toBeOnTheScreen());
     expect(within(top('chat-screen')).getByText(TOPIC.title)).toBeOnTheScreen();
     expect(fake.completeRequests).toHaveLength(1);
