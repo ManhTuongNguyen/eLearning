@@ -1,3 +1,9 @@
+<div align="right">
+
+**English** | [Tiếng Việt](README.vi.md)
+
+</div>
+
 # English Learning Chat
 
 A mobile application for learning English through natural AI conversation, built as a ChatGPT-style chat experience with features designed for language learners.
