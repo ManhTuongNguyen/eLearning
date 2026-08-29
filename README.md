@@ -13,16 +13,16 @@ A mobile application for learning English through natural AI conversation, built
 - Anki-compatible CSV export
 - Text-to-speech (Android native)
 - Two isolated modes: authenticated **Server mode** and local **Serverless mode**
-- OpenRouter model fallback
+- Multi-provider LLM support (OpenRouter, Google Gemini, OpenAI, 9Router, OpenAI-compatible) with ordered model fallback
 
 ## Architecture
 
 ```text
 Server mode:
-React Native → HTTPS → Django REST API → PostgreSQL / Redis / Celery → OpenRouter
+React Native → HTTPS → Django REST API → PostgreSQL / Redis / Celery → LLM provider (selected by `LLM_PROVIDER`)
 
 Serverless mode:
-React Native → Local SQLite + OpenRouter directly
+React Native → Local SQLite + LLM provider directly (user-selected provider and key)
 ```
 
 | Directory | Purpose |
@@ -74,11 +74,12 @@ cp .env.example .env
 | `POSTGRES_*` | Database credentials used by Django, Docker Compose and pytest |
 | `DB_ENGINE` | `postgresql` (default) or `sqlite3` for a no-Docker quick start |
 | `REDIS_URL` / `CELERY_*` | Redis connection and Celery broker/result backends |
-| `OPENROUTER_API_KEY` | Server-side LLM key — never sent to the mobile application |
+| `LLM_PROVIDER` | Server-side provider integration: `openrouter` (default), `gemini`, `openai`, `ninerouter`, `openai-compatible` |
+| `<PROVIDER>_API_KEY` / `<PROVIDER>_BASE_URL` | Credentials of the selected provider (e.g. `OPENROUTER_API_KEY`, `GEMINI_API_KEY`) — never sent to the mobile application |
 | `LLM_PRIMARY_MODEL` / `LLM_FALLBACK_MODELS` | Server-mode model chain (see [LLM model configuration](#llm-model-configuration)) |
 | `JWT_*` | Access/refresh token lifetimes |
 
-The mobile app needs no `.env`; server-mode API base URL and serverless settings (user OpenRouter key, models) are configured in the app (Settings → serverless OpenRouter settings; the key is stored in secure device storage).
+The mobile app has its own environment file — copy `mobile/.env.example` to `mobile/.env` and set `API_BASE_URL` (the backend base URL; `http://10.0.2.2:8000` on the Android emulator). Mode-specific files (`.env.development` / `.env.test` / `.env.production`) override it per build type, values are inlined at build time, and a missing `API_BASE_URL` fails the bundle. Serverless provider settings (provider, API key, primary/fallback models) are configured in the app (Settings → provider settings; the key is stored in secure device storage).
 
 ## Development
 
@@ -220,17 +221,20 @@ Server-mode models are configured entirely through the environment; no model
 names are hard-coded in application code.
 
 ```text
-OPENROUTER_API_KEY           server-side key (required in production, never sent to clients)
-OPENROUTER_BASE_URL          OpenRouter API root (default https://openrouter.ai/api/v1)
-LLM_PRIMARY_MODEL            model tried first ("vendor/model", OpenRouter catalog id)
+LLM_PROVIDER                 provider integration: openrouter | gemini | openai | ninerouter | openai-compatible (default openrouter)
+<PROVIDER>_API_KEY           server-side key of the selected provider (required in production, never sent to clients)
+<PROVIDER>_BASE_URL          provider API root (optional; every provider has a default except openai-compatible)
+LLM_PRIMARY_MODEL            model tried first (an id from the configured provider's catalog)
 LLM_FALLBACK_MODELS          comma-separated fallbacks, tried in order
 LLM_REQUEST_TIMEOUT_SECONDS  per-request HTTP timeout (> 0)
 ```
 
-The ordered chain (`LLM_PRIMARY_MODEL` followed by `LLM_FALLBACK_MODELS`) is
-assembled by `backend/llm/config.py` (`load_model_configuration()`), which
-strips names and drops blank/duplicate entries. Only retryable failures
-(timeouts, transport errors, provider availability) move to the next model;
-invalid configuration raises `ImproperlyConfigured` naming the offending
-variable at startup. Valid catalog ids are listed at
-https://openrouter.ai/api/v1/models.
+Switching provider is a configuration change (`LLM_PROVIDER`), never a code
+change (`backend/llm/registry.py`). The ordered chain (`LLM_PRIMARY_MODEL`
+followed by `LLM_FALLBACK_MODELS`) is assembled by `backend/llm/config.py`
+(`load_model_configuration()`), which strips names and drops blank/duplicate
+entries. Only retryable failures (timeouts, transport errors, provider
+availability) move to the next model; invalid configuration raises
+`ImproperlyConfigured` naming the offending variable at startup. Model ids
+follow the configured provider's catalog (for OpenRouter: `vendor/model`,
+listed at https://openrouter.ai/api/v1/models).

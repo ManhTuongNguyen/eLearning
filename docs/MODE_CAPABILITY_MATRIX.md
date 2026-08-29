@@ -28,9 +28,9 @@ serverless is active.
 | Saved vocabulary (save word) | Yes | No | `useVocabularySave` + runtime gate |
 | Vocabulary enrichment | Yes | No | backend Celery only |
 | Vocabulary screen / CSV export | Yes | No | `api/vocabulary` + runtime gate |
-| Provider configuration (key, model) | No | Yes | `OpenRouterSettingsScreen`, `serverless/settings` |
-| Direct provider request | No | Yes | `serverless/*` clients |
-| Provider/model discovery | No | Yes | `serverless/modelCatalog` |
+| Provider configuration (provider, key, model) | No | Yes | `OpenRouterSettingsScreen`, `serverless/settings` |
+| Direct provider request | No | Yes | `serverless/providerRegistry`, provider clients |
+| Provider/model discovery | No | Yes | `serverless/modelCatalog` (keyless for OpenRouter/9Router) |
 | Clear local data | No | Yes | `clearAllServerlessData` |
 | Read aloud (TTS) | Yes | Yes | `tts/*` (device-local, mode-independent) |
 | Copy / text selection surface | Yes | Copy only | clipboard + `MessageActionsMenu` |

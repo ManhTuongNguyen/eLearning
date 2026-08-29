@@ -24,13 +24,13 @@ Server mode (default, authenticated):
   Django REST API  ──  PostgreSQL
         |             Redis (broker DB 1 / result DB 2)
         v             Celery worker
-  OpenRouter (server-side key)
+  LLM provider (server-side key; selected by LLM_PROVIDER)
 
 Serverless mode (local only):
 
   React Native app
         ├── Local SQLite (react-native-sqlite-storage)
-        └── OpenRouter directly (user-supplied key)
+        └── LLM provider directly (user-selected provider, user-supplied key)
 ```
 
 Isolation rules:
@@ -38,7 +38,7 @@ Isolation rules:
 - Switching modes never merges or migrates data.
 - While serverless is active, server history is hidden; restoring server mode
   makes it available again.
-- The serverless OpenRouter key never reaches the backend; the server key is
+- The serverless provider key never reaches the backend; the server key is
   never sent to the mobile app.
 - Serverless local data is removed only by an explicit "Clear local data"
   action in Settings.
@@ -67,11 +67,11 @@ API calls.
 | `learning` | Per-user CEFR learning level (`Profile.level`: A1–C2 or `AUTO`) |
 | `conversations` | Sessions, messages, chat write path, topic generation, context assembly, rolling summaries, suggestions, improvement |
 | `vocabulary` | Saved expressions, async enrichment, Anki CSV export |
-| `llm` | Provider abstraction, OpenRouter client, model fallback, streaming normalization, SSE plumbing (no DB models) |
+| `llm` | Provider abstraction and registry (OpenRouter, Gemini, OpenAI, 9Router, OpenAI-compatible), model fallback, streaming normalization, SSE plumbing (no DB models) |
 
 Layering conventions (enforced by review and tests):
 
-- Django views never call OpenRouter; they use application services.
+- Django views never call LLM providers directly; they use application services.
 - Serializers only validate/shape data; business logic lives in service modules.
 - Every LLM-consuming service receives an `LLMProvider` via constructor
   injection; production wiring uses cached `FallbackProvider.from_settings()`
@@ -82,12 +82,14 @@ Layering conventions (enforced by review and tests):
 A single `config/settings.py` driven by `python-decouple`; there is no
 base/dev/prod split. When `DEBUG=False`, `validate_production_configuration()`
 fails startup unless `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`,
-`POSTGRES_PASSWORD` and `OPENROUTER_API_KEY` are set. All variables are
-documented in the root `.env.example`. Key LLM/memory settings:
+`POSTGRES_PASSWORD` and the selected provider's API key (resolved from
+`LLM_PROVIDER`) are set. All variables are documented in the root
+`.env.example`. Key LLM/memory settings:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OPENROUTER_API_KEY` / `OPENROUTER_BASE_URL` | `""` / `https://openrouter.ai/api/v1` | Server-side provider credentials |
+| `LLM_PROVIDER` | `openrouter` | Server-side provider integration (`openrouter`, `gemini`, `openai`, `ninerouter`, `openai-compatible`) |
+| `<PROVIDER>_API_KEY` / `<PROVIDER>_BASE_URL` | per provider | Credentials of the selected provider (e.g. `OPENROUTER_API_KEY` / `GEMINI_API_KEY`); the base URL is optional except for `openai-compatible` |
 | `LLM_PRIMARY_MODEL` | `openai/gpt-4o-mini` | First model tried |
 | `LLM_FALLBACK_MODELS` | `openai/gpt-4o,anthropic/claude-3.5-haiku` | Ordered fallbacks |
 | `LLM_REQUEST_TIMEOUT_SECONDS` / `_CONNECT_` / `_READ_` | 60 / 10 / 60 | HTTP timeouts |
@@ -153,14 +155,27 @@ Retryable LLM failures map to 503, permanent ones to 502.
 
 ## 3. LLM provider abstraction
 
-All OpenRouter interaction is funneled through the `llm` app. Nothing outside
-it knows OpenRouter's HTTP details.
+All provider interaction is funneled through the `llm` app. Nothing outside it
+knows a provider's HTTP details. Selecting a provider is a configuration
+change — `LLM_PROVIDER` — never a code change.
 
 ```text
 LLMProvider (ABC, llm/provider.py)
-    ├── OpenRouterProvider   (llm/openrouter.py, httpx)
-    └── FallbackProvider     (llm/fallback.py, ordered model chain)
+    ├── OpenAICompatibleProvider   (llm/openai_compatible.py, shared contract)
+    │     ├── OpenRouterProvider   (llm/openrouter.py)
+    │     ├── OpenAIProvider       (llm/openai.py)
+    │     └── NineRouterProvider   (llm/ninerouter.py)
+    ├── GeminiProvider             (llm/gemini.py)
+    └── FallbackProvider           (llm/fallback.py, ordered model chain)
 ```
+
+- **Registry** (`llm/registry.py`, `llm/provider_specs.py`): `LLM_PROVIDER`
+  selects the integration; each `ProviderSpec` carries the provider's name and
+  its `<PREFIX>_API_KEY`/`<PREFIX>_BASE_URL` settings. Vendors whose wire
+  contract is genuinely the OpenAI chat-completions shape (OpenRouter, OpenAI,
+  9Router, generic OpenAI-compatible) share one implementation; Gemini, whose
+  API surface differs, implements `LLMProvider` directly. `FallbackProvider`
+  wraps whichever provider the registry builds.
 
 - **Interface**: `complete(request) -> CompletionResponse` and
   `stream(request) -> Iterator[StreamEvent]`. The first stream event is always
@@ -185,10 +200,12 @@ LLMProvider (ABC, llm/provider.py)
   guarantees exactly one `StreamStart`, zero or more `StreamDelta`, and exactly
   one terminal event; contract violations from the provider become
   `StreamFailed` (`LLMResponseError`).
-- **Model discovery**: `OpenRouterProvider.list_models()` normalizes the
-  `/models` catalog into `ModelInfo` entries (malformed entries skipped). The
-  server exposes no `/models` HTTP endpoint; server-side models are configured
-  purely through the environment.
+- **Model discovery**: every provider implements `list_models()`, normalizing
+  its catalog into `ModelInfo` entries (malformed entries skipped, optional
+  fields handled defensively). Discovery is keyless where the catalog is
+  public (OpenRouter, 9Router) and key-authenticated elsewhere (Gemini,
+  OpenAI). The server exposes no `/models` HTTP endpoint; server-side models
+  are configured purely through the environment.
 
 ---
 
@@ -198,7 +215,13 @@ LLMProvider (ABC, llm/provider.py)
 
 `llm/sse.py` encodes events as `event: <name>\ndata: <json>\n\n` frames and
 wraps them in a `StreamingHttpResponse` with `Cache-Control: no-cache` and
-`X-Accel-Buffering: no`. Frame names map 1:1 to the normalized events:
+`X-Accel-Buffering: no`. Because the streaming views answer with a plain Django
+response outside DRF's renderer contract, `api/negotiation.py` extends content
+negotiation per view (`ServerSentEventNegotiation` on the stream views,
+`CsvNegotiation` on the vocabulary export): `Accept: text/event-stream` /
+`Accept: text/csv` are accepted, errors still render as JSON, unmatched media
+types still 406, and global negotiation is untouched. Frame names map 1:1 to
+the normalized events:
 
 ```text
 event: start       data: {"model": "..."}
@@ -362,6 +385,12 @@ session creation into the chat screen.
 - **API client** (`src/api/client.ts`): typed request helper producing a
   normalized `ApiError` with categories
   `network | authentication | validation | server | llm | timeout`.
+- **Environment configuration** (`src/config.ts`): the backend base URL comes
+  from the virtual `@env` module (react-native-dotenv babel plugin) and is
+  never hard-coded. Mode files select the value per build type
+  (`.env.development` debug, `.env.test` jest, `.env.production` release); a
+  missing or malformed `API_BASE_URL` fails the bundle with an actionable
+  message instead of failing at request time.
 - **Auth state** (`src/auth/AuthContext.tsx`): startup token restore, single
   flight token refresh (concurrent 401s trigger exactly one refresh), automatic
   one-retry of failed authenticated requests.
@@ -378,9 +407,10 @@ deltas buffered by `DeltaBuffer`, authoritative replacement from the
 the sample conversation renders in a modal with per-turn TTS. Long-press opens
 `MessageActionsMenu` (suggest replies, improve English — user messages only —
 copy, speak, select text). Text selection uses an editable `TextInput` mirror
-(`TextSelectionSheet`) and flows into `VocabularySaveSheet`, which saves
-immediately and shows a toast; enrichment status appears in the vocabulary
-screen later. The list is windowed and `MessageRow` is memoized
+(`TextSelectionSheet`); its `Save word` action saves immediately via
+`useVocabularySave` with a success toast — no second confirmation step — and
+enrichment status appears in the vocabulary screen later. The list is windowed
+and `MessageRow` is memoized
 (`streamingUx.ts` tuning constants) for large histories.
 
 ### 8.4 Local SQLite database (serverless)
@@ -398,23 +428,33 @@ screen later. The list is windowed and `MessageRow` is memoized
   `LocalConversationRepository` (`src/db/conversationRepository.ts`); feature
   code never writes SQL.
 - `clearServerlessLocalData()` (`src/db/clearLocalData.ts`) wipes serverless
-  tables in one transaction and clears the stored OpenRouter key — it never
+  tables in one transaction and clears the stored provider keys — it never
   touches auth tokens, the theme preference, or the mode flag.
 
-### 8.5 Serverless OpenRouter client
+### 8.5 Serverless LLM provider layer
 
 `src/serverless/` mirrors the backend's LLM architecture on-device:
 
-- `openrouterClient.ts` — direct OpenRouter calls with the user's key,
+- `providerRegistry.ts` — the mobile analogue of `llm/registry.py`: maps a
+  provider id (`openrouter`, `gemini`, `openai`, `ninerouter`) onto its
+  `LLMClient` factory and model discovery. OpenAI-compatible vendors share
+  `openAICompatibleClient.ts`; Gemini, with a genuinely different API surface,
+  implements `LLMClient` directly in `geminiClient.ts`. The selected provider
+  is a persisted setting, never a code change.
+- Provider clients (`openrouterClient.ts`, `openAIClient.ts`,
+  `nineRouterClient.ts`, …) — direct provider calls with the user's key,
   ordered primary/fallback model chain, XHR-based SSE streaming with the same
-  fallback-before-first-event rule, and model discovery.
+  fallback-before-first-event rule, and model discovery (keyless where the
+  catalog is public — OpenRouter, 9Router; key-authenticated for Gemini and
+  OpenAI).
 - `errors.ts` — error hierarchy mirroring `llm/exceptions.py` (retryable vs
   permanent).
-- `secureApiKey.ts` — the API key lives in the keychain under a dedicated
-  service (`com.elearningmobile.serverless`), separate from auth tokens; it is
-  never written to SQLite, AsyncStorage, or logs. Non-secret configuration
-  (primary/fallback models) and the cached model catalog live in the local
-  `settings` table (`settings.ts`, `modelCatalog.ts`; the catalog is refreshed
+- `secureApiKey.ts` — API keys live in the keychain under a dedicated service
+  (`com.elearningmobile.serverless`), namespaced per provider, separate from
+  auth tokens; they are never written to SQLite, AsyncStorage, or logs.
+  Non-secret configuration (selected provider, per-provider primary/fallback
+  models) and the per-provider cached model catalogs live in the local
+  `settings` table (`settings.ts`, `modelCatalog.ts`; a catalog is refreshed
   only on success so a failed refresh never destroys the cache).
 - Local feature services mirror the backend: `topicGeneration.ts`,
   `contextBuilder.ts` / `conversationContext.ts` (identical context shape and
@@ -425,13 +465,11 @@ screen later. The list is windowed and `MessageRow` is memoized
   assistant slot persisted in one transaction, terminal state persisted before
   delivering the `completed` event, failed rows retryable in place.
 
-**Wiring status**: the serverless turn pipeline, topic generation and summary
-maintenance are implemented and unit-tested at the service layer, but the
-chat/new-conversation screens do not yet invoke them — in serverless mode the
-UI currently wires History, learning level, suggested replies, improvement,
-model/settings management and data clearing directly, while turn streaming
-still targets the (blocked) server endpoint. Completing this wiring is tracked
-by the Phase 20 validation tasks in `SPEC.md`.
+**Wiring status**: the serverless pipeline is fully wired and validated — in
+serverless mode the chat, new-conversation, history, level and settings screens
+operate entirely on the local SQLite + provider-direct stack (server/journey
+validation in `SPEC.md` Phase 20), while the runtime mode gate blocks every
+server transport.
 
 ### 8.6 Text-to-speech
 
@@ -452,12 +490,17 @@ silences on unmount/session switch.
   (context, window, summarizer, trigger, topics, suggestions, improvement),
   API/integration tests (auth, chat lifecycle, retry, ownership, vocabulary,
   CSV), Celery task tests with `transaction.on_commit` hooks drained manually,
-  DB-performance assertions over SQL query counts, and secret-handling
-  regression tests. External HTTP is always mocked; the test database
-  (`test_elearning`) is isolated from the development database.
+  DB-performance assertions over SQL query counts, secret-handling regression
+  tests, and the audit regression suite (`test_audit_regression.py`,
+  `test_sse_content_negotiation.py`, `test_server_mode_journey.py`) covering
+  the post-MVP fixes (SSE/CSV negotiation, keyless model discovery, one-time
+  token refresh, provider strategy wiring). External HTTP is always mocked;
+  the test database (`test_elearning`) is isolated from the development
+  database.
 - **Mobile** (`mobile/__tests__/`, `mobile/src/serverless/__tests__/`): Jest +
   React Native Testing Library with a real-SQL in-memory `sql.js` driver for
   database tests, a scriptable `FakeOpenRouterClient` for LLM seams, and
   in-memory mocks for keychain/AsyncStorage/SQLite/share. Component,
-  navigation, streaming-state, mode-isolation and serverless service tests all
-  run without a device (`pnpm test`, `pnpm lint`, `pnpm typecheck`).
+  navigation, streaming-state, mode-isolation, serverless-journey and
+  serverless service tests all run without a device (`pnpm test`, `pnpm lint`,
+  `pnpm typecheck`).

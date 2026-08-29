@@ -239,6 +239,8 @@ data: {"error": "openrouter [model]: boom", "retryable": true}
 
 Every stream ends with exactly one terminal frame: `completed` (success) or `error` (failure). Partial output from a failed stream is never persisted as a complete assistant message. Responses carry `Content-Type: text/event-stream`, `Cache-Control: no-cache` and `X-Accel-Buffering: no`.
 
+Clients send `Accept: text/event-stream`; content negotiation accepts it on the streaming endpoints (and `Accept: text/csv` on the vocabulary export) while any other unmatched media type still returns `406`.
+
 Errors: `400` for blank/missing `text`; `404` for foreign/nonexistent sessions; provider failures arrive as the terminal `error` event (the already-committed user message stays intact and the failed assistant row can be retried).
 
 ### `POST /api/v1/sessions/{id}/messages/{message_pk}/retry/` — authenticated
@@ -299,7 +301,7 @@ Stream a raw LLM completion as SSE. Body:
 ```
 
 - `role` must be `system`, `user`, or `assistant`; `content` must be non-blank; `temperature` is optional, bounded to `0.0–2.0`.
-- Clients cannot pin a model — the server-side chain (primary model + configured fallbacks) always decides which model serves the request.
+- Clients cannot pin a model or provider — the server-side configuration (`LLM_PROVIDER`, primary model + configured fallbacks) always decides which model serves the request.
 - Response: same SSE frame format as chat streaming (`start`/`delta`/`completed`/`error`), one terminal frame.
 
 ---
@@ -357,5 +359,5 @@ Download the caller's vocabulary as an Anki-importable CSV.
 
 - **Timestamps** are ISO-8601 UTC.
 - **JWT lifetimes** come from `JWT_ACCESS_TOKEN_MINUTES` and `JWT_REFRESH_TOKEN_DAYS`; expired access tokens → `401 AUTHENTICATION_FAILED` with a `WWW-Authenticate: Bearer` header.
-- **Secrets** (server OpenRouter key, database credentials) are never present in any response.
-- The mobile app's **serverless mode** does not use this API at all: it talks to OpenRouter directly and stores data in local SQLite (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
+- **Secrets** (server provider keys, database credentials) are never present in any response.
+- The mobile app's **serverless mode** does not use this API at all: it talks to the configured LLM provider directly and stores data in local SQLite (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
