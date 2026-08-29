@@ -66,7 +66,6 @@ export async function resetLocalDatabaseForTests(
   // callers that read the profile immediately get a valid result.
   const db = await openDb();
   await db.execute(
-    `INSERT INTO learning_profile (id, level, updated_at) VALUES (1, 'A1', datetime('now'))
-     ON CONFLICT (id) DO UPDATE SET level = 'A1', updated_at = datetime('now')`,
+    `INSERT OR REPLACE INTO learning_profile (id, level, updated_at) VALUES (1, 'A1', datetime('now'))`,
   );
 }

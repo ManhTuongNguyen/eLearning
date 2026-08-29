@@ -126,21 +126,18 @@ export async function saveServerlessOpenRouterConfig(config: LLMClientConfig): P
   await saveServerlessApiKey(config.apiKey, provider);
 
   await db.execute(
-    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))`,
     [SETTING_PROVIDER, provider],
   );
 
   await db.execute(
-    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))`,
     [primaryModelSettingKey(provider), config.primaryModel],
   );
 
   const fallbackValue = (config.fallbackModels ?? []).join(',');
   await db.execute(
-    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))`,
     [fallbackModelsSettingKey(provider), fallbackValue],
   );
 }

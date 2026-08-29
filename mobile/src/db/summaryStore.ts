@@ -36,15 +36,22 @@ export async function saveSummary(
   },
 ): Promise<LocalSummary> {
   const timestamp = nowIso();
-  await db.execute(
-    `INSERT INTO summaries (session_id, content, message_boundary, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT (session_id) DO UPDATE SET
-       content = excluded.content,
-       message_boundary = excluded.message_boundary,
-       updated_at = excluded.updated_at`,
-    [input.session_id, input.content, input.message_boundary, timestamp, timestamp],
+  // Portable upsert (UPDATE then INSERT): ON CONFLICT DO UPDATE needs
+  // SQLite >= 3.24 (absent on e.g. Android 9) and INSERT OR REPLACE would
+  // assign a new row id, breaking the stable-row contract.
+  const updated = await db.execute(
+    `UPDATE summaries
+     SET content = ?, message_boundary = ?, updated_at = ?
+     WHERE session_id = ?`,
+    [input.content, input.message_boundary, timestamp, input.session_id],
   );
+  if (updated.rowsAffected === 0) {
+    await db.execute(
+      `INSERT INTO summaries (session_id, content, message_boundary, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [input.session_id, input.content, input.message_boundary, timestamp, timestamp],
+    );
+  }
   const stored = await getSummary(db, input.session_id);
   if (!stored) {
     throw new Error('saveSummary: stored summary could not be read back');

@@ -307,6 +307,42 @@ export function createStyles(c: ThemeColors, topInset: number) {
       paddingHorizontal: 10,
       backgroundColor: c.background,
     },
+    tooltipOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+      backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    },
+    tooltipBubble: {
+      width: '100%',
+      maxWidth: 480,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      padding: 16,
+      gap: 6,
+    },
+    tooltipText: {
+      fontSize: 15,
+      fontWeight: '600',
+      lineHeight: 21,
+      color: c.textPrimary,
+    },
+    tooltipSub: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.textSecondary,
+    },
+    tooltipHint: {
+      fontSize: 12,
+      color: c.textMuted,
+    },
     chainOrder: {
       width: 20,
       fontSize: 13,
@@ -404,6 +440,11 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Long-press tooltip content: the full untruncated model label + id. */
+  const [modelTooltip, setModelTooltip] = useState<{
+    label: string;
+    id: string;
+  } | null>(null);
 
   const descriptor = PROVIDER_DESCRIPTORS[provider];
 
@@ -438,6 +479,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
           setModelsUpdatedAt(catalog?.fetchedAt ?? null);
         }
       } catch (err) {
+        console.error('[provider-models] initial load failed:', err);
         if (!cancelled) {
           setError(toErrorMessage(err));
         }
@@ -533,6 +575,8 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
       setModelsUpdatedAt(snapshot.fetchedAt);
     } catch (err) {
       // A failed refresh keeps whatever catalog was cached before.
+      // Surface the raw cause for on-device diagnosis (adb logcat / DevTools).
+      console.error('[provider-models] refresh failed:', err);
       setError(toErrorMessage(err));
     } finally {
       setRefreshing(false);
@@ -811,6 +855,9 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                           accessibilityRole="radio"
                           accessibilityState={{checked: isPrimary}}
                           onPress={() => choosePrimary(model.id)}
+                          onLongPress={() =>
+                            setModelTooltip({label: modelLabel(model), id: model.id})
+                          }
                           style={styles.primaryButton}
                           testID={`openrouter-model-primary-${model.id}`}>
                           <View
@@ -878,8 +925,9 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
             <View style={styles.chainList} testID="openrouter-fallback-chain">
               <Text style={styles.chainHeader}>Fallback order</Text>
               {fallbackModels.map((id, index) => (
-                <View
+                <Pressable
                   key={id}
+                  onLongPress={() => setModelTooltip({label: id, id: ''})}
                   style={styles.chainRow}
                   testID={`openrouter-fallback-chip-${index}`}>
                   <Text style={styles.chainOrder}>{index + 1}.</Text>
@@ -914,7 +962,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                       ✕
                     </Text>
                   </Pressable>
-                </View>
+                </Pressable>
               ))}
             </View>
           ) : null}
@@ -942,6 +990,23 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
           )}
         </Pressable>
       </ScrollView>
+
+      {modelTooltip ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close model details"
+          onPress={() => setModelTooltip(null)}
+          style={styles.tooltipOverlay}
+          testID="openrouter-model-tooltip">
+          <View style={styles.tooltipBubble}>
+            <Text style={styles.tooltipText}>{modelTooltip.label}</Text>
+            {modelTooltip.id && modelTooltip.id !== modelTooltip.label ? (
+              <Text style={styles.tooltipSub}>{modelTooltip.id}</Text>
+            ) : null}
+            <Text style={styles.tooltipHint}>Tap anywhere to close</Text>
+          </View>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

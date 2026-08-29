@@ -24,11 +24,11 @@ export async function setSetting(
   key: string,
   value: string,
 ): Promise<void> {
+  // INSERT OR REPLACE instead of ON CONFLICT DO UPDATE: the UPSERT syntax
+  // requires SQLite >= 3.24 while many Android devices (e.g. Android 9)
+  // ship older engines.
   await db.execute(
-    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT (key) DO UPDATE SET
-       value = excluded.value,
-       updated_at = excluded.updated_at`,
+    `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)`,
     [key, value, nowIso()],
   );
 }

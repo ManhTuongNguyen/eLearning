@@ -18,7 +18,7 @@
  */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {render, screen, userEvent, waitFor} from '@testing-library/react-native';
+import {render, screen, userEvent, waitFor, within} from '@testing-library/react-native';
 
 import {ModeProvider} from '../src/mode/ModeContext';
 import {saveApplicationMode} from '../src/mode/modeStorage';
@@ -665,5 +665,52 @@ describe('OpenRouterSettingsScreen in server mode (TASK-AUDIT-016)', () => {
     expect(mockedLoadProviderState).not.toHaveBeenCalled();
     expect(mockedGetCached).not.toHaveBeenCalled();
     expect(mockedListProviderModels).not.toHaveBeenCalled();
+  });
+});
+
+describe('long-press model tooltip', () => {
+  it('reveals the full untruncated name and id and closes on tap', async () => {
+    const longName = 'An Extremely Long Display Name That Cannot Fit The Truncated Row';
+    mockedGetCached.mockResolvedValue(
+      catalogSnapshot([catalogModel('vendor/very-long-model-identifier', longName)]),
+    );
+    await renderSettledScreen();
+
+    expect(screen.queryByTestId('openrouter-model-tooltip')).toBeNull();
+
+    await user.longPress(
+      screen.getByTestId('openrouter-model-primary-vendor/very-long-model-identifier'),
+    );
+
+    const tooltip = screen.getByTestId('openrouter-model-tooltip');
+    expect(tooltip).toBeOnTheScreen();
+    expect(within(tooltip).getByText(longName)).toBeOnTheScreen();
+    expect(within(tooltip).getByText('vendor/very-long-model-identifier')).toBeOnTheScreen();
+
+    // A long press must not select the model as primary.
+    expect(checkedStateOf('openrouter-model-primary-vendor/very-long-model-identifier')).toBe(
+      false,
+    );
+
+    await user.press(tooltip);
+    expect(screen.queryByTestId('openrouter-model-tooltip')).toBeNull();
+  });
+
+  it('shows the full id of a truncated fallback chain entry', async () => {
+    mockedGetCached.mockResolvedValue(catalogSnapshot());
+    mockedLoadProviderState.mockResolvedValue({
+      apiKey: STORED_KEY,
+      primaryModel: 'vendor/model-a',
+      fallbackModels: ['vendor/claude-x'],
+    });
+    await renderSettledScreen();
+
+    await user.longPress(screen.getByTestId('openrouter-fallback-chip-0'));
+
+    const tooltip = screen.getByTestId('openrouter-model-tooltip');
+    expect(within(tooltip).getByText('vendor/claude-x')).toBeOnTheScreen();
+
+    await user.press(tooltip);
+    expect(screen.queryByTestId('openrouter-model-tooltip')).toBeNull();
   });
 });

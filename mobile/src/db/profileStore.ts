@@ -38,11 +38,9 @@ export async function saveLearningProfile(
   level: EnglishLevel,
 ): Promise<LocalLearningProfile> {
   const timestamp = nowIso();
+  // INSERT OR REPLACE for pre-3.24 SQLite compatibility (no UPSERT).
   await db.execute(
-    `INSERT INTO learning_profile (id, level, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT (id) DO UPDATE SET
-       level = excluded.level,
-       updated_at = excluded.updated_at`,
+    `INSERT OR REPLACE INTO learning_profile (id, level, updated_at) VALUES (?, ?, ?)`,
     [PROFILE_ROW_ID, level, timestamp],
   );
   return {level, updated_at: timestamp};
