@@ -20,6 +20,7 @@ import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native
 
 import type {ChatMessage} from '../api/sessions';
 import type {ThemeColors} from '../theme/colors';
+import {createCodeStyle, MarkdownText} from './MarkdownText';
 
 /** Row-scoped styles, created once per theme by the owning screen. */
 export function createRowStyles(c: ThemeColors) {
@@ -59,6 +60,7 @@ export function createRowStyles(c: ThemeColors) {
     contentAssistant: {
       color: c.textPrimary,
     },
+    codeInline: createCodeStyle(c),
     failedNote: {
       fontSize: 14,
       lineHeight: 20,
@@ -164,10 +166,16 @@ function MessageRowImpl({
             <Text style={[styles.content, styles.failedNote]}>
               The response failed to generate.
             </Text>
+          ) : isUser ? (
+            // User messages keep raw fidelity: what the user typed is what
+            // shows, so stray asterisks are never reinterpreted as markup.
+            <Text style={[styles.content, styles.contentUser]}>{item.content}</Text>
           ) : (
-            <Text style={[styles.content, isUser ? styles.contentUser : styles.contentAssistant]}>
-              {item.content}
-            </Text>
+            <MarkdownText
+              content={item.content}
+              style={[styles.content, styles.contentAssistant]}
+              codeStyle={styles.codeInline}
+            />
           )}
         </Pressable>
         {failed ? (

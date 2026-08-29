@@ -28,6 +28,7 @@ import {useTheme} from '../theme/ThemeContext';
 import type {TextToSpeechEngine} from '../tts/textToSpeech';
 import {getSpeechEngine} from '../tts/textToSpeech';
 import {useSpeechPlayback} from '../tts/useSpeechPlayback';
+import {createCodeStyle, MarkdownText} from './MarkdownText';
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -123,6 +124,7 @@ function createStyles(c: ThemeColors) {
     contentAssistant: {
       color: c.textPrimary,
     },
+    codeInline: createCodeStyle(c),
   });
 }
 
@@ -226,13 +228,15 @@ export function SampleConversationModal({
                     styles.bubble,
                     isUser ? styles.bubbleUser : styles.bubbleAssistant,
                   ]}>
-                  <Text
-                    style={[
-                      styles.content,
-                      isUser ? styles.contentUser : styles.contentAssistant,
-                    ]}>
-                    {turn.content}
-                  </Text>
+                  {isUser ? (
+                    <Text style={[styles.content, styles.contentUser]}>{turn.content}</Text>
+                  ) : (
+                    <MarkdownText
+                      content={turn.content}
+                      style={[styles.content, styles.contentAssistant]}
+                      codeStyle={styles.codeInline}
+                    />
+                  )}
                 </View>
               </View>
             );

@@ -2424,6 +2424,27 @@ Acceptance criteria:
 
 ---
 
+## TASK-121 — Render inline AI formatting in chat messages
+
+Status: `[x]`
+
+AI replies and sample conversations carry inline markdown emphasis that must
+render as formatting instead of literal asterisks.
+
+Acceptance criteria:
+
+- Assistant chat bubbles render `**bold**`, `*italic*`, `***bold italic***`,
+  `` `code` `` and `~~strikethrough~~` using nested text styling.
+- Assistant turns in the sample-conversation overlay render the same subset.
+- User messages keep raw fidelity (no reinterpretation of typed markers).
+- Unclosed markers (for example during streaming) render as literal text.
+- Ordinary prose is unaffected: arithmetic asterisks (`2 * 3 * 4`) and
+  intraword underscores (`snake_case_name`) never become formatting.
+- No third-party markdown dependency is introduced.
+- Parser and component behavior are covered by unit and render tests.
+
+---
+
 # Engineering Rules
 
 ## Rule 1 — Do not over-engineer
