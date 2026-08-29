@@ -14,15 +14,15 @@
  * - Providers with genuinely different API surfaces (Gemini) implement
  *   `LLMClient` directly in ./geminiClient.
  */
-import {createGeminiClient, DEFAULT_GEMINI_BASE_URL, listGeminiModels} from './geminiClient';
-import {createOpenAIClient, DEFAULT_OPENAI_BASE_URL, listOpenAIModels} from './openAIClient';
+import { createGeminiClient, DEFAULT_GEMINI_BASE_URL, listGeminiModels } from './geminiClient';
+import { createOpenAIClient, DEFAULT_OPENAI_BASE_URL, listOpenAIModels } from './openAIClient';
 import {
   createNineRouterClient,
   DEFAULT_NINE_ROUTER_BASE_URL,
   listNineRouterModels,
 } from './nineRouterClient';
-import {createOpenRouterClient, DEFAULT_BASE_URL, listOpenRouterModels} from './openrouterClient';
-import type {LLMClient, LLMClientConfig, ModelInfo, ProviderId} from './types';
+import { createOpenRouterClient, DEFAULT_BASE_URL, listOpenRouterModels } from './openrouterClient';
+import type { LLMClient, LLMClientConfig, ModelInfo, ProviderId } from './types';
 
 /** Human-facing metadata for one supported provider. */
 export interface ProviderDescriptor {
@@ -83,7 +83,6 @@ export const SUPPORTED_PROVIDER_IDS: readonly ProviderId[] = [
   'openrouter',
   'gemini',
   'openai',
-  'ninerouter',
 ];
 
 /** True when `value` is one of the supported provider ids. */
@@ -133,7 +132,7 @@ export function createProviderClient(config: LLMClientConfig): LLMClient {
  */
 export async function listProviderModels(
   provider: ProviderId,
-  options: {apiKey?: string; baseUrl?: string; timeoutMs?: number} = {},
+  options: { apiKey?: string; baseUrl?: string; timeoutMs?: number } = {},
 ): Promise<ModelInfo[]> {
   switch (provider) {
     case 'openrouter':
