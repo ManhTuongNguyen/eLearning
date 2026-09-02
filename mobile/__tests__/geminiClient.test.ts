@@ -362,6 +362,67 @@ describe('streamCompletion', () => {
     ]);
   });
 
+  test('parses Gemini CRLF-framed SSE events without malformed JSON errors', async () => {
+    // Real Gemini streams terminate SSE lines with CRLF. A parser that only
+    // recognizes "\n\n" separators collapses every event into one frame and
+    // reports "Malformed JSON chunk from provider." — the reported failure.
+    const client = makeClient();
+    const stream = beginStream(client);
+
+    const frame = (text: string) =>
+      `data: ${JSON.stringify({
+        modelVersion: 'gemini-2.0-flash',
+        candidates: [{content: {parts: [{text}], role: 'model'}}],
+      })}\r\n\r\n`;
+
+    const xhr = stream.xhr();
+    xhr.emit(frame('Hello') + frame(' there'));
+    xhr.respond();
+
+    expect(stream.events).toEqual([
+      {type: 'start', model: 'gemini-2.0-flash'},
+      {type: 'delta', text: 'Hello'},
+      {type: 'delta', text: ' there'},
+      {type: 'completed', text: 'Hello there', model: 'gemini-2.0-flash', deltaCount: 2},
+    ]);
+  });
+
+  test('buffers a JSON object fragmented across network chunks until its frame completes', async () => {
+    // A network chunk is not a complete JSON object: the payload may split
+    // mid-token (and even inside the CRLF terminator) across onprogress
+    // events, and must stay buffered until the frame terminator arrives.
+    const client = makeClient();
+    const stream = beginStream(client);
+
+    const firstJson = JSON.stringify({
+      modelVersion: 'gemini-2.0-flash',
+      candidates: [{content: {parts: [{text: 'Hel'}], role: 'model'}}],
+    });
+    const secondJson = JSON.stringify({
+      modelVersion: 'gemini-2.0-flash',
+      candidates: [{content: {parts: [{text: 'lo'}], role: 'model'}}],
+    });
+    const firstFrame = `data: ${firstJson}\r\n\r\n`;
+    const secondFrame = `data: ${secondJson}\r\n\r\n`;
+
+    const xhr = stream.xhr();
+    // Chunk 1: partial JSON of frame one, ending mid-token.
+    xhr.emit(firstFrame.slice(0, 40));
+    // Chunk 2: rest of frame one plus the start of frame two, split inside
+    // its "data:" prefix.
+    xhr.emit(firstFrame.slice(40) + secondFrame.slice(0, 4));
+    // Chunk 3: remainder of frame two.
+    xhr.emit(secondFrame.slice(4));
+    xhr.respond();
+
+    expect(stream.events).toEqual([
+      {type: 'start', model: 'gemini-2.0-flash'},
+      {type: 'delta', text: 'Hel'},
+      {type: 'delta', text: 'lo'},
+      {type: 'completed', text: 'Hello', model: 'gemini-2.0-flash', deltaCount: 2},
+    ]);
+  });
+
   test('multi-part chunks join into one delta and empty payloads are ignored', async () => {
     const client = makeClient();
     const stream = beginStream(client);

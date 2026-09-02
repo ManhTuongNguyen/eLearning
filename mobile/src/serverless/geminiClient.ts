@@ -350,7 +350,7 @@ export function createGeminiClient(config: LLMClientConfig): LLMClient {
         return;
       }
       const dataLines: string[] = [];
-      for (const line of raw.replace(/\r/g, '').split('\n')) {
+      for (const line of raw.split('\n')) {
         if (line.startsWith('data:')) {
           dataLines.push(line.slice('data:'.length).trim());
         }
@@ -419,7 +419,12 @@ export function createGeminiClient(config: LLMClientConfig): LLMClient {
       }
       const total = xhr.responseText.length;
       if (total > cursor) {
-        pending += xhr.responseText.slice(cursor, total);
+        // Gemini terminates SSE lines with CRLF, so the raw stream never
+        // contains a bare "\n\n" frame separator. Normalize CR to LF before
+        // splitting (raw CR never appears inside JSON payloads; JSON strings
+        // escape it as "\\r") so each `data:` line stays one complete JSON
+        // object instead of the whole body collapsing into a single frame.
+        pending += xhr.responseText.slice(cursor, total).replace(/\r/g, '');
         cursor = total;
         let separator = pending.indexOf('\n\n');
         while (separator !== -1) {

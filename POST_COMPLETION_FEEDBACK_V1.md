@@ -307,7 +307,7 @@ Use the existing React Native architecture and the smallest appropriate keyboard
 
 ## TASK-IMPROVEMENT-003 — Fix Malformed JSON Chunks from Gemini Streaming
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
