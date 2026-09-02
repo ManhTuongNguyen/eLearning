@@ -1,7 +1,6 @@
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {render, screen, waitFor} from '@testing-library/react-native';
-import {initialWindowMetrics} from 'react-native-safe-area-context';
 
 import {ModeProvider} from '../src/mode/ModeContext';
 import {saveApplicationMode} from '../src/mode/modeStorage';
@@ -14,14 +13,6 @@ import * as serverlessSettings from '../src/serverless/settings';
 import {createStyles} from '../src/screens/OpenRouterSettingsScreen';
 import {lightColors} from '../src/theme/colors';
 import {ThemeProvider} from '../src/theme/ThemeContext';
-
-/**
- * The shared jest.setup.js mock returns ONE insets object that both
- * initialWindowMetrics and useSafeAreaInsets reference, so mutating
- * metrics.insets.top drives the hook inside the rendered screen — the way
- * real devices report per-device status-bar insets.
- */
-const metrics = initialWindowMetrics as {insets: {top: number}};
 
 jest.mock('../src/db/database');
 jest.mock('../src/serverless/settings');
@@ -75,43 +66,34 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  metrics.insets.top = 0;
   setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
 });
 
 describe('OpenRouterSettingsScreen layout (TASK-AUDIT-012)', () => {
-  it('uses the shared pushed-screen header spacing on standard devices (no safe-area inset)', () => {
-    const styles = createStyles(lightColors, 0);
+  it('uses the shared pushed-screen header spacing on top of the app-shell inset padding', () => {
+    const styles = createStyles(lightColors);
 
     expect(styles.container.paddingTop).toBe(24);
     expect(flattenStyle(styles.container).marginTop).toBeUndefined();
   });
 
-  it('adds the device top inset so edge-to-edge screens clear the status bar', () => {
-    for (const topInset of [24, 42]) {
-      const styles = createStyles(lightColors, topInset);
-      expect(styles.container.paddingTop).toBe(24 + topInset);
-    }
-  });
-
   it('never applies negative margins to the container', () => {
-    for (const topInset of [0, 42]) {
-      const flat = flattenStyle(createStyles(lightColors, topInset).container);
-      for (const [key, value] of Object.entries(flat)) {
-        if (key.startsWith('margin')) {
-          expect(value).not.toBeLessThan(0);
-        }
+    const flat = flattenStyle(createStyles(lightColors).container);
+    for (const [key, value] of Object.entries(flat)) {
+      if (key.startsWith('margin')) {
+        expect(value).not.toBeLessThan(0);
       }
     }
   });
 
-  it('derives the rendered top padding from the device inset', async () => {
-    metrics.insets.top = 42;
-
+  it('renders with the fixed header spacing; the app shell adds the device inset', async () => {
+    // Edge-to-edge devices draw under the system status bar, and the shell
+    // in App.tsx pads the whole tree by the safe-area inset; the screen
+    // itself always renders its own fixed spacing.
     await renderScreen();
 
     const container = screen.getByTestId('openrouter-settings-screen');
-    expect(flattenStyle(container.props.style).paddingTop).toBe(66);
+    expect(flattenStyle(container.props.style).paddingTop).toBe(24);
     await waitFor(() =>
       expect(screen.getByTestId('openrouter-save')).toBeOnTheScreen(),
     );

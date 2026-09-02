@@ -7,7 +7,8 @@
  * backend traffic happens while serverless is active. Selections persist
  * immediately in both modes; errors keep the last confirmed value selected.
  *
- * The top inset comes from useSafeAreaInsets (TASK-AUDIT-011) instead of a
+ * The top spacing is a fixed constant (the app shell in App.tsx already
+ * pads the whole tree out of the system status bar), replacing the
  * fixed oversized padding, so the header sits at the same spacing as the
  * other pushed screens while devices that draw under the status bar
  * (edge-to-edge Android) still clear it.
@@ -21,7 +22,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {getProfile, LEVELS, updateProfile} from '../api/profile';
 import type {EnglishLevel, LevelOption} from '../api/profile';
@@ -36,13 +36,16 @@ import {useTheme} from '../theme/ThemeContext';
 /** Spacing between the safe-area top inset and the header row (px). */
 const HEADER_TOP_SPACING = 24;
 
-export function createStyles(c: ThemeColors, topInset: number) {
+export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
       paddingHorizontal: 24,
-      paddingTop: topInset + HEADER_TOP_SPACING,
+      // The app shell (App.tsx) pads the whole tree out of the system bars
+      // on edge-to-edge devices (Android 15+); screens only add their own
+      // fixed header spacing on top of that.
+      paddingTop: HEADER_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
@@ -139,10 +142,9 @@ export function LevelScreen({navigation}: LevelScreenProps) {
   const {authedRequest} = useAuth();
   const {status: modeStatus, mode} = useApplicationMode();
   const {colors} = useTheme();
-  const insets = useSafeAreaInsets();
   const styles = useMemo(
-    () => createStyles(colors, insets.top),
-    [colors, insets.top],
+    () => createStyles(colors),
+    [colors],
   );
   const [selected, setSelected] = useState<EnglishLevel | null>(null);
   const [loading, setLoading] = useState(true);

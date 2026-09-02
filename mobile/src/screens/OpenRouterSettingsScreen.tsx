@@ -20,7 +20,8 @@
  * exclusively through the explicit Refresh control; snapshots older than
  * the staleness window are labelled but remain usable offline.
  *
- * The top inset comes from useSafeAreaInsets (TASK-AUDIT-012) instead of a
+ * The top spacing is a fixed constant (the app shell in App.tsx already
+ * pads the whole tree out of the system status bar), replacing the
  * fixed oversized padding, so the header sits at the same spacing as the
  * other pushed screens while devices that draw under the status bar
  * (edge-to-edge Android) still clear it.
@@ -35,7 +36,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {toErrorMessage} from '../auth/AuthContext';
 import {SecretInput} from '../components/SecretInput';
@@ -63,13 +63,16 @@ const MAX_VISIBLE_MODELS = 50;
 /** Spacing between the safe-area top inset and the header row (px). */
 const HEADER_TOP_SPACING = 24;
 
-export function createStyles(c: ThemeColors, topInset: number) {
+export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
       paddingHorizontal: 24,
-      paddingTop: topInset + HEADER_TOP_SPACING,
+      // The app shell (App.tsx) pads the whole tree out of the system bars
+      // on edge-to-edge devices (Android 15+); screens only add their own
+      // fixed header spacing on top of that.
+      paddingTop: HEADER_TOP_SPACING,
     },
     scroll: {
       paddingBottom: 32,
@@ -413,14 +416,13 @@ function modelLabel(model: ModelInfo): string {
 
 export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenProps) {
   const {colors} = useTheme();
-  const insets = useSafeAreaInsets();
   // TASK-AUDIT-016: this editor configures the serverless provider stack,
   // so it is only operable in serverless mode; server-mode mounts see a
   // notice instead of serverless-only configuration controls.
   const {status: modeStatus, mode} = useApplicationMode();
   const styles = useMemo(
-    () => createStyles(colors, insets.top),
-    [colors, insets.top],
+    () => createStyles(colors),
+    [colors],
   );
 
   const [loading, setLoading] = useState(true);

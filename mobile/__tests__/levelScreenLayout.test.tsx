@@ -3,7 +3,6 @@ import {NavigationContainer, createNavigationContainerRef} from '@react-navigati
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {render, screen, waitFor} from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {initialWindowMetrics} from 'react-native-safe-area-context';
 
 import * as authApi from '../src/api/auth';
 import * as profileApi from '../src/api/profile';
@@ -19,14 +18,6 @@ import type {MainStackParamList} from '../src/navigation/types';
 import {createStyles, LevelScreen} from '../src/screens/LevelScreen';
 import {lightColors} from '../src/theme/colors';
 import {ThemeProvider} from '../src/theme/ThemeContext';
-
-/**
- * The shared jest.setup.js mock returns ONE insets object that both
- * initialWindowMetrics and useSafeAreaInsets reference, so mutating
- * metrics.insets.top drives the hook inside the rendered screen — the way
- * real devices report per-device status-bar insets.
- */
-const metrics = initialWindowMetrics as {insets: {top: number}};
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/profile', () => ({
@@ -100,47 +91,36 @@ beforeEach(() => {
 
 afterEach(() => {
   setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
-  metrics.insets.top = 0;
 });
 
 describe('LevelScreen layout (TASK-AUDIT-011)', () => {
-  it('uses the shared pushed-screen header spacing on standard devices (no safe-area inset)', () => {
-    const styles = createStyles(lightColors, 0);
+  it('uses the shared pushed-screen header spacing on top of the app-shell inset padding', () => {
+    const styles = createStyles(lightColors);
 
     expect(styles.container.paddingTop).toBe(24);
     expect(flattenStyle(styles.container).marginTop).toBeUndefined();
   });
 
-  it('adds the device top inset so edge-to-edge screens clear the status bar', () => {
-    for (const topInset of [24, 42]) {
-      const styles = createStyles(lightColors, topInset);
-      expect(styles.container.paddingTop).toBe(24 + topInset);
-    }
-  });
-
   it('never applies negative margins to the container', () => {
-    for (const topInset of [0, 42]) {
-      const flat = flattenStyle(createStyles(lightColors, topInset).container);
-      for (const [key, value] of Object.entries(flat)) {
-        if (key.startsWith('margin')) {
-          expect(value).not.toBeLessThan(0);
-        }
+    const flat = flattenStyle(createStyles(lightColors).container);
+    for (const [key, value] of Object.entries(flat)) {
+      if (key.startsWith('margin')) {
+        expect(value).not.toBeLessThan(0);
       }
     }
   });
 
   it.each(['server', 'serverless'] as const)(
-    'derives the rendered top padding from the device inset in %s mode',
+    'renders the fixed header spacing in %s mode (the app shell adds the device inset)',
     async mode => {
       if (mode === 'serverless') {
         await enterServerlessMode();
       }
-      metrics.insets.top = 42;
 
       await renderScreen();
 
       const container = screen.getByTestId('level-screen');
-      expect(flattenStyle(container.props.style).paddingTop).toBe(66);
+      expect(flattenStyle(container.props.style).paddingTop).toBe(24);
       await waitFor(() =>
         expect(screen.getByTestId('level-B1')).toBeOnTheScreen(),
       );

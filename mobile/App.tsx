@@ -9,11 +9,17 @@
  * container follow the resolved scheme. Application mode per SPEC TASK-080:
  * ModeProvider restores SERVER/SERVERLESS before screens mount and its
  * runtime gate blocks backend traffic while serverless.
+ *
+ * Edge-to-edge (Android 15+ enforcement for targetSdk 35+): the window
+ * draws under the system status/navigation bars on modern devices, so the
+ * shell below pads the whole tree with the safe-area insets — restoring the
+ * legacy look (content below the bars) everywhere while staying a no-op on
+ * Android versions without enforcement, where the insets are zero.
  */
 import {NavigationContainer} from '@react-navigation/native';
 import React from 'react';
-import {StatusBar} from 'react-native';
-import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {StatusBar, StyleSheet, View} from 'react-native';
+import {SafeAreaProvider, useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {AuthProvider} from './src/auth/AuthContext';
 import {ModeProvider} from './src/mode/ModeContext';
@@ -36,18 +42,38 @@ function ThemedChrome({children}: {children: React.ReactNode}) {
   );
 }
 
+const shellStyles = StyleSheet.create({
+  insetShell: {flex: 1},
+});
+
+/** Pads the app out of the system status/navigation bars (edge-to-edge). */
+function InsetShell({children}: {children: React.ReactNode}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={[
+        shellStyles.insetShell,
+        {paddingTop: insets.top, paddingBottom: insets.bottom},
+      ]}>
+      {children}
+    </View>
+  );
+}
+
 function App() {
   return (
     <SafeAreaProvider>
-      <ModeProvider>
-        <ThemeProvider>
-          <AuthProvider>
-            <ThemedChrome>
-              <RootNavigator />
-            </ThemedChrome>
-          </AuthProvider>
-        </ThemeProvider>
-      </ModeProvider>
+      <InsetShell>
+        <ModeProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <ThemedChrome>
+                <RootNavigator />
+              </ThemedChrome>
+            </AuthProvider>
+          </ThemeProvider>
+        </ModeProvider>
+      </InsetShell>
     </SafeAreaProvider>
   );
 }
