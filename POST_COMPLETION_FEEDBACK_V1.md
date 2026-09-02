@@ -1,19 +1,23 @@
-# English Learning Chat — Post-Completion Audit and Improvement Backlog
+# English Learning Chat — Serverless UX and Provider Reliability Improvements
 
 ## 0. Purpose
 
-This document is a **post-completion engineering backlog** for the English Learning Chat project.
+This document is a focused **post-completion improvement task** for the English Learning Chat project.
 
-This is the active backlog for post-MVP development.
+The MVP and previous post-completion audit work are already implemented.
 
 IMPORTANT:
-- The MVP described by ROADMAP.md and SPEC.md is already implemented.
-- Do NOT read the entire SPEC.md before every task.
+
 - Do NOT restart or re-audit the original MVP.
-- This file is the authoritative task list for post-completion work.
-- Read the existing source code before implementing each task.
-- Read SPEC.md or ROADMAP.md only when a task explicitly requires clarification
-  about an original product requirement or architecture.
+- Do NOT read the entire `SPEC.md` before starting.
+- Read the existing source code and current implementation first.
+- Read `SPEC.md` or `ROADMAP.md` only if the implementation requires clarification about an original product requirement.
+- Keep the scope limited to the improvements described in this file.
+- Do not perform unrelated refactoring.
+- Preserve both SERVER and SERVERLESS application modes.
+- Add or update regression tests where practical.
+
+The goal is to improve several related **serverless mobile UX and provider reliability issues** without introducing unnecessary architectural changes.
 
 ---
 
@@ -27,7 +31,7 @@ Tasks are grouped by priority:
 
 Priority does not override dependencies.
 
-The agent must prefer the first incomplete dependency-safe task, not simply the highest-numbered task.
+The agent should prefer the first incomplete dependency-safe task.
 
 ---
 
@@ -55,36 +59,44 @@ SERVERLESS
     LLM provider directly
 ```
 
-Serverless mode must never silently route conversation requests through the backend.
+Serverless conversation requests must continue to go directly from the mobile application to the configured provider.
 
-Server mode must continue to use the backend.
-
-Mode switching must not merge or migrate conversation data.
+Do not route serverless provider requests through the Django backend as part of these fixes.
 
 ---
 
 ## Rule 2 — Preserve provider abstraction
 
-LLM integrations must not leak provider-specific HTTP details into screens, domain logic, or unrelated application services.
+Provider-specific behavior must remain behind the existing provider abstraction.
 
-The project currently has OpenRouter support. The improved architecture must allow additional providers such as:
+The Gemini fix must not introduce Gemini-specific handling into unrelated screens or conversation UI.
 
-- Gemini
-- OpenRouter
-- 9router
-- OpenAI
-- OpenAI-compatible APIs
-- Other compatible providers later
+Prefer:
 
-Provider-specific behavior belongs behind a strategy/provider interface.
+```text
+Chat / Conversation
+        ↓
+Provider abstraction
+        ↓
+Gemini streaming implementation
+```
+
+rather than:
+
+```text
+Chat screen
+    ↓
+if Gemini:
+    parse Gemini JSON
+```
+
+Use the existing architecture wherever possible.
 
 ---
 
 ## Rule 3 — Tests accompany implementation
 
-Every bug fix must include a regression test where practical.
-
-Every architectural change must include tests for the changed behavior.
+Every bug fix should include a regression test where practical.
 
 Do not mark a task complete merely because the application appears to work manually.
 
@@ -95,7 +107,7 @@ Do not mark a task complete merely because the application appears to work manua
 Mobile:
 
 - Strict TypeScript.
-- Explicit types for API responses, navigation parameters, state, repositories, provider interfaces, and configuration.
+- Explicit types.
 - Avoid `any`.
 - Use single quotes.
 - No semicolons.
@@ -114,1040 +126,487 @@ Backend:
 
 Never:
 
-- log access tokens
-- log refresh tokens
-- log OpenRouter API keys
-- return server provider credentials to mobile
-- send a serverless user's provider key to the backend
-- store serverless provider keys in ordinary SQLite
+- log provider API keys
+- log authentication tokens
+- expose provider credentials
+- send serverless provider keys to the backend
 - commit secrets
 
 ---
 
-# 3. P0 — Critical Bugs
+# 3. P1 — Serverless UX and Provider Reliability
 
-## TASK-AUDIT-001 — Fix 406 for chat SSE streaming
+## TASK-IMPROVEMENT-001 — Fix Settings Scrollbar Position
 
-Status: `[x]`
-
-Priority: `P0`
-
-Problem:
-
-The chat endpoint:
-
-```text
-POST /api/v1/sessions/{id}/messages/stream/
-```
-
-returns HTTP 406 when the mobile client requests:
-
-```text
-Accept: text/event-stream
-```
-
-The client requires SSE, but Django REST Framework content negotiation currently rejects the request before a valid SSE response can be produced.
-
-The original specification explicitly requires SSE streaming and a correct content type.
-
-### Requirements
-
-Inspect the current DRF negotiation and streaming implementation.
-
-Implement a proper solution that:
-
-- accepts the client's SSE request
-- returns:
-
-```text
-Content-Type: text/event-stream
-```
-
-- streams events incrementally
-- preserves authentication and authorization
-- preserves the existing SSE event format where possible
-- does not replace SSE with polling
-- does not introduce WebSockets
-- does not disable content negotiation globally
-- does not weaken authentication
-- does not create a special bypass that accepts arbitrary invalid media types
-
-Prefer a narrowly scoped renderer/content-negotiation/view solution appropriate for this endpoint.
-
-### Acceptance criteria
-
-- `Accept: text/event-stream` does not produce 406.
-- The endpoint returns `text/event-stream`.
-- Text chunks arrive incrementally.
-- Completion events still work.
-- Provider errors still terminate the stream cleanly.
-- Existing authentication/ownership checks remain active.
-- Existing SSE clients continue to work.
-- Backend regression tests cover the exact 406 scenario.
-- Relevant mobile streaming tests still pass.
-
----
-
-## TASK-AUDIT-002 — Fix 406 for CSV export
-
-Status: `[x]`
-
-Priority: `P0`
-
-Problem:
-
-The vocabulary CSV export endpoint currently returns HTTP 406.
-
-Endpoint:
-
-```text
-GET /api/v1/vocabulary/export/
-```
-
-The endpoint must return downloadable CSV rather than being rejected by DRF content negotiation.
-
-### Requirements
-
-Inspect the actual request headers and response negotiation.
-
-Implement a narrowly scoped solution for CSV export.
-
-The endpoint must return an appropriate CSV media type, such as:
-
-```text
-text/csv
-```
-
-with a valid download filename.
-
-Do not disable DRF content negotiation globally.
-
-### Acceptance criteria
-
-- CSV export no longer returns 406.
-- Authenticated users can export their own vocabulary.
-- The response has a CSV content type.
-- The response has a sensible `Content-Disposition` filename.
-- UTF-8 content is preserved.
-- Commas, quotes, and newlines are escaped correctly.
-- Existing authorization behavior remains unchanged.
-- Regression tests cover the failing request.
-- Mobile export/share flow continues to work.
-
----
-
-## TASK-AUDIT-003 — Correct serverless mode entry and persistence
-
-Status: `[x]`
-
-Priority: `P0`
-
-Problem:
-
-Serverless mode currently requires unnecessary navigation through login/account screens and presents server-account information even though serverless mode is independent of authentication.
-
-Required behavior:
-
-- A user can enable serverless mode directly from the login screen.
-- Once serverless mode is enabled, the application must not route the user to login on subsequent app launches.
-- This remains true after the application is closed and reopened.
-- Serverless mode must not display account/server information.
-
-### Requirements
-
-Treat application mode as an early startup decision, before normal authenticated navigation.
-
-Expected startup behavior:
-
-```text
-App launch
-    ↓
-Load persisted application mode
-    ↓
-SERVERLESS ─────────→ Serverless application
-    |
-SERVER ─────────────→ Restore authentication
-                         |
-                         +── authenticated → Main application
-                         |
-                         +── unauthenticated → Login
-```
-
-The serverless state must persist securely and independently of server authentication state.
-
-### UI requirements
-
-On the login screen:
-
-- provide a clear way to enter serverless mode
-- do not require an account
-- explain that conversations remain on the device
-- explain that AI requests go directly to the configured provider
-
-When serverless mode is active:
-
-- remove "Signed in as ..."
-- remove username/email account information
-- remove server-only account UI
-- remove server logout/account controls
-- do not show server history
-- do not make authentication requests merely to initialize the serverless application
-
-### Acceptance criteria
-
-- Serverless mode can be entered directly from login.
-- Closing and reopening the app keeps serverless mode active.
-- Serverless startup never redirects to login.
-- Serverless mode does not require a valid server JWT.
-- Account information is absent in serverless mode.
-- Server history is absent in serverless mode.
-- Switching back to server mode restores the normal authentication flow.
-- Tests cover cold-start behavior.
-
----
-
-## TASK-AUDIT-004 — Fix OpenRouter model discovery without token validation
-
-Status: `[x]`
-
-Priority: `P0`
-
-Problem:
-
-Users cannot select an OpenRouter model after entering their API token.
-
-The OpenRouter models endpoint does not require the user's API token for the application's model discovery use case.
-
-Model discovery must therefore not depend on token validation.
-
-### Requirements
-
-Separate:
-
-```text
-model discovery
-```
-
-from:
-
-```text
-authenticated provider request
-```
-
-Model discovery should call the OpenRouter models endpoint directly without first requiring a user API key.
-
-The normalized model representation must support data such as:
-
-```json
-{
-  "id": "tencent/hy4-preview",
-  "canonical_slug": "tencent/hy4-preview-20260827",
-  "name": "Tencent: Hy4 preview",
-  "context_length": 1048576,
-  "architecture": {
-    "modality": "text->text",
-    "input_modalities": ["text"],
-    "output_modalities": ["text"],
-    "tokenizer": "Other"
-  },
-  "pricing": {
-    "prompt": "0.000000834",
-    "completion": "0.000002501",
-    "input_cache_read": "0.000000042"
-  },
-  "top_provider": {
-    "context_length": 1048576,
-    "max_completion_tokens": 64000
-  },
-  "supported_parameters": [
-    "include_reasoning",
-    "max_completion_tokens",
-    "max_tokens",
-    "reasoning",
-    "reasoning_effort",
-    "response_format",
-    "stop",
-    "structured_outputs",
-    "temperature",
-    "tool_choice",
-    "tools"
-  ]
-}
-```
-
-Do not assume every optional field is present.
-
-### Acceptance criteria
-
-- Model discovery succeeds without an API key.
-- Entering an API key is not required before loading models.
-- Invalid/expired user API keys do not prevent model discovery.
-- Model data is normalized into a typed internal representation.
-- Optional OpenRouter fields are handled safely.
-- Model selection works after discovery.
-- The user's API key is still required for actual serverless LLM requests.
-- Tests cover discovery without a token.
-- External OpenRouter HTTP calls are mocked in tests.
-
----
-
-# 4. P1 — Authentication and Reliability
-
-## TASK-AUDIT-005 — Implement one-time access-token refresh wrapper
-
-Status: `[x]`
+Status: `[ ]`
 
 Priority: `P1`
 
-Problem:
+### Problem
 
-Access tokens expire after approximately 15 minutes.
+The scrollbar in the Settings screen is currently visually positioned incorrectly.
 
-The API client currently needs a robust wrapper that:
+The same problem also applies to the **Agent Provider Settings screen** in serverless mode.
 
-1. executes the original HTTP request
-2. detects an expired/unauthorized access token
-3. refreshes the access token using the refresh token
-4. retries the original request exactly once
-5. returns the result of the retry
+The scrollbar should be anchored to the **right edge of the application/screen**, rather than appearing offset inside the Settings content area.
 
-Expected flow:
-
-```text
-HTTP request
-    ↓
-401 / expired access token
-    ↓
-refresh token
-    ↓
-new access token
-    ↓
-retry original HTTP request once
-    ↓
-return result
-```
+Both screens must have consistent scrollbar behavior.
 
 ### Requirements
 
-Implement this in the central API/authentication layer rather than separately in each screen.
-
-The original request must be retained sufficiently to retry it.
-
-The retry must happen at most once.
-
-If refresh fails:
-
-```text
-clear invalid authentication state
-→ require login
-```
-
-Do not retry indefinitely.
-
-### Concurrency requirement
-
-If multiple requests receive an expired token at approximately the same time, avoid unnecessary refresh-token races.
-
-Prefer a single shared refresh operation:
-
-```text
-request A ─┐
-request B ─┼→ shared refresh → retry
-request C ─┘
-```
-
-Do not start multiple refresh operations if one is already in progress.
-
-### Acceptance criteria
-
-- Expired access tokens are detected centrally.
-- Refresh is attempted once.
-- Original request is retried once after successful refresh.
-- The original request's method, URL, headers, body, and relevant options are preserved.
-- Refresh failure clears authentication state.
-- No infinite retry loop is possible.
-- Concurrent requests do not unnecessarily trigger multiple refresh requests.
-- Tests cover:
-  - normal request
-  - 401 → refresh → retry success
-  - 401 → refresh failure
-  - retry returning 401 again
-  - concurrent expired-token requests
-
----
-
-# 5. P1 — Serverless UX and Navigation
-
-## TASK-AUDIT-006 — Add back navigation to Settings
-
-Status: `[x]`
-
-Priority: `P1`
-
-Problem:
-
-The Settings screen does not provide an expected navigator/back action.
-
-### Acceptance criteria
-
-- Settings has a clear back navigation affordance where appropriate.
-- Back navigation follows the existing React Navigation structure.
-- Android system back behavior remains correct.
-- No duplicate navigation stack entries are introduced.
-- Navigation tests are updated.
-
----
-
-## TASK-AUDIT-007 — Simplify vocabulary save flow
-
-Status: `[x]`
-
-Priority: `P1`
-
-Problem:
-
-After selecting text, the system popup includes:
-
-```text
-Cut
-Copy
-Share
-Select all
-...
-Save word
-```
-
-After selecting `Save word`, the application opens another confirmation menu.
-
-This second confirmation is redundant.
-
-### Required behavior
-
-```text
-Select text
-    ↓
-System selection menu
-    ↓
-Save word
-    ↓
-Save immediately
-    ↓
-Success toast
-```
-
-Do not display a second confirmation step.
-
-### Acceptance criteria
-
-- Selecting `Save word` immediately starts the save operation.
-- No second confirmation dialog/menu is displayed.
-- Successful save shows a small success toast.
-- Save remains asynchronous with respect to enrichment.
-- Failure still produces useful feedback.
-- Existing vocabulary behavior is preserved.
-- Regression test covers the interaction.
-
----
-
-## TASK-AUDIT-008 — Fix history state after successful login
-
-Status: `[x]`
-
-Priority: `P1`
-
-Problem:
-
-After login succeeds, the application sometimes displays:
-
-```text
-No conversation yet
-```
-
-even though conversation history already exists.
-
-This indicates a state initialization, cache, timing, or navigation synchronization problem.
-
-### Requirements
-
-Inspect:
-
-- authentication state restoration
-- history loading
-- screen mounting
-- repository/cache state
-- navigation transitions
-- query invalidation/refetch behavior
-
-Do not solve this by adding an arbitrary fixed delay.
-
-The history screen must derive its state from the authoritative repository/query state.
-
-### Acceptance criteria
-
-- Existing server conversations appear after login.
-- Empty state appears only when the server actually has no conversations.
-- Loading state is distinct from empty state.
-- Login navigation does not race history initialization.
-- Returning to History refreshes appropriately when required.
-- Regression tests reproduce the original failure.
-
----
-
-# 6. P1 — Chat Layout and Rendering
-
-## TASK-AUDIT-009 — Improve chat message width and alignment
-
-Status: `[x]`
-
-Priority: `P1`
-
-Problem:
-
-Chat messages currently use too little horizontal space.
-
-Observed issues:
-
-- Messages consume roughly 55% of screen width.
-- User messages have excessive right margin.
-- User messages should sit closer to the right edge.
-- Short text such as `Hello` can wrap incorrectly:
-
-```text
-Hel
-lo
-```
-
-even when enough horizontal space should exist.
-
-### Requirements
-
-Review:
-
-- message container width
-- max-width
+Inspect the current scrolling implementation for:
+
+- Settings screen
+- Agent Provider Settings screen
+- `ScrollView` / `FlatList` / equivalent components
+- content container styles
 - horizontal padding
-- parent flex layout
-- text measurement
-- `flexShrink`
-- alignment
-- bubble padding
-- list content container styles
+- parent containers
+- safe-area handling
+- scrollbar/indicator behavior
 
-Do not solve wrapping problems by disabling text wrapping globally.
+Determine why the scrollbar is being positioned away from the right edge.
 
-Recommended behavior:
+Fix the layout at the appropriate container level.
+
+The desired behavior is conceptually:
 
 ```text
-Assistant:
-[ wider message area ................. ]
-
-                         [ user message .... ]
+┌──────────────────────────────┐
+│ Settings content             │█
+│                              │█ ← scrollbar
+│                              │█
+│                              │█
+└──────────────────────────────┘
 ```
 
-The exact percentage is not prescribed. Choose a natural mobile-chat width that provides substantially more usable space while preserving visual separation.
+The content itself may retain its intended horizontal padding:
+
+```text
+┌──────────────────────────────┐
+│   Settings content        █  │
+│   Settings content        █  │
+│   Settings content        █  │
+└──────────────────────────────┘
+```
+
+The scrollbar must not move inward simply because the content has horizontal padding.
+
+### Constraints
+
+Do not solve the problem by:
+
+- adding arbitrary negative margins
+- hard-coding a scrollbar position
+- changing unrelated screen dimensions
+- removing scrolling
+- hiding the scrollbar
+- duplicating the entire Settings layout
+
+Use the smallest appropriate layout fix.
 
 ### Acceptance criteria
 
-- User messages are aligned toward the right.
-- Assistant messages remain aligned toward the left.
-- Both message types can use substantially more than the current ~55% width.
-- Short words/sentences do not wrap unexpectedly.
-- Long messages still wrap normally.
-- Very long words/URLs do not overflow the screen.
-- Layout works on small and larger Android screens.
-- Regression tests cover message container styles/rendering where practical.
+- The Settings screen remains vertically scrollable.
+- The Settings scrollbar is anchored to the right edge.
+- The Agent Provider Settings screen scrollbar is also anchored to the right edge.
+- Horizontal content padding does not incorrectly move the scrollbar inward.
+- Both screens have consistent scrollbar behavior.
+- Safe-area behavior remains correct.
+- The fix works on representative Android screen sizes.
+- No unrelated Settings layout is changed.
+- Relevant tests are updated where practical.
 
 ---
 
-# 7. P1 — Environment and Configuration
+## TASK-IMPROVEMENT-002 — Keep Chat Input Visible When Keyboard Opens
 
-## TASK-AUDIT-010 — Remove hard-coded backend server configuration
-
-Status: `[x]`
+Status: `[ ]`
 
 Priority: `P1`
 
-Problem:
+### Problem
 
-The mobile application hard-codes the backend server in `config.ts`.
+When the user starts typing a message, the input area can become invisible or positioned incorrectly because the keyboard changes the available application viewport.
 
-The backend URL must be environment/configuration driven.
+The current behavior makes the message input difficult or impossible to see while typing.
+
+The expected behavior is similar to a normal mobile chat application:
+
+```text
+┌─────────────────────────┐
+│                         │
+│     Conversation        │
+│                         │
+│                         │
+│                         │
+├─────────────────────────┤
+│ Message input      Send │
+└─────────────────────────┘
+          Keyboard
+```
+
+The input must remain visible above the keyboard.
 
 ### Requirements
 
-Use the project's existing configuration mechanism if one exists.
+Inspect the existing chat screen implementation, including:
 
-Otherwise introduce the smallest appropriate React Native environment configuration mechanism.
+- keyboard handling
+- safe-area handling
+- root layout
+- message list
+- input container
+- `KeyboardAvoidingView` or equivalent
+- Android window/keyboard behavior
+- flex layout
+- absolute positioning, if currently used
+- bottom padding/insets
 
-At minimum support:
+Identify the actual cause rather than adding a fixed offset.
 
-```text
-development
-test
-production
-```
+The solution should work when:
 
-The server URL must not be embedded in application source code.
+- the keyboard is opened
+- the user types a short message
+- the user types a long message
+- the conversation already contains many messages
+- the message list is scrolled
+- the keyboard is dismissed
+- the device has different screen heights
 
-Do not introduce a large configuration framework for a single URL.
+The message list should continue to behave naturally while the input remains accessible.
 
-### Acceptance criteria
+### Constraints
 
-- No production backend URL is hard-coded in `config.ts`.
-- `.env`/environment configuration controls the backend base URL.
-- `.env.example` documents required configuration.
-- Test configuration can use a test API URL/mock.
-- Existing development workflow remains straightforward.
-- Configuration values are typed.
-- No secrets are placed in source control.
+Do not:
 
----
+- hard-code a keyboard height
+- add an arbitrary large bottom margin
+- permanently move the input upward
+- break scrolling when the keyboard is closed
+- hide existing messages unnecessarily
+- introduce a second chat input
 
-# 8. P1 — Learning and OpenRouter Screen Layout
-
-## TASK-AUDIT-011 — Fix excessive top margin on Learning Level screen
-
-Status: `[x]`
-
-Priority: `P1`
-
-Problem:
-
-The Learning Level screen has an excessively large top margin/empty area.
-
-### Acceptance criteria
-
-- Remove unnecessary top whitespace.
-- Preserve safe-area behavior.
-- Maintain consistent spacing with the rest of the application.
-- Ensure content remains reachable when the keyboard/system UI is present.
-- Test the layout on representative Android screen sizes.
-
-Do not use arbitrary negative margins as the primary fix.
-
----
-
-## TASK-AUDIT-012 — Fix excessive top margin on OpenRouter setup screen
-
-Status: `[x]`
-
-Priority: `P1`
-
-Problem:
-
-The OpenRouter setup screen has the same excessive top whitespace issue.
+Use the existing React Native architecture and the smallest appropriate keyboard/layout mechanism.
 
 ### Acceptance criteria
 
-- Remove unnecessary top whitespace.
-- Preserve safe-area behavior.
-- Align the screen with the application's normal content spacing.
-- Keep API key/model controls usable on small screens.
-- Avoid arbitrary negative margins.
+- The message input remains visible when the keyboard opens.
+- The input is positioned immediately above the keyboard when appropriate.
+- The user can see what they are typing.
+- The send button remains accessible.
+- Existing message scrolling continues to work.
+- Long conversations do not cause the input to disappear.
+- Dismissing the keyboard restores the normal layout.
+- The behavior works on representative Android screen sizes.
+- No fixed keyboard-height workaround is introduced.
+- Relevant regression/UI tests are added or updated where practical.
 
 ---
 
-# 9. P1 — Multi-Provider LLM Architecture
+## TASK-IMPROVEMENT-003 — Fix Malformed JSON Chunks from Gemini Streaming
 
-## TASK-AUDIT-013 — Implement multi-provider strategy architecture
-
-Status: `[x]`
+Status: `[ ]`
 
 Priority: `P1`
 
-Problem:
+### Problem
 
-The application needs to support multiple AI providers in both modes.
-
-Required providers include:
+When using Gemini in serverless mode, sending a simple message such as:
 
 ```text
-Gemini
-OpenRouter
-9router
-OpenAI
-OpenAI-compatible providers
+hello
 ```
 
-The exact provider list may grow.
-
-Both server and serverless implementations must support the same conceptual provider architecture.
-
-### Goal
-
-The application should be able to select an LLM provider without coupling conversation features to provider-specific implementations.
-
-Conceptually:
+can successfully create the conversation, but the application displays an error similar to:
 
 ```text
-LLMProvider
-    |
-    +── OpenRouterProvider
-    +── GeminiProvider
-    +── NineRouterProvider
-    +── OpenAIProvider
-    +── OpenAICompatibleProvider
+malformed json chunk from provider
 ```
 
-For both environments:
-
-```text
-Server:
-Application service
-    ↓
-Provider strategy
-    ↓
-External provider
-
-Serverless:
-Mobile application service
-    ↓
-Provider strategy
-    ↓
-External provider
-```
-
-### Provider interface
-
-The abstraction should cover the capabilities actually required by the application, including:
-
-- normal completion
-- streaming completion
-- model discovery where supported
-- structured output where supported
-- error normalization
-- timeout handling
-- provider-specific authentication
-- model fallback compatibility
-
-Do not force every provider to expose identical capabilities if the provider does not support them. Capabilities should be represented explicitly where necessary.
-
-### Configuration
-
-A provider configuration should conceptually contain:
-
-```text
-provider
-base_url
-api_key reference
-primary model
-fallback models
-```
-
-Do not store actual secrets in normal application state or logs.
-
-### OpenAI-compatible providers
-
-OpenAI-compatible providers should reuse a common implementation where their API contract is genuinely compatible.
-
-Do not create separate duplicated clients for every OpenAI-compatible vendor.
-
-### Serverless isolation
-
-Serverless provider requests must go directly from mobile to the configured provider.
-
-Server provider credentials must never be bundled into mobile.
-
-### Acceptance criteria
-
-- Provider interface exists in both server and serverless architecture where appropriate.
-- Conversation code depends on the provider abstraction rather than OpenRouter-specific HTTP code.
-- OpenRouter continues to work.
-- At least one additional provider implementation is supported end-to-end as proof of the abstraction.
-- OpenAI-compatible providers can reuse a common strategy when compatible.
-- Provider errors are normalized.
-- Streaming is supported through the abstraction.
-- Tests mock provider implementations.
-- Existing serverless OpenRouter behavior remains functional.
-- No provider API keys are logged.
-- The architecture does not duplicate conversation logic per provider.
-
----
-
-# 10. P1 — Screen Maintainability and Shared State
-
-## TASK-AUDIT-014 — Reduce oversized screen files
-
-Status: `[x]`
-
-Priority: `P1`
-
-Problem:
-
-Some screen files contain too much UI, state, business logic, networking, persistence, and interaction handling.
-
-This makes the code difficult to understand, test, and modify.
+The provider response is reaching the application, but the streaming/chunk parser is incorrectly interpreting one or more Gemini response chunks.
 
 ### Requirements
 
-Do not perform a blind "split every file" refactor.
-
-First identify responsibilities currently mixed inside large screens.
-
-Move reusable/shared behavior into appropriate layers such as:
+Trace the complete Gemini streaming path:
 
 ```text
-screens/
-components/
-hooks/
-state/
-services/
-repositories/
-utils/
-types/
+Gemini provider
+    ↓
+HTTP streaming response
+    ↓
+chunk reader
+    ↓
+JSON parser
+    ↓
+provider response normalization
+    ↓
+conversation/message state
+    ↓
+UI
 ```
 
-Use the project's existing conventions where possible.
+Determine the actual format of Gemini's streamed response and compare it with the parser's assumptions.
 
-### Preferred separation
+A network chunk is not necessarily equivalent to a complete JSON object.
 
-A screen should primarily coordinate:
+For example, JSON data may be fragmented across multiple network chunks:
 
 ```text
-navigation
-layout
-presentation
-user interaction wiring
+chunk 1:
+{"candidates":[{"content":
+
+chunk 2:
+{"parts":[{"text":"hel"}]}
+
+chunk 3:
+...}
 ```
 
-Business operations should live in:
+The implementation must not assume that every network chunk is independently valid JSON.
 
-```text
-services
-repositories
-hooks/state
-```
+Handle fragmented JSON/framing according to the actual Gemini response protocol used by the application.
 
-Reusable visual pieces should live in:
+### Error handling
 
-```text
-components
-```
+The provider implementation should:
 
-Shared types should not be duplicated across screens.
+- correctly parse valid Gemini streaming responses
+- handle response data split across network chunks
+- correctly process protocol/framing data where applicable
+- normalize provider output into the application's existing streaming representation
+- preserve incremental text delivery
+- preserve completion behavior
+- surface genuine provider errors clearly
+- avoid logging API keys or other secrets
 
-### State
+Do not:
 
-When state is shared by multiple screens or represents application-level state, move it into the existing shared-state mechanism or introduce a small appropriate one.
-
-Do not introduce a global state library solely to shorten one file.
+- blindly concatenate unrelated requests
+- catch all JSON errors and silently ignore them
+- return an empty response when parsing fails
+- add Gemini parsing logic to the chat screen
+- change the provider abstraction solely to work around this bug
 
 ### Acceptance criteria
 
-- The largest problematic screens are reduced to understandable responsibilities.
-- Networking logic is not duplicated across screens.
-- Persistence logic is not embedded directly in complex UI components.
-- Shared state has a clear owner.
-- Components/hooks/services are individually testable where appropriate.
-- No behavior regression occurs.
-- The refactor does not create excessive abstraction layers.
+- Sending `hello` to Gemini in serverless mode does not produce the malformed JSON error.
+- Gemini text is displayed correctly.
+- Streaming remains incremental.
+- Fragmented network chunks are handled correctly.
+- Completion events/state are preserved.
+- Genuine Gemini/provider errors are still surfaced.
+- Existing OpenRouter behavior remains unchanged.
+- Provider-specific parsing remains inside the Gemini/provider layer.
+- A regression test reproduces the malformed-chunk scenario.
+- Tests do not require a real Gemini API key or live provider request.
+- No provider secret is logged.
 
 ---
 
-# 11. P1 — Cross-Cutting Provider and Request Behavior
+## TASK-IMPROVEMENT-004 — Improve Primary and Fallback Model Configuration UI
 
-## TASK-AUDIT-015 — Unify HTTP request and authentication behavior
-
-Status: `[x]`
+Status: `[ ]`
 
 Priority: `P1`
 
-Review the mobile networking architecture after implementing `TASK-AUDIT-005`.
+### Problem
 
-The following concerns should have a single predictable owner:
+The serverless provider settings screen allows users to configure a primary model and fallback models, but the current layout does not make the relationship between them sufficiently clear.
+
+Users should understand:
 
 ```text
-base URL
-authentication headers
-token refresh
-request retry
-error normalization
-JSON handling
-timeouts
+Primary model
+    ↓
+Used first for normal requests
+
+Fallback models
+    ↓
+Alternative models used when the primary model
+cannot successfully complete the request
 ```
 
-Screens must not implement their own token refresh logic.
+### Requirements
+
+Improve the layout of:
+
+- primary model selection
+- fallback model selection
+- selected fallback models
+- fallback ordering, if supported
+- explanatory text
+- save/configuration controls
+
+The primary model should be visually presented as the main/default model.
+
+Fallback models should be clearly presented as secondary models.
+
+If fallback order matters in the current implementation, make that order understandable to the user.
+
+If fallback order does not matter, do not introduce ordering behavior merely for visual purposes.
+
+### In-screen guide
+
+Add concise explanatory guidance directly to the provider settings screen.
+
+The guide should explain:
+
+```text
+Primary model
+
+Choose the model you want to use first.
+This is your default model for conversations.
+
+Fallback models
+
+Choose one or more alternative models.
+They can be used when the primary model fails
+or cannot complete the request.
+
+Tip:
+Choose a reliable model as your primary model.
+Use other compatible models as fallbacks.
+```
+
+Use wording appropriate for the existing application's UI style.
+
+Do not create a separate documentation screen.
+
+Do not make the guide excessively long.
+
+### Model selection behavior
+
+Preserve the existing model discovery and provider configuration architecture.
+
+The UI should:
+
+- clearly show the currently selected primary model
+- clearly show selected fallback models
+- prevent invalid configurations where appropriate
+- avoid confusing duplication between primary and fallback selection
+- preserve selections when navigating within the screen
+- work with a large model catalog
+
+If the current provider/model abstraction already defines model compatibility rules, reuse them rather than duplicating those rules in the screen.
 
 ### Acceptance criteria
 
-- Authentication behavior is centralized.
-- API services use the same request wrapper.
-- Error types are consistent.
-- One-time token refresh behavior is reusable.
-- Streaming requests use an explicitly appropriate path when they cannot use the normal JSON request wrapper.
-- Tests cover normal and authenticated requests.
+- Primary model and fallback models are visually distinct.
+- A user can understand the purpose of each without external documentation.
+- A concise guide is displayed on the screen.
+- Existing model discovery continues to work.
+- Existing model selection behavior remains functional.
+- Fallback selections are clearly visible.
+- Large model names do not break the layout.
+- The UI remains usable on smaller Android screens.
+- Existing provider configurations continue to load correctly.
+- Relevant UI/component tests are updated where practical.
 
 ---
 
-# 12. P2 — Additional Hardening
+## TASK-IMPROVEMENT-005 — Navigate Back and Show Success Toast After Agent Configuration Save
 
-## TASK-AUDIT-016 — Audit all mode-dependent UI
+Status: `[ ]`
 
-Status: `[x]`
+Priority: `P1`
 
-Priority: `P2`
+### Problem
 
-Audit every screen and navigation route for correct behavior in:
+In serverless mode, when the user saves the configuration in the Agent Settings screen, the application currently does not provide the expected completion flow.
+
+After a successful save, the user should be returned to the Settings screen and receive clear success feedback.
+
+Expected behavior:
 
 ```text
-SERVER
-SERVERLESS
+Agent Settings
+    ↓
+Save configuration
+    ↓
+Configuration saved successfully
+    ↓
+Navigate back to Settings
+    ↓
+Show success toast
 ```
 
-Build a mode capability matrix.
+### Requirements
 
-Example:
+When saving the serverless agent configuration succeeds:
 
-| Feature | Server | Serverless |
-|---|---:|---:|
-| Account | Yes | No |
-| Server history | Yes | No |
-| Local history | No | Yes |
-| Server vocabulary | Yes | No |
-| Vocabulary enrichment | Yes | No |
-| CSV export | Yes | No |
-| Direct provider request | No | Yes |
-| Server authentication | Yes | No |
+1. Persist the configuration using the existing configuration mechanism.
+2. Confirm the save operation succeeds.
+3. Navigate back to the appropriate Settings screen.
+4. Display a success toast.
+
+The toast should communicate that the agent configuration was saved successfully.
+
+Use the application's existing toast/notification mechanism if one exists.
+
+Do not introduce a new toast library unless the project currently has no suitable mechanism and a new dependency is genuinely necessary.
+
+### Error behavior
+
+If saving fails:
+
+- remain on the Agent Settings screen
+- do not navigate away
+- do not show a success toast
+- display appropriate error feedback
+- preserve the user's entered configuration where practical
+
+The success navigation must happen only after persistence succeeds.
+
+Do not navigate optimistically before the save operation completes.
 
 ### Acceptance criteria
 
-- No server-only UI appears in serverless mode.
-- No serverless-only configuration is required in server mode.
-- Navigation routes are mode-safe.
-- API calls are mode-safe.
-- Mode-dependent tests exist for critical routes.
+- Successful serverless agent configuration save navigates back to Settings.
+- A success toast is displayed after the save succeeds.
+- The toast does not appear when saving fails.
+- Failed saves do not navigate away from Agent Settings.
+- Configuration is persisted before navigation occurs.
+- Existing Settings navigation behavior remains correct.
+- Android back behavior is not broken.
+- No duplicate navigation stack entries are created.
+- Regression tests cover successful and failed save behavior where practical.
 
 ---
 
-## TASK-AUDIT-017 — Audit model discovery caching
+# 4. Recommended Execution Order
 
-Status: `[x]`
+The default execution order is:
 
-Priority: `P2`
+```text
+TASK-IMPROVEMENT-001
+Settings scrollbar
+        ↓
+TASK-IMPROVEMENT-002
+Chat keyboard/input visibility
+        ↓
+TASK-IMPROVEMENT-003
+Gemini malformed JSON streaming
+        ↓
+TASK-IMPROVEMENT-004
+Primary/fallback model UI
+        ↓
+TASK-IMPROVEMENT-005
+Agent configuration save flow
+```
 
-Review model discovery after `TASK-AUDIT-004`.
+Dependencies may allow some tasks to be implemented independently.
 
-The application should not request the complete model catalog unnecessarily on every screen render.
-
-### Acceptance criteria
-
-- Model discovery results are cached appropriately.
-- Explicit refresh is supported.
-- Cached models remain available when temporarily offline.
-- Loading, cached, empty, and error states are distinct.
-- A screen re-render does not trigger unnecessary model requests.
+However, the agent should avoid starting a task if another task is actively changing the same architectural area and doing so would cause unnecessary duplicated work.
 
 ---
 
-## TASK-AUDIT-018 — Add regression coverage for audited bugs
+# 5. Validation
 
-Status: `[x]`
+After implementation, run the repository's actual validation commands.
 
-Priority: `P2`
-
-Create a focused regression suite covering all confirmed audit bugs.
-
-At minimum:
-
-### Backend
-
-- SSE `Accept: text/event-stream` does not return 406.
-- CSV export does not return 406.
-- Provider model discovery works without token validation.
-- Access token refresh works exactly once.
-- Refresh failure logs the user out.
-- User ownership remains enforced.
-
-### Mobile
-
-- Serverless mode can be entered from login.
-- Serverless mode survives app restart.
-- Serverless mode does not route to login.
-- Account UI is absent in serverless mode.
-- Existing history appears after login.
-- Save word is immediate.
-- Chat message widths/alignment are correct.
-- Environment configuration is loaded correctly.
-- Provider strategy selection works.
-
-### Acceptance criteria
-
-- Tests are deterministic.
-- External APIs are mocked.
-- Tests do not depend on real OpenRouter credentials.
-- Existing tests continue to pass.
-
----
-
-# 13. Final Audit Validation
-
-## TASK-AUDIT-019 — Run complete post-completion validation
-
-Status: `[x]`
-
-Priority: `P2`
-
-After all previous tasks are complete, perform a full audit.
-
-### Server mode journey
-
-```text
-Login
-→ Restore authentication
-→ History
-→ Open existing conversation
-→ Send message
-→ SSE streaming
-→ Token expiration
-→ Refresh token
-→ Continue original request
-→ Save vocabulary
-→ Export CSV
-```
-
-### Serverless journey
-
-```text
-Login screen
-→ Enable serverless
-→ Restart application
-→ Remain serverless
-→ Configure provider
-→ Discover models without token validation
-→ Select model
-→ Start conversation
-→ Stream response directly from provider
-→ Open local history
-→ Save vocabulary where supported
-→ TTS
-```
-
-### Provider journey
-
-Verify the provider abstraction does not require conversation screens to know whether the configured provider is:
-
-```text
-OpenRouter
-Gemini
-9router
-OpenAI
-OpenAI-compatible
-```
-
-### Quality checks
-
-Run the actual project commands.
-
-Backend, where applicable:
-
-```text
-uv run ruff check .
-uv run ruff format --check .
-uv run pytest
-uv run python manage.py check
-```
-
-Mobile, where applicable:
+For mobile, where applicable:
 
 ```text
 pnpm lint
@@ -1155,118 +614,158 @@ pnpm test
 pnpm typecheck
 ```
 
-Use the repository's actual commands if they differ.
+If the repository uses different commands, use the existing project commands.
 
-### Acceptance criteria
+## Manual validation
 
-- All previous audit tasks are complete.
-- Relevant tests pass.
-- Existing tests pass.
-- Type/lint/format checks pass.
-- No known P0/P1 regression remains.
-- No hard-coded production server configuration remains.
-- No provider secret is exposed.
-- Server and serverless data remain isolated.
-- The project remains consistent with `ROADMAP.md` and `SPEC.md`.
+### Settings scrollbar
 
----
-
-# 14. Recommended Execution Order
-
-The default execution order is:
+Verify both screens:
 
 ```text
-TASK-AUDIT-001  SSE 406
-      ↓
-TASK-AUDIT-002  CSV 406
-      ↓
-TASK-AUDIT-003  Serverless startup/navigation
-      ↓
-TASK-AUDIT-004  OpenRouter model discovery
-      ↓
-TASK-AUDIT-005  Token refresh wrapper
-      ↓
-TASK-AUDIT-006  Settings back navigation
-      ↓
-TASK-AUDIT-007  Immediate vocabulary save
-      ↓
-TASK-AUDIT-008  History state after login
-      ↓
-TASK-AUDIT-009  Chat layout
-      ↓
-TASK-AUDIT-010  Environment configuration
-      ↓
-TASK-AUDIT-011  Learning screen layout
-      ↓
-TASK-AUDIT-012  OpenRouter setup layout
-      ↓
-TASK-AUDIT-013  Multi-provider strategy
-      ↓
-TASK-AUDIT-014  Screen/state refactoring
-      ↓
-TASK-AUDIT-015  HTTP/auth unification
-      ↓
-TASK-AUDIT-016  Mode-dependent UI audit
-      ↓
-TASK-AUDIT-017  Model discovery caching
-      ↓
-TASK-AUDIT-018  Regression suite
-      ↓
-TASK-AUDIT-019  Final validation
+Settings
+    ↓
+Scroll
+    ↓
+Scrollbar remains at the right edge
 ```
 
-Dependencies may allow parallel work, but the agent should not start a task if a preceding task changes the same architectural area and would make the work unnecessarily duplicative.
+and:
+
+```text
+Settings
+    ↓
+Agent Provider Settings
+    ↓
+Scroll
+    ↓
+Scrollbar remains at the right edge
+```
+
+### Chat
+
+```text
+Open conversation
+    ↓
+Tap input
+    ↓
+Keyboard opens
+    ↓
+Type "hello"
+    ↓
+Verify input remains visible
+    ↓
+Send message
+    ↓
+Verify normal conversation behavior
+```
+
+### Gemini
+
+```text
+Select Gemini
+    ↓
+Start conversation
+    ↓
+Send "hello"
+    ↓
+Receive streamed response
+    ↓
+Verify no "malformed json chunk" error
+```
+
+Also test a response long enough to produce multiple streaming chunks.
+
+### Provider configuration
+
+```text
+Open serverless provider settings
+    ↓
+Select primary model
+    ↓
+Select fallback model(s)
+    ↓
+Read the on-screen guidance
+    ↓
+Save
+    ↓
+Return to Settings
+    ↓
+Verify success toast
+```
+
+### Failed save
+
+Where practical:
+
+```text
+Save configuration
+    ↓
+Save fails
+    ↓
+Remain on Agent Settings
+    ↓
+No success toast
+    ↓
+Error feedback is shown
+```
 
 ---
 
-# 15. Definition of Done
+# 6. Definition of Done
 
-An audit task is complete only when:
+This task is complete only when:
 
-1. The implementation exists.
-2. The original bug or requirement is demonstrably addressed.
-3. Relevant regression tests exist.
-4. Existing tests still pass.
-5. Type/lint/format checks pass where applicable.
-6. The implementation follows the existing architecture.
-7. Server/serverless isolation is preserved.
-8. Provider secrets remain protected.
-9. No unrelated feature is introduced.
-10. Documentation/configuration is updated when required.
-11. Acceptance criteria are satisfied.
-12. The task is marked `[x]`.
-13. The agent can explain the change from repository evidence if asked.
+1. The Settings scrollbar is anchored to the right edge.
+2. The Agent Provider Settings scrollbar is anchored to the right edge.
+3. The chat input remains visible when the keyboard is open.
+4. Gemini streaming no longer produces the malformed JSON chunk error for valid responses.
+5. Gemini fragmented streaming data is parsed correctly.
+6. Existing OpenRouter behavior remains functional.
+7. Primary and fallback models have a clearer configuration layout.
+8. The provider settings screen contains concise guidance explaining primary vs fallback models.
+9. Successful serverless agent configuration saves navigate back to Settings.
+10. Successful saves display a success toast.
+11. Failed saves remain on the Agent Settings screen and do not display a success toast.
+12. Relevant regression tests are added or updated.
+13. Existing tests continue to pass.
+14. Type checking passes.
+15. Linting passes.
+16. No provider secrets are exposed.
+17. No unrelated feature or large refactor is introduced.
+18. SERVER and SERVERLESS behavior remain isolated.
+19. The implementation follows the existing application architecture.
 
-Do not mark a task complete merely because the application builds.
+Do not mark the task complete merely because the application builds.
 
 ---
 
-# 16. Final Principle
+# 7. Final Principle
 
-This is a **post-MVP audit**, not a second MVP implementation.
+This is a focused post-completion improvement task.
 
 Prefer:
 
 ```text
-small regression fix
-+
-focused test
-+
-minimal architectural improvement
+understand existing implementation
+        +
+focused fix
+        +
+regression test
 ```
 
 over:
 
 ```text
-large rewrite
-+
+large refactor
+        +
 new dependency
-+
-unrelated refactor
+        +
+unrelated architectural changes
 ```
 
-Preserve working behavior.
+For the Gemini issue in particular, fix the actual streaming/framing problem rather than hiding the parsing error.
 
-Fix the observed problems first.
+For the UI issues, prefer correct layout and navigation behavior over hard-coded offsets or timing-based workarounds.
 
-When a deeper architectural change is necessary, make the smallest change that creates a clean long-term boundary without rewriting unrelated working code.
+Preserve working behavior while fixing the observed problems.
