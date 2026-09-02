@@ -26,6 +26,13 @@
  * fallback chain states its order semantics, so the configuration is
  * understandable without external documentation.
  *
+ * TASK-IMPROVEMENT-005: only a resolved save navigates, popping back to
+ * the Settings screen the editor was pushed from (a navigate to the
+ * existing entry, so no duplicate stack rows appear) and handing over a
+ * one-shot `configSaved` flag that Settings turns into the success toast.
+ * A failed save stays here with the inline error and the entered
+ * configuration untouched — no navigation, no success feedback.
+ *
  * The top spacing is a fixed constant (the app shell in App.tsx already
  * pads the whole tree out of the system status bar), replacing the
  * fixed oversized padding, so the header sits at the same spacing as the
@@ -475,11 +482,6 @@ export function createStyles(c: ThemeColors) {
       fontSize: 14,
       lineHeight: 19,
     },
-    saved: {
-      color: c.success,
-      fontSize: 14,
-      fontWeight: '600',
-    },
     saveButton: {
       backgroundColor: c.primary,
       borderRadius: 10,
@@ -528,7 +530,6 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Long-press tooltip content: the full untruncated model label + id. */
   const [modelTooltip, setModelTooltip] = useState<{
@@ -607,7 +608,6 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
         return;
       }
       setError(null);
-      setSaved(false);
       setRefreshing(false);
       setFilter('');
       setSwitching(true);
@@ -638,7 +638,6 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
       return;
     }
     setError(null);
-    setSaved(false);
     setRefreshing(true);
     try {
       const db = await getLocalDatabase();
@@ -675,7 +674,6 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
 
   const choosePrimary = useCallback((id: string) => {
     setError(null);
-    setSaved(false);
     setPrimaryModel(id);
     // The client builds its attempt chain as primary + unique non-primary
     // models, so promoting an entry removes it from the fallback queue.
@@ -684,7 +682,6 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
 
   const toggleFallback = useCallback((id: string) => {
     setError(null);
-    setSaved(false);
     setFallbackModels(current => {
       if (current.includes(id)) {
         return current.filter(model => model !== id);
@@ -694,7 +691,6 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
   }, []);
 
   const moveFallback = useCallback((index: number, direction: -1 | 1) => {
-    setSaved(false);
     setFallbackModels(current => {
       const target = index + direction;
       if (target < 0 || target >= current.length) {
@@ -709,16 +705,22 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
   }, []);
 
   const removeFallback = useCallback((index: number) => {
-    setSaved(false);
     setFallbackModels(current => current.filter((_, position) => position !== index));
   }, []);
 
+  /**
+   * TASK-IMPROVEMENT-005 save flow: validation failures and storage errors
+   * keep the user here with the inline error and the entered configuration
+   * intact; only a completed persistence navigates back to Settings — with
+   * a `configSaved` param that the Settings screen renders as the success
+   * toast. `navigate` targets the existing Settings entry instead of
+   * pushing, so the stack never gains a duplicate screen.
+   */
   const handleSave = useCallback(async () => {
     if (saving) {
       return;
     }
     setError(null);
-    setSaved(false);
     const label = PROVIDER_DESCRIPTORS[provider].label;
     const article = /^[AEIOU]/.test(label) ? 'An' : 'A';
     const apiKey = resolveApiKey();
@@ -738,13 +740,13 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
       // it cannot linger longer than necessary.
       setStoredKey(apiKey);
       setApiKeyDraft('');
-      setSaved(true);
+      navigation.navigate('Settings', {configSaved: true});
     } catch (err) {
       setError(toErrorMessage(err));
     } finally {
       setSaving(false);
     }
-  }, [saving, resolveApiKey, primaryModel, fallbackModels, provider]);
+  }, [saving, resolveApiKey, primaryModel, fallbackModels, provider, navigation]);
 
   /** Filtered + alphabetically stable subset of the discovered catalog. */
   const visibleModels = useMemo<{models: ModelInfo[]; total: number}>(() => {
@@ -857,7 +859,6 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
           <SecretInput
             onChangeText={value => {
               setApiKeyDraft(value);
-              setSaved(false);
               setError(null);
             }}
             placeholder={storedKey ? '••••••••••••  saved' : descriptor.keyPlaceholder}
@@ -1106,7 +1107,6 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
             {error}
           </Text>
         ) : null}
-        {saved ? <Text style={styles.saved}>Saved.</Text> : null}
 
         <Pressable
           accessibilityRole="button"

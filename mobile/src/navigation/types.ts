@@ -22,12 +22,17 @@ export type MainStackParamList = {
   /** New-conversation form (optional topic hint) — SPEC TASK-051. */
   NewConversation: undefined;
   History: undefined;
-  Settings: undefined;
+  Settings: {configSaved?: boolean} | undefined;
   /** Learning-level editor pushed from Settings (SPEC TASK-018). */
   Level: undefined;
   /** Saved-expression list pushed from Settings (SPEC TASK-072). */
   Vocabulary: undefined;
-  /** Serverless OpenRouter editor pushed from Settings (SPEC TASK-092). */
+  /**
+   * Serverless OpenRouter editor pushed from Settings (SPEC TASK-092).
+   * On a successful save it navigates back to Settings with
+   * `configSaved` so the status card can flash the success toast
+   * (TASK-IMPROVEMENT-005).
+   */
   OpenRouterSettings: undefined;
 };
 

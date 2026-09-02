@@ -16,6 +16,11 @@
  * The screen is pushed onto the main stack from Chat, so the header carries
  * the same ‹ Back affordance as the other pushed screens (TASK-AUDIT-006);
  * the Android system back button pops the stack identically.
+ *
+ * TASK-IMPROVEMENT-005: returning from the serverless agent configuration
+ * editor after a completed save hands over a one-shot `configSaved` route
+ * param, which flashes the self-dismissing success toast here — the same
+ * transient-toast pattern the other screens already use.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -63,6 +68,9 @@ const APPLICATION_MODE_OPTIONS: Array<{
     testID: 'settings-mode-serverless',
   },
 ];
+
+/** How long the configuration-saved toast stays visible (TASK-IMPROVEMENT-005). */
+export const CONFIG_SAVED_TOAST_DURATION_MS = 2500;
 
 /** Row shape shared by both mode-specific sections. */
 interface SettingsRow {
@@ -363,6 +371,32 @@ export function createStyles(c: ThemeColors) {
       fontSize: 16,
       fontWeight: '600',
     },
+    /* TASK-IMPROVEMENT-005: transient success toast, mirroring the
+       self-dismissing toast the chat and vocabulary screens already use. */
+    toast: {
+      position: 'absolute',
+      bottom: 24,
+      left: 24,
+      right: 24,
+      backgroundColor: c.surface,
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      shadowOffset: {width: 0, height: 2},
+      elevation: 6,
+    },
+    toastText: {
+      color: c.success,
+      fontSize: 14,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
   });
 }
 
@@ -380,7 +414,7 @@ function StatusLine({label, value, testID}: {label: string; value: string; testI
   );
 }
 
-export function SettingsScreen({navigation}: SettingsScreenProps) {
+export function SettingsScreen({navigation, route}: SettingsScreenProps) {
   const {user, logout, busy} = useAuth();
   // Two independent "mode" concepts live side by side here: the visual theme
   // and the SERVER/SERVERLESS application mode (TASK-080) — aliased apart.
@@ -397,6 +431,39 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
 
   /** While clearing local data, the button is disabled to prevent double-taps. */
   const [clearing, setClearing] = useState(false);
+
+  /**
+   * TASK-IMPROVEMENT-005: the agent configuration editor pops back with
+   * `configSaved` only after its persistence step resolved, so this flag
+   * appearing is strictly post-save. It is consumed exactly once and the
+   * toast dismisses itself — success feedback can never fire for a failed
+   * save, because a failed save never navigates.
+   */
+  const [savedToastVisible, setSavedToastVisible] = useState(false);
+
+  // The editor stays mounted below this screen on the stack, so a
+  // completed save arrives as a params update on a live instance: consume
+  // it exactly once (flash the toast) and drop the flag from the route so
+  // refocuses or theme flips never resurrect a stale success toast.
+  useEffect(() => {
+    if (route.params?.configSaved !== true) {
+      return;
+    }
+    setSavedToastVisible(true);
+    navigation.setParams({configSaved: undefined});
+  }, [navigation, route.params?.configSaved]);
+
+  // The configuration-saved toast dismisses itself after a fixed delay.
+  useEffect(() => {
+    if (!savedToastVisible) {
+      return;
+    }
+    const timer = setTimeout(
+      () => setSavedToastVisible(false),
+      CONFIG_SAVED_TOAST_DURATION_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [savedToastVisible]);
 
   /**
    * Confirm and clear all serverless local data (TASK-094). Server mode
@@ -711,6 +778,14 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
           </Pressable>
         ) : null}
       </ScrollView>
+
+      {savedToastVisible ? (
+        <View pointerEvents="none" style={styles.toast} testID="settings-saved-toast">
+          <Text role="status" style={styles.toastText} testID="settings-saved-toast-text">
+            Configuration saved successfully.
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

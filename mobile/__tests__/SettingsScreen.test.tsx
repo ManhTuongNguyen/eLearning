@@ -10,7 +10,7 @@
  * switcher are visible in both modes.
  */
 import React from 'react';
-import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {useAuth} from '../src/auth/AuthContext';
@@ -18,8 +18,12 @@ import {ModeProvider} from '../src/mode/ModeContext';
 import {saveApplicationMode} from '../src/mode/modeStorage';
 import {setRuntimeApplicationMode} from '../src/mode/runtime';
 import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
-import type {SettingsScreenProps} from '../src/navigation/types';
-import {createStyles, SettingsScreen} from '../src/screens/SettingsScreen';
+import type {MainStackParamList, SettingsScreenProps} from '../src/navigation/types';
+import {
+  CONFIG_SAVED_TOAST_DURATION_MS,
+  createStyles,
+  SettingsScreen,
+} from '../src/screens/SettingsScreen';
 import * as serverlessSettings from '../src/serverless/settings';
 import type {OpenRouterClientConfig} from '../src/serverless/types';
 import {lightColors} from '../src/theme/colors';
@@ -64,10 +68,10 @@ function configuredStub(): OpenRouterClientConfig {
   };
 }
 
-function settingsProps(): SettingsScreenProps {
+function settingsProps(params?: MainStackParamList['Settings']): SettingsScreenProps {
   return {
-    navigation: {navigate: jest.fn(), goBack: jest.fn()},
-    route: {key: 'settings-test', name: 'Settings', params: undefined},
+    navigation: {navigate: jest.fn(), goBack: jest.fn(), setParams: jest.fn()},
+    route: {key: 'settings-test', name: 'Settings', params},
   } as unknown as SettingsScreenProps;
 }
 
@@ -89,9 +93,9 @@ function checkedStateOf(testID: string): boolean | undefined {
  * Renders the screen inside the providers it consumes, restoring the given
  * application mode exactly like an app start would (persisted flag -> Mode).
  */
-async function renderSettings(mode: 'server' | 'serverless') {
+async function renderSettings(mode: 'server' | 'serverless', params?: MainStackParamList['Settings']) {
   await saveApplicationMode(mode);
-  const props = settingsProps();
+  const props = settingsProps(params);
 
   render(
     <ModeProvider>
@@ -314,5 +318,77 @@ describe('SettingsScreen scrollbar anchoring (TASK-IMPROVEMENT-001)', () => {
     expect(styles.header.paddingHorizontal).toBe(24);
     expect(styles.content.padding).toBe(24);
     expect(styles.content.paddingBottom).toBe(40);
+  });
+});
+
+// TASK-IMPROVEMENT-005: the agent configuration editor hands back a
+// one-shot `configSaved` flag only after its save resolved; Settings
+// answers with a self-dismissing success toast. Without the flag — which
+// includes every failed save, since those never navigate — no toast may
+// ever appear.
+describe('configuration-saved toast (TASK-IMPROVEMENT-005)', () => {
+  it('flashes the success toast when the editor reports a completed save', async () => {
+    const props = await renderSettings('serverless', {configSaved: true});
+
+    const toast = await screen.findByTestId('settings-saved-toast');
+    expect(toast).toHaveTextContent('Configuration saved successfully.');
+    expect(screen.getByTestId('settings-saved-toast-text').props.role).toBe('status');
+    // The one-shot flag is dropped from the route immediately, so a later
+    // revisit or refocus can never replay a stale success toast.
+    expect(props.navigation.setParams).toHaveBeenCalledWith({configSaved: undefined});
+  });
+
+  it('shows no toast when returning without the saved flag', async () => {
+    await renderSettings('serverless');
+
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-openrouter-key-status')).toBeOnTheScreen(),
+    );
+    expect(screen.queryByTestId('settings-saved-toast')).toBeNull();
+  });
+
+  it('ignores an explicitly false saved flag', async () => {
+    await renderSettings('serverless', {configSaved: false});
+
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-openrouter-key-status')).toBeOnTheScreen(),
+    );
+    expect(screen.queryByTestId('settings-saved-toast')).toBeNull();
+  });
+
+  it('dismisses the toast by itself after the fixed delay', async () => {
+    // Mount without the flag and settle under real timers first, so the
+    // save hand-over can be replayed on the live instance while the fake
+    // clock controls the toast's scheduled dismissal.
+    const view = await render(
+      <ModeProvider>
+        <ThemeProvider>
+          <SettingsScreen {...settingsProps()} />
+        </ThemeProvider>
+      </ModeProvider>,
+    );
+    await waitFor(() => expect(checkedStateOf('settings-mode-serverless')).toBe(true));
+    expect(screen.queryByTestId('settings-saved-toast')).toBeNull();
+
+    jest.useFakeTimers();
+    try {
+      await act(async () => {
+        view.rerender(
+          <ModeProvider>
+            <ThemeProvider>
+              <SettingsScreen {...settingsProps({configSaved: true})} />
+            </ThemeProvider>
+          </ModeProvider>,
+        );
+      });
+      expect(screen.getByTestId('settings-saved-toast')).toBeOnTheScreen();
+
+      await act(async () => {
+        jest.advanceTimersByTime(CONFIG_SAVED_TOAST_DURATION_MS);
+      });
+      expect(screen.queryByTestId('settings-saved-toast')).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

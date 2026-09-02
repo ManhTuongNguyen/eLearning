@@ -15,10 +15,14 @@
  * TASK-AUDIT-016: the editor is serverless-only, so every mount runs under
  * a ModeProvider with serverless persisted; a server-mode mount renders the
  * mode notice without reading any serverless configuration.
+ *
+ * TASK-IMPROVEMENT-005: a successful save navigates back to Settings with
+ * a one-shot `configSaved` flag only after persistence resolved — a failed
+ * save stays on the editor with the inline error and never navigates.
  */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {render, screen, userEvent, waitFor, within} from '@testing-library/react-native';
+import {act, render, screen, userEvent, waitFor, within} from '@testing-library/react-native';
 
 import {ModeProvider} from '../src/mode/ModeContext';
 import {saveApplicationMode} from '../src/mode/modeStorage';
@@ -224,10 +228,9 @@ describe('model selection from the discovered catalog', () => {
       primaryModel: 'vendor/model-b',
       fallbackModels: ['vendor/claude-x', 'vendor/model-a'],
     });
-    // Saving confirms, promotes the draft key to storage and clears it
-    // from the input so the secret does not linger on screen.
-    await waitFor(() => expect(screen.getByText('Saved.')).toBeOnTheScreen());
-    expect(screen.getByTestId('openrouter-api-key-input').props.value).toBe('');
+    // Saving promotes the draft key to storage and clears it from the
+    // input so the secret does not linger on screen.
+    await waitFor(() => expect(screen.getByTestId('openrouter-api-key-input').props.value).toBe(''));
   });
 
   it('keeps the stored key working when the field is left untouched', async () => {
@@ -292,6 +295,72 @@ describe('model selection from the discovered catalog', () => {
     expect(mockedSaveConfig).toHaveBeenCalledWith(
       expect.objectContaining({fallbackModels: ['vendor/model-b']}),
     );
+  });
+});
+
+// TASK-IMPROVEMENT-005: a successful save hands the user back to Settings
+// together with a one-shot `configSaved` flag (the toast renders there), and
+// only after persistence actually resolved. Failed saves never navigate.
+describe('save completion flow (TASK-IMPROVEMENT-005)', () => {
+  it('navigates back to Settings with the saved flag once persistence resolves', async () => {
+    mockedLoadProviderState.mockResolvedValue({
+      apiKey: STORED_KEY,
+      primaryModel: 'vendor/model-a',
+      fallbackModels: ['vendor/model-b'],
+    });
+    let resolveSave!: () => void;
+    mockedSaveConfig.mockImplementation(
+      () =>
+        new Promise<void>(resolve => {
+          resolveSave = resolve;
+        }),
+    );
+
+    const props = await renderSettledScreen();
+
+    await user.press(screen.getByTestId('openrouter-save'));
+    await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
+
+    // No optimistic navigation: the save must complete first.
+    expect(props.navigation.navigate).not.toHaveBeenCalled();
+    expect(props.navigation.goBack).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSave();
+    });
+
+    await waitFor(() =>
+      expect(props.navigation.navigate).toHaveBeenCalledWith('Settings', {
+        configSaved: true,
+      }),
+    );
+    // The back hop rides the single navigate call to the existing Settings
+    // entry — no goBack, no duplicate stack rows.
+    expect(props.navigation.goBack).not.toHaveBeenCalled();
+  });
+
+  it('keeps the editor open with the error and without navigation when the save fails', async () => {
+    mockedLoadProviderState.mockResolvedValue({
+      apiKey: STORED_KEY,
+      primaryModel: 'vendor/model-a',
+      fallbackModels: ['vendor/model-b'],
+    });
+    mockedGetCached.mockResolvedValue(catalogSnapshot());
+    mockedSaveConfig.mockRejectedValue(new Error('Secure storage is unavailable.'));
+
+    const props = await renderSettledScreen();
+
+    await user.press(screen.getByTestId('openrouter-save'));
+
+    const error = await screen.findByTestId('openrouter-form-error');
+    expect(error).toHaveTextContent(/Secure storage is unavailable/);
+    // Stay on the editor, no success navigation and therefore no saved
+    // flag for Settings to turn into a success toast.
+    expect(props.navigation.navigate).not.toHaveBeenCalled();
+    expect(props.navigation.goBack).not.toHaveBeenCalled();
+    expect(screen.getByTestId('openrouter-save')).toBeOnTheScreen();
+    // The entered configuration is preserved for a retry.
+    expect(checkedStateOf('openrouter-model-primary-vendor/model-a')).toBe(true);
   });
 });
 

@@ -508,7 +508,7 @@ If the current provider/model abstraction already defines model compatibility ru
 
 ## TASK-IMPROVEMENT-005 — Navigate Back and Show Success Toast After Agent Configuration Save
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

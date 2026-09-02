@@ -316,17 +316,23 @@ describe('TASK-117 serverless journey', () => {
     await pressTop('openrouter-model-fallback-vendor/model-b');
     await waitFor(() => expect(checkedOf('openrouter-model-fallback-vendor/model-b')).toBe(true));
     await pressTop('openrouter-save');
-    await waitFor(() => expect(screen.getByText('Saved.')).toBeOnTheScreen());
-    await pressTop('openrouter-back');
+    // TASK-IMPROVEMENT-005: the save itself navigates back to Settings with
+    // the one-shot saved flag, and the Settings card flashes the success
+    // toast while refreshing to the persisted configuration. The editor
+    // instance stays mounted below, so resolve the topmost screens.
+    await waitFor(() => expect(top('settings-screen')).toBeOnTheScreen());
+    expect(top('settings-saved-toast')).toHaveTextContent(
+      'Configuration saved successfully.',
+    );
     await waitFor(() =>
       expect(
-        screen.getByTestId('settings-openrouter-key-status'),
+        top('settings-openrouter-key-status'),
       ).toHaveTextContent('Saved on this device'),
     );
-    expect(screen.getByTestId('settings-openrouter-primary-status')).toHaveTextContent(
+    expect(top('settings-openrouter-primary-status')).toHaveTextContent(
       'vendor/model-a',
     );
-    expect(screen.getByTestId('settings-openrouter-fallback-status')).toHaveTextContent(
+    expect(top('settings-openrouter-fallback-status')).toHaveTextContent(
       '1 selected',
     );
 
