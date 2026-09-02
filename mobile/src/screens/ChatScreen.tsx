@@ -61,6 +61,13 @@
  * MessageRow with stable prop identities, so a delta flush re-renders only
  * the streaming bubble while every untouched row bails out, and the FlatList
  * virtualization bounds keep long conversations mounted in a bounded window.
+ * Keyboard handling (TASK-IMPROVEMENT-002): the whole screen lives inside a
+ * padding-behavior KeyboardAvoidingView offset by the status-bar inset, so
+ * the composer rides on top of the keyboard in both application modes; on
+ * Android 15+ (targetSdk 35+) edge-to-edge enforcement stops the legacy
+ * window-resize path from relaying out the screen under the keyboard, while
+ * on devices where the system already shrinks the window the measured
+ * keyboard overlap is zero and the shell stays put.
  *
  * Responsibilities (TASK-AUDIT-014): the screen coordinates navigation,
  * layout, presentation and interaction wiring only. The turn-streaming
@@ -74,13 +81,13 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import type {ChatMessage, Session} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
@@ -368,6 +375,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const {getAccessToken, authedRequest} = useAuth();
   const {colors} = useTheme();
   const {mode} = useApplicationMode();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   // Row styles are created once per theme so the memoized MessageRow sees a
   // stable `styles` prop (TASK-103).
@@ -727,7 +735,8 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'android' ? undefined : 'padding'}
+      behavior="padding"
+      keyboardVerticalOffset={insets.top}
       testID="chat-screen">
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Chat</Text>
@@ -836,6 +845,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
               onScroll={handleScroll}
               scrollEventThrottle={16}
               onContentSizeChange={handleContentSizeChange}
+              // Keep the list interactive while the keyboard is open
+              // (TASK-IMPROVEMENT-002): rows, long-press menus and buttons
+              // must respond on the first tap instead of the tap only
+              // dismissing the keyboard.
+              keyboardShouldPersistTaps="handled"
               // TASK-103 virtualization bounds: mount a bounded slice of a
               // long conversation and grow it in steady batches.
               initialNumToRender={CHAT_LIST_INITIAL_NUM_TO_RENDER}

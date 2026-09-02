@@ -221,7 +221,7 @@ Use the smallest appropriate layout fix.
 
 ## TASK-IMPROVEMENT-002 — Keep Chat Input Visible When Keyboard Opens
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

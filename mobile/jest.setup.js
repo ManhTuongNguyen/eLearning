@@ -6,7 +6,8 @@ jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
   const { View } = require('react-native');
 
-  const insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  const fallbackInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+  let insets = { ...fallbackInsets };
   const frame = { x: 0, y: 0, width: 0, height: 0 };
 
   const PassThrough = ({ children }) => React.createElement(View, null, children);
@@ -22,6 +23,16 @@ jest.mock('react-native-safe-area-context', () => {
     initialWindowMetrics: { frame, insets },
     useSafeAreaInsets: () => insets,
     useSafeAreaFrame: () => frame,
+    /**
+     * Test seam: pretend the device reports different bar geometry, e.g. to
+     * regression-test keyboard-avoidance offsets (TASK-IMPROVEMENT-002).
+     */
+    __setSafeAreaInsets: patch => {
+      insets = { ...insets, ...patch };
+    },
+    __resetSafeAreaInsets: () => {
+      insets = { ...fallbackInsets };
+    },
   };
 });
 
