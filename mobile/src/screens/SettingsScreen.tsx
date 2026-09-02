@@ -77,7 +77,7 @@ function isRenderableInitial(email: string): boolean {
   return email.length > 0 && /\p{L}|\p{N}/u.test(email[0]);
 }
 
-function createStyles(c: ThemeColors) {
+export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,

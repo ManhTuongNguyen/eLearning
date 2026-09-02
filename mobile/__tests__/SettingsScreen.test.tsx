@@ -19,9 +19,10 @@ import {saveApplicationMode} from '../src/mode/modeStorage';
 import {setRuntimeApplicationMode} from '../src/mode/runtime';
 import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
 import type {SettingsScreenProps} from '../src/navigation/types';
-import {SettingsScreen} from '../src/screens/SettingsScreen';
+import {createStyles, SettingsScreen} from '../src/screens/SettingsScreen';
 import * as serverlessSettings from '../src/serverless/settings';
 import type {OpenRouterClientConfig} from '../src/serverless/types';
+import {lightColors} from '../src/theme/colors';
 import {ThemeProvider} from '../src/theme/ThemeContext';
 
 jest.mock('../src/auth/AuthContext', () => ({
@@ -68,6 +69,14 @@ function settingsProps(): SettingsScreenProps {
     navigation: {navigate: jest.fn(), goBack: jest.fn()},
     route: {key: 'settings-test', name: 'Settings', params: undefined},
   } as unknown as SettingsScreenProps;
+}
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  const entries = Array.isArray(style) ? style : [style];
+  return Object.assign(
+    {},
+    ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})),
+  );
 }
 
 /** Checked state of one of the settings radio controls, read once settled. */
@@ -281,5 +290,29 @@ describe('serverless-mode visibility (TASK-091)', () => {
     fireEvent.press(await screen.findByTestId('settings-openrouter-card'));
 
     expect(props.navigation.navigate).toHaveBeenCalledWith('OpenRouterSettings');
+  });
+});
+
+describe('SettingsScreen scrollbar anchoring (TASK-IMPROVEMENT-001)', () => {
+  // On Android the scroll indicator draws at the ScrollView's own frame
+  // edge (ReactScrollView uses SCROLLBARS_OUTSIDE_OVERLAY), so the screen
+  // gutter must never sit on an ancestor of the ScrollView: it belongs on
+  // the header and the scroll content container so the indicator stays
+  // anchored to the right screen edge.
+  it('keeps horizontal padding off the container and the ScrollView frame', () => {
+    const flatContainer = flattenStyle(createStyles(lightColors).container);
+
+    expect(flatContainer.paddingHorizontal).toBeUndefined();
+    expect(flatContainer.paddingLeft).toBeUndefined();
+    expect(flatContainer.paddingRight).toBeUndefined();
+    expect(flatContainer.padding).toBeUndefined();
+  });
+
+  it('applies the screen gutter to the header and the scroll content container', () => {
+    const styles = createStyles(lightColors);
+
+    expect(styles.header.paddingHorizontal).toBe(24);
+    expect(styles.content.padding).toBe(24);
+    expect(styles.content.paddingBottom).toBe(40);
   });
 });

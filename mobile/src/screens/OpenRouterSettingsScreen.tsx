@@ -68,7 +68,10 @@ export function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingHorizontal: 24,
+      // No horizontal padding here (TASK-IMPROVEMENT-001): padding on the
+      // ScrollView's parent would inset the scrollable's frame and pull its
+      // scroll indicator away from the screen edge. The screen gutter is
+      // applied by the header and by the scroll content container instead.
       // The app shell (App.tsx) pads the whole tree out of the system bars
       // on edge-to-edge devices (Android 15+); screens only add their own
       // fixed header spacing on top of that.
@@ -77,11 +80,13 @@ export function createStyles(c: ThemeColors) {
     scroll: {
       paddingBottom: 32,
       gap: 16,
+      paddingHorizontal: 24,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+      paddingHorizontal: 24,
       marginBottom: 4,
     },
     backText: {
@@ -98,6 +103,9 @@ export function createStyles(c: ThemeColors) {
       width: 48,
     },
     modeNotice: {
+      // Outside the ScrollView, so it carries the screen gutter itself now
+      // that the container no longer applies horizontal padding.
+      marginHorizontal: 24,
       borderWidth: 1,
       borderColor: c.border,
       borderRadius: 12,

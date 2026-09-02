@@ -99,3 +99,25 @@ describe('OpenRouterSettingsScreen layout (TASK-AUDIT-012)', () => {
     );
   });
 });
+
+describe('OpenRouterSettingsScreen scrollbar anchoring (TASK-IMPROVEMENT-001)', () => {
+  // On Android the scroll indicator draws at the ScrollView's own frame
+  // edge (ReactScrollView uses SCROLLBARS_OUTSIDE_OVERLAY), so any
+  // horizontal padding on the ScrollView's parent would pull the
+  // indicator inward. The gutter must live on the header and the scroll
+  // content container instead.
+  it('keeps horizontal padding off the container wrapping the ScrollView', () => {
+    const flat = flattenStyle(createStyles(lightColors).container);
+
+    expect(flat.paddingHorizontal).toBeUndefined();
+    expect(flat.paddingLeft).toBeUndefined();
+    expect(flat.paddingRight).toBeUndefined();
+  });
+
+  it('applies the screen gutter to the header and scroll content container', () => {
+    const styles = createStyles(lightColors);
+
+    expect(styles.header.paddingHorizontal).toBe(24);
+    expect(styles.scroll.paddingHorizontal).toBe(24);
+  });
+});

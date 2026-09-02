@@ -138,7 +138,7 @@ Never:
 
 ## TASK-IMPROVEMENT-001 — Fix Settings Scrollbar Position
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
