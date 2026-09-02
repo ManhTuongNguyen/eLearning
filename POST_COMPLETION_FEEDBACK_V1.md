@@ -407,7 +407,7 @@ Do not:
 
 ## TASK-IMPROVEMENT-004 — Improve Primary and Fallback Model Configuration UI
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

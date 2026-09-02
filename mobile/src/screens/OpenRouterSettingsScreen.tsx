@@ -20,6 +20,12 @@
  * exclusively through the explicit Refresh control; snapshots older than
  * the staleness window are labelled but remain usable offline.
  *
+ * TASK-IMPROVEMENT-004: the models card opens with a short in-screen guide
+ * explaining the primary-vs-fallback relationship, the selected primary
+ * row is highlighted and badged as the main/default model, and the
+ * fallback chain states its order semantics, so the configuration is
+ * understandable without external documentation.
+ *
  * The top spacing is a fixed constant (the app shell in App.tsx already
  * pads the whole tree out of the system status bar), replacing the
  * fixed oversized padding, so the header sits at the same spacing as the
@@ -208,6 +214,39 @@ export function createStyles(c: ThemeColors) {
       color: c.textMuted,
       lineHeight: 18,
     },
+    // TASK-IMPROVEMENT-004: concise in-screen guide for the primary vs
+    // fallback model relationship.
+    guide: {
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      backgroundColor: c.background,
+      padding: 12,
+      gap: 8,
+    },
+    guideIntro: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.textSecondary,
+    },
+    guideHeading: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    guideHeadingAccent: {
+      color: c.accent,
+    },
+    guideBody: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.textSecondary,
+    },
+    guideTip: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: c.textMuted,
+    },
     catalogMeta: {
       fontSize: 12,
       color: c.textMuted,
@@ -241,6 +280,11 @@ export function createStyles(c: ThemeColors) {
       borderTopWidth: 1,
       borderTopColor: c.border,
     },
+    // TASK-IMPROVEMENT-004: the selected primary row carries an accent wash
+    // so the main/default model stands out from fallback candidates.
+    modelRowSelected: {
+      backgroundColor: c.accentSoft,
+    },
     primaryButton: {
       flex: 1,
       flexDirection: 'row',
@@ -264,12 +308,34 @@ export function createStyles(c: ThemeColors) {
       flex: 1,
       gap: 1,
     },
+    nameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
     modelName: {
       fontSize: 14,
       fontWeight: '500',
       color: c.textPrimary,
+      // Long names truncate instead of pushing the primary badge away.
+      flexShrink: 1,
     },
     modelNameSelected: {
+      color: c.accent,
+    },
+    primaryBadge: {
+      borderWidth: 1,
+      borderColor: c.accent,
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      backgroundColor: c.surface,
+    },
+    primaryBadgeText: {
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
       color: c.accent,
     },
     modelId: {
@@ -302,10 +368,24 @@ export function createStyles(c: ThemeColors) {
     chainList: {
       gap: 8,
     },
+    chainListBordered: {
+      // TASK-IMPROVEMENT-004: the ordered chain is visually separated from
+      // the discovery list so it reads as a summary of secondary models.
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      padding: 10,
+      backgroundColor: c.background,
+    },
     chainHeader: {
       fontSize: 13,
       fontWeight: '600',
       color: c.textSecondary,
+    },
+    chainIntro: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: c.textMuted,
     },
     chainRow: {
       flexDirection: 'row',
@@ -830,6 +910,32 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
             )
           ) : (
             <>
+              <View style={styles.guide} testID="openrouter-model-guide">
+                <Text style={styles.guideIntro}>
+                  Models are used in order: the primary model first, then each
+                  fallback until one answers.
+                </Text>
+                <View>
+                  <Text style={[styles.guideHeading, styles.guideHeadingAccent]}>
+                    Primary model
+                  </Text>
+                  <Text style={styles.guideBody}>
+                    The model you want to use first — your default for
+                    conversations.
+                  </Text>
+                </View>
+                <View>
+                  <Text style={styles.guideHeading}>Fallback models</Text>
+                  <Text style={styles.guideBody}>
+                    Alternative models used when the primary model fails or
+                    cannot complete the request.
+                  </Text>
+                </View>
+                <Text style={styles.guideTip}>
+                  Tip: choose a reliable model as your primary model, then add
+                  other compatible models as fallbacks.
+                </Text>
+              </View>
               {modelsUpdatedAt ? (
                 <Text
                   style={styles.catalogMeta}
@@ -860,7 +966,9 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                     const isFallback =
                       !isPrimary && fallbackModels.includes(model.id);
                     return (
-                      <View key={model.id} style={styles.modelRow}>
+                      <View
+                        key={model.id}
+                        style={[styles.modelRow, isPrimary && styles.modelRowSelected]}>
                         <Pressable
                           accessibilityRole="radio"
                           accessibilityState={{checked: isPrimary}}
@@ -877,14 +985,23 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                             ]}
                           />
                           <View style={styles.modelTexts}>
-                            <Text
-                              numberOfLines={1}
-                              style={[
-                                styles.modelName,
-                                isPrimary && styles.modelNameSelected,
-                              ]}>
-                              {modelLabel(model)}
-                            </Text>
+                            <View style={styles.nameRow}>
+                              <Text
+                                numberOfLines={1}
+                                style={[
+                                  styles.modelName,
+                                  isPrimary && styles.modelNameSelected,
+                                ]}>
+                                {modelLabel(model)}
+                              </Text>
+                              {isPrimary ? (
+                                <View
+                                  style={styles.primaryBadge}
+                                  testID={`openrouter-model-primary-badge-${model.id}`}>
+                                  <Text style={styles.primaryBadgeText}>Primary</Text>
+                                </View>
+                              ) : null}
+                            </View>
                             <Text numberOfLines={1} style={styles.modelId}>
                               {model.id}
                             </Text>
@@ -932,8 +1049,14 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
           )}
 
           {fallbackModels.length > 0 ? (
-            <View style={styles.chainList} testID="openrouter-fallback-chain">
+            <View
+              style={[styles.chainList, styles.chainListBordered]}
+              testID="openrouter-fallback-chain">
               <Text style={styles.chainHeader}>Fallback order</Text>
+              <Text style={styles.chainIntro} testID="openrouter-fallback-order-note">
+                These models are tried one after another, in this order, when
+                the primary model cannot complete the request.
+              </Text>
               {fallbackModels.map((id, index) => (
                 <Pressable
                   key={id}

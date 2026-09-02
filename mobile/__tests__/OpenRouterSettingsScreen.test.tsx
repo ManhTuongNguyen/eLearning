@@ -25,11 +25,12 @@ import {saveApplicationMode} from '../src/mode/modeStorage';
 import {setRuntimeApplicationMode} from '../src/mode/runtime';
 import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
 import type {OpenRouterSettingsScreenProps} from '../src/navigation/types';
-import {OpenRouterSettingsScreen} from '../src/screens/OpenRouterSettingsScreen';
+import {createStyles, OpenRouterSettingsScreen} from '../src/screens/OpenRouterSettingsScreen';
 import * as modelCatalog from '../src/serverless/modelCatalog';
 import * as providerRegistry from '../src/serverless/providerRegistry';
 import * as serverlessSettings from '../src/serverless/settings';
-import type {ModelInfo} from '../src/serverless/types';import {ThemeProvider} from '../src/theme/ThemeContext';
+import type {ModelInfo} from '../src/serverless/types';import {lightColors} from '../src/theme/colors';
+import {ThemeProvider} from '../src/theme/ThemeContext';
 
 jest.mock('../src/db/database');
 jest.mock('../src/serverless/settings');
@@ -91,6 +92,11 @@ function catalogSnapshot(models = CATALOG, fetchedAt = '2026-08-27T00:00:00.000Z
 function checkedStateOf(testID: string): boolean | undefined {
   const state = screen.getByTestId(testID).props.accessibilityState;
   return state ? state.checked : undefined;
+}
+
+/** Screen style factory bound to the light palette for style assertions. */
+function createScreenStyles() {
+  return createStyles(lightColors);
 }
 
 async function renderScreen(): Promise<OpenRouterSettingsScreenProps> {
@@ -714,5 +720,91 @@ describe('long-press model tooltip', () => {
 
     await user.press(tooltip);
     expect(screen.queryByTestId('openrouter-model-tooltip')).toBeNull();
+  });
+});
+
+// TASK-IMPROVEMENT-004: the primary/fallback relationship must be
+// understandable on the screen itself — a concise guide, a highlighted and
+// badged primary row and an ordered chain with its semantics stated —
+// without external documentation.
+describe('primary/fallback configuration guide (TASK-IMPROVEMENT-004)', () => {
+  it('shows the concise primary-vs-fallback guide inside the models card', async () => {
+    mockedGetCached.mockResolvedValue(catalogSnapshot());
+
+    await renderSettledScreen();
+
+    const guide = await screen.findByTestId('openrouter-model-guide');
+    expect(guide).toBeOnTheScreen();
+    expect(
+      within(guide).getByText(/model you want to use first/i),
+    ).toBeOnTheScreen();
+    expect(
+      within(guide).getByText(/default for conversations/i),
+    ).toBeOnTheScreen();
+    expect(
+      within(guide).getByText(/alternative models used when the primary model fails/i),
+    ).toBeOnTheScreen();
+    expect(
+      within(guide).getByText(/choose a reliable model as your primary model/i),
+    ).toBeOnTheScreen();
+  });
+
+  it('does not render the guide before a catalog exists', async () => {
+    await renderSettledScreen();
+
+    expect(await screen.findByTestId('openrouter-models-empty')).toBeOnTheScreen();
+    expect(screen.queryByTestId('openrouter-model-guide')).toBeNull();
+  });
+
+  it('highlights the selected primary row with a Primary badge', async () => {
+    mockedLoadProviderState.mockResolvedValue({
+      apiKey: STORED_KEY,
+      primaryModel: 'vendor/model-a',
+      fallbackModels: [],
+    });
+    mockedGetCached.mockResolvedValue(catalogSnapshot());
+
+    await renderSettledScreen();
+
+    const row = await screen.findByTestId('openrouter-model-primary-vendor/model-a');
+    expect(row.props.accessibilityState).toMatchObject({checked: true});
+    expect(
+      screen.getByTestId('openrouter-model-primary-badge-vendor/model-a'),
+    ).toBeOnTheScreen();
+
+    // Switching the primary moves the highlight and badge to the new row.
+    await user.press(screen.getByTestId('openrouter-model-primary-vendor/model-b'));
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('openrouter-model-primary-badge-vendor/model-b'),
+      ).toBeOnTheScreen(),
+    );
+    expect(
+      screen.queryByTestId('openrouter-model-primary-badge-vendor/model-a'),
+    ).toBeNull();
+  });
+
+  it('styles the selected primary row with the accent wash and unselected rows without it', () => {
+    const styles = createScreenStyles();
+
+    expect(styles.modelRowSelected.backgroundColor).toBe(lightColors.accentSoft);
+    expect('backgroundColor' in styles.modelRow).toBe(false);
+  });
+
+  it('explains that fallbacks are attempted in the displayed order', async () => {
+    mockedLoadProviderState.mockResolvedValue({
+      apiKey: STORED_KEY,
+      primaryModel: 'vendor/model-a',
+      fallbackModels: ['vendor/model-b', 'vendor/claude-x'],
+    });
+    mockedGetCached.mockResolvedValue(catalogSnapshot());
+
+    await renderSettledScreen();
+
+    expect(
+      await screen.findByTestId('openrouter-fallback-order-note'),
+    ).toHaveTextContent(/one after another, in this order/i);
+    expect(screen.getByTestId('openrouter-fallback-chip-0')).toBeOnTheScreen();
+    expect(screen.getByTestId('openrouter-fallback-chip-1')).toBeOnTheScreen();
   });
 });
