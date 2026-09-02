@@ -10,8 +10,8 @@ export const APPLICATION_MODES = ['server', 'serverless'] as const;
 
 export type ApplicationMode = (typeof APPLICATION_MODES)[number];
 
-/** Fresh installs start in the authenticated server mode. */
-export const DEFAULT_APPLICATION_MODE: ApplicationMode = 'server';
+/** Fresh installs start in the on-device serverless mode. */
+export const DEFAULT_APPLICATION_MODE: ApplicationMode = 'serverless';
 
 /**
  * Deterministically validate an untrusted value (persisted storage, deep

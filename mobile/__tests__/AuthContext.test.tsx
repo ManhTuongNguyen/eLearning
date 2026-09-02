@@ -6,6 +6,7 @@ import {AuthProvider, useAuth} from '../src/auth/AuthContext';
 import * as authApi from '../src/api/auth';
 import {ApiError} from '../src/api/client';
 import * as secureStorage from '../src/auth/secureStorage';
+import {setRuntimeApplicationMode} from '../src/mode/runtime';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/auth/secureStorage');
@@ -79,6 +80,9 @@ function renderAuth() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Auth restore hits server APIs: pin the runtime holder because fresh
+  // installs now default to serverless.
+  setRuntimeApplicationMode('server');
   mockedStorage.loadTokens.mockResolvedValue(null);
 });
 

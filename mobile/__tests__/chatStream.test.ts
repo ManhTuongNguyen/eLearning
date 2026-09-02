@@ -12,6 +12,7 @@ import {
   streamRetryTurn,
 } from '../src/api/chatStream';
 import {API_BASE_URL} from '../src/config';
+import {setRuntimeApplicationMode} from '../src/mode/runtime';
 
 type Listener = (() => void) | null;
 
@@ -120,6 +121,9 @@ function sse(event: string, data: object): string {
 const realXHR = globalThis.XMLHttpRequest;
 
 beforeEach(() => {
+  // SSE transport tests: pin the runtime holder because fresh installs now
+  // default to serverless.
+  setRuntimeApplicationMode('server');
   globalThis.XMLHttpRequest = FakeXHR as unknown as typeof XMLHttpRequest;
   FakeXHR.sent = [];
 });

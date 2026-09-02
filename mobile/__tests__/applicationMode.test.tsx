@@ -54,14 +54,14 @@ function resetStorage() {
 }
 
 describe('application mode types', () => {
-  it('exposes exactly the two documented modes with server as default', () => {
+  it('exposes exactly the two documented modes with serverless as default', () => {
     expect(parseApplicationMode('server')).toBe('server');
     expect(parseApplicationMode('serverless')).toBe('serverless');
     expect(parseApplicationMode('offline')).toBeNull();
     expect(parseApplicationMode(null)).toBeNull();
     expect(parseApplicationMode(undefined)).toBeNull();
     expect(parseApplicationMode(42)).toBeNull();
-    expect(DEFAULT_APPLICATION_MODE).toBe('server');
+    expect(DEFAULT_APPLICATION_MODE).toBe('serverless');
   });
 });
 
@@ -82,17 +82,17 @@ describe('modeStorage', () => {
   });
 
   it('falls back to the default when nothing was persisted', async () => {
-    await expect(loadApplicationMode()).resolves.toBe('server');
+    await expect(loadApplicationMode()).resolves.toBe('serverless');
   });
 
   it('falls back to the default for corrupted persisted values', async () => {
     await asyncStorage.setItem('app.applicationMode', 'offline-mode');
-    await expect(loadApplicationMode()).resolves.toBe('server');
+    await expect(loadApplicationMode()).resolves.toBe('serverless');
   });
 
   it('falls back to the default when reads fail', async () => {
     (asyncStorage.getItem as jest.Mock).mockRejectedValueOnce(new Error('disk error'));
-    await expect(loadApplicationMode()).resolves.toBe('server');
+    await expect(loadApplicationMode()).resolves.toBe('serverless');
   });
 
   it('keeps the persisted mode readable after an app restart', async () => {
@@ -120,7 +120,7 @@ describe('modeStorage', () => {
     });
     const storage = revivedStorage as typeof import('../src/mode/modeStorage');
 
-    await expect(storage.loadApplicationMode()).resolves.toBe('server');
+    await expect(storage.loadApplicationMode()).resolves.toBe('serverless');
   });
 });
 
@@ -164,8 +164,8 @@ describe('ModeProvider', () => {
     await render(<Harness />);
 
     await waitFor(() => expect(screen.getByTestId('probe-status').props.children).toBe('ready'));
-    expect(screen.getByTestId('probe-mode').props.children).toBe('server');
-    expect(getRuntimeApplicationMode()).toBe('server');
+    expect(screen.getByTestId('probe-mode').props.children).toBe('serverless');
+    expect(getRuntimeApplicationMode()).toBe('serverless');
   });
 
   it('restores a persisted serverless selection at startup', async () => {
@@ -305,8 +305,8 @@ describe('Settings application-mode switcher (TASK-090)', () => {
 
     // Restore settles asynchronously; wait for the checked state to reflect
     // the persisted default before asserting.
-    await waitFor(() => expect(checkedStateOf('settings-mode-server')).toBe(true));
-    expect(checkedStateOf('settings-mode-serverless')).toBe(false);
+    await waitFor(() => expect(checkedStateOf('settings-mode-serverless')).toBe(true));
+    expect(checkedStateOf('settings-mode-server')).toBe(false);
   });
 
   it('restores a persisted serverless selection with its radio checked', async () => {
@@ -317,23 +317,23 @@ describe('Settings application-mode switcher (TASK-090)', () => {
     expect(checkedStateOf('settings-mode-server')).toBe(false);
   });
 
-  it('switching to serverless flips the radios, persists, and moves the runtime gate', async () => {
+  it('switching to server flips the radios, persists, and moves the runtime gate', async () => {
     await renderSettings();
-    await waitFor(() => expect(checkedStateOf('settings-mode-server')).toBe(true));
-
-    await fireEvent.press(screen.getByTestId('settings-mode-serverless'));
-
     await waitFor(() => expect(checkedStateOf('settings-mode-serverless')).toBe(true));
-    expect(checkedStateOf('settings-mode-server')).toBe(false);
-    expect(getRuntimeApplicationMode()).toBe('serverless');
-    await expect(loadApplicationMode()).resolves.toBe('serverless');
 
-    // Switching back restores server data access and persistence.
     await fireEvent.press(screen.getByTestId('settings-mode-server'));
 
-    await waitFor(() => expect(getRuntimeApplicationMode()).toBe('server'));
-    expect(checkedStateOf('settings-mode-server')).toBe(true);
+    await waitFor(() => expect(checkedStateOf('settings-mode-server')).toBe(true));
     expect(checkedStateOf('settings-mode-serverless')).toBe(false);
+    expect(getRuntimeApplicationMode()).toBe('server');
     await expect(loadApplicationMode()).resolves.toBe('server');
+
+    // Switching back restores serverless data access and persistence.
+    await fireEvent.press(screen.getByTestId('settings-mode-serverless'));
+
+    await waitFor(() => expect(getRuntimeApplicationMode()).toBe('serverless'));
+    expect(checkedStateOf('settings-mode-serverless')).toBe(true);
+    expect(checkedStateOf('settings-mode-server')).toBe(false);
+    await expect(loadApplicationMode()).resolves.toBe('serverless');
   });
 });

@@ -131,8 +131,11 @@ async function renderScreen() {
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  // Server-flow journeys: pin the persisted mode because fresh installs
+  // now default to serverless.
+  await saveApplicationMode('server');
   mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
   mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
   mockedSessions.listMessages.mockResolvedValue(emptyMessagesPage());

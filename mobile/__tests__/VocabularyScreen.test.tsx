@@ -110,9 +110,12 @@ async function renderVocabulary(options?: {withChatUnderneath?: boolean}) {
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   asyncStorage.__resetAsyncStorageStore();
   jest.clearAllMocks();
+  // Server-flow journeys: pin the persisted mode because fresh installs
+  // now default to serverless.
+  await saveApplicationMode('server');
   mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
   mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
   // The Chat underneath checks the authoritative history on the no-session

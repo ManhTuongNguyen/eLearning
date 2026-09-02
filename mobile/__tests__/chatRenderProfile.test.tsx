@@ -34,6 +34,7 @@ import {AuthProvider} from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
 import {ModeProvider} from '../src/mode/ModeContext';
+import {saveApplicationMode} from '../src/mode/modeStorage';
 import {ChatScreen} from '../src/screens/ChatScreen';
 import {
   CHAT_LIST_INITIAL_NUM_TO_RENDER,
@@ -179,8 +180,11 @@ function renderCountOf(rowId: string | number): number {
   return mockRenderCounts.get(String(rowId)) ?? 0;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  // Server-flow journeys: pin the persisted mode because fresh installs
+  // now default to serverless.
+  await saveApplicationMode('server');
   mockRenderCounts.clear();
   mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
   mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});

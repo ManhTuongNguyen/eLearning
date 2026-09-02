@@ -74,8 +74,12 @@ async function renderAuthenticated(tokens?: AuthTokens) {
   return renderRoot();
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  asyncStorage.__resetAsyncStorageStore();
+  // Default-flow tests assert the server auth gate; pin the persisted mode
+  // because fresh installs now default to serverless.
+  await saveApplicationMode('server');
   mockedStorage.loadTokens.mockResolvedValue(null);
   // The no-session landing route checks the authoritative history before it
   // may claim the empty state (TASK-AUDIT-008); default to an empty one.
@@ -91,7 +95,6 @@ beforeEach(() => {
     previous: null,
     results: [],
   });
-  asyncStorage.__resetAsyncStorageStore();
 });
 
 describe('root switch', () => {

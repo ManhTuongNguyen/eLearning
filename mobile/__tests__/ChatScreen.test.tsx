@@ -58,6 +58,7 @@ import type {
 import * as vocabularyApi from '../src/api/vocabulary';
 import {AuthProvider} from '../src/auth/AuthContext';
 import {ModeProvider} from '../src/mode/ModeContext';
+import {saveApplicationMode} from '../src/mode/modeStorage';
 import * as secureStorage from '../src/auth/secureStorage';
 import type {MainStackParamList} from '../src/navigation/types';
 import {ChatScreen, VOCAB_TOAST_DURATION_MS} from '../src/screens/ChatScreen';
@@ -196,8 +197,11 @@ function messageTestIds(): string[] {
     .map(element => element.props.testID as string);
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  // Server-flow journeys: pin the persisted mode because fresh installs
+  // now default to serverless.
+  await saveApplicationMode('server');
   mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
   mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
   // The no-session landing route checks the authoritative history before it

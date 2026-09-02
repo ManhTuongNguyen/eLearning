@@ -11,6 +11,13 @@ import {
 import {apiRequest} from '../src/api/client';
 import {API_BASE_URL} from '../src/config';
 import type {AuthedRequester} from '../src/auth/authedRequest';
+import {setRuntimeApplicationMode} from '../src/mode/runtime';
+
+// Server-transport tests: pin the runtime holder because fresh installs now
+// default to serverless.
+beforeEach(() => {
+  setRuntimeApplicationMode('server');
+});
 
 /** Fixed-token requester standing in for the provider-built authed requester. */
 const requester: AuthedRequester = (path, options) => apiRequest(path, {...options, token: 'tok'});

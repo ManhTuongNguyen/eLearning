@@ -33,6 +33,7 @@ import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
 import * as vocabularyApi from '../src/api/vocabulary';
 import type {VocabularyItem} from '../src/api/vocabulary';
 import * as Keychain from 'react-native-keychain';
+import {saveApplicationMode} from '../src/mode/modeStorage';
 import {VOCAB_TOAST_DURATION_MS} from '../src/screens/ChatScreen';
 import * as ankiShare from '../src/utils/ankiShare';
 
@@ -158,9 +159,12 @@ async function captureWordFromMessage(): Promise<void> {
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   mockedKeychain.__resetKeychainStore();
   jest.clearAllMocks();
+  // Server-flow journeys: pin the persisted mode because fresh installs
+  // now default to serverless.
+  await saveApplicationMode('server');
 });
 
 describe('TASK-112 vocabulary journey', () => {

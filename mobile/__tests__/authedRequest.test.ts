@@ -9,6 +9,7 @@ import {createAuthedRequester} from '../src/auth/authedRequest';
 import type {AuthedRequester, AuthedRequestOptions} from '../src/auth/authedRequest';
 import {ApiError} from '../src/api/client';
 import * as client from '../src/api/client';
+import {setRuntimeApplicationMode} from '../src/mode/runtime';
 import type {AuthTokens} from '../src/auth/tokens';
 
 jest.mock('../src/api/client', () => ({
@@ -69,6 +70,9 @@ function makeHarness(initialTokens: AuthTokens | null = TOKENS) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Server-transport tests: pin the runtime holder because fresh installs
+  // now default to serverless.
+  setRuntimeApplicationMode('server');
 });
 
 describe('authedRequest wrapper (TASK-AUDIT-005)', () => {

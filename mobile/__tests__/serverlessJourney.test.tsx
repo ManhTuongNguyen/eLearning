@@ -241,10 +241,13 @@ async function startConversationWithReply(fake: FakeOpenRouterClient): Promise<v
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   mockedKeychain.__resetKeychainStore();
   mockedNativeDriver.__resetLocalDriver();
   resetLocalDatabase();
+  // Server-flow journeys: pin the persisted mode because fresh installs
+  // now default to serverless.
+  await saveApplicationMode('server');
   setRuntimeApplicationMode('server');
   jest.clearAllMocks();
   mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});

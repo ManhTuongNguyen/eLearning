@@ -44,6 +44,7 @@ import {API_BASE_URL, resolveApiBaseUrl} from '../src/config';
 import {resetLocalDatabase} from '../src/db/database';
 import * as nativeDriver from '../src/db/nativeDriver';
 import {getRuntimeApplicationMode, setRuntimeApplicationMode} from '../src/mode/runtime';
+import {saveApplicationMode} from '../src/mode/modeStorage';
 import {
   createProviderClient,
   listProviderModels,
@@ -213,11 +214,14 @@ async function selectRange(start: number, end: number): Promise<void> {
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   mockedKeychain.__resetKeychainStore();
   asyncStorage.__resetAsyncStorageStore();
   mockedNativeDriver.__resetLocalDriver();
   resetLocalDatabase();
+  // Server-flow journeys: pin the persisted mode because fresh installs
+  // now default to serverless.
+  await saveApplicationMode('server');
   setRuntimeApplicationMode('server');
   jest.clearAllMocks();
   mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});

@@ -4,6 +4,13 @@ import {
   backendRequestHeaders,
   DEFAULT_REQUEST_TIMEOUT_MS,
 } from '../src/api/client';
+import {setRuntimeApplicationMode} from '../src/mode/runtime';
+
+// These tests exercise the server transport; pin the runtime holder because
+// fresh installs now default to serverless.
+beforeEach(() => {
+  setRuntimeApplicationMode('server');
+});
 
 function jsonResponse(status: number, body: unknown): Response {
   return {

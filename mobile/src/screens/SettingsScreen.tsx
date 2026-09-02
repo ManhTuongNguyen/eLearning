@@ -385,7 +385,7 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
   // Two independent "mode" concepts live side by side here: the visual theme
   // and the SERVER/SERVERLESS application mode (TASK-080) — aliased apart.
   const {mode: themeMode, setMode: setThemeMode, colors} = useTheme();
-  const {mode: appMode, setMode: setApplicationMode} = useApplicationMode();
+  const {mode: appMode, status: modeStatus, setMode: setApplicationMode} = useApplicationMode();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   /** Configuration state for the serverless OpenRouter card. */
@@ -462,8 +462,10 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
   // Reload when the mode flips to serverless and, on real navigators, every
   // time the screen regains focus — returning from the OpenRouter editor
   // must refresh the card. Bare navigation stubs (tests) skip the listener.
+  // The readiness gate keeps the provisional default mode (while the
+  // persisted mode is still restoring) from firing a spurious query.
   useEffect(() => {
-    if (appMode !== 'serverless') {
+    if (modeStatus !== 'ready' || appMode !== 'serverless') {
       return;
     }
     loadOpenRouterStatus();
@@ -471,7 +473,7 @@ export function SettingsScreen({navigation}: SettingsScreenProps) {
     return () => {
       unsubscribe?.();
     };
-  }, [appMode, navigation, loadOpenRouterStatus]);
+  }, [modeStatus, appMode, navigation, loadOpenRouterStatus]);
 
   /** Server-feature rows: hidden entirely while serverless is active. */
   const serverRows: SettingsRow[] = useMemo(() => {

@@ -21,6 +21,7 @@ import type {Session} from '../src/api/sessions';
 import * as sessionsApi from '../src/api/sessions';
 import * as profileApi from '../src/api/profile';
 import * as Keychain from 'react-native-keychain';
+import {saveApplicationMode} from '../src/mode/modeStorage';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -95,9 +96,12 @@ function sessionPage(results: Session[]): sessionsApi.Paginated<Session> {
   return {count: results.length, next: null, previous: null, results};
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   mockedKeychain.__resetKeychainStore();
   jest.clearAllMocks();
+  // Server-flow journeys: pin the persisted mode because fresh installs
+  // now default to serverless.
+  await saveApplicationMode('server');
   mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
   // The no-session landing route checks the authoritative history before it
   // may claim the empty state (TASK-AUDIT-008); default to an empty one.

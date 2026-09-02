@@ -6,6 +6,7 @@ import * as authApi from '../src/api/auth';
 import * as profileApi from '../src/api/profile';
 import * as sessionsApi from '../src/api/sessions';
 import * as secureStorage from '../src/auth/secureStorage';
+import {saveApplicationMode} from '../src/mode/modeStorage';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -35,6 +36,12 @@ beforeEach(() => {
 });
 
 describe('App authentication flow', () => {
+  beforeEach(async () => {
+    // These are server-flow journeys; pin the persisted mode to 'server'
+    // because fresh installs now default to serverless.
+    await saveApplicationMode('server');
+  });
+
   it('shows the login screen for unauthenticated users', async () => {
     await render(<App />);
 
