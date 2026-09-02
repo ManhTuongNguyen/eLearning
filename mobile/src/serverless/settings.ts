@@ -25,7 +25,7 @@ import {
   saveServerlessApiKey,
 } from './secureApiKey';
 import {clearServerlessLocalData} from '../db/clearLocalData';
-import {resolveProviderId} from './providerRegistry';
+import {isProviderId, resolveProviderId} from './providerRegistry';
 import type {LLMClientConfig, ProviderId} from './types';
 
 const SETTING_PROVIDER = 'serverless_provider';
@@ -119,7 +119,14 @@ export async function loadServerlessProviderState(
 /** Save the serverless provider configuration. */
 export async function saveServerlessOpenRouterConfig(config: LLMClientConfig): Promise<void> {
   const db = await getLocalDatabase();
-  const provider = resolveProviderId(config.provider ?? 'openrouter');
+  // Writes are editor-driven and must only ever contain supported ids:
+  // reject invalid values instead of silently rewriting them to the
+  // default (reads degrade gracefully; writes stay strict).
+  const requested = config.provider ?? 'openrouter';
+  if (!isProviderId(String(requested).trim().toLowerCase())) {
+    throw new Error(`Unknown serverless provider: ${requested}`);
+  }
+  const provider = resolveProviderId(requested);
 
   // Persist the secret into the keychain (TASK-093) and the non-secret
   // identifiers into the local settings table (TASK-092).

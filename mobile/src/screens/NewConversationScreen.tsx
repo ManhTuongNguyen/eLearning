@@ -150,7 +150,7 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
         if (mode === 'serverless') {
           // TASK-085: topic generation runs directly against the user's
           // configured provider (registry-selected: OpenRouter, Gemini,
-          // OpenAI, 9Router) with their own key; nothing touches the
+          // OpenAI) with their own key; nothing touches the
           // backend (Rule 9).
           const config = await loadServerlessOpenRouterConfig();
           if (!config) {

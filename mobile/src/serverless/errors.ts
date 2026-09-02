@@ -5,7 +5,7 @@
  * Mirrors the backend hierarchy in llm/exceptions.py so error handling is
  * uniform across modes AND providers. Every transport-, HTTP-, or
  * payload-level failure is translated into one of these classes before it
- * escapes the client (any provider: OpenRouter, Gemini, OpenAI, 9Router);
+ * escapes the client (any provider: OpenRouter, Gemini, OpenAI);
  * `retryable` marks failures where another attempt (or the next fallback
  * model) may succeed. Messages never contain the API key.
  *

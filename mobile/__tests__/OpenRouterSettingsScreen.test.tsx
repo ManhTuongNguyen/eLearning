@@ -412,7 +412,7 @@ describe('provider switching (TASK-AUDIT-013)', () => {
   it('renders every registry-supported provider as a selectable chip', async () => {
     await renderSettledScreen();
 
-    for (const id of ['openrouter', 'gemini', 'openai', 'ninerouter']) {
+    for (const id of ['openrouter', 'gemini', 'openai']) {
       expect(screen.getByTestId(`provider-chip-${id}`)).toBeOnTheScreen();
     }
     expect(
@@ -558,11 +558,12 @@ describe('model catalog caching (TASK-AUDIT-017)', () => {
     await user.type(screen.getByTestId('openrouter-model-filter'), 'claude');
 
     // Switching providers only reads the other namespace's local cache.
-    // 9Router is used because its discovery is keyless, so the trailing
-    // refresh below reaches the cache layer instead of a key guard.
-    await user.press(screen.getByTestId('provider-chip-ninerouter'));
+    // OpenAI is used because its discovery requires a key: the refresh
+    // below proves the explicit control is the single network path (the
+    // key guard is satisfied by typing the key first).
+    await user.press(screen.getByTestId('provider-chip-openai'));
     await waitFor(() =>
-      expect(mockedLoadProviderState).toHaveBeenLastCalledWith('ninerouter'),
+      expect(mockedLoadProviderState).toHaveBeenLastCalledWith('openai'),
     );
 
     expect(mockedRefresh).not.toHaveBeenCalled();
@@ -574,11 +575,12 @@ describe('model catalog caching (TASK-AUDIT-017)', () => {
       models: await fetchModels(),
       fetchedAt: '2026-08-27T01:00:00.000Z',
     }));
+    await user.type(screen.getByTestId('openrouter-api-key-input'), 'sk-openai-key');
     await user.press(screen.getByTestId('openrouter-models-refresh'));
 
     await waitFor(() => expect(mockedRefresh).toHaveBeenCalledTimes(1));
     expect(mockedListProviderModels).toHaveBeenCalledTimes(1);
-    expect(mockedListProviderModels).toHaveBeenCalledWith('ninerouter', {apiKey: undefined});
+    expect(mockedListProviderModels).toHaveBeenCalledWith('openai', {apiKey: 'sk-openai-key'});
   });
 
   it('shows a distinct loading state until the cached catalog has loaded', async () => {

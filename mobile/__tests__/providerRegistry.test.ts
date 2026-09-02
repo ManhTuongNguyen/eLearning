@@ -1,7 +1,8 @@
 /**
  * Serverless provider registry tests (TASK-AUDIT-013). Covers provider id
  * resolution (blank → openrouter, case-insensitive matching, unknown ids
- * rejected), registry completeness for every supported provider, client
+ * degrade to the default so stale persisted settings never crash
+ * startup), registry completeness for every supported provider, client
  * factory dispatch with per-provider validation, and model catalog
  * dispatch — including the keyless contract for public catalogs
  * (TASK-AUDIT-004: no Authorization header is ever sent) and
@@ -9,7 +10,6 @@
  */
 import {DEFAULT_GEMINI_BASE_URL} from '../src/serverless/geminiClient';
 import {DEFAULT_OPENAI_BASE_URL} from '../src/serverless/openAIClient';
-import {DEFAULT_NINE_ROUTER_BASE_URL} from '../src/serverless/nineRouterClient';
 import {
   createProviderClient,
   listProviderModels,
@@ -74,18 +74,20 @@ describe('provider id resolution', () => {
   test('values are matched case-insensitively and trimmed', () => {
     expect(resolveProviderId('Gemini')).toBe('gemini');
     expect(resolveProviderId('  OpenAI ')).toBe('openai');
-    expect(resolveProviderId('NINEROUTER')).toBe('ninerouter');
   });
 
-  test('unknown provider ids are programmer errors', () => {
-    expect(() => resolveProviderId('anthropic')).toThrow(/Unknown serverless provider/);
-    expect(() => resolveProviderId('openrouter ')).not.toThrow();
+  test('unrecognized values degrade to the default instead of crashing startup', () => {
+    // A provider removed from the registry in an app update (e.g.
+    // 'ninerouter' persisted by an older build) must resolve to the
+    // historic default, never throw.
+    expect(resolveProviderId('ninerouter')).toBe('openrouter');
+    expect(resolveProviderId('anthropic')).toBe('openrouter');
   });
 });
 
 describe('registry descriptors', () => {
   test('every supported provider id has a complete descriptor', () => {
-    expect(SUPPORTED_PROVIDER_IDS).toEqual(['openrouter', 'gemini', 'openai', 'ninerouter']);
+    expect(SUPPORTED_PROVIDER_IDS).toEqual(['openrouter', 'gemini', 'openai']);
     for (const id of SUPPORTED_PROVIDER_IDS) {
       const descriptor = PROVIDER_DESCRIPTORS[id];
       expect(descriptor.id).toBe(id);
@@ -101,12 +103,10 @@ describe('registry descriptors', () => {
     expect(PROVIDER_DESCRIPTORS.openrouter.defaultBaseUrl).toBe(DEFAULT_BASE_URL);
     expect(PROVIDER_DESCRIPTORS.gemini.defaultBaseUrl).toBe(DEFAULT_GEMINI_BASE_URL);
     expect(PROVIDER_DESCRIPTORS.openai.defaultBaseUrl).toBe(DEFAULT_OPENAI_BASE_URL);
-    expect(PROVIDER_DESCRIPTORS.ninerouter.defaultBaseUrl).toBe(DEFAULT_NINE_ROUTER_BASE_URL);
   });
 
   test('only authenticated-catalog providers declare key-gated discovery', () => {
     expect(PROVIDER_DESCRIPTORS.openrouter.modelDiscoveryRequiresAuth).toBe(false);
-    expect(PROVIDER_DESCRIPTORS.ninerouter.modelDiscoveryRequiresAuth).toBe(false);
     expect(PROVIDER_DESCRIPTORS.gemini.modelDiscoveryRequiresAuth).toBe(true);
     expect(PROVIDER_DESCRIPTORS.openai.modelDiscoveryRequiresAuth).toBe(true);
   });
@@ -137,9 +137,6 @@ describe('createProviderClient dispatch', () => {
     expect(() => createProviderClient(config('openai', ''))).toThrow(
       /OpenAI API key is required/,
     );
-    expect(() => createProviderClient(config('ninerouter', ''))).toThrow(
-      /9Router API key is required/,
-    );
     expect(() =>
       createProviderClient({provider: 'gemini', apiKey: 'k', primaryModel: '  '}),
     ).toThrow(/primary Gemini model is required/);
@@ -157,16 +154,6 @@ describe('listProviderModels dispatch', () => {
     expect(url).toBe('https://openrouter.ai/api/v1/models');
     expect(init?.headers).toBeUndefined();
     expect(models.map(model => model.id)).toEqual(['vendor/model-a', 'vendor/model-b']);
-  });
-
-  test('9Router hits its default endpoint keylessly', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, catalogBody()));
-
-    const models = await listProviderModels('ninerouter');
-
-    expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:20128/v1/models');
-    expect(fetchMock.mock.calls[0][1]?.headers).toBeUndefined();
-    expect(models).toHaveLength(2);
   });
 
   test('OpenAI discovery is authenticated with the supplied key', async () => {

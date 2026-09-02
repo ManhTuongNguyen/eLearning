@@ -281,7 +281,7 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     });
 
     test('resolves nulls when nothing is stored for the provider', async () => {
-      await expect(loadServerlessProviderState('ninerouter')).resolves.toEqual({
+      await expect(loadServerlessProviderState('gemini')).resolves.toEqual({
         apiKey: null,
         primaryModel: null,
         fallbackModels: [],
@@ -294,8 +294,8 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
       expect(primaryModelSettingKey('openrouter')).toBe('serverless_primary_model');
       expect(fallbackModelsSettingKey('openrouter')).toBe('serverless_fallback_models');
       expect(primaryModelSettingKey('gemini')).toBe('serverless_primary_model_gemini');
-      expect(fallbackModelsSettingKey('ninerouter')).toBe(
-        'serverless_fallback_models_ninerouter',
+      expect(fallbackModelsSettingKey('gemini')).toBe(
+        'serverless_fallback_models_gemini',
       );
     });
   });

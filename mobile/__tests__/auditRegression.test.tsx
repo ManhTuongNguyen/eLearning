@@ -572,7 +572,9 @@ describe('provider strategy selection regression (TASK-AUDIT-013/004)', () => {
   it('resolves provider ids and builds a client for every strategy', () => {
     expect(resolveProviderId(null)).toBe('openrouter');
     expect(resolveProviderId(' Gemini ')).toBe('gemini');
-    expect(() => resolveProviderId('anthropic')).toThrow(/Unknown serverless provider/);
+    // Stale persisted ids (e.g. a provider removed from the registry)
+    // degrade to the default instead of crashing startup.
+    expect(resolveProviderId('anthropic')).toBe('openrouter');
 
     for (const provider of SUPPORTED_PROVIDER_IDS) {
       const llmClient = createProviderClient(providerConfig(provider));

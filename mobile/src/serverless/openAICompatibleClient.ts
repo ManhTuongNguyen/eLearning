@@ -4,7 +4,7 @@
  *
  * This module implements the `/chat/completions` wire contract (JSON
  * completions, SSE streaming, `/models` catalog) that OpenRouter, OpenAI,
- * 9Router, and most OpenAI-compatible vendors share. Concrete providers are
+ * and most OpenAI-compatible vendors share. Concrete providers are
  * created through `createOpenAICompatibleClient` with a small spec — no
  * vendor logic is duplicated per provider.
  *

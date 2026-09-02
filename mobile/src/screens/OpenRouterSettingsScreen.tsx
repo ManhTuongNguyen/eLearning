@@ -1,7 +1,7 @@
 /**
  * Serverless LLM provider settings editor (SPEC TASK-092,
  * TASK-AUDIT-013): configures the active provider (OpenRouter, Gemini,
- * OpenAI or 9Router), the user's API key, primary model and ordered
+ * OpenAI), the user's API key, primary model and ordered
  * fallback models. Keys live only in secure storage via
  * saveServerlessOpenRouterConfig (TASK-088/093) — they are never rendered,
  * logged or sent anywhere except the selected provider's auth header, and
@@ -10,7 +10,7 @@
  * the locally cached per-provider catalog (TASK-084) or a direct refresh
  * through listProviderModels (TASK-AUDIT-004): discovery hits the public
  * /models endpoint with no credentials for providers that publish one
- * (OpenRouter, 9Router) and requires the user's key for the others
+ * (OpenRouter) and requires the user's key for the others
  * (Gemini, OpenAI). Fallback order is edited in place with move up/down
  * controls.
  *

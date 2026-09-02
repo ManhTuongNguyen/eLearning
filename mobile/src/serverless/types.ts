@@ -7,7 +7,7 @@
  *
  * Conversation code depends only on the `LLMClient` interface and the
  * normalized data structures below; the concrete provider (OpenRouter,
- * Gemini, OpenAI, 9Router, …) is selected via `createProviderClient`.
+ * Gemini, OpenAI, …) is selected via `createProviderClient`.
  */
 import type {LLMError} from './errors';
 
@@ -261,7 +261,7 @@ export type OpenRouterClient = LLMClient;
  * OpenAI-compatible strategy when the wire contract matches) and
  * registering it in `providerRegistry.ts`.
  */
-export type ProviderId = 'openrouter' | 'gemini' | 'openai' | 'ninerouter';
+export type ProviderId = 'openrouter' | 'gemini' | 'openai';
 
 /** Build the terminal `failed` event for one normalized provider error. */
 export function failedEvent(error: LLMError, partialText: string): ServerlessStreamEvent {

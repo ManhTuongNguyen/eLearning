@@ -8,7 +8,7 @@
  * persisted in the local settings table), never a code change.
  *
  * Two shapes of integrations exist:
- * - OpenAI-compatible providers (OpenRouter, OpenAI, 9Router) share one
+ * - OpenAI-compatible providers (OpenRouter, OpenAI) share one
  *   implementation in ./openAICompatibleClient because their wire contract
  *   is genuinely the same.
  * - Providers with genuinely different API surfaces (Gemini) implement
@@ -16,11 +16,6 @@
  */
 import { createGeminiClient, DEFAULT_GEMINI_BASE_URL, listGeminiModels } from './geminiClient';
 import { createOpenAIClient, DEFAULT_OPENAI_BASE_URL, listOpenAIModels } from './openAIClient';
-import {
-  createNineRouterClient,
-  DEFAULT_NINE_ROUTER_BASE_URL,
-  listNineRouterModels,
-} from './nineRouterClient';
 import { createOpenRouterClient, DEFAULT_BASE_URL, listOpenRouterModels } from './openrouterClient';
 import type { LLMClient, LLMClientConfig, ModelInfo, ProviderId } from './types';
 
@@ -67,15 +62,6 @@ export const PROVIDER_DESCRIPTORS: Record<ProviderId, ProviderDescriptor> = {
       'Get a key at platform.openai.com. It is stored securely on this device and sent only to OpenAI.',
     modelDiscoveryRequiresAuth: true,
   },
-  ninerouter: {
-    id: 'ninerouter',
-    label: '9Router',
-    defaultBaseUrl: DEFAULT_NINE_ROUTER_BASE_URL,
-    keyPlaceholder: '9router key…',
-    keyHint:
-      'Point the app at your 9Router endpoint (default: localhost:20128). The key stays on this device.',
-    modelDiscoveryRequiresAuth: false,
-  },
 };
 
 /** Provider ids exposed by the settings UI, in display order. */
@@ -95,16 +81,19 @@ export function isProviderId(value: unknown): value is ProviderId {
 
 /**
  * Resolve a persisted provider value onto a supported id. Blank/absent
- * values fall back to `openrouter` (the historic default); unknown values
- * are programmer errors and throw.
+ * values fall back to `openrouter` (the historic default); unrecognized
+ * values also fall back — the persisted setting is app-written data, so a
+ * value that is no longer supported (e.g. a provider removed from the
+ * registry in an update) must degrade to the default, never crash startup.
+ * Writes should validate with `isProviderId` first and reject bad ids.
  */
 export function resolveProviderId(value: string | null | undefined): ProviderId {
-  if (value === null || value === undefined || value.trim() === '') {
+  if (value === null || value === undefined) {
     return 'openrouter';
   }
   const normalized = value.trim().toLowerCase();
-  if (!isProviderId(normalized)) {
-    throw new Error(`Unknown serverless provider: ${value}`);
+  if (normalized === '' || !isProviderId(normalized)) {
+    return 'openrouter';
   }
   return normalized;
 }
@@ -119,14 +108,12 @@ export function createProviderClient(config: LLMClientConfig): LLMClient {
       return createGeminiClient(config);
     case 'openai':
       return createOpenAIClient(config);
-    case 'ninerouter':
-      return createNineRouterClient(config);
   }
 }
 
 /**
  * Fetch the model catalog for one provider without building a full client.
- * Keyless for providers with public catalogs (OpenRouter, 9Router);
+ * Keyless for providers with public catalogs (OpenRouter);
  * requires a key for providers whose discovery endpoint is authenticated
  * (Gemini, OpenAI).
  */
@@ -141,7 +128,5 @@ export async function listProviderModels(
       return listGeminiModels(options);
     case 'openai':
       return listOpenAIModels(options);
-    case 'ninerouter':
-      return listNineRouterModels(options);
   }
 }
