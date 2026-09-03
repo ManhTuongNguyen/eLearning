@@ -7,15 +7,19 @@
  * server-backed rows — learning level editing (TASK-018) and the saved
  * vocabulary list (TASK-072). Serverless mode (TASK-AUDIT-003) is
  * independent of server accounts: no account identity, no server logout —
- * instead an OpenRouter settings card opens the local AI configuration
+ * instead an AI provider status card opens the local AI configuration
  * editor (TASK-092): the key itself is stored in secure storage and is
- * never displayed. Both modes keep the theme selection (TASK-044), the
- * application-mode switcher (TASK-090) and — serverless only — local data
- * clearing (TASK-094).
+ * never displayed. The card is labelled with the persisted serverless
+ * provider (OpenRouter, Gemini, OpenAI — TASK-AUDIT-013), so switching
+ * providers is reflected by the summary text. Both modes keep the theme
+ * selection (TASK-044), the application-mode switcher (TASK-090) and —
+ * serverless only — local data clearing (TASK-094).
  *
  * The screen is pushed onto the main stack from Chat, so the header carries
- * the same ‹ Back affordance as the other pushed screens (TASK-AUDIT-006);
- * the Android system back button pops the stack identically.
+ * the same ‹ Back affordance as the other pushed screens (TASK-AUDIT-006).
+ * The back button pops the whole stack down to Chat (the stack root), so
+ * leaving Settings — including after a provider-configuration save — always
+ * returns to the chat screen.
  *
  * TASK-IMPROVEMENT-005: returning from the serverless agent configuration
  * editor after a completed save hands over a one-shot `configSaved` route
@@ -37,7 +41,13 @@ import {useAuth} from '../auth/AuthContext';
 import {useApplicationMode} from '../mode/ModeContext';
 import type {ApplicationMode} from '../mode/types';
 import type {SettingsScreenProps} from '../navigation/types';
-import {clearAllServerlessData, loadServerlessOpenRouterConfig} from '../serverless/settings';
+import {
+  clearAllServerlessData,
+  loadServerlessOpenRouterConfig,
+  loadServerlessProvider,
+} from '../serverless/settings';
+import {PROVIDER_DESCRIPTORS} from '../serverless/providerRegistry';
+import type {ProviderId} from '../serverless/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 import type {ThemeMode} from '../theme/ThemeContext';
@@ -64,7 +74,7 @@ const APPLICATION_MODE_OPTIONS: Array<{
     value: 'serverless',
     label: 'Serverless mode',
     description:
-      'Conversations stay on this device and AI requests go directly to OpenRouter.',
+      'Conversations stay on this device and AI requests go directly to your configured provider.',
     testID: 'settings-mode-serverless',
   },
 ];
@@ -96,7 +106,8 @@ export function createStyles(c: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 24,
-      paddingTop: 24,
+      // Same header spacing as the Chat screen so every screen lines up.
+      paddingTop: 16,
       paddingBottom: 8,
     },
     backText: {
@@ -422,9 +433,10 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
   const {mode: appMode, status: modeStatus, setMode: setApplicationMode} = useApplicationMode();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  /** Configuration state for the serverless OpenRouter card. */
+  /** Configuration state for the serverless AI provider card. */
   const [openRouterStatus, setOpenRouterStatus] = useState<'loading' | {
     hasApiKey: boolean;
+    provider: ProviderId;
     primaryModel: string | null;
     fallbackCount: number;
   }>('loading');
@@ -473,7 +485,7 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
   const confirmClearLocalData = (): void => {
     Alert.alert(
       'Clear local data?',
-      'This will remove all serverless conversations, summaries, profile and OpenRouter settings from this device. Your account on the server is not affected.',
+      'This will remove all serverless conversations, summaries, profile and AI provider settings from this device. Your account on the server is not affected.',
       [
         {text: 'Cancel', style: 'cancel'},
         {
@@ -483,7 +495,12 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
             setClearing(true);
             try {
               await clearAllServerlessData();
-              setOpenRouterStatus({hasApiKey: false, primaryModel: null, fallbackCount: 0});
+              setOpenRouterStatus({
+                hasApiKey: false,
+                provider: 'openrouter',
+                primaryModel: null,
+                fallbackCount: 0,
+              });
               Alert.alert('Local data cleared', 'All serverless data has been removed from this device.');
             } catch (error) {
               Alert.alert(
@@ -500,19 +517,23 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
   };
 
   /**
-   * Read the OpenRouter configuration card state from on-device storage.
-   * The request counter follows the screen's stale-response-guard pattern:
-   * only the newest read may apply its result.
+   * Read the AI provider configuration card state from on-device storage.
+   * The persisted provider id is read alongside the configuration so the
+   * card is labelled with the agent the user actually selected (e.g.
+   * "Google Gemini"), not a hardcoded provider name. The request counter
+   * follows the screen's stale-response-guard pattern: only the newest
+   * read may apply its result.
    */
   const openRouterStatusRequestRef = useRef(0);
   const loadOpenRouterStatus = useCallback((): void => {
     const requestId = ++openRouterStatusRequestRef.current;
     setOpenRouterStatus('loading');
-    loadServerlessOpenRouterConfig()
-      .then(config => {
+    Promise.all([loadServerlessOpenRouterConfig(), loadServerlessProvider()])
+      .then(([config, provider]) => {
         if (openRouterStatusRequestRef.current === requestId) {
           setOpenRouterStatus({
             hasApiKey: config !== null && config.apiKey.length > 0,
+            provider,
             primaryModel: config?.primaryModel ?? null,
             fallbackCount: config?.fallbackModels?.length ?? 0,
           });
@@ -521,7 +542,12 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
       .catch(() => {
         // A storage failure only degrades the card to "not configured".
         if (openRouterStatusRequestRef.current === requestId) {
-          setOpenRouterStatus({hasApiKey: false, primaryModel: null, fallbackCount: 0});
+          setOpenRouterStatus({
+            hasApiKey: false,
+            provider: 'openrouter',
+            primaryModel: null,
+            fallbackCount: 0,
+          });
         }
       });
   }, []);
@@ -572,7 +598,7 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
         <Pressable
           accessibilityLabel="Go back"
           hitSlop={8}
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.popToTop()}
           testID="settings-back">
           <Text style={styles.backText}>‹ Back</Text>
         </Pressable>
@@ -618,12 +644,16 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
         {appMode === 'serverless' ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="OpenRouter settings"
+            accessibilityLabel="AI provider settings"
             onPress={() => navigation.navigate('OpenRouterSettings')}
             style={({pressed}) => [styles.openRouterCard, pressed && styles.rowPressed]}
             testID="settings-openrouter-card">
             <View style={styles.openRouterHeader}>
-              <Text style={styles.openRouterTitle}>OpenRouter</Text>
+              <Text style={styles.openRouterTitle} testID="settings-openrouter-title">
+                {openRouterStatus === 'loading'
+                  ? 'AI provider'
+                  : PROVIDER_DESCRIPTORS[openRouterStatus.provider].label}
+              </Text>
               {openRouterStatus === 'loading' ? (
                 <ActivityIndicator size="small" testID="settings-openrouter-loading" />
               ) : openRouterStatus.hasApiKey ? (

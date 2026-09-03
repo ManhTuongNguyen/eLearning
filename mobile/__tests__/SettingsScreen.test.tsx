@@ -38,6 +38,7 @@ jest.mock('../src/auth/AuthContext', () => ({
 jest.mock('../src/serverless/settings');
 
 const mockedConfig = jest.mocked(serverlessSettings.loadServerlessOpenRouterConfig);
+const mockedLoadProvider = jest.mocked(serverlessSettings.loadServerlessProvider);
 const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
   __resetAsyncStorageStore: () => void;
 };
@@ -70,7 +71,7 @@ function configuredStub(): OpenRouterClientConfig {
 
 function settingsProps(params?: MainStackParamList['Settings']): SettingsScreenProps {
   return {
-    navigation: {navigate: jest.fn(), goBack: jest.fn(), setParams: jest.fn()},
+    navigation: {navigate: jest.fn(), goBack: jest.fn(), popToTop: jest.fn(), setParams: jest.fn()},
     route: {key: 'settings-test', name: 'Settings', params},
   } as unknown as SettingsScreenProps;
 }
@@ -117,8 +118,10 @@ beforeEach(() => {
   asyncStorage.__resetAsyncStorageStore();
   jest.clearAllMocks();
   stubAuth();
-  // Default to an unconfigured device; individual tests override this.
+  // Default to an unconfigured device on the historic default provider;
+  // individual tests override this.
   mockedConfig.mockResolvedValue(null);
+  mockedLoadProvider.mockResolvedValue('openrouter');
   setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
 });
 
@@ -175,7 +178,7 @@ describe('controls present in every mode', () => {
   });
 
   it.each(['server', 'serverless'] as const)(
-    'shows the back affordance and pops the stack when pressed in %s mode (TASK-AUDIT-006)',
+    'shows the back affordance and routes back to the chat screen when pressed in %s mode (TASK-AUDIT-006)',
     async mode => {
       const props = await renderSettings(mode);
 
@@ -184,7 +187,11 @@ describe('controls present in every mode', () => {
 
       fireEvent.press(screen.getByTestId('settings-back'));
 
-      expect(props.navigation.goBack).toHaveBeenCalledTimes(1);
+      // Settings always pops the stack down to Chat (the stack root), so
+      // leaving it can never land on a screen stacked below — e.g. the AI
+      // provider editor after a completed save.
+      expect(props.navigation.popToTop).toHaveBeenCalledTimes(1);
+      expect(props.navigation.goBack).not.toHaveBeenCalled();
       expect(props.navigation.navigate).not.toHaveBeenCalled();
     },
   );
@@ -241,6 +248,7 @@ describe('serverless-mode visibility (TASK-091)', () => {
     expect(await screen.findByTestId('settings-openrouter-key-status')).toHaveTextContent(
       'Saved on this device',
     );
+    expect(screen.getByTestId('settings-openrouter-title')).toHaveTextContent('OpenRouter');
     expect(screen.getByTestId('settings-openrouter-primary-status')).toHaveTextContent(
       'openai/gpt-4o-mini',
     );
@@ -250,6 +258,25 @@ describe('serverless-mode visibility (TASK-091)', () => {
     expect(screen.getByTestId('settings-openrouter-badge')).toHaveTextContent('Ready');
     // The secret itself must never be rendered anywhere on the screen.
     expect(screen.queryByText(SECRET_KEY)).toBeNull();
+  });
+
+  it('labels the card with the persisted provider after switching the agent (TASK-AUDIT-013)', async () => {
+    mockedConfig.mockResolvedValue({
+      apiKey: SECRET_KEY,
+      provider: 'gemini',
+      primaryModel: 'models/gemini-2.0-flash',
+      fallbackModels: [],
+    });
+    mockedLoadProvider.mockResolvedValue('gemini');
+    await renderSettings('serverless');
+
+    expect(await screen.findByTestId('settings-openrouter-title')).toHaveTextContent(
+      'Google Gemini',
+    );
+    expect(screen.getByTestId('settings-openrouter-primary-status')).toHaveTextContent(
+      'models/gemini-2.0-flash',
+    );
+    expect(screen.getByTestId('settings-openrouter-badge')).toHaveTextContent('Ready');
   });
 
   it('reports an unconfigured setup when nothing has been stored yet', async () => {
@@ -282,7 +309,7 @@ describe('serverless-mode visibility (TASK-091)', () => {
     expect(screen.getByText('Your conversations are stored with your account.')).toBeOnTheScreen();
     expect(
       screen.getByText(
-        'Conversations stay on this device and AI requests go directly to OpenRouter.',
+        'Conversations stay on this device and AI requests go directly to your configured provider.',
       ),
     ).toBeOnTheScreen();
   });

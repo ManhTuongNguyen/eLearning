@@ -299,7 +299,7 @@ describe('Settings application-mode switcher (TASK-090)', () => {
     expect(screen.getByText('Serverless mode')).toBeOnTheScreen();
     expect(
       screen.getByText(
-        'Conversations stay on this device and AI requests go directly to OpenRouter.',
+        'Conversations stay on this device and AI requests go directly to your configured provider.',
       ),
     ).toBeOnTheScreen();
 

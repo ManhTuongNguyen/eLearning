@@ -50,7 +50,11 @@ function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      padding: 24,
+      // Same header spacing as the Chat screen; the other sides keep the
+      // previous screen gutter.
+      paddingTop: 16,
+      paddingHorizontal: 24,
+      paddingBottom: 24,
     },
     header: {
       flexDirection: 'row',

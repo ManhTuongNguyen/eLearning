@@ -105,7 +105,7 @@ function createScreenStyles() {
 
 async function renderScreen(): Promise<OpenRouterSettingsScreenProps> {
   const props = {
-    navigation: {navigate: jest.fn(), goBack: jest.fn()},
+    navigation: {navigate: jest.fn(), goBack: jest.fn(), popTo: jest.fn()},
     route: {key: 'openrouter-settings-test', name: 'OpenRouterSettings', params: undefined},
   } as unknown as OpenRouterSettingsScreenProps;
 
@@ -301,8 +301,11 @@ describe('model selection from the discovered catalog', () => {
 // TASK-IMPROVEMENT-005: a successful save hands the user back to Settings
 // together with a one-shot `configSaved` flag (the toast renders there), and
 // only after persistence actually resolved. Failed saves never navigate.
+// `popTo` targets the existing Settings entry — a plain `navigate` would
+// push a duplicate Settings row and make Back on Settings land on this
+// editor again.
 describe('save completion flow (TASK-IMPROVEMENT-005)', () => {
-  it('navigates back to Settings with the saved flag once persistence resolves', async () => {
+  it('pops back to Settings with the saved flag once persistence resolves', async () => {
     mockedLoadProviderState.mockResolvedValue({
       apiKey: STORED_KEY,
       primaryModel: 'vendor/model-a',
@@ -324,18 +327,20 @@ describe('save completion flow (TASK-IMPROVEMENT-005)', () => {
     // No optimistic navigation: the save must complete first.
     expect(props.navigation.navigate).not.toHaveBeenCalled();
     expect(props.navigation.goBack).not.toHaveBeenCalled();
+    expect(props.navigation.popTo).not.toHaveBeenCalled();
 
     await act(async () => {
       resolveSave();
     });
 
     await waitFor(() =>
-      expect(props.navigation.navigate).toHaveBeenCalledWith('Settings', {
+      expect(props.navigation.popTo).toHaveBeenCalledWith('Settings', {
         configSaved: true,
       }),
     );
-    // The back hop rides the single navigate call to the existing Settings
-    // entry — no goBack, no duplicate stack rows.
+    // The back hop pops to the existing Settings entry — no goBack, no
+    // duplicate stack rows.
+    expect(props.navigation.navigate).not.toHaveBeenCalled();
     expect(props.navigation.goBack).not.toHaveBeenCalled();
   });
 
@@ -358,6 +363,7 @@ describe('save completion flow (TASK-IMPROVEMENT-005)', () => {
     // flag for Settings to turn into a success toast.
     expect(props.navigation.navigate).not.toHaveBeenCalled();
     expect(props.navigation.goBack).not.toHaveBeenCalled();
+    expect(props.navigation.popTo).not.toHaveBeenCalled();
     expect(screen.getByTestId('openrouter-save')).toBeOnTheScreen();
     // The entered configuration is preserved for a retry.
     expect(checkedStateOf('openrouter-model-primary-vendor/model-a')).toBe(true);

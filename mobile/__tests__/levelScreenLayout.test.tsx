@@ -97,7 +97,7 @@ describe('LevelScreen layout (TASK-AUDIT-011)', () => {
   it('uses the shared pushed-screen header spacing on top of the app-shell inset padding', () => {
     const styles = createStyles(lightColors);
 
-    expect(styles.container.paddingTop).toBe(24);
+    expect(styles.container.paddingTop).toBe(16);
     expect(flattenStyle(styles.container).marginTop).toBeUndefined();
   });
 
@@ -120,7 +120,7 @@ describe('LevelScreen layout (TASK-AUDIT-011)', () => {
       await renderScreen();
 
       const container = screen.getByTestId('level-screen');
-      expect(flattenStyle(container.props.style).paddingTop).toBe(24);
+      expect(flattenStyle(container.props.style).paddingTop).toBe(16);
       await waitFor(() =>
         expect(screen.getByTestId('level-B1')).toBeOnTheScreen(),
       );

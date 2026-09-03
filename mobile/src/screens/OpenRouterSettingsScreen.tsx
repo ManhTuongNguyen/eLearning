@@ -27,10 +27,11 @@
  * understandable without external documentation.
  *
  * TASK-IMPROVEMENT-005: only a resolved save navigates, popping back to
- * the Settings screen the editor was pushed from (a navigate to the
- * existing entry, so no duplicate stack rows appear) and handing over a
- * one-shot `configSaved` flag that Settings turns into the success toast.
- * A failed save stays here with the inline error and the entered
+ * the Settings screen the editor was pushed from (`popTo` the existing
+ * entry — a plain `navigate` here would push a duplicate Settings row and
+ * make the Back button on Settings land on this editor again) and handing
+ * over a one-shot `configSaved` flag that Settings turns into the success
+ * toast. A failed save stays here with the inline error and the entered
  * configuration untouched — no navigation, no success feedback.
  *
  * The top spacing is a fixed constant (the app shell in App.tsx already
@@ -74,7 +75,7 @@ import {useTheme} from '../theme/ThemeContext';
 const MAX_VISIBLE_MODELS = 50;
 
 /** Spacing between the safe-area top inset and the header row (px). */
-const HEADER_TOP_SPACING = 24;
+const HEADER_TOP_SPACING = 16;
 
 export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -713,8 +714,9 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
    * keep the user here with the inline error and the entered configuration
    * intact; only a completed persistence navigates back to Settings — with
    * a `configSaved` param that the Settings screen renders as the success
-   * toast. `navigate` targets the existing Settings entry instead of
-   * pushing, so the stack never gains a duplicate screen.
+   * toast. `popTo` targets the existing Settings entry below this editor
+   * instead of `navigate` (which would push a duplicate Settings row and
+   * leave the editor in the stack, so Back on Settings landed here again).
    */
   const handleSave = useCallback(async () => {
     if (saving) {
@@ -740,7 +742,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
       // it cannot linger longer than necessary.
       setStoredKey(apiKey);
       setApiKeyDraft('');
-      navigation.navigate('Settings', {configSaved: true});
+      navigation.popTo('Settings', {configSaved: true});
     } catch (err) {
       setError(toErrorMessage(err));
     } finally {

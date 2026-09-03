@@ -73,7 +73,7 @@ describe('OpenRouterSettingsScreen layout (TASK-AUDIT-012)', () => {
   it('uses the shared pushed-screen header spacing on top of the app-shell inset padding', () => {
     const styles = createStyles(lightColors);
 
-    expect(styles.container.paddingTop).toBe(24);
+    expect(styles.container.paddingTop).toBe(16);
     expect(flattenStyle(styles.container).marginTop).toBeUndefined();
   });
 
@@ -93,7 +93,7 @@ describe('OpenRouterSettingsScreen layout (TASK-AUDIT-012)', () => {
     await renderScreen();
 
     const container = screen.getByTestId('openrouter-settings-screen');
-    expect(flattenStyle(container.props.style).paddingTop).toBe(24);
+    expect(flattenStyle(container.props.style).paddingTop).toBe(16);
     await waitFor(() =>
       expect(screen.getByTestId('openrouter-save')).toBeOnTheScreen(),
     );

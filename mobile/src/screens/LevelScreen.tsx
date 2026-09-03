@@ -34,7 +34,7 @@ import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 
 /** Spacing between the safe-area top inset and the header row (px). */
-const HEADER_TOP_SPACING = 24;
+const HEADER_TOP_SPACING = 16;
 
 export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
