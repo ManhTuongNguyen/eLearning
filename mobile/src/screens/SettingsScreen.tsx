@@ -215,8 +215,8 @@ export function createStyles(c: ThemeColors) {
       fontSize: 18,
       color: c.textMuted,
     },
-    /* OpenRouter status card (serverless only) */
-    openRouterCard: {
+    /* AI provider status card (serverless only) */
+    aiProviderCard: {
       alignSelf: 'stretch',
       borderWidth: 1,
       borderColor: c.border,
@@ -226,13 +226,13 @@ export function createStyles(c: ThemeColors) {
       paddingHorizontal: 16,
       gap: 10,
     },
-    openRouterHeader: {
+    aiProviderCardHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
     },
-    openRouterTitle: {
+    aiProviderCardTitle: {
       fontSize: 15,
       fontWeight: '600',
       color: c.textPrimary,
@@ -411,7 +411,7 @@ export function createStyles(c: ThemeColors) {
   });
 }
 
-/** One status line of the serverless OpenRouter card. */
+/** One status line of the serverless AI provider card. */
 function StatusLine({label, value, testID}: {label: string; value: string; testID?: string}) {
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -434,7 +434,7 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   /** Configuration state for the serverless AI provider card. */
-  const [openRouterStatus, setOpenRouterStatus] = useState<'loading' | {
+  const [providerStatus, setProviderStatus] = useState<'loading' | {
     hasApiKey: boolean;
     provider: ProviderId;
     primaryModel: string | null;
@@ -495,7 +495,7 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
             setClearing(true);
             try {
               await clearAllServerlessData();
-              setOpenRouterStatus({
+              setProviderStatus({
                 hasApiKey: false,
                 provider: 'openrouter',
                 primaryModel: null,
@@ -524,14 +524,14 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
    * follows the screen's stale-response-guard pattern: only the newest
    * read may apply its result.
    */
-  const openRouterStatusRequestRef = useRef(0);
-  const loadOpenRouterStatus = useCallback((): void => {
-    const requestId = ++openRouterStatusRequestRef.current;
-    setOpenRouterStatus('loading');
+  const providerStatusRequestRef = useRef(0);
+  const loadProviderStatus = useCallback((): void => {
+    const requestId = ++providerStatusRequestRef.current;
+    setProviderStatus('loading');
     Promise.all([loadServerlessOpenRouterConfig(), loadServerlessProvider()])
       .then(([config, provider]) => {
-        if (openRouterStatusRequestRef.current === requestId) {
-          setOpenRouterStatus({
+        if (providerStatusRequestRef.current === requestId) {
+          setProviderStatus({
             hasApiKey: config !== null && config.apiKey.length > 0,
             provider,
             primaryModel: config?.primaryModel ?? null,
@@ -541,8 +541,8 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
       })
       .catch(() => {
         // A storage failure only degrades the card to "not configured".
-        if (openRouterStatusRequestRef.current === requestId) {
-          setOpenRouterStatus({
+        if (providerStatusRequestRef.current === requestId) {
+          setProviderStatus({
             hasApiKey: false,
             provider: 'openrouter',
             primaryModel: null,
@@ -553,7 +553,7 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
   }, []);
 
   // Reload when the mode flips to serverless and, on real navigators, every
-  // time the screen regains focus — returning from the OpenRouter editor
+  // time the screen regains focus — returning from the AI provider editor
   // must refresh the card. Bare navigation stubs (tests) skip the listener.
   // The readiness gate keeps the provisional default mode (while the
   // persisted mode is still restoring) from firing a spurious query.
@@ -561,12 +561,12 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
     if (modeStatus !== 'ready' || appMode !== 'serverless') {
       return;
     }
-    loadOpenRouterStatus();
-    const unsubscribe = navigation.addListener?.('focus', loadOpenRouterStatus);
+    loadProviderStatus();
+    const unsubscribe = navigation.addListener?.('focus', loadProviderStatus);
     return () => {
       unsubscribe?.();
     };
-  }, [modeStatus, appMode, navigation, loadOpenRouterStatus]);
+  }, [modeStatus, appMode, navigation, loadProviderStatus]);
 
   /** Server-feature rows: hidden entirely while serverless is active. */
   const serverRows: SettingsRow[] = useMemo(() => {
@@ -645,23 +645,23 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="AI provider settings"
-            onPress={() => navigation.navigate('OpenRouterSettings')}
-            style={({pressed}) => [styles.openRouterCard, pressed && styles.rowPressed]}
-            testID="settings-openrouter-card">
-            <View style={styles.openRouterHeader}>
-              <Text style={styles.openRouterTitle} testID="settings-openrouter-title">
-                {openRouterStatus === 'loading'
+            onPress={() => navigation.navigate('AIProviderSettings')}
+            style={({pressed}) => [styles.aiProviderCard, pressed && styles.rowPressed]}
+            testID="settings-ai-provider-card">
+            <View style={styles.aiProviderCardHeader}>
+              <Text style={styles.aiProviderCardTitle} testID="settings-ai-provider-title">
+                {providerStatus === 'loading'
                   ? 'AI provider'
-                  : PROVIDER_DESCRIPTORS[openRouterStatus.provider].label}
+                  : PROVIDER_DESCRIPTORS[providerStatus.provider].label}
               </Text>
-              {openRouterStatus === 'loading' ? (
-                <ActivityIndicator size="small" testID="settings-openrouter-loading" />
-              ) : openRouterStatus.hasApiKey ? (
-                <View style={styles.badge} testID="settings-openrouter-badge">
+              {providerStatus === 'loading' ? (
+                <ActivityIndicator size="small" testID="settings-ai-provider-loading" />
+              ) : providerStatus.hasApiKey ? (
+                <View style={styles.badge} testID="settings-ai-provider-badge">
                   <Text style={styles.badgeText}>Ready</Text>
                 </View>
               ) : (
-                <View style={[styles.badge, styles.badgePending]} testID="settings-openrouter-badge">
+                <View style={[styles.badge, styles.badgePending]} testID="settings-ai-provider-badge">
                   <Text style={[styles.badgeText, styles.badgeTextPending]}>Not set up</Text>
                 </View>
               )}
@@ -669,33 +669,33 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
             <StatusLine
               label="API key"
               value={
-                openRouterStatus === 'loading'
+                providerStatus === 'loading'
                   ? '…'
-                  : openRouterStatus.hasApiKey
+                  : providerStatus.hasApiKey
                     ? 'Saved on this device'
                     : 'Not configured'
               }
-              testID="settings-openrouter-key-status"
+              testID="settings-ai-provider-key-status"
             />
             <StatusLine
               label="Primary model"
               value={
-                openRouterStatus === 'loading'
+                providerStatus === 'loading'
                   ? '…'
-                  : (openRouterStatus.primaryModel ?? 'Not selected')
+                  : (providerStatus.primaryModel ?? 'Not selected')
               }
-              testID="settings-openrouter-primary-status"
+              testID="settings-ai-provider-primary-status"
             />
             <StatusLine
               label="Fallback models"
               value={
-                openRouterStatus === 'loading'
+                providerStatus === 'loading'
                   ? '…'
-                  : openRouterStatus.fallbackCount > 0
-                    ? `${openRouterStatus.fallbackCount} selected`
+                  : providerStatus.fallbackCount > 0
+                    ? `${providerStatus.fallbackCount} selected`
                     : 'None'
               }
-              testID="settings-openrouter-fallback-status"
+              testID="settings-ai-provider-fallback-status"
             />
           </Pressable>
         ) : null}

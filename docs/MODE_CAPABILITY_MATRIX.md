@@ -28,7 +28,7 @@ serverless is active.
 | Saved vocabulary (save word) | Yes | No | `useVocabularySave` + runtime gate |
 | Vocabulary enrichment | Yes | No | backend Celery only |
 | Vocabulary screen / CSV export | Yes | No | `api/vocabulary` + runtime gate |
-| Provider configuration (provider, key, model) | No | Yes | `OpenRouterSettingsScreen`, `serverless/settings` |
+| Provider configuration (provider, key, model) | No | Yes | `AIProviderSettingsScreen`, `serverless/settings` |
 | Direct provider request | No | Yes | `serverless/providerRegistry`, provider clients |
 | Provider/model discovery | No | Yes | `serverless/modelCatalog` (keyless for OpenRouter/9Router) |
 | Clear local data | No | Yes | `clearAllServerlessData` |
@@ -54,7 +54,7 @@ both the mode and the auth restore have settled.
 | `Settings` | Main | Account card, server rows, logout | OpenRouter card, clear-local, switcher | Conditioned rendering |
 | `Level` | Main | `GET/PATCH /profile` | Local `learning_profile` | Mode-branched, waits for mode-ready |
 | `Vocabulary` | Main | List + enrichment + CSV export | Server-only notice, zero API calls | In-screen guard (TASK-AUDIT-016) |
-| `OpenRouterSettings` | Main | Serverless-only notice, no config reads | Full provider editor | In-screen guard (TASK-AUDIT-016) |
+| `AIProviderSettings` | Main | Serverless-only notice, no config reads | Full provider editor | In-screen guard (TASK-AUDIT-016) |
 
 ## 3. Enforcement layers
 
@@ -65,7 +65,7 @@ both the mode and the auth restore have settled.
    attempted in serverless throws `ServerApiBlockedError` before any
    transport work, so nothing is ever transmitted.
 3. **Screen guards** — server-only (`Vocabulary`) and serverless-only
-   (`OpenRouterSettings`) screens render an explicit mode notice and skip
+   (`AIProviderSettings`) screens render an explicit mode notice and skip
    their data effects when mounted in the wrong mode (TASK-AUDIT-016), and
    both wait for the persisted mode to be restored before deciding.
 4. **Conditioned UI** — `SettingsScreen` hides server rows/account/logout in
@@ -87,6 +87,6 @@ both the mode and the auth restore have settled.
 | History per mode + disjoint stores | `HistoryScreen.test.tsx` |
 | Level per mode | `LevelScreen.test.tsx` |
 | Vocabulary server mode + serverless notice/no-fetch | `VocabularyScreen.test.tsx` |
-| OpenRouter editor serverless + server-mode notice/no-reads | `OpenRouterSettingsScreen.test.tsx`, `openRouterSettingsLayout.test.tsx` |
+| AI provider editor serverless + server-mode notice/no-reads | `AIProviderSettingsScreen.test.tsx`, `aiProviderSettingsLayout.test.tsx` |
 | Menu action gating (`vocabularyEnabled`) | `MessageActionsMenu.test.tsx` |
 | Serverless entry from login | `LoginScreen.test.tsx` |

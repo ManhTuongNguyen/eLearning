@@ -209,7 +209,7 @@ describe('server-mode visibility', () => {
 
     expect(screen.getByTestId('settings-open-level')).toBeOnTheScreen();
     expect(screen.getByTestId('settings-open-vocabulary')).toBeOnTheScreen();
-    expect(screen.queryByTestId('settings-openrouter-card')).toBeNull();
+    expect(screen.queryByTestId('settings-ai-provider-card')).toBeNull();
 
     fireEvent.press(screen.getByTestId('settings-open-level'));
     expect(props.navigation.navigate).toHaveBeenCalledWith('Level');
@@ -237,7 +237,7 @@ describe('serverless-mode visibility (TASK-091)', () => {
 
     expect(screen.queryByTestId('settings-open-level')).toBeNull();
     expect(screen.queryByTestId('settings-open-vocabulary')).toBeNull();
-    expect(screen.getByTestId('settings-openrouter-card')).toBeOnTheScreen();
+    expect(screen.getByTestId('settings-ai-provider-card')).toBeOnTheScreen();
     expect(mockedConfig).toHaveBeenCalledTimes(1);
   });
 
@@ -245,17 +245,17 @@ describe('serverless-mode visibility (TASK-091)', () => {
     mockedConfig.mockResolvedValue(configuredStub());
     await renderSettings('serverless');
 
-    expect(await screen.findByTestId('settings-openrouter-key-status')).toHaveTextContent(
+    expect(await screen.findByTestId('settings-ai-provider-key-status')).toHaveTextContent(
       'Saved on this device',
     );
-    expect(screen.getByTestId('settings-openrouter-title')).toHaveTextContent('OpenRouter');
-    expect(screen.getByTestId('settings-openrouter-primary-status')).toHaveTextContent(
+    expect(screen.getByTestId('settings-ai-provider-title')).toHaveTextContent('OpenRouter');
+    expect(screen.getByTestId('settings-ai-provider-primary-status')).toHaveTextContent(
       'openai/gpt-4o-mini',
     );
-    expect(screen.getByTestId('settings-openrouter-fallback-status')).toHaveTextContent(
+    expect(screen.getByTestId('settings-ai-provider-fallback-status')).toHaveTextContent(
       '2 selected',
     );
-    expect(screen.getByTestId('settings-openrouter-badge')).toHaveTextContent('Ready');
+    expect(screen.getByTestId('settings-ai-provider-badge')).toHaveTextContent('Ready');
     // The secret itself must never be rendered anywhere on the screen.
     expect(screen.queryByText(SECRET_KEY)).toBeNull();
   });
@@ -270,34 +270,34 @@ describe('serverless-mode visibility (TASK-091)', () => {
     mockedLoadProvider.mockResolvedValue('gemini');
     await renderSettings('serverless');
 
-    expect(await screen.findByTestId('settings-openrouter-title')).toHaveTextContent(
+    expect(await screen.findByTestId('settings-ai-provider-title')).toHaveTextContent(
       'Google Gemini',
     );
-    expect(screen.getByTestId('settings-openrouter-primary-status')).toHaveTextContent(
+    expect(screen.getByTestId('settings-ai-provider-primary-status')).toHaveTextContent(
       'models/gemini-2.0-flash',
     );
-    expect(screen.getByTestId('settings-openrouter-badge')).toHaveTextContent('Ready');
+    expect(screen.getByTestId('settings-ai-provider-badge')).toHaveTextContent('Ready');
   });
 
   it('reports an unconfigured setup when nothing has been stored yet', async () => {
     mockedConfig.mockResolvedValue(null);
     await renderSettings('serverless');
 
-    expect(await screen.findByTestId('settings-openrouter-key-status')).toHaveTextContent(
+    expect(await screen.findByTestId('settings-ai-provider-key-status')).toHaveTextContent(
       'Not configured',
     );
-    expect(screen.getByTestId('settings-openrouter-primary-status')).toHaveTextContent(
+    expect(screen.getByTestId('settings-ai-provider-primary-status')).toHaveTextContent(
       'Not selected',
     );
-    expect(screen.getByTestId('settings-openrouter-fallback-status')).toHaveTextContent('None');
-    expect(screen.getByTestId('settings-openrouter-badge')).toHaveTextContent('Not set up');
+    expect(screen.getByTestId('settings-ai-provider-fallback-status')).toHaveTextContent('None');
+    expect(screen.getByTestId('settings-ai-provider-badge')).toHaveTextContent('Not set up');
   });
 
   it('degrades storage failures to an unconfigured report instead of crashing', async () => {
     mockedConfig.mockRejectedValue(new Error('sqlite unavailable'));
     await renderSettings('serverless');
 
-    expect(await screen.findByTestId('settings-openrouter-key-status')).toHaveTextContent(
+    expect(await screen.findByTestId('settings-ai-provider-key-status')).toHaveTextContent(
       'Not configured',
     );
   });
@@ -318,9 +318,9 @@ describe('serverless-mode visibility (TASK-091)', () => {
     mockedConfig.mockResolvedValue(configuredStub());
     const props = await renderSettings('serverless');
 
-    fireEvent.press(await screen.findByTestId('settings-openrouter-card'));
+    fireEvent.press(await screen.findByTestId('settings-ai-provider-card'));
 
-    expect(props.navigation.navigate).toHaveBeenCalledWith('OpenRouterSettings');
+    expect(props.navigation.navigate).toHaveBeenCalledWith('AIProviderSettings');
   });
 });
 
@@ -369,7 +369,7 @@ describe('configuration-saved toast (TASK-IMPROVEMENT-005)', () => {
     await renderSettings('serverless');
 
     await waitFor(() =>
-      expect(screen.getByTestId('settings-openrouter-key-status')).toBeOnTheScreen(),
+      expect(screen.getByTestId('settings-ai-provider-key-status')).toBeOnTheScreen(),
     );
     expect(screen.queryByTestId('settings-saved-toast')).toBeNull();
   });
@@ -378,7 +378,7 @@ describe('configuration-saved toast (TASK-IMPROVEMENT-005)', () => {
     await renderSettings('serverless', {configSaved: false});
 
     await waitFor(() =>
-      expect(screen.getByTestId('settings-openrouter-key-status')).toBeOnTheScreen(),
+      expect(screen.getByTestId('settings-ai-provider-key-status')).toBeOnTheScreen(),
     );
     expect(screen.queryByTestId('settings-saved-toast')).toBeNull();
   });

@@ -373,7 +373,7 @@ State management is plain React Context — no external store library.
 loading      → SplashScreen
 unauthenticated → AuthNavigator   (Login, Register)
 authenticated   → MainNavigator   (Chat, NewConversation, History,
-                                   Settings, Level, Vocabulary, OpenRouterSettings)
+                                   Settings, Level, Vocabulary, AIProviderSettings)
 ```
 
 Navigation params are fully typed (`src/navigation/types.ts`), including the

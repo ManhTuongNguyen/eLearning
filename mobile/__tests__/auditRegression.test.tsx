@@ -282,7 +282,7 @@ describe('serverless mode regression (TASK-AUDIT-003/016)', () => {
     expect(screen.queryByText('Signed in as')).toBeNull();
     expect(screen.queryByTestId('settings-logout')).toBeNull();
     expect(screen.queryByTestId('settings-open-vocabulary')).toBeNull();
-    expect(top('settings-openrouter-card')).toBeOnTheScreen();
+    expect(top('settings-ai-provider-card')).toBeOnTheScreen();
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(xhrConstructorSpy).not.toHaveBeenCalled();

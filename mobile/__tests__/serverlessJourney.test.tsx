@@ -299,23 +299,23 @@ describe('TASK-117 serverless journey', () => {
     // Server-only features are hidden while serverless is active.
     expect(screen.queryByTestId('settings-open-vocabulary')).toBeNull();
     expect(screen.queryByTestId('settings-open-level')).toBeNull();
-    expect(top('settings-openrouter-card')).toBeOnTheScreen();
+    expect(top('settings-ai-provider-card')).toBeOnTheScreen();
 
     // ---- Configure the API key and select models. ----------------------
-    await pressTop('settings-openrouter-card');
+    await pressTop('settings-ai-provider-card');
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-settings-screen')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-settings-screen')).toBeOnTheScreen(),
     );
-    await fireEvent.changeText(screen.getByTestId('openrouter-api-key-input'), API_KEY);
-    await pressTop('openrouter-models-refresh');
+    await fireEvent.changeText(screen.getByTestId('ai-provider-api-key-input'), API_KEY);
+    await pressTop('ai-provider-models-refresh');
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-count')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-count')).toBeOnTheScreen(),
     );
-    await pressTop('openrouter-model-primary-vendor/model-a');
-    await waitFor(() => expect(checkedOf('openrouter-model-primary-vendor/model-a')).toBe(true));
-    await pressTop('openrouter-model-fallback-vendor/model-b');
-    await waitFor(() => expect(checkedOf('openrouter-model-fallback-vendor/model-b')).toBe(true));
-    await pressTop('openrouter-save');
+    await pressTop('ai-provider-model-primary-vendor/model-a');
+    await waitFor(() => expect(checkedOf('ai-provider-model-primary-vendor/model-a')).toBe(true));
+    await pressTop('ai-provider-model-fallback-vendor/model-b');
+    await waitFor(() => expect(checkedOf('ai-provider-model-fallback-vendor/model-b')).toBe(true));
+    await pressTop('ai-provider-save');
     // TASK-IMPROVEMENT-005: the save itself navigates back to Settings with
     // the one-shot saved flag, and the Settings card flashes the success
     // toast while refreshing to the persisted configuration. The editor
@@ -326,13 +326,13 @@ describe('TASK-117 serverless journey', () => {
     );
     await waitFor(() =>
       expect(
-        top('settings-openrouter-key-status'),
+        top('settings-ai-provider-key-status'),
       ).toHaveTextContent('Saved on this device'),
     );
-    expect(top('settings-openrouter-primary-status')).toHaveTextContent(
+    expect(top('settings-ai-provider-primary-status')).toHaveTextContent(
       'vendor/model-a',
     );
-    expect(top('settings-openrouter-fallback-status')).toHaveTextContent(
+    expect(top('settings-ai-provider-fallback-status')).toHaveTextContent(
       '1 selected',
     );
 
@@ -492,7 +492,7 @@ describe('TASK-117 serverless journey', () => {
     await confirmClearLocalData();
     await waitFor(() =>
       expect(
-        screen.getByTestId('settings-openrouter-key-status'),
+        screen.getByTestId('settings-ai-provider-key-status'),
       ).toHaveTextContent('Not configured'),
     );
 

@@ -28,8 +28,8 @@ import {ModeProvider} from '../src/mode/ModeContext';
 import {saveApplicationMode} from '../src/mode/modeStorage';
 import {setRuntimeApplicationMode} from '../src/mode/runtime';
 import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
-import type {OpenRouterSettingsScreenProps} from '../src/navigation/types';
-import {createStyles, OpenRouterSettingsScreen} from '../src/screens/OpenRouterSettingsScreen';
+import type {AIProviderSettingsScreenProps} from '../src/navigation/types';
+import {createStyles, AIProviderSettingsScreen} from '../src/screens/AIProviderSettingsScreen';
 import * as modelCatalog from '../src/serverless/modelCatalog';
 import * as providerRegistry from '../src/serverless/providerRegistry';
 import * as serverlessSettings from '../src/serverless/settings';
@@ -103,11 +103,11 @@ function createScreenStyles() {
   return createStyles(lightColors);
 }
 
-async function renderScreen(): Promise<OpenRouterSettingsScreenProps> {
+async function renderScreen(): Promise<AIProviderSettingsScreenProps> {
   const props = {
     navigation: {navigate: jest.fn(), goBack: jest.fn(), popTo: jest.fn()},
-    route: {key: 'openrouter-settings-test', name: 'OpenRouterSettings', params: undefined},
-  } as unknown as OpenRouterSettingsScreenProps;
+    route: {key: 'ai-provider-settings-test', name: 'AIProviderSettings', params: undefined},
+  } as unknown as AIProviderSettingsScreenProps;
 
   // @testing-library/react-native v14 render() is asynchronous; awaiting it
   // binds the shared `screen` handle before any query runs. ModeProvider is
@@ -115,7 +115,7 @@ async function renderScreen(): Promise<OpenRouterSettingsScreenProps> {
   await render(
     <ModeProvider>
       <ThemeProvider>
-        <OpenRouterSettingsScreen {...props} />
+        <AIProviderSettingsScreen {...props} />
       </ThemeProvider>
     </ModeProvider>,
   );
@@ -127,9 +127,9 @@ async function renderScreen(): Promise<OpenRouterSettingsScreenProps> {
  * screen bind, then wait until the always-present save button proves the
  * mount-time configuration/catalog effects have fully settled.
  */
-async function renderSettledScreen(): Promise<OpenRouterSettingsScreenProps> {
+async function renderSettledScreen(): Promise<AIProviderSettingsScreenProps> {
   const props = await renderScreen();
-  await waitFor(() => expect(screen.getByTestId('openrouter-save')).toBeOnTheScreen());
+  await waitFor(() => expect(screen.getByTestId('ai-provider-save')).toBeOnTheScreen());
   return props;
 }
 
@@ -168,10 +168,10 @@ describe('rendering stored configuration (TASK-092)', () => {
     await renderSettledScreen();
 
     await waitFor(() =>
-      expect(checkedStateOf('openrouter-model-primary-vendor/model-a')).toBe(true),
+      expect(checkedStateOf('ai-provider-model-primary-vendor/model-a')).toBe(true),
     );
-    expect(checkedStateOf('openrouter-model-primary-vendor/model-b')).toBe(false);
-    expect(screen.getByTestId('openrouter-fallback-chain')).toBeOnTheScreen();
+    expect(checkedStateOf('ai-provider-model-primary-vendor/model-b')).toBe(false);
+    expect(screen.getByTestId('ai-provider-fallback-chain')).toBeOnTheScreen();
     // The entry appears once in the catalog row and once in the ordered chip.
     expect(screen.getAllByText('vendor/model-b').length).toBeGreaterThanOrEqual(1);
     expect(
@@ -179,7 +179,7 @@ describe('rendering stored configuration (TASK-092)', () => {
     ).toBe(false);
 
     // The key is masked and its real value never appears anywhere.
-    const input = screen.getByTestId('openrouter-api-key-input');
+    const input = screen.getByTestId('ai-provider-api-key-input');
     expect(input.props.secureTextEntry).toBe(true);
     expect(input.props.value).toBe('');
     expect(String(input.props.placeholder)).toContain('saved');
@@ -189,10 +189,10 @@ describe('rendering stored configuration (TASK-092)', () => {
   it('prompts for a first key when nothing is stored yet', async () => {
     await renderSettledScreen();
 
-    expect(await screen.findByTestId('openrouter-models-empty')).toBeOnTheScreen();
-    const input = screen.getByTestId('openrouter-api-key-input');
+    expect(await screen.findByTestId('ai-provider-models-empty')).toBeOnTheScreen();
+    const input = screen.getByTestId('ai-provider-api-key-input');
     expect(String(input.props.placeholder)).not.toContain('saved');
-    expect(screen.queryByTestId('openrouter-fallback-chain')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-fallback-chain')).toBeNull();
   });
 });
 
@@ -201,25 +201,25 @@ describe('model selection from the discovered catalog', () => {
     mockedGetCached.mockResolvedValue(catalogSnapshot());
 
     await renderSettledScreen();
-    await user.type(screen.getByTestId('openrouter-api-key-input'), NEW_KEY);
+    await user.type(screen.getByTestId('ai-provider-api-key-input'), NEW_KEY);
 
     // Choose primary, queue two fallbacks, then reorder by moving the
     // first entry one position down.
-    await user.press(screen.getByTestId('openrouter-model-primary-vendor/model-b'));
+    await user.press(screen.getByTestId('ai-provider-model-primary-vendor/model-b'));
     await waitFor(() =>
-      expect(checkedStateOf('openrouter-model-primary-vendor/model-b')).toBe(true),
+      expect(checkedStateOf('ai-provider-model-primary-vendor/model-b')).toBe(true),
     );
-    await user.press(screen.getByTestId('openrouter-model-fallback-vendor/model-a'));
+    await user.press(screen.getByTestId('ai-provider-model-fallback-vendor/model-a'));
     await waitFor(() =>
-      expect(screen.queryByTestId('openrouter-fallback-chip-0')).toBeOnTheScreen(),
+      expect(screen.queryByTestId('ai-provider-fallback-chip-0')).toBeOnTheScreen(),
     );
-    await user.press(screen.getByTestId('openrouter-model-fallback-vendor/claude-x'));
+    await user.press(screen.getByTestId('ai-provider-model-fallback-vendor/claude-x'));
     await waitFor(() =>
-      expect(screen.queryByTestId('openrouter-fallback-chip-1')).toBeOnTheScreen(),
+      expect(screen.queryByTestId('ai-provider-fallback-chip-1')).toBeOnTheScreen(),
     );
-    await user.press(screen.getByTestId('openrouter-fallback-down-0'));
+    await user.press(screen.getByTestId('ai-provider-fallback-down-0'));
 
-    await user.press(screen.getByTestId('openrouter-save'));
+    await user.press(screen.getByTestId('ai-provider-save'));
 
     await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
     expect(mockedSaveConfig).toHaveBeenCalledWith({
@@ -230,7 +230,7 @@ describe('model selection from the discovered catalog', () => {
     });
     // Saving promotes the draft key to storage and clears it from the
     // input so the secret does not linger on screen.
-    await waitFor(() => expect(screen.getByTestId('openrouter-api-key-input').props.value).toBe(''));
+    await waitFor(() => expect(screen.getByTestId('ai-provider-api-key-input').props.value).toBe(''));
   });
 
   it('keeps the stored key working when the field is left untouched', async () => {
@@ -242,7 +242,7 @@ describe('model selection from the discovered catalog', () => {
 
     await renderSettledScreen();
 
-    await user.press(screen.getByTestId('openrouter-save'));
+    await user.press(screen.getByTestId('ai-provider-save'));
     await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
     expect(mockedSaveConfig).toHaveBeenCalledWith(
       expect.objectContaining({apiKey: STORED_KEY}),
@@ -259,16 +259,16 @@ describe('model selection from the discovered catalog', () => {
 
     await renderSettledScreen();
     await waitFor(() =>
-      expect(screen.queryByTestId('openrouter-fallback-chain')).toBeOnTheScreen(),
+      expect(screen.queryByTestId('ai-provider-fallback-chain')).toBeOnTheScreen(),
     );
 
-    await user.press(screen.getByTestId('openrouter-model-primary-vendor/model-b'));
+    await user.press(screen.getByTestId('ai-provider-model-primary-vendor/model-b'));
 
     await waitFor(() =>
-      expect(screen.queryByTestId('openrouter-fallback-chain')).toBeNull(),
+      expect(screen.queryByTestId('ai-provider-fallback-chain')).toBeNull(),
     );
 
-    await user.press(screen.getByTestId('openrouter-save'));
+    await user.press(screen.getByTestId('ai-provider-save'));
     await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
     expect(mockedSaveConfig).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -288,8 +288,8 @@ describe('model selection from the discovered catalog', () => {
     await renderSettledScreen();
     await waitFor(() => expect(screen.getByText('vendor/claude-x')).toBeOnTheScreen());
 
-    await user.press(screen.getByTestId('openrouter-fallback-remove-1'));
-    await user.press(screen.getByTestId('openrouter-save'));
+    await user.press(screen.getByTestId('ai-provider-fallback-remove-1'));
+    await user.press(screen.getByTestId('ai-provider-save'));
 
     await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
     expect(mockedSaveConfig).toHaveBeenCalledWith(
@@ -321,7 +321,7 @@ describe('save completion flow (TASK-IMPROVEMENT-005)', () => {
 
     const props = await renderSettledScreen();
 
-    await user.press(screen.getByTestId('openrouter-save'));
+    await user.press(screen.getByTestId('ai-provider-save'));
     await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
 
     // No optimistic navigation: the save must complete first.
@@ -355,18 +355,18 @@ describe('save completion flow (TASK-IMPROVEMENT-005)', () => {
 
     const props = await renderSettledScreen();
 
-    await user.press(screen.getByTestId('openrouter-save'));
+    await user.press(screen.getByTestId('ai-provider-save'));
 
-    const error = await screen.findByTestId('openrouter-form-error');
+    const error = await screen.findByTestId('ai-provider-form-error');
     expect(error).toHaveTextContent(/Secure storage is unavailable/);
     // Stay on the editor, no success navigation and therefore no saved
     // flag for Settings to turn into a success toast.
     expect(props.navigation.navigate).not.toHaveBeenCalled();
     expect(props.navigation.goBack).not.toHaveBeenCalled();
     expect(props.navigation.popTo).not.toHaveBeenCalled();
-    expect(screen.getByTestId('openrouter-save')).toBeOnTheScreen();
+    expect(screen.getByTestId('ai-provider-save')).toBeOnTheScreen();
     // The entered configuration is preserved for a retry.
-    expect(checkedStateOf('openrouter-model-primary-vendor/model-a')).toBe(true);
+    expect(checkedStateOf('ai-provider-model-primary-vendor/model-a')).toBe(true);
   });
 });
 
@@ -376,9 +376,9 @@ describe('validation guards', () => {
 
     await renderSettledScreen();
 
-    await user.press(screen.getByTestId('openrouter-save'));
+    await user.press(screen.getByTestId('ai-provider-save'));
 
-    const error = await screen.findByTestId('openrouter-form-error');
+    const error = await screen.findByTestId('ai-provider-form-error');
     expect(error).toHaveTextContent(/api key/i);
     expect(mockedSaveConfig).not.toHaveBeenCalled();
   });
@@ -388,10 +388,10 @@ describe('validation guards', () => {
 
     await renderSettledScreen();
 
-    await user.type(screen.getByTestId('openrouter-api-key-input'), NEW_KEY);
-    await user.press(screen.getByTestId('openrouter-save'));
+    await user.type(screen.getByTestId('ai-provider-api-key-input'), NEW_KEY);
+    await user.press(screen.getByTestId('ai-provider-save'));
 
-    const error = await screen.findByTestId('openrouter-form-error');
+    const error = await screen.findByTestId('ai-provider-form-error');
     expect(error).toHaveTextContent(/primary model/i);
     expect(mockedSaveConfig).not.toHaveBeenCalled();
   });
@@ -409,10 +409,10 @@ describe('model catalog refresh', () => {
 
     await renderSettledScreen();
 
-    await user.press(screen.getByTestId('openrouter-models-refresh'));
+    await user.press(screen.getByTestId('ai-provider-models-refresh'));
 
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-primary-fresh/new-model')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-primary-fresh/new-model')).toBeOnTheScreen(),
     );
     // Discovery is keyless (TASK-AUDIT-004): no key configured or sent.
     expect(mockedListProviderModels).toHaveBeenCalledTimes(1);
@@ -423,7 +423,7 @@ describe('model catalog refresh', () => {
       'openrouter',
     );
     // Catalog source labels stay intact after refresh.
-    expect(screen.queryByTestId('openrouter-models-empty')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-models-empty')).toBeNull();
   });
 
   it('keeps showing the cached catalog when a refresh fails', async () => {
@@ -432,14 +432,14 @@ describe('model catalog refresh', () => {
 
     await renderSettledScreen();
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-primary-vendor/model-a')).toBeOnTheScreen(),
     );
 
-    await user.press(screen.getByTestId('openrouter-models-refresh'));
+    await user.press(screen.getByTestId('ai-provider-models-refresh'));
 
-    const error = await screen.findByTestId('openrouter-form-error');
+    const error = await screen.findByTestId('ai-provider-form-error');
     expect(error).toHaveTextContent(/OpenRouter is unreachable/);
-    expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen();
+    expect(screen.getByTestId('ai-provider-model-primary-vendor/model-a')).toBeOnTheScreen();
   });
 
   it('refreshes the catalog before any API key has been configured', async () => {
@@ -451,18 +451,18 @@ describe('model catalog refresh', () => {
     }));
 
     await renderSettledScreen();
-    expect(await screen.findByTestId('openrouter-models-empty')).toBeOnTheScreen();
+    expect(await screen.findByTestId('ai-provider-models-empty')).toBeOnTheScreen();
 
-    await user.press(screen.getByTestId('openrouter-models-refresh'));
+    await user.press(screen.getByTestId('ai-provider-models-refresh'));
 
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-primary-vendor/model-a')).toBeOnTheScreen(),
     );
     // Discovery is keyless: it succeeds with no key stored and none typed.
     expect(mockedListProviderModels).toHaveBeenCalledTimes(1);
     expect(mockedListProviderModels).toHaveBeenCalledWith('openrouter', {apiKey: undefined});
     expect(mockedRefresh).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId('openrouter-form-error')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-form-error')).toBeNull();
   });
 
   it('requires the provider key before discovery for auth-only catalogs', async () => {
@@ -475,14 +475,14 @@ describe('model catalog refresh', () => {
     await renderSettledScreen();
     await user.press(screen.getByTestId('provider-chip-gemini'));
     await waitFor(() =>
-      expect(String(screen.getByTestId('openrouter-api-key-input').props.placeholder)).toBe(
+      expect(String(screen.getByTestId('ai-provider-api-key-input').props.placeholder)).toBe(
         'AIza…',
       ),
     );
 
-    await user.press(screen.getByTestId('openrouter-models-refresh'));
+    await user.press(screen.getByTestId('ai-provider-models-refresh'));
 
-    const error = await screen.findByTestId('openrouter-form-error');
+    const error = await screen.findByTestId('ai-provider-form-error');
     expect(error).toHaveTextContent(/Enter your Google Gemini API key/);
     // No discovery call went out without credentials.
     expect(mockedListProviderModels).not.toHaveBeenCalled();
@@ -510,7 +510,7 @@ describe('provider switching (TASK-AUDIT-013)', () => {
 
     await renderSettledScreen();
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-primary-vendor/model-a')).toBeOnTheScreen(),
     );
 
     mockedListProviderModels.mockClear();
@@ -521,12 +521,12 @@ describe('provider switching (TASK-AUDIT-013)', () => {
       expect(mockedLoadProviderState).toHaveBeenLastCalledWith('gemini'),
     );
     await waitFor(() =>
-      expect(String(screen.getByTestId('openrouter-api-key-input').props.placeholder)).toBe(
+      expect(String(screen.getByTestId('ai-provider-api-key-input').props.placeholder)).toBe(
         'AIza…',
       ),
     );
-    expect(await screen.findByTestId('openrouter-models-empty')).toBeOnTheScreen();
-    expect(screen.queryByTestId('openrouter-fallback-chain')).toBeNull();
+    expect(await screen.findByTestId('ai-provider-models-empty')).toBeOnTheScreen();
+    expect(screen.queryByTestId('ai-provider-fallback-chain')).toBeNull();
   });
 
   it('saves the edited provider selection with the configuration', async () => {
@@ -535,15 +535,15 @@ describe('provider switching (TASK-AUDIT-013)', () => {
     await renderSettledScreen();
     await user.press(screen.getByTestId('provider-chip-gemini'));
     await waitFor(() =>
-      expect(String(screen.getByTestId('openrouter-api-key-input').props.placeholder)).toBe(
+      expect(String(screen.getByTestId('ai-provider-api-key-input').props.placeholder)).toBe(
         'AIza…',
       ),
     );
 
-    await user.type(screen.getByTestId('openrouter-api-key-input'), 'AIza-new-gemini-key');
-    await user.press(screen.getByTestId('openrouter-model-primary-vendor/model-b'));
+    await user.type(screen.getByTestId('ai-provider-api-key-input'), 'AIza-new-gemini-key');
+    await user.press(screen.getByTestId('ai-provider-model-primary-vendor/model-b'));
 
-    await user.press(screen.getByTestId('openrouter-save'));
+    await user.press(screen.getByTestId('ai-provider-save'));
 
     await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
     expect(mockedSaveConfig).toHaveBeenCalledWith({
@@ -562,9 +562,9 @@ describe('provider switching (TASK-AUDIT-013)', () => {
       expect(mockedLoadProviderState).toHaveBeenLastCalledWith('openai'),
     );
 
-    await user.press(screen.getByTestId('openrouter-save'));
+    await user.press(screen.getByTestId('ai-provider-save'));
 
-    const error = await screen.findByTestId('openrouter-form-error');
+    const error = await screen.findByTestId('ai-provider-form-error');
     expect(error).toHaveTextContent(/API key is required/);
     expect(mockedSaveConfig).not.toHaveBeenCalled();
   });
@@ -574,7 +574,7 @@ describe('provider switching (TASK-AUDIT-013)', () => {
 
     await renderSettledScreen();
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-primary-vendor/model-a')).toBeOnTheScreen(),
     );
 
     await user.press(screen.getByTestId('provider-chip-gemini'));
@@ -585,7 +585,7 @@ describe('provider switching (TASK-AUDIT-013)', () => {
     await user.press(screen.getByTestId('provider-chip-openrouter'));
 
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-primary-vendor/model-a')).toBeOnTheScreen(),
     );
   });
 });
@@ -596,17 +596,17 @@ describe('catalog usability', () => {
 
     await renderSettledScreen();
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-filter')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-filter')).toBeOnTheScreen(),
     );
 
-    expect(screen.getByTestId('openrouter-model-primary-vendor/claude-x')).toBeOnTheScreen();
-    await user.type(screen.getByTestId('openrouter-model-filter'), 'claude');
+    expect(screen.getByTestId('ai-provider-model-primary-vendor/claude-x')).toBeOnTheScreen();
+    await user.type(screen.getByTestId('ai-provider-model-filter'), 'claude');
 
-    expect(screen.getByTestId('openrouter-model-primary-vendor/claude-x')).toBeOnTheScreen();
-    expect(screen.queryByTestId('openrouter-model-primary-vendor/model-a')).toBeNull();
-    expect(screen.queryByTestId('openrouter-model-primary-vendor/model-b')).toBeNull();
+    expect(screen.getByTestId('ai-provider-model-primary-vendor/claude-x')).toBeOnTheScreen();
+    expect(screen.queryByTestId('ai-provider-model-primary-vendor/model-a')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-model-primary-vendor/model-b')).toBeNull();
 
-    await user.type(screen.getByTestId('openrouter-model-filter'), 'zzz-nothing');
+    await user.type(screen.getByTestId('ai-provider-model-filter'), 'zzz-nothing');
     expect(screen.getByText('No models match your filter.')).toBeOnTheScreen();
   });
 
@@ -615,7 +615,7 @@ describe('catalog usability', () => {
 
     await renderSettledScreen();
 
-    expect(await screen.findByTestId('openrouter-model-count')).toHaveTextContent(
+    expect(await screen.findByTestId('ai-provider-model-count')).toHaveTextContent(
       /3 model\(s\)/,
     );
   });
@@ -632,11 +632,11 @@ describe('model catalog caching (TASK-AUDIT-017)', () => {
 
     await renderSettledScreen();
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-primary-vendor/model-a')).toBeOnTheScreen(),
     );
 
     // A re-render driven by local UI state must not touch discovery.
-    await user.type(screen.getByTestId('openrouter-model-filter'), 'claude');
+    await user.type(screen.getByTestId('ai-provider-model-filter'), 'claude');
 
     // Switching providers only reads the other namespace's local cache.
     // OpenAI is used because its discovery requires a key: the refresh
@@ -656,8 +656,8 @@ describe('model catalog caching (TASK-AUDIT-017)', () => {
       models: await fetchModels(),
       fetchedAt: '2026-08-27T01:00:00.000Z',
     }));
-    await user.type(screen.getByTestId('openrouter-api-key-input'), 'sk-openai-key');
-    await user.press(screen.getByTestId('openrouter-models-refresh'));
+    await user.type(screen.getByTestId('ai-provider-api-key-input'), 'sk-openai-key');
+    await user.press(screen.getByTestId('ai-provider-models-refresh'));
 
     await waitFor(() => expect(mockedRefresh).toHaveBeenCalledTimes(1));
     expect(mockedListProviderModels).toHaveBeenCalledTimes(1);
@@ -677,14 +677,14 @@ describe('model catalog caching (TASK-AUDIT-017)', () => {
 
     // While the local snapshot is being read the card neither shows the
     // empty message nor any model rows.
-    expect(await screen.findByTestId('openrouter-models-catalog-loading')).toBeOnTheScreen();
-    expect(screen.queryByTestId('openrouter-models-empty')).toBeNull();
+    expect(await screen.findByTestId('ai-provider-models-catalog-loading')).toBeOnTheScreen();
+    expect(screen.queryByTestId('ai-provider-models-empty')).toBeNull();
 
     resolveCached(catalogSnapshot());
     await waitFor(() =>
-      expect(screen.queryByTestId('openrouter-models-catalog-loading')).toBeNull(),
+      expect(screen.queryByTestId('ai-provider-models-catalog-loading')).toBeNull(),
     );
-    expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen();
+    expect(screen.getByTestId('ai-provider-model-primary-vendor/model-a')).toBeOnTheScreen();
   });
 
   it('labels an aged snapshot as stale while its models remain fully usable', async () => {
@@ -692,15 +692,15 @@ describe('model catalog caching (TASK-AUDIT-017)', () => {
 
     await renderSettledScreen();
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-primary-vendor/model-a')).toBeOnTheScreen(),
     );
 
-    expect(screen.getByTestId('openrouter-models-stale')).toHaveTextContent(/May be outdated/);
+    expect(screen.getByTestId('ai-provider-models-stale')).toHaveTextContent(/May be outdated/);
 
     // Staleness never removes functionality: rows stay selectable.
-    await user.press(screen.getByTestId('openrouter-model-primary-vendor/model-b'));
+    await user.press(screen.getByTestId('ai-provider-model-primary-vendor/model-b'));
     await waitFor(() =>
-      expect(checkedStateOf('openrouter-model-primary-vendor/model-b')).toBe(true),
+      expect(checkedStateOf('ai-provider-model-primary-vendor/model-b')).toBe(true),
     );
   });
 
@@ -709,17 +709,17 @@ describe('model catalog caching (TASK-AUDIT-017)', () => {
 
     await renderSettledScreen();
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-model-primary-vendor/model-a')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-model-primary-vendor/model-a')).toBeOnTheScreen(),
     );
 
-    expect(screen.queryByTestId('openrouter-models-stale')).toBeNull();
-    expect(screen.getByTestId('openrouter-model-count')).toBeOnTheScreen();
+    expect(screen.queryByTestId('ai-provider-models-stale')).toBeNull();
+    expect(screen.getByTestId('ai-provider-model-count')).toBeOnTheScreen();
   });
 });
 
 // TASK-AUDIT-016: the editor is serverless-only. A server-mode mount must
 // show the mode notice and never touch serverless configuration storage.
-describe('OpenRouterSettingsScreen in server mode (TASK-AUDIT-016)', () => {
+describe('AIProviderSettingsScreen in server mode (TASK-AUDIT-016)', () => {
   it('renders the serverless-only notice instead of the editor', async () => {
     await saveApplicationMode('server');
     setRuntimeApplicationMode('server');
@@ -727,12 +727,12 @@ describe('OpenRouterSettingsScreen in server mode (TASK-AUDIT-016)', () => {
     await renderScreen();
 
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-mode-notice')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-mode-notice')).toBeOnTheScreen(),
     );
     expect(screen.getByText(/serverless feature/)).toBeOnTheScreen();
-    expect(screen.queryByTestId('openrouter-api-key-input')).toBeNull();
-    expect(screen.queryByTestId('openrouter-save')).toBeNull();
-    expect(screen.queryByTestId('openrouter-models-refresh')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-api-key-input')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-save')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-models-refresh')).toBeNull();
   });
 
   it('reads no serverless configuration in server mode', async () => {
@@ -741,7 +741,7 @@ describe('OpenRouterSettingsScreen in server mode (TASK-AUDIT-016)', () => {
 
     await renderScreen();
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-mode-notice')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-mode-notice')).toBeOnTheScreen(),
     );
 
     expect(mockedLoadProvider).not.toHaveBeenCalled();
@@ -759,24 +759,24 @@ describe('long-press model tooltip', () => {
     );
     await renderSettledScreen();
 
-    expect(screen.queryByTestId('openrouter-model-tooltip')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-model-tooltip')).toBeNull();
 
     await user.longPress(
-      screen.getByTestId('openrouter-model-primary-vendor/very-long-model-identifier'),
+      screen.getByTestId('ai-provider-model-primary-vendor/very-long-model-identifier'),
     );
 
-    const tooltip = screen.getByTestId('openrouter-model-tooltip');
+    const tooltip = screen.getByTestId('ai-provider-model-tooltip');
     expect(tooltip).toBeOnTheScreen();
     expect(within(tooltip).getByText(longName)).toBeOnTheScreen();
     expect(within(tooltip).getByText('vendor/very-long-model-identifier')).toBeOnTheScreen();
 
     // A long press must not select the model as primary.
-    expect(checkedStateOf('openrouter-model-primary-vendor/very-long-model-identifier')).toBe(
+    expect(checkedStateOf('ai-provider-model-primary-vendor/very-long-model-identifier')).toBe(
       false,
     );
 
     await user.press(tooltip);
-    expect(screen.queryByTestId('openrouter-model-tooltip')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-model-tooltip')).toBeNull();
   });
 
   it('shows the full id of a truncated fallback chain entry', async () => {
@@ -788,13 +788,13 @@ describe('long-press model tooltip', () => {
     });
     await renderSettledScreen();
 
-    await user.longPress(screen.getByTestId('openrouter-fallback-chip-0'));
+    await user.longPress(screen.getByTestId('ai-provider-fallback-chip-0'));
 
-    const tooltip = screen.getByTestId('openrouter-model-tooltip');
+    const tooltip = screen.getByTestId('ai-provider-model-tooltip');
     expect(within(tooltip).getByText('vendor/claude-x')).toBeOnTheScreen();
 
     await user.press(tooltip);
-    expect(screen.queryByTestId('openrouter-model-tooltip')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-model-tooltip')).toBeNull();
   });
 });
 
@@ -808,7 +808,7 @@ describe('primary/fallback configuration guide (TASK-IMPROVEMENT-004)', () => {
 
     await renderSettledScreen();
 
-    const guide = await screen.findByTestId('openrouter-model-guide');
+    const guide = await screen.findByTestId('ai-provider-model-guide');
     expect(guide).toBeOnTheScreen();
     expect(
       within(guide).getByText(/model you want to use first/i),
@@ -827,8 +827,8 @@ describe('primary/fallback configuration guide (TASK-IMPROVEMENT-004)', () => {
   it('does not render the guide before a catalog exists', async () => {
     await renderSettledScreen();
 
-    expect(await screen.findByTestId('openrouter-models-empty')).toBeOnTheScreen();
-    expect(screen.queryByTestId('openrouter-model-guide')).toBeNull();
+    expect(await screen.findByTestId('ai-provider-models-empty')).toBeOnTheScreen();
+    expect(screen.queryByTestId('ai-provider-model-guide')).toBeNull();
   });
 
   it('highlights the selected primary row with a Primary badge', async () => {
@@ -841,21 +841,21 @@ describe('primary/fallback configuration guide (TASK-IMPROVEMENT-004)', () => {
 
     await renderSettledScreen();
 
-    const row = await screen.findByTestId('openrouter-model-primary-vendor/model-a');
+    const row = await screen.findByTestId('ai-provider-model-primary-vendor/model-a');
     expect(row.props.accessibilityState).toMatchObject({checked: true});
     expect(
-      screen.getByTestId('openrouter-model-primary-badge-vendor/model-a'),
+      screen.getByTestId('ai-provider-model-primary-badge-vendor/model-a'),
     ).toBeOnTheScreen();
 
     // Switching the primary moves the highlight and badge to the new row.
-    await user.press(screen.getByTestId('openrouter-model-primary-vendor/model-b'));
+    await user.press(screen.getByTestId('ai-provider-model-primary-vendor/model-b'));
     await waitFor(() =>
       expect(
-        screen.getByTestId('openrouter-model-primary-badge-vendor/model-b'),
+        screen.getByTestId('ai-provider-model-primary-badge-vendor/model-b'),
       ).toBeOnTheScreen(),
     );
     expect(
-      screen.queryByTestId('openrouter-model-primary-badge-vendor/model-a'),
+      screen.queryByTestId('ai-provider-model-primary-badge-vendor/model-a'),
     ).toBeNull();
   });
 
@@ -877,9 +877,9 @@ describe('primary/fallback configuration guide (TASK-IMPROVEMENT-004)', () => {
     await renderSettledScreen();
 
     expect(
-      await screen.findByTestId('openrouter-fallback-order-note'),
+      await screen.findByTestId('ai-provider-fallback-order-note'),
     ).toHaveTextContent(/one after another, in this order/i);
-    expect(screen.getByTestId('openrouter-fallback-chip-0')).toBeOnTheScreen();
-    expect(screen.getByTestId('openrouter-fallback-chip-1')).toBeOnTheScreen();
+    expect(screen.getByTestId('ai-provider-fallback-chip-0')).toBeOnTheScreen();
+    expect(screen.getByTestId('ai-provider-fallback-chip-1')).toBeOnTheScreen();
   });
 });

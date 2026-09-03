@@ -28,12 +28,11 @@ export type MainStackParamList = {
   /** Saved-expression list pushed from Settings (SPEC TASK-072). */
   Vocabulary: undefined;
   /**
-   * Serverless OpenRouter editor pushed from Settings (SPEC TASK-092).
-   * On a successful save it navigates back to Settings with
-   * `configSaved` so the status card can flash the success toast
-   * (TASK-IMPROVEMENT-005).
+   * Serverless AI provider editor pushed from Settings (SPEC TASK-092).
+   * On a successful save it pops back to Settings with `configSaved` so
+   * the status card can flash the success toast (TASK-IMPROVEMENT-005).
    */
-  OpenRouterSettings: undefined;
+  AIProviderSettings: undefined;
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -51,9 +50,9 @@ export type LevelScreenProps = NativeStackScreenProps<MainStackParamList, 'Level
 
 export type VocabularyScreenProps = NativeStackScreenProps<MainStackParamList, 'Vocabulary'>;
 
-export type OpenRouterSettingsScreenProps = NativeStackScreenProps<
+export type AIProviderSettingsScreenProps = NativeStackScreenProps<
   MainStackParamList,
-  'OpenRouterSettings'
+  'AIProviderSettings'
 >;
 
 export type SettingsScreenProps = NativeStackScreenProps<MainStackParamList, 'Settings'>;

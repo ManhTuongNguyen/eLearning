@@ -1,16 +1,15 @@
 /**
- * Serverless LLM provider settings editor (SPEC TASK-092,
- * TASK-AUDIT-013): configures the active provider (OpenRouter, Gemini,
- * OpenAI), the user's API key, primary model and ordered
- * fallback models. Keys live only in secure storage via
- * saveServerlessOpenRouterConfig (TASK-088/093) — they are never rendered,
- * logged or sent anywhere except the selected provider's auth header, and
- * each provider gets its own keychain/settings/catalog namespace so
- * switching providers never mixes secrets or model ids. Models come from
- * the locally cached per-provider catalog (TASK-084) or a direct refresh
- * through listProviderModels (TASK-AUDIT-004): discovery hits the public
- * /models endpoint with no credentials for providers that publish one
- * (OpenRouter) and requires the user's key for the others
+ * AI provider settings editor (SPEC TASK-092, TASK-AUDIT-013): configures
+ * the active provider (OpenRouter, Gemini, OpenAI), the user's API key,
+ * primary model and ordered fallback models. Keys live only in secure
+ * storage via saveServerlessOpenRouterConfig (TASK-088/093) — they are
+ * never rendered, logged or sent anywhere except the selected provider's
+ * auth header, and each provider gets its own keychain/settings/catalog
+ * namespace so switching providers never mixes secrets or model ids.
+ * Models come from the locally cached per-provider catalog (TASK-084) or a
+ * direct refresh through listProviderModels (TASK-AUDIT-004): discovery
+ * hits the public /models endpoint with no credentials for providers that
+ * publish one (OpenRouter) and requires the user's key for the others
  * (Gemini, OpenAI). Fallback order is edited in place with move up/down
  * controls.
  *
@@ -55,7 +54,7 @@ import {toErrorMessage} from '../auth/AuthContext';
 import {SecretInput} from '../components/SecretInput';
 import {getLocalDatabase} from '../db/database';
 import {useApplicationMode} from '../mode/ModeContext';
-import type {OpenRouterSettingsScreenProps} from '../navigation/types';
+import type {AIProviderSettingsScreenProps} from '../navigation/types';
 import {getCachedModelCatalog, isModelCatalogStale, refreshModelCatalog} from '../serverless/modelCatalog';
 import {
   listProviderModels,
@@ -505,7 +504,7 @@ function modelLabel(model: ModelInfo): string {
   return model.name || model.id;
 }
 
-export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenProps) {
+export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenProps) {
   const {colors} = useTheme();
   // TASK-AUDIT-016: this editor configures the serverless provider stack,
   // so it is only operable in serverless mode; server-mode mounts see a
@@ -790,19 +789,19 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
   // above this return, so the conditional keeps the rules-of-hooks contract.
   if (modeStatus === 'ready' && mode !== 'serverless') {
     return (
-      <View style={styles.container} testID="openrouter-settings-screen">
+      <View style={styles.container} testID="ai-provider-settings-screen">
         <View style={styles.header}>
           <Pressable
             accessibilityLabel="Go back"
             hitSlop={8}
             onPress={() => navigation.goBack()}
-            testID="openrouter-back">
+            testID="ai-provider-back">
             <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
           <Text style={styles.title}>AI provider</Text>
           <View style={styles.headerSpacer} />
         </View>
-        <View style={styles.modeNotice} testID="openrouter-mode-notice">
+        <View style={styles.modeNotice} testID="ai-provider-mode-notice">
           <Text style={styles.modeNoticeText}>
             Direct AI connections are a serverless feature. Switch the
             application to serverless mode to configure a provider, API key
@@ -814,13 +813,13 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
   }
 
   return (
-    <View style={styles.container} testID="openrouter-settings-screen">
+    <View style={styles.container} testID="ai-provider-settings-screen">
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
           hitSlop={8}
           onPress={() => navigation.goBack()}
-          testID="openrouter-back">
+          testID="ai-provider-back">
           <Text style={styles.backText}>‹ Back</Text>
         </Pressable>
         <Text style={styles.title}>{descriptor.label}</Text>
@@ -865,7 +864,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
             }}
             placeholder={storedKey ? '••••••••••••  saved' : descriptor.keyPlaceholder}
             value={apiKeyDraft}
-            testID="openrouter-api-key-input"
+            testID="ai-provider-api-key-input"
             textContentType="none"
             inputStyle={styles.input}
             showBorder={false}
@@ -891,9 +890,9 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                 styles.refreshButton,
                 (refreshing || pressed) && styles.refreshButtonDisabled,
               ]}
-              testID="openrouter-models-refresh">
+              testID="ai-provider-models-refresh">
               {refreshing ? (
-                <ActivityIndicator size="small" testID="openrouter-models-loading" />
+                <ActivityIndicator size="small" testID="ai-provider-models-loading" />
               ) : (
                 <Text style={styles.refreshText}>Refresh</Text>
               )}
@@ -902,18 +901,18 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
 
           {models === null ? (
             catalogLoading ? (
-              <Text style={styles.emptyText} testID="openrouter-models-catalog-loading">
+              <Text style={styles.emptyText} testID="ai-provider-models-catalog-loading">
                 Loading saved models…
               </Text>
             ) : (
-              <Text style={styles.emptyText} testID="openrouter-models-empty">
+              <Text style={styles.emptyText} testID="ai-provider-models-empty">
                 No models downloaded yet. Tap Refresh to load the available models from{' '}
                 {descriptor.label}.
               </Text>
             )
           ) : (
             <>
-              <View style={styles.guide} testID="openrouter-model-guide">
+              <View style={styles.guide} testID="ai-provider-model-guide">
                 <Text style={styles.guideIntro}>
                   Models are used in order: the primary model first, then each
                   fallback until one answers.
@@ -942,7 +941,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
               {modelsUpdatedAt ? (
                 <Text
                   style={styles.catalogMeta}
-                  testID={modelsStale ? 'openrouter-models-stale' : undefined}>
+                  testID={modelsStale ? 'ai-provider-models-stale' : undefined}>
                   Cached locally (updated {modelsUpdatedAt}).
                   {modelsStale ? ' May be outdated — tap Refresh to update.' : ''}
                 </Text>
@@ -953,7 +952,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                 onChangeText={setFilter}
                 placeholder="Filter models…"
                 style={styles.input}
-                testID="openrouter-model-filter"
+                testID="ai-provider-model-filter"
                 value={filter}
               />
               {visibleModels.total === 0 ? (
@@ -980,7 +979,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                             setModelTooltip({label: modelLabel(model), id: model.id})
                           }
                           style={styles.primaryButton}
-                          testID={`openrouter-model-primary-${model.id}`}>
+                          testID={`ai-provider-model-primary-${model.id}`}>
                           <View
                             style={[
                               styles.radioOuter,
@@ -1000,7 +999,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                               {isPrimary ? (
                                 <View
                                   style={styles.primaryBadge}
-                                  testID={`openrouter-model-primary-badge-${model.id}`}>
+                                  testID={`ai-provider-model-primary-badge-${model.id}`}>
                                   <Text style={styles.primaryBadgeText}>Primary</Text>
                                 </View>
                               ) : null}
@@ -1023,7 +1022,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                             isFallback && styles.fallbackToggleSelected,
                             isPrimary && styles.fallbackToggleDisabled,
                           ]}
-                          testID={`openrouter-model-fallback-${model.id}`}>
+                          testID={`ai-provider-model-fallback-${model.id}`}>
                           <Text
                             style={[
                               styles.fallbackToggleText,
@@ -1042,7 +1041,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                       list.
                     </Text>
                   ) : (
-                    <Text style={styles.catalogMeta} testID="openrouter-model-count">
+                    <Text style={styles.catalogMeta} testID="ai-provider-model-count">
                       {visibleModels.total} model(s) available on {descriptor.label}.
                     </Text>
                   )}
@@ -1054,9 +1053,9 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
           {fallbackModels.length > 0 ? (
             <View
               style={[styles.chainList, styles.chainListBordered]}
-              testID="openrouter-fallback-chain">
+              testID="ai-provider-fallback-chain">
               <Text style={styles.chainHeader}>Fallback order</Text>
-              <Text style={styles.chainIntro} testID="openrouter-fallback-order-note">
+              <Text style={styles.chainIntro} testID="ai-provider-fallback-order-note">
                 These models are tried one after another, in this order, when
                 the primary model cannot complete the request.
               </Text>
@@ -1065,7 +1064,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                   key={id}
                   onLongPress={() => setModelTooltip({label: id, id: ''})}
                   style={styles.chainRow}
-                  testID={`openrouter-fallback-chip-${index}`}>
+                  testID={`ai-provider-fallback-chip-${index}`}>
                   <Text style={styles.chainOrder}>{index + 1}.</Text>
                   <Text numberOfLines={1} style={styles.chainId}>
                     {id}
@@ -1075,7 +1074,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                     disabled={index === 0}
                     onPress={() => moveFallback(index, -1)}
                     style={[styles.chainControl, index === 0 && styles.chainControlDisabled]}
-                    testID={`openrouter-fallback-up-${index}`}>
+                    testID={`ai-provider-fallback-up-${index}`}>
                     <Text style={styles.chainControlText}>↑</Text>
                   </Pressable>
                   <Pressable
@@ -1086,14 +1085,14 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
                       styles.chainControl,
                       index === fallbackModels.length - 1 && styles.chainControlDisabled,
                     ]}
-                    testID={`openrouter-fallback-down-${index}`}>
+                    testID={`ai-provider-fallback-down-${index}`}>
                     <Text style={styles.chainControlText}>↓</Text>
                   </Pressable>
                   <Pressable
                     accessibilityLabel={`Remove ${id} from fallbacks`}
                     onPress={() => removeFallback(index)}
                     style={[styles.chainControl, styles.chainControlRemove]}
-                    testID={`openrouter-fallback-remove-${index}`}>
+                    testID={`ai-provider-fallback-remove-${index}`}>
                     <Text style={[styles.chainControlText, styles.chainControlRemoveText]}>
                       ✕
                     </Text>
@@ -1105,7 +1104,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
         </View>
 
         {error ? (
-          <Text role="alert" style={styles.error} testID="openrouter-form-error">
+          <Text role="alert" style={styles.error} testID="ai-provider-form-error">
             {error}
           </Text>
         ) : null}
@@ -1117,9 +1116,9 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
             handleSave();
           }}
           style={[styles.saveButton, (saving || loading) && styles.saveButtonDisabled]}
-          testID="openrouter-save">
+          testID="ai-provider-save">
           {saving ? (
-            <ActivityIndicator color={colors.onPrimary} testID="openrouter-saving" />
+            <ActivityIndicator color={colors.onPrimary} testID="ai-provider-saving" />
           ) : (
             <Text style={styles.saveButtonText}>Save configuration</Text>
           )}
@@ -1132,7 +1131,7 @@ export function OpenRouterSettingsScreen({navigation}: OpenRouterSettingsScreenP
           accessibilityLabel="Close model details"
           onPress={() => setModelTooltip(null)}
           style={styles.tooltipOverlay}
-          testID="openrouter-model-tooltip">
+          testID="ai-provider-model-tooltip">
           <View style={styles.tooltipBubble}>
             <Text style={styles.tooltipText}>{modelTooltip.label}</Text>
             {modelTooltip.id && modelTooltip.id !== modelTooltip.label ? (

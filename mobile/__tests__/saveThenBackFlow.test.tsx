@@ -99,17 +99,17 @@ async function openEditorAndSave() {
   fireEvent.press(screen.getByTestId('chat-open-settings'));
   expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
 
-  fireEvent.press(await screen.findByTestId('settings-openrouter-card'));
-  expect(await screen.findByTestId('openrouter-settings-screen')).toBeOnTheScreen();
+  fireEvent.press(await screen.findByTestId('settings-ai-provider-card'));
+  expect(await screen.findByTestId('ai-provider-settings-screen')).toBeOnTheScreen();
   await waitFor(() =>
-    expect(screen.getByTestId('openrouter-save').props.disabled).toBeFalsy(),
+    expect(screen.getByTestId('ai-provider-save').props.disabled).toBeFalsy(),
   );
 
-  fireEvent.press(screen.getByTestId('openrouter-save'));
+  fireEvent.press(screen.getByTestId('ai-provider-save'));
   await waitFor(() => expect(screen.getByTestId('settings-screen')).toBeOnTheScreen());
   // The editor must be removed from the stack, not merely hidden below the
   // duplicated Settings row (the historical bug).
-  expect(screen.queryByTestId('openrouter-settings-screen')).toBeNull();
+  expect(screen.queryByTestId('ai-provider-settings-screen')).toBeNull();
 }
 
 describe('save in the provider editor, then Back (regression)', () => {
@@ -120,7 +120,7 @@ describe('save in the provider editor, then Back (regression)', () => {
     fireEvent.press(screen.getByTestId('settings-back'));
 
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
-    expect(screen.queryByTestId('openrouter-settings-screen')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-settings-screen')).toBeNull();
     expect(screen.queryByTestId('settings-screen')).toBeNull();
   });
 
@@ -136,7 +136,7 @@ describe('save in the provider editor, then Back (regression)', () => {
     });
 
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
-    expect(screen.queryByTestId('openrouter-settings-screen')).toBeNull();
+    expect(screen.queryByTestId('ai-provider-settings-screen')).toBeNull();
     expect(screen.queryByTestId('settings-screen')).toBeNull();
   });
 });

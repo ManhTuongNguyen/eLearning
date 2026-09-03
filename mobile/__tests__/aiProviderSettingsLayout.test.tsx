@@ -6,11 +6,11 @@ import {ModeProvider} from '../src/mode/ModeContext';
 import {saveApplicationMode} from '../src/mode/modeStorage';
 import {setRuntimeApplicationMode} from '../src/mode/runtime';
 import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
-import type {OpenRouterSettingsScreenProps} from '../src/navigation/types';
-import {OpenRouterSettingsScreen} from '../src/screens/OpenRouterSettingsScreen';
+import type {AIProviderSettingsScreenProps} from '../src/navigation/types';
+import {AIProviderSettingsScreen} from '../src/screens/AIProviderSettingsScreen';
 import * as modelCatalog from '../src/serverless/modelCatalog';
 import * as serverlessSettings from '../src/serverless/settings';
-import {createStyles} from '../src/screens/OpenRouterSettingsScreen';
+import {createStyles} from '../src/screens/AIProviderSettingsScreen';
 import {lightColors} from '../src/theme/colors';
 import {ThemeProvider} from '../src/theme/ThemeContext';
 
@@ -37,15 +37,15 @@ function flattenStyle(style: unknown): Record<string, unknown> {
 async function renderScreen() {
   const props = {
     navigation: {navigate: jest.fn(), goBack: jest.fn()},
-    route: {key: 'openrouter-settings-test', name: 'OpenRouterSettings', params: undefined},
-  } as unknown as OpenRouterSettingsScreenProps;
+    route: {key: 'ai-provider-settings-test', name: 'AIProviderSettings', params: undefined},
+  } as unknown as AIProviderSettingsScreenProps;
 
   // The layout test targets the editor body, which only exists in
   // serverless mode (TASK-AUDIT-016), so mount under the real providers.
   await render(
     <ModeProvider>
       <ThemeProvider>
-        <OpenRouterSettingsScreen {...props} />
+        <AIProviderSettingsScreen {...props} />
       </ThemeProvider>
     </ModeProvider>,
   );
@@ -69,7 +69,7 @@ afterEach(() => {
   setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
 });
 
-describe('OpenRouterSettingsScreen layout (TASK-AUDIT-012)', () => {
+describe('AIProviderSettingsScreen layout (TASK-AUDIT-012)', () => {
   it('uses the shared pushed-screen header spacing on top of the app-shell inset padding', () => {
     const styles = createStyles(lightColors);
 
@@ -92,15 +92,15 @@ describe('OpenRouterSettingsScreen layout (TASK-AUDIT-012)', () => {
     // itself always renders its own fixed spacing.
     await renderScreen();
 
-    const container = screen.getByTestId('openrouter-settings-screen');
+    const container = screen.getByTestId('ai-provider-settings-screen');
     expect(flattenStyle(container.props.style).paddingTop).toBe(16);
     await waitFor(() =>
-      expect(screen.getByTestId('openrouter-save')).toBeOnTheScreen(),
+      expect(screen.getByTestId('ai-provider-save')).toBeOnTheScreen(),
     );
   });
 });
 
-describe('OpenRouterSettingsScreen scrollbar anchoring (TASK-IMPROVEMENT-001)', () => {
+describe('AIProviderSettingsScreen scrollbar anchoring (TASK-IMPROVEMENT-001)', () => {
   // On Android the scroll indicator draws at the ScrollView's own frame
   // edge (ReactScrollView uses SCROLLBARS_OUTSIDE_OVERLAY), so any
   // horizontal padding on the ScrollView's parent would pull the
