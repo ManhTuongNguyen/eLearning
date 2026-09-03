@@ -701,6 +701,24 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
         ) : null}
 
         <View style={styles.rowGroup}>
+          <Text style={styles.sectionLabel}>Speech</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Text to speech settings"
+            onPress={() => navigation.navigate('TTSSettings')}
+            style={({pressed}) => [styles.row, pressed && styles.rowPressed]}
+            testID="settings-open-tts">
+            <View style={styles.rowTexts}>
+              <Text style={styles.rowTitle}>Text to speech</Text>
+              <Text style={styles.rowDescription}>
+                Voice, gender, speed, pitch and latency for read-aloud.
+              </Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.rowGroup}>
           <Text style={styles.sectionLabel}>Theme</Text>
           <View style={styles.segmentRow}>
             {THEME_OPTIONS.map(option => {

@@ -13,6 +13,8 @@ import {HistoryScreen} from '../screens/HistoryScreen';
 import {LevelScreen} from '../screens/LevelScreen';
 import {NewConversationScreen} from '../screens/NewConversationScreen';
 import {SettingsScreen} from '../screens/SettingsScreen';
+import {TTSSettingsScreen} from '../screens/TTSSettingsScreen';
+import {VoiceManagerScreen} from '../screens/VoiceManagerScreen';
 import {VocabularyScreen} from '../screens/VocabularyScreen';
 import type {MainStackParamList} from './types';
 
@@ -28,6 +30,8 @@ export function MainNavigator() {
       <Stack.Screen name="Level" component={LevelScreen} />
       <Stack.Screen name="Vocabulary" component={VocabularyScreen} />
       <Stack.Screen name="AIProviderSettings" component={AIProviderSettingsScreen} />
+      <Stack.Screen name="TTSSettings" component={TTSSettingsScreen} />
+      <Stack.Screen name="VoiceManager" component={VoiceManagerScreen} />
     </Stack.Navigator>
   );
 }

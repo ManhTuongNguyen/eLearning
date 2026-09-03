@@ -11,6 +11,9 @@ importers:
       '@react-native-async-storage/async-storage':
         specifier: ^3.1.1
         version: 3.1.1(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.81.4(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.1.0))(react@19.1.0)
+      '@react-native-community/slider':
+        specifier: ^5.2.1
+        version: 5.2.1
       '@react-native/new-app-screen':
         specifier: 0.81.4
         version: 0.81.4(@types/react@19.2.18)(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.81.4(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.1.0))(react@19.1.0)
@@ -78,6 +81,9 @@ importers:
       '@testing-library/react-native':
         specifier: ^14.0.1
         version: 14.0.1(jest@29.7.0(@types/node@26.3.0))(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.81.4(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.1.0))(react@19.1.0)(test-renderer@1.2.0(@types/react@19.2.18)(react@19.1.0))
+      '@types/adm-zip':
+        specifier: ^0.5.8
+        version: 0.5.8
       '@types/jest':
         specifier: ^29.5.13
         version: 29.5.14
@@ -987,6 +993,9 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
+  '@react-native-community/slider@5.2.1':
+    resolution: {integrity: sha512-HBDPRFRIN47hRtd5tdDWZp3kkVN1z98jGbK9wHOfUfVO+PbBDZzD7xjiiyBqNpg6Rom2QPFOpBZzsB2bHy4yAQ==}
+
   '@react-native/assets-registry@0.81.4':
     resolution: {integrity: sha512-AMcDadefBIjD10BRqkWw+W/VdvXEomR6aEZ0fhQRAv7igrBzb4PTn4vHKYg+sUK0e3wa74kcMy2DLc/HtnGcMA==}
     engines: {node: '>= 20.19.4'}
@@ -1151,6 +1160,9 @@ packages:
     peerDependenciesMeta:
       jest:
         optional: true
+
+  '@types/adm-zip@0.5.8':
+    resolution: {integrity: sha512-RVVH7QvZYbN+ihqZ4kX/dMiowf6o+Jk1fNwiSdx0NahBJLU787zkULhGhJM8mf/obmLGmgdMM0bXsQTmyfbR7Q==}
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -5025,6 +5037,8 @@ snapshots:
       - typescript
       - utf-8-validate
 
+  '@react-native-community/slider@5.2.1': {}
+
   '@react-native/assets-registry@0.81.4': {}
 
   '@react-native/babel-plugin-codegen@0.81.4(@babel/core@7.29.7)':
@@ -5282,6 +5296,10 @@ snapshots:
       test-renderer: 1.2.0(@types/react@19.2.18)(react@19.1.0)
     optionalDependencies:
       jest: 29.7.0(@types/node@26.3.0)
+
+  '@types/adm-zip@0.5.8':
+    dependencies:
+      '@types/node': 26.3.0
 
   '@types/babel__core@7.20.5':
     dependencies:

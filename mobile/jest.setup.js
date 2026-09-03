@@ -93,6 +93,24 @@ jest.mock('react-native-share', () => ({
 }));
 
 /**
+ * @react-native-community/slider mock: renders a plain View carrying ALL
+ * slider props on its own props object (value, minimumValue, maximumValue,
+ * step, onValueChange, onSlidingComplete, testID) so screens can exercise
+ * slider-driven state flows and tests can assert the configured bounds.
+ */
+jest.mock('@react-native-community/slider', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  const Slider = (props) => React.createElement(View, { ...props, testID: props.testID ?? 'slider' }, null);
+
+  return {
+    __esModule: true,
+    default: Slider,
+  };
+});
+
+/**
  * react-native-sqlite-storage mock (local serverless database, TASK-081).
  *
  * Records every executed statement against a shared statement log so tests

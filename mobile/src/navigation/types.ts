@@ -33,6 +33,10 @@ export type MainStackParamList = {
    * the status card can flash the success toast (TASK-IMPROVEMENT-005).
    */
   AIProviderSettings: undefined;
+  /** Speech output configuration pushed from Settings (TASK-TTS-001). */
+  TTSSettings: undefined;
+  /** Voice manager (installed system voices) pushed from TTS settings (TASK-TTS-003). */
+  VoiceManager: undefined;
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -53,6 +57,16 @@ export type VocabularyScreenProps = NativeStackScreenProps<MainStackParamList, '
 export type AIProviderSettingsScreenProps = NativeStackScreenProps<
   MainStackParamList,
   'AIProviderSettings'
+>;
+
+export type TTSSettingsScreenProps = NativeStackScreenProps<
+  MainStackParamList,
+  'TTSSettings'
+>;
+
+export type VoiceManagerScreenProps = NativeStackScreenProps<
+  MainStackParamList,
+  'VoiceManager'
 >;
 
 export type SettingsScreenProps = NativeStackScreenProps<MainStackParamList, 'Settings'>;
