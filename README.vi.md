@@ -8,6 +8,12 @@
 
 Ứng dụng di động học tiếng Anh thông qua hội thoại AI tự nhiên, được xây dựng dưới dạng trải nghiệm chat kiểu ChatGPT với các tính năng dành riêng cho người học ngôn ngữ.
 
+## Tải xuống (Download)
+
+📦 **Tải file APK:** [eLearning-v1.0.0-arm64-v8a.apk](https://github.com/ManhTuongNguyen/eLearning/releases/download/v1.0.0/eLearning-release.apk)
+
+> ⚠️ **Cảnh báo tương thích thiết bị:** file APK này chỉ dành cho thiết bị **arm64-v8a**. Nó sẽ không cài đặt được trên thiết bị/giả lập ARM 32-bit (`armeabi-v7a`), `x86` hoặc `x86_64`. Hầu hết điện thoại Android hiện đại (từ 2016 trở đi) đều dùng arm64-v8a — hãy kiểm tra kiến trúc CPU của thiết bị trước khi tải. Nếu thiết bị của bạn dùng kiến trúc khác, bạn cần [tự build ứng dụng](#chạy-mobile).
+
 ## Phát triển (Development)
 
 Dự án này được hoàn thành từ đầu đến cuối bởi một **Autonomous Agent Loop** (Loop Engineering): [opencode](https://opencode.ai) chạy model `ox-alpha` (GLM 5.3 flash) đã thực thi toàn bộ backlog mà không cần prompt từng bước từ con người. Một shell loop gọi lại agent liên tục; chính agent quyết định việc tiếp theo cần làm bằng cách đọc các state file được track. Phần này tài liệu hóa toàn bộ flow để bạn có thể replicate trên bất kỳ dự án nào — và cách chạy, test và sử dụng những gì loop đã xây dựng.

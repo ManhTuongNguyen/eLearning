@@ -8,6 +8,12 @@
 
 A mobile application for learning English through natural AI conversation, built as a ChatGPT-style chat experience with features designed for language learners.
 
+## Download
+
+📦 **Download the APK:** [eLearning-v1.0.0-arm64-v8a.apk](https://github.com/ManhTuongNguyen/eLearning/releases/download/v1.0.0/eLearning-release.apk)
+
+> ⚠️ **Device compatibility warning:** this APK is built for **arm64-v8a devices only**. It will not install on 32-bit ARM (`armeabi-v7a`), `x86` or `x86_64` devices/emulators. Most modern Android phones (2016 and later) use arm64-v8a — check your device's CPU architecture before downloading. If your device has a different architecture, you need to [build the app yourself](#running-mobile).
+
 ## Development
 
 This project was completed end-to-end by an **Autonomous Agent Loop** (Loop Engineering): [opencode](https://opencode.ai) running the `ox-alpha` (GLM 5.3 flash) model executed the backlog without step-by-step human prompting. A shell loop re-invokes the agent indefinitely; the agent itself decides what to do next by reading tracked state files. This section documents the full flow so you can replicate it on any project — and how to run, test and use what the loop built.
