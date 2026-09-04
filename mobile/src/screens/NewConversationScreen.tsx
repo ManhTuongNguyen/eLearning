@@ -10,10 +10,12 @@
  * user's own key and persisted in the local SQLite database — no backend
  * traffic happens (ROADMAP Rule 9). Both land in Chat; a blank Start behaves
  * exactly like the auto action, so empty input works too.
- * The server-mode creation response carries the generated sample conversation
+ * the server-mode creation response carries the generated sample conversation
  * (TASK-053), which is handed to Chat as a route param since no endpoint can
- * refetch it. Creation shows a spinner and disables the action; failures
- * surface in an inline banner and leave the form ready to retry.
+ * refetch it; serverless creation (TASK-093) generates the identical example
+ * directly through the provider. Creation shows a spinner and disables the
+ * action; failures surface in an inline banner and leave the form ready to
+ * retry.
  */
 import React, {useCallback, useMemo, useState} from 'react';
 import {
@@ -155,7 +157,8 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
           // TASK-085: topic generation runs directly against the user's
           // configured provider (registry-selected: OpenRouter, Gemini,
           // OpenAI) with their own key; nothing touches the
-          // backend (Rule 9).
+          // backend (Rule 9). TASK-093: the created session also carries
+          // its generated example conversation, mirroring the server flow.
           const config = await loadServerlessOpenRouterConfig();
           if (!config) {
             throw new Error(
@@ -164,12 +167,12 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
           }
           const client = createProviderClient(config);
           const db = await getLocalDatabase();
-          const session = await createServerlessSession(
+          const {session, sampleTurns} = await createServerlessSession(
             db,
             request => client.complete(request),
             rawHint.trim(),
           );
-          navigation.replace('Chat', {sessionId: session.id});
+          navigation.replace('Chat', {sessionId: session.id, sampleTurns});
           return;
         }
         // TASK-AUDIT-005: creation goes through the central authed requester

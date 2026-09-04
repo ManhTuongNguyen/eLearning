@@ -208,17 +208,48 @@ class TestFailureAtomicity:
         assert response.status_code == status.HTTP_502_BAD_GATEWAY
         assert Session.objects.count() == 0
 
-    def test_sample_failure_after_successful_topic_persists_nothing(self, authed_api, service):
-        service.sample_error = LLMResponseError(
-            "unusable sample", provider="topics", retryable=False
-        )
+    def test_sample_transport_failure_after_successful_topic_persists_nothing(
+        self, authed_api, service
+    ):
+        """Transport/provider failures still abort: only a malformed sample
+        completion degrades to a blank example (see the degradation test
+        below). An unreachable provider is not trustworthy for the session.
+        """
+        service.sample_error = LLMAvailabilityError("upstream unavailable", provider="topics")
 
         response = authed_api.post(SESSIONS_URL, {}, format="json")
 
-        assert response.status_code == status.HTTP_502_BAD_GATEWAY
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
         assert len(service.generate_calls) == 1
         assert len(service.sample_calls) == 1
         assert Session.objects.count() == 0
+
+    def test_malformed_sample_output_degrades_to_blank_example(
+        self, authed_api, user, service, caplog
+    ):
+        """A malformed sample completion must not sink the session (TASK-093).
+
+        The example is display-only, so unusable output is skipped: the
+        session stands and the response carries a blank example, while
+        provider/transport failures still abort the request.
+        """
+        service.sample_error = LLMResponseError(
+            "Sample conversation response was not a JSON object.",
+            provider="topics",
+            retryable=False,
+        )
+
+        with caplog.at_level("WARNING", logger="conversations.views"):
+            response = authed_api.post(SESSIONS_URL, {"topic_hint": "travel"}, format="json")
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert Session.objects.count() == 1
+        session = Session.objects.get()
+        assert session.title == TOPIC_TITLE
+        assert session.topic_hint == "travel"
+        assert response.data["sample_conversation"] == {"turns": []}
+        # The skip is observable in the logs, without any payload content.
+        assert any("sample conversation skipped" in message for message in caplog.messages)
 
     def test_base_llm_error_defaults_to_502(self, authed_api, service):
         service.generate_error = LLMError("generic", provider="llm", retryable=True)

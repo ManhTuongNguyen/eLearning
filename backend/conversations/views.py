@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 from functools import lru_cache
 
@@ -28,9 +29,11 @@ from conversations.topics import GeneratedTopic, TopicGenerationService
 from conversations.window import recent_message_window, select_recent_messages
 from learning.models import Profile
 from llm import views as llm_views
-from llm.exceptions import LLMError
+from llm.exceptions import LLMError, LLMResponseError
 from llm.fallback import FallbackProvider
 from llm.sse import sse_streaming_response
+
+logger = logging.getLogger("conversations.views")
 
 
 class Conflict(APIException):
@@ -104,7 +107,12 @@ class SessionCollectionView(generics.ListAPIView):
     3. Persist the session.
 
     All LLM work happens before the single session write, so provider
-    failures never leave corrupt or half-filled sessions behind.
+    failures never leave corrupt or half-filled sessions behind. The sample
+    conversation is display-only, so a malformed sample completion (not the
+    required JSON shape) degrades instead of failing: the session is still
+    created and ``sample_conversation`` is answered as a blank
+    ``{"turns": []}``. Transport/provider failures still abort the request —
+    a provider that cannot be reached cannot be trusted for the topic either.
     """
 
     permission_classes = [IsAuthenticated]
@@ -121,9 +129,17 @@ class SessionCollectionView(generics.ListAPIView):
         service = get_topic_service()
         try:
             topic = service.generate(level=profile.level, hint=hint)
-            sample = service.generate_sample(topic=topic, level=profile.level)
         except LLMError as exc:
             raise exc
+        try:
+            sample = service.generate_sample(topic=topic, level=profile.level)
+        except LLMResponseError as exc:
+            # Malformed sample output (not the required JSON shape) must not
+            # sink the session: the example is display-only, so it degrades
+            # to a blank example while the topic stands. Transport/provider
+            # failures still propagate and abort the request.
+            logger.warning("sample conversation skipped for session creation: %s", exc)
+            sample = None
         session = Session.objects.create(
             user=request.user,
             title=topic.title,
@@ -132,7 +148,7 @@ class SessionCollectionView(generics.ListAPIView):
             learning_level=profile.level,
         )
         data = SessionSerializer(session).data
-        data["sample_conversation"] = asdict(sample)
+        data["sample_conversation"] = asdict(sample) if sample is not None else {"turns": []}
         return Response(data, status=status.HTTP_201_CREATED)
 
 

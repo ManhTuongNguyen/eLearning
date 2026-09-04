@@ -125,6 +125,22 @@ const TOPIC = {
   description:
     'Talk about a dream trip: where to go, what to pack and who to take along.',
 };
+const SAMPLE_TURNS = {
+  turns: [
+    {role: 'assistant', content: 'Hi! Have you ever planned a big trip?'},
+    {role: 'user', content: 'Yes, I visited Japan last spring.'},
+    {role: 'assistant', content: 'That sounds wonderful! What did you enjoy most?'},
+    {role: 'user', content: 'The food and the temples were amazing.'},
+  ],
+};
+/**
+ * TASK-093: the topic and its example conversation arrive together in ONE
+ * combined completion.
+ */
+const COMBINED_TOPIC_AND_SAMPLE = JSON.stringify({
+  topic: TOPIC,
+  sample_conversation: SAMPLE_TURNS,
+});
 const USER_TEXT = 'Hello! How are you?';
 const ASSISTANT_TEXT = 'Hello there! Nice to meet you.';
 const SUGGESTIONS = {
@@ -219,14 +235,22 @@ async function bootConfiguredServerlessApp(
 
 type ReactTestRendererLike = ReturnType<typeof render>;
 
-/** Create one serverless conversation and stream one assistant reply. */
-async function startConversationWithReply(fake: FakeOpenRouterClient): Promise<void> {
+/**
+ * TASK-093: serverless session creation runs ONE combined completion that
+ * returns the topic and its example conversation together.
+ */
+function enqueueTopicAndSample(fake: FakeOpenRouterClient): void {
   fake.enqueueComplete({
-    text: JSON.stringify(TOPIC),
+    text: COMBINED_TOPIC_AND_SAMPLE,
     model: 'vendor/model-a',
     finishReason: 'stop',
-    requestId: 'topic-1',
+    requestId: 'topic-and-sample-1',
   });
+}
+
+/** Create one serverless conversation and stream one assistant reply. */
+async function startConversationWithReply(fake: FakeOpenRouterClient): Promise<void> {
+  enqueueTopicAndSample(fake);
   await pressTop('chat-open-new');
   await waitFor(() =>
     expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen(),
@@ -297,9 +321,10 @@ describe('TASK-117 serverless journey', () => {
     await pressTop('settings-mode-serverless');
     await waitFor(() => expect(checkedOf('settings-mode-serverless')).toBe(true));
     expect(getRuntimeApplicationMode()).toBe('serverless');
-    // Server-only features are hidden while serverless is active.
+    // Server-only features are hidden while serverless is active, but the
+    // learning-level row stays (TASK-091: it edits the local SQLite profile).
     expect(screen.queryByTestId('settings-open-vocabulary')).toBeNull();
-    expect(screen.queryByTestId('settings-open-level')).toBeNull();
+    expect(screen.getByTestId('settings-open-level')).toBeOnTheScreen();
     expect(top('settings-ai-provider-card')).toBeOnTheScreen();
 
     // ---- Configure the API key and select models. ----------------------
@@ -347,17 +372,24 @@ describe('TASK-117 serverless journey', () => {
     await waitFor(() =>
       expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen(),
     );
-    fake.enqueueComplete({
-      text: JSON.stringify(TOPIC),
-      model: 'vendor/model-a',
-      finishReason: 'stop',
-      requestId: 'topic-1',
-    });
+    enqueueTopicAndSample(fake);
     await pressTop('new-conversation-start');
     await waitFor(() => expect(screen.getByTestId('chat-topic-title')).toBeOnTheScreen());
     expect(within(top('chat-screen')).getByText(TOPIC.title)).toBeOnTheScreen();
+    // TASK-093: one combined completion returns topic + example, and the
+    // example entry point is offered exactly like in server mode.
     expect(fake.completeRequests).toHaveLength(1);
     expect(fake.completeRequests[0].messages[0].role).toBe('system');
+    await waitFor(() =>
+      expect(within(top('chat-screen')).getByTestId('chat-show-example')).toBeOnTheScreen(),
+    );
+    await pressTop('chat-show-example');
+    expect(screen.getByTestId('sample-modal')).toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId('sample-modal')).getByText(SAMPLE_TURNS.turns[0].content),
+    ).toBeOnTheScreen();
+    await pressTop('sample-close');
+    expect(screen.queryByTestId('sample-modal')).toBeNull();
     expect(fake.streamRequests).toHaveLength(0);
 
     // ---- Chat: stream the assistant response. --------------------------

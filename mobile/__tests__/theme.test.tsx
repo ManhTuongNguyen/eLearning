@@ -1,12 +1,14 @@
 /**
  * Theme system tests (SPEC TASK-044): mode resolution (light/dark/system),
  * live tracking of the OS preference, palette integrity, the Settings
- * switcher, and proof that screens consume tokens instead of hard-coded
+ * switcher, persistence of the selected mode across remounts (preferences/
+ * theme), and proof that screens consume tokens instead of hard-coded
  * colors.
  */
 import React from 'react';
 import {Pressable, Text, View} from 'react-native';
 import {act, fireEvent, render, screen} from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {darkColors, lightColors} from '../src/theme/colors';
 import {ModeProvider} from '../src/mode/ModeContext';
@@ -130,8 +132,13 @@ function setSystemScheme(scheme: SystemScheme) {
   }
 }
 
+const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
+  __resetAsyncStorageStore: () => void;
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
+  asyncStorage.__resetAsyncStorageStore();
   setSystemScheme('light');
 });
 
@@ -302,6 +309,65 @@ describe('settings theme switcher', () => {
     await fireEvent.press(screen.getByTestId('settings-theme-light'));
 
     expect(screen.getByTestId('probe-resolved').props.children).toBe('light');
+  });
+});
+
+describe('theme persistence (preferences/theme)', () => {
+  /** Flush the restore/save promise chains and their re-renders. */
+  async function flushAsyncWork(): Promise<void> {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  it('a selected mode is stored immediately', async () => {
+    await render(<Harness />);
+    await fireEvent.press(screen.getByTestId('set-dark'));
+
+    // The save fires inside the press; the mock store write is synchronous.
+    expect(await AsyncStorage.getItem('app.themeMode')).toBe('dark');
+  });
+
+  it('a remount restores the persisted mode instead of the system default', async () => {
+    // First "launch": choose dark, then the app goes away (the next render
+    // auto-unmounts the previous tree, like a fresh process).
+    await render(<Harness />);
+    await fireEvent.press(screen.getByTestId('set-dark'));
+    expect(await AsyncStorage.getItem('app.themeMode')).toBe('dark');
+
+    // Second "launch": the OS says light, but the persisted dark mode wins.
+    setSystemScheme('light');
+    await render(<Harness />);
+    await flushAsyncWork();
+
+    expect(screen.getByTestId('probe-mode').props.children).toBe('dark');
+    expect(screen.getByTestId('probe-resolved').props.children).toBe('dark');
+    expect(screen.getByTestId('probe-background').props.children).toBe(darkColors.background);
+  });
+
+  it('a remount with no stored value keeps following the system preference', async () => {
+    await render(<Harness />);
+
+    expect(screen.getByTestId('probe-mode').props.children).toBe('system');
+  });
+
+  it('a corrupted stored value falls back to the system default', async () => {
+    await AsyncStorage.setItem('app.themeMode', 'neon');
+    await render(<Harness />);
+    await flushAsyncWork();
+
+    expect(screen.getByTestId('probe-mode').props.children).toBe('system');
+    expect(screen.getByTestId('probe-resolved').props.children).toBe('light');
+  });
+
+  it('switching back to system persists the explicit choice too', async () => {
+    await render(<Harness />);
+    await fireEvent.press(screen.getByTestId('set-light'));
+    expect(await AsyncStorage.getItem('app.themeMode')).toBe('light');
+
+    await fireEvent.press(screen.getByTestId('set-system'));
+    expect(await AsyncStorage.getItem('app.themeMode')).toBe('system');
+    expect(screen.getByTestId('probe-mode').props.children).toBe('system');
   });
 });
 

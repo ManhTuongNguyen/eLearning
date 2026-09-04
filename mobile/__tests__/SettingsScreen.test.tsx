@@ -1,13 +1,14 @@
 /**
  * Settings screen tests (SPEC TASK-091): every documented control renders,
  * and only the options relevant to the active application mode are shown.
- * Server mode exposes the server-backed learning-level and vocabulary
- * entries; serverless replaces them with an OpenRouter status card that
- * reports configuration presence without ever revealing the API key value.
- * Account identity and logout are server-mode only (TASK-AUDIT-003):
- * serverless mode is independent of server accounts, so no account
- * information is displayed there. Theme segments and the application-mode
- * switcher are visible in both modes.
+ * Server mode exposes the server-backed vocabulary entry next to the
+ * learning-level editor; serverless keeps the learning-level entry (backed
+ * by the on-device SQLite profile, TASK-091) and adds an AI provider status
+ * card that reports configuration presence without ever revealing the API
+ * key value. Account identity and logout are server-mode only
+ * (TASK-AUDIT-003): serverless mode is independent of server accounts, so
+ * no account information is displayed there. Theme segments and the
+ * application-mode switcher are visible in both modes.
  */
 import React from 'react';
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
@@ -242,11 +243,17 @@ describe('server-mode visibility', () => {
 });
 
 describe('serverless-mode visibility (TASK-091)', () => {
-  it('replaces server-backed rows with the OpenRouter settings card', async () => {
+  it('keeps the learning-level row (backed by the local profile) but hides vocabulary, and shows the provider card', async () => {
     mockedConfig.mockResolvedValue(configuredStub());
-    await renderSettings('serverless');
+    const props = await renderSettings('serverless');
 
-    expect(screen.queryByTestId('settings-open-level')).toBeNull();
+    // TASK-091: the level editor reads/writes the on-device SQLite profile,
+    // so its entry point stays available without the server.
+    expect(screen.getByTestId('settings-open-level')).toBeOnTheScreen();
+    fireEvent.press(screen.getByTestId('settings-open-level'));
+    expect(props.navigation.navigate).toHaveBeenCalledWith('Level');
+
+    // Vocabulary remains a server-only feature (TASK-AUDIT-016).
     expect(screen.queryByTestId('settings-open-vocabulary')).toBeNull();
     expect(screen.getByTestId('settings-ai-provider-card')).toBeOnTheScreen();
     expect(mockedConfig).toHaveBeenCalledTimes(1);

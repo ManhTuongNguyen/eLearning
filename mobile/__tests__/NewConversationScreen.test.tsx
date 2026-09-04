@@ -86,6 +86,20 @@ const VALID_TOPIC_JSON = JSON.stringify({
   description: 'You order drinks at a busy café in London. Practise polite requests.',
 });
 
+/**
+ * Valid combined session-creation payload (TASK-093): topic and example
+ * conversation arrive in ONE provider response.
+ */
+const VALID_COMBINED_JSON = JSON.stringify({
+  topic: JSON.parse(VALID_TOPIC_JSON),
+  sample_conversation: {
+    turns: [
+      {role: 'assistant', content: 'Welcome aboard, traveler!'},
+      {role: 'user', content: 'Thanks! Where should we go?'},
+    ],
+  },
+});
+
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
     id: 42,
@@ -390,8 +404,8 @@ describe('serverless creation honors the configured provider (TASK-AUDIT-013/019
   const GEMINI_KEY = 'test-gemini-key';
   const GEMINI_MODEL = 'gemini-nano-test';
 
-  /** Minimal Gemini generateContent success body carrying the topic JSON. */
-  function geminiTopicResponse(): Response {
+  /** Minimal Gemini generateContent success body carrying the combined JSON. */
+  function geminiTextResponse(text: string): Response {
     return {
       ok: true,
       status: 200,
@@ -399,7 +413,7 @@ describe('serverless creation honors the configured provider (TASK-AUDIT-013/019
         JSON.stringify({
           candidates: [
             {
-              content: {parts: [{text: VALID_TOPIC_JSON}]},
+              content: {parts: [{text}]},
               finishReason: 'stop',
             },
           ],
@@ -430,7 +444,8 @@ describe('serverless creation honors the configured provider (TASK-AUDIT-013/019
       apiKey: GEMINI_KEY,
       primaryModel: GEMINI_MODEL,
     });
-    fetchSpy.mockResolvedValue(geminiTopicResponse());
+    // TASK-093: one combined completion returns the topic AND its sample.
+    fetchSpy.mockResolvedValue(geminiTextResponse(VALID_COMBINED_JSON));
 
     await renderScreen();
     await waitFor(() => expect(getRuntimeApplicationMode()).toBe('serverless'));
@@ -438,7 +453,8 @@ describe('serverless creation honors the configured provider (TASK-AUDIT-013/019
 
     await fireEvent.press(screen.getByTestId('new-conversation-start'));
 
-    // The topic request reached Google's Gemini endpoint with the stored key.
+    // The single combined request reached Google's Gemini endpoint with the
+    // stored key, and the example entry point appears in chat.
     await screen.findByTestId('chat-screen');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0];
@@ -446,6 +462,9 @@ describe('serverless creation honors the configured provider (TASK-AUDIT-013/019
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
     );
     expect((init?.headers as Record<string, string>)['x-goog-api-key']).toBe(GEMINI_KEY);
+    await waitFor(() =>
+      expect(screen.getByTestId('chat-show-example')).toBeOnTheScreen(),
+    );
     // No request went to OpenRouter and nothing touched the backend.
     expect(fetchSpy.mock.calls.some(([target]) => String(target).includes('openrouter.ai'))).toBe(
       false,

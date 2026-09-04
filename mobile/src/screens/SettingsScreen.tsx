@@ -4,16 +4,18 @@
  * active application mode (TASK-080).
  *
  * Server mode shows: signed-in account identity, logout (TASK-015), and the
- * server-backed rows — learning level editing (TASK-018) and the saved
- * vocabulary list (TASK-072). Serverless mode (TASK-AUDIT-003) is
+ * server-backed vocabulary row (TASK-072) next to the learning-level editor
+ * (TASK-018). Serverless mode (TASK-AUDIT-003) is
  * independent of server accounts: no account identity, no server logout —
  * instead an AI provider status card opens the local AI configuration
  * editor (TASK-092): the key itself is stored in secure storage and is
  * never displayed. The card is labelled with the persisted serverless
  * provider (OpenRouter, Gemini, OpenAI — TASK-AUDIT-013), so switching
  * providers is reflected by the summary text. Both modes keep the theme
- * selection (TASK-044), the application-mode switcher (TASK-090) and —
- * serverless only — local data clearing (TASK-094).
+ * selection (TASK-044), the learning-level editor — backed by the on-device
+ * SQLite profile while serverless (TASK-091) — the application-mode
+ * switcher (TASK-090) and — serverless only — local data clearing
+ * (TASK-094).
  *
  * The screen is pushed onto the main stack from Chat, so the header carries
  * the same ‹ Back affordance as the other pushed screens (TASK-AUDIT-006).
@@ -664,25 +666,30 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
     };
   }, [modeStatus, appMode, navigation, loadProviderStatus]);
 
-  /** Server-feature rows: hidden entirely while serverless is active. */
-  const serverRows: SettingsRow[] = useMemo(() => {
-    if (appMode !== 'server') {
-      return [];
-    }
-    return [
+  /**
+   * Learning rows: the level editor reads/writes the server profile in
+   * server mode (TASK-018) and the on-device SQLite profile in serverless
+   * mode (TASK-091) — the Level screen itself branches on the mode — so it
+   * is offered in BOTH; vocabulary stays server-only (TASK-AUDIT-016).
+   */
+  const learningRows: SettingsRow[] = useMemo(() => {
+    const rows: SettingsRow[] = [
       {
         title: 'Learning level',
         description: 'Set the level used to shape topics and corrections.',
         onPress: () => navigation.navigate('Level'),
         testID: 'settings-open-level',
       },
-      {
+    ];
+    if (appMode === 'server') {
+      rows.push({
         title: 'Vocabulary',
         description: 'Saved words and phrases with their enrichment.',
         onPress: () => navigation.navigate('Vocabulary'),
         testID: 'settings-open-vocabulary',
-      },
-    ];
+      });
+    }
+    return rows;
   }, [appMode, navigation]);
 
   const email = user?.email ?? '';
@@ -718,31 +725,6 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                 {email || 'Unknown account'}
               </Text>
             </View>
-          </View>
-        ) : null}
-
-        {serverRows.length > 0 ? (
-          <View style={styles.rowGroup}>
-            <Text style={styles.sectionLabel}>Learning</Text>
-            {serverRows.map(row => (
-              <Pressable
-                key={row.testID}
-                accessibilityRole="button"
-                accessibilityLabel={row.title}
-                onPress={row.onPress}
-                style={({ pressed }) => [
-                  styles.row,
-                  pressed && styles.rowPressed,
-                ]}
-                testID={row.testID}
-              >
-                <View style={styles.rowTexts}>
-                  <Text style={styles.rowTitle}>{row.title}</Text>
-                  <Text style={styles.rowDescription}>{row.description}</Text>
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            ))}
           </View>
         ) : null}
 
@@ -820,24 +802,30 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
           </Pressable>
         ) : null}
 
-        <View style={styles.rowGroup}>
-          <Text style={styles.sectionLabel}>Speech</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Text to speech settings"
-            onPress={() => navigation.navigate('TTSSettings')}
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            testID="settings-open-tts"
-          >
-            <View style={styles.rowTexts}>
-              <Text style={styles.rowTitle}>Text to speech</Text>
-              <Text style={styles.rowDescription}>
-                Voice, gender, speed, pitch and latency for read-aloud.
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-        </View>
+        {learningRows.length > 0 ? (
+          <View style={styles.rowGroup}>
+            <Text style={styles.sectionLabel}>Learning</Text>
+            {learningRows.map(row => (
+              <Pressable
+                key={row.testID}
+                accessibilityRole="button"
+                accessibilityLabel={row.title}
+                onPress={row.onPress}
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && styles.rowPressed,
+                ]}
+                testID={row.testID}
+              >
+                <View style={styles.rowTexts}>
+                  <Text style={styles.rowTitle}>{row.title}</Text>
+                  <Text style={styles.rowDescription}>{row.description}</Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
 
         {/* Grammar auto-check: available in both modes because the check
             rides the improvement pipeline each mode already uses. Off by
@@ -870,6 +858,25 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
             </Pressable>
           </View>
         ) : null}
+
+        <View style={styles.rowGroup}>
+          <Text style={styles.sectionLabel}>Speech</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Text to speech settings"
+            onPress={() => navigation.navigate('TTSSettings')}
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            testID="settings-open-tts"
+          >
+            <View style={styles.rowTexts}>
+              <Text style={styles.rowTitle}>Text to speech</Text>
+              <Text style={styles.rowDescription}>
+                Voice, gender, speed, pitch and latency for read-aloud.
+              </Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
 
         <View style={styles.rowGroup}>
           <Text style={styles.sectionLabel}>Theme</Text>
