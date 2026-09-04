@@ -1,12 +1,13 @@
 /**
  * TASK-IMPROVEMENT-002 keyboard-avoidance regression tests for the chat
  * screen. The conversation shell must lift the composer above the reported
- * keyboard frame — no hard-coded keyboard height — and restore the normal
- * layout on dismissal. The keyboard frame is driven through the same
- * device-event seam the OS uses (Keyboard events), and the shell's measured
- * layout through its onLayout seam, so the real KeyboardAvoidingView math
- * is exercised: padding = screen-bottom overlap with the keyboard, offset by
- * the status-bar inset the app applies above the screen (edge-to-edge).
+ * keyboard frame — no hard-coded keyboard height — and anchor it back to
+ * the shell bottom on dismissal. The keyboard frame is driven through the
+ * same device-event seam the OS uses (Keyboard events), and the shell's
+ * measured layout through its onLayout seam, so the real avoidance math
+ * in useChatKeyboardAvoidance is exercised: padding = screen-bottom overlap
+ * with the keyboard, offset by the status-bar inset the app applies above
+ * the screen (edge-to-edge).
  */
 import React from 'react';
 import {DeviceEventEmitter, Pressable, Text, View} from 'react-native';
@@ -81,7 +82,11 @@ function shellPaddingBottom(): unknown {
 
 /** Push one keyboard event through the OS event seam, like a device would. */
 async function emitKeyboard(
-  name: 'keyboardWillShow' | 'keyboardWillHide',
+  name:
+    | 'keyboardWillShow'
+    | 'keyboardDidShow'
+    | 'keyboardWillHide'
+    | 'keyboardDidHide',
   endCoordinates: {screenX: number; screenY: number; width: number; height: number},
 ) {
   await act(async () => {
@@ -233,5 +238,48 @@ describe('chat keyboard avoidance (TASK-IMPROVEMENT-002)', () => {
 
     const list = screen.getByTestId('chat-list');
     expect(list.props.keyboardShouldPersistTaps).toBe('handled');
+  });
+
+  it('anchors the composer to the bottom when Android reports the keyboard hidden', async () => {
+    // Android (ReactRootView.checkForKeyboardEvents) emits keyboardDidHide
+    // with screenY set to the visible display-frame height — a window metric
+    // that excludes the status bar and therefore does not match the shell's
+    // coordinate frame. Re-deriving the overlap from it leaves a residual
+    // status-bar-height padding above the composer after dismissal (the
+    // "ghost margin" on Android 16 + Gboard with edge-to-edge). The shell
+    // must restore the plain layout exactly, whatever the payload reports.
+    safeArea.__setSafeAreaInsets({top: 24, bottom: 12});
+    await renderChat({sessionId: 5});
+    await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
+
+    const shell = screen.getByTestId('chat-screen');
+    await fireEvent(shell, 'layout', {
+      persist: () => {},
+      nativeEvent: {layout: {x: 0, y: 0, width: 400, height: 700}},
+    });
+
+    await emitKeyboard('keyboardDidShow', {
+      screenX: 0,
+      screenY: 500,
+      width: 400,
+      height: 300,
+    });
+    await waitFor(() => expect(shellPaddingBottom()).toBe(700 - (500 - 24)));
+
+    // Android reports the hide event's screenY as the visible display-frame
+    // height (700 = the shell's own height, measured below the status bar).
+    // The old KeyboardAvoidingView formula turned that into
+    // 700 - (700 - 24) = 24 residual points of padding — the
+    // status-bar-height "ghost margin" seen on Android 16 + Gboard with
+    // edge-to-edge. The shell must restore the plain layout (0) exactly,
+    // whatever the payload reports.
+    await emitKeyboard('keyboardDidHide', {
+      screenX: 0,
+      screenY: 700,
+      width: 400,
+      height: 0,
+    });
+    await waitFor(() => expect(shellPaddingBottom()).toBe(0));
+    expect(screen.getByTestId('chat-composer')).toBeOnTheScreen();
   });
 });

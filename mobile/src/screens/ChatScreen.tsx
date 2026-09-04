@@ -60,13 +60,17 @@
  * MessageRow with stable prop identities, so a delta flush re-renders only
  * the streaming bubble while every untouched row bails out, and the FlatList
  * virtualization bounds keep long conversations mounted in a bounded window.
- * Keyboard handling (TASK-IMPROVEMENT-002): the whole screen lives inside a
- * padding-behavior KeyboardAvoidingView offset by the status-bar inset, so
+ * Keyboard handling (TASK-IMPROVEMENT-002): the shell lifts the composer
+ * above the reported keyboard frame through `useChatKeyboardAvoidance`, so
  * the composer rides on top of the keyboard in both application modes; on
  * Android 15+ (targetSdk 35+) edge-to-edge enforcement stops the legacy
  * window-resize path from relaying out the screen under the keyboard, while
  * on devices where the system already shrinks the window the measured
- * keyboard overlap is zero and the shell stays put.
+ * keyboard overlap is zero and the shell stays put. Unlike the
+ * padding-behavior KeyboardAvoidingView it replaces, dismissal re-anchors
+ * the composer to the shell bottom instead of trusting the Android hide
+ * event's window metrics (its status-bar-height residue left the composer
+ * floating above the bottom edge on Android 16 + Gboard).
  *
  * Responsibilities (TASK-AUDIT-014): the screen coordinates navigation,
  * layout, presentation and interaction wiring only. The turn-streaming
@@ -79,7 +83,6 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
   Pressable,
   StyleSheet,
   Text,
@@ -101,6 +104,7 @@ import {
   VOCAB_TOAST_DURATION_MS,
 } from '../hooks/useVocabularySave';
 import {useChatTurns} from '../hooks/useChatTurns';
+import {useChatKeyboardAvoidance} from '../hooks/useChatKeyboardAvoidance';
 import {useFollowBottom} from '../hooks/useFollowBottom';
 import type {ChatScreenProps} from '../navigation/types';
 import {useApplicationMode} from '../mode/ModeContext';
@@ -414,6 +418,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     jumpToLatest,
     resetFollow,
   } = useFollowBottom<ChatMessage>();
+
+  // Keyboard avoidance (TASK-IMPROVEMENT-002): the shell lifts the composer
+  // above the keyboard and re-anchors it to the bottom on dismissal.
+  const {paddingBottom: keyboardPadding, handleShellLayout} =
+    useChatKeyboardAvoidance(insets.top);
 
   // Turn pipeline (TASK-050/054/086): optimistic rows, buffered deltas,
   // terminal outcomes and aborts for both modes.
@@ -732,10 +741,9 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   );
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior="padding"
-      keyboardVerticalOffset={insets.top}
+    <View
+      style={[styles.container, {paddingBottom: keyboardPadding}]}
+      onLayout={handleShellLayout}
       testID="chat-screen">
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Chat</Text>
@@ -981,6 +989,6 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           ) : null}
         </>
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
