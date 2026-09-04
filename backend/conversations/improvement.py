@@ -4,9 +4,13 @@ Improves one learner-written message on explicit request (ROADMAP section 8):
 the corrected sentence plus a short level-appropriate explanation of what
 changed. The service owns four concerns:
 
-1. Prompt construction — the learner's English level shapes how the
-   explanation is written; ``AUTO`` lets the model infer an appropriate
-   level. The message under correction is quoted verbatim.
+1. Prompt construction — the learner's English level shapes the request:
+   with a known level the model must correct the message AND extend it into
+   a fuller version that guides the learner to say more, pitched one CEFR
+   sub-level above their own (an A2 learner receives about B1; C2 caps at
+   C2); ``AUTO`` stays correction-only and lets the model infer an
+   appropriate level for the explanation. The message under correction is
+   quoted verbatim.
 2. Structured-output parsing — completions must decode into the
    ``improved`` / ``explanation`` / ``severity`` fields of a
    :class:`Improvement` value object; anything else is a contract violation.
@@ -46,17 +50,26 @@ logger = logging.getLogger("conversations.improvement")
 ERROR_PROVIDER = "improvement"
 
 SYSTEM_PROMPT = (
-    "You correct English messages written by a learner in an English-learning "
+    "You improve English messages written by a learner in an English-learning "
     "chat application.\n"
     "Respond with ONLY one JSON object and nothing else, using exactly this shape:\n"
-    '{"improved": "<the corrected message>", '
+    '{"improved": "<the improved message>", '
     '"explanation": "<short reason for the changes>", '
     '"severity": "<none|minor|critical>"}\n'
-    "Fix grammar, spelling, word choice and natural phrasing while keeping the "
-    "learner's meaning and tone. If the message is already correct, return it "
-    'unchanged as "improved", say so briefly and use severity "none". Rate '
-    'severity by how much the mistakes hurt understanding: "none" for a '
-    'correct message, "minor" for small slips a reader easily overlooks '
+    "Always fix grammar, spelling, word choice and natural phrasing while "
+    "keeping the learner's meaning and tone. When the learner's level is "
+    "known, go beyond correcting: extend the message into a fuller, more "
+    "engaging version that guides the learner to say more — build on their "
+    "ideas, add a natural follow-up element such as a reason, example, "
+    "opinion or question, and use richer vocabulary and grammar pitched "
+    "slightly above their level (roughly one CEFR sub-level up, e.g. an A2 "
+    "learner receives about B1) so the improvement is a small, reachable "
+    "stretch rather than a leap. When the learner's level is unknown, keep "
+    "the message at its own level: only correct it. If the message is "
+    'already correct, still return it as "improved" (extended when the level '
+    'is known, unchanged otherwise), say so briefly and use severity "none". '
+    'Rate severity by how much the mistakes hurt understanding: "none" for '
+    'a correct message, "minor" for small slips a reader easily overlooks '
     '(typos, a missing article), "critical" for mistakes that break or '
     "materially distort the meaning (wrong verb tense changing when something "
     "happened, wrong negation, wrong key vocabulary). Keep the explanation to "
@@ -73,6 +86,21 @@ USER_PROMPT_HEADER = (
     "English-learning chat session."
 )
 MESSAGE_INSTRUCTION = 'The learner\'s message: "{message}"'
+
+#: CEFR ladder used to pitch the extended message one sub-level above the
+#: learner's own level (an A2 learner receives about B1).
+_CEFR_LADDER: tuple[str, ...] = ("A1", "A2", "B1", "B2", "C1", "C2")
+
+
+def _target_level(level: str) -> str:
+    """Return one CEFR sub-level above ``level``, capped at the top of the scale.
+
+    An A2 learner is stretched toward B1; a C2 learner is already at the top,
+    so the target is their own level (the prompt then asks for a same-level
+    extension instead of a stretch).
+    """
+    index = _CEFR_LADDER.index(level) if level in _CEFR_LADDER else -1
+    return _CEFR_LADDER[min(index + 1, len(_CEFR_LADDER) - 1)]
 
 
 @dataclass(frozen=True)
@@ -160,13 +188,32 @@ def _build_user_prompt(*, level: str, message: str) -> str:
     if level == Level.AUTO:
         parts.append(
             "The learner's English level is unknown; infer an appropriate level "
-            "for the explanation."
+            "for the explanation. Correct the message only — do not extend or "
+            "rewrite it beyond the corrections."
         )
     else:
         parts.append(
             f"The learner's English level is {level} (CEFR); write the "
             "explanation so a learner at that level understands it."
         )
+        target = _target_level(level)
+        if target != level:
+            parts.append(
+                "Extend the message as well: after correcting it, rewrite it "
+                "as a fuller, natural version that guides the learner to say "
+                "more — add a relevant detail, reason, example, opinion or "
+                "follow-up question instead of keeping a simple sentence, "
+                "while keeping their original point intact."
+            )
+            parts.append(
+                f"Pitch the extended message slightly above the learner's "
+                f"level: write it around {target} rather than {level}."
+            )
+        else:
+            parts.append(
+                f"The learner is already at the top of the CEFR scale ({level}); "
+                "extend the message in natural, idiomatic English at that level."
+            )
     parts.append(MESSAGE_INSTRUCTION.format(message=message))
     return "\n".join(parts)
 

@@ -259,6 +259,50 @@ class HappyPathTests(SimpleTestCase):
         self.assertIn("B2", user_content)
         self.assertNotIn("unknown", user_content)
 
+    def test_concrete_level_asks_for_an_extension_one_sub_level_above(self) -> None:
+        self.improve_default(level="A2")
+
+        user_content = self.provider.requests[0].messages[-1].content
+        self.assertIn("Extend the message as well", user_content)
+        self.assertIn("guides the learner to say more", user_content)
+        # A2 learners are stretched toward B1: slightly above, not a leap.
+        self.assertIn("around B1 rather than A2", user_content)
+
+    def test_extension_target_advances_the_whole_cefr_ladder(self) -> None:
+        for level, target in (("A1", "A2"), ("A2", "B1"), ("B1", "B2"), ("B2", "C1"), ("C1", "C2")):
+            with self.subTest(level=level, target=target):
+                self.improve_default(level=level)
+
+                user_content = self.provider.requests[-1].messages[-1].content
+                self.assertIn(f"around {target} rather than {level}", user_content)
+
+    def test_extension_target_caps_at_c2(self) -> None:
+        self.improve_default(level="C2")
+
+        user_content = self.provider.requests[-1].messages[-1].content
+        self.assertIn("top of the CEFR scale (C2)", user_content)
+        self.assertIn("extend the message", user_content)
+        self.assertNotIn("rather than C2", user_content)
+
+    def test_auto_level_stays_correction_only(self) -> None:
+        self.improve_default(level=Level.AUTO)
+
+        user_content = self.provider.requests[0].messages[-1].content
+        self.assertIn("unknown", user_content)
+        self.assertNotIn("(CEFR)", user_content)
+        # AUTO keeps the historic behaviour: corrections only, no extension.
+        self.assertIn("Correct the message only", user_content)
+        self.assertNotIn("Extend the message as well", user_content)
+
+    def test_system_prompt_describes_both_behaviours(self) -> None:
+        self.improve_default()
+
+        system_content = self.provider.requests[0].messages[0].content
+        # Known level: correct AND extend slightly above; unknown: correct only.
+        self.assertIn("extend the message", system_content)
+        self.assertIn("slightly above their level", system_content)
+        self.assertIn("only correct it", system_content)
+
     def test_auto_level_asks_for_an_inferred_explanation_level(self) -> None:
         self.improve_default(level=Level.AUTO)
 

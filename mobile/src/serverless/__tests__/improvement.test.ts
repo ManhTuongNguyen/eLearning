@@ -3,6 +3,7 @@
  */
 
 import {generateImprovement} from '../improvement';
+import type {EnglishLevel} from '../../../src/api/profile';
 import type {CompletionResult, OpenRouterClient} from '../types';
 import {OpenRouterAvailabilityError, OpenRouterResponseError} from '../errors';
 
@@ -110,10 +111,61 @@ describe('generateImprovement', () => {
     expect(request.messages[0].content).toContain('none');
     expect(request.messages[0].content).toContain('minor');
     expect(request.messages[0].content).toContain('critical');
+    // The system prompt describes both behaviours: extend when the level is
+    // known, correct only when it is unknown.
+    expect(request.messages[0].content).toContain('extend the message');
+    expect(request.messages[0].content).toContain('slightly above their level');
+    expect(request.messages[0].content).toContain('only correct it');
 
     const userPrompt = request.messages[1].content;
     expect(userPrompt).toContain("The learner's English level is B2 (CEFR)");
     expect(userPrompt).toContain('I go to store yesterday.');
+  });
+
+  it('asks a known-level learner for an extension pitched one sub-level above', async () => {
+    const client = mockClient(VALID_JSON);
+
+    await generateImprovement(client, {
+      level: 'A2',
+      originalMessage: 'I go to store yesterday.',
+    });
+
+    const userPrompt = (client.complete as jest.Mock).mock.calls[0][0]
+      .messages[1].content;
+    expect(userPrompt).toContain('Extend the message as well');
+    expect(userPrompt).toContain('guides the learner to say more');
+    // A2 learners are stretched toward B1: slightly above, not a leap.
+    expect(userPrompt).toContain('around B1 rather than A2');
+  });
+
+  it('advances the extension target across the CEFR ladder', async () => {
+    expect.assertions(5);
+    const ladder: Array<[EnglishLevel, string]> = [
+      ['A1', 'A2'],
+      ['A2', 'B1'],
+      ['B1', 'B2'],
+      ['B2', 'C1'],
+      ['C1', 'C2'],
+    ];
+    for (const [level, target] of ladder) {
+      const client = mockClient(VALID_JSON);
+      await generateImprovement(client, {level, originalMessage: 'Hello!'});
+      const userPrompt = (client.complete as jest.Mock).mock.calls[0][0]
+        .messages[1].content;
+      expect(userPrompt).toContain(`around ${target} rather than ${level}`);
+    }
+  });
+
+  it('caps the extension target at C2', async () => {
+    const client = mockClient(VALID_JSON);
+
+    await generateImprovement(client, {level: 'C2', originalMessage: 'Hello!'});
+
+    const userPrompt = (client.complete as jest.Mock).mock.calls[0][0]
+      .messages[1].content;
+    expect(userPrompt).toContain('top of the CEFR scale (C2)');
+    expect(userPrompt).toContain('extend the message');
+    expect(userPrompt).not.toContain('rather than C2');
   });
 
   it('lets the model infer an appropriate level for AUTO learners', async () => {
@@ -127,6 +179,9 @@ describe('generateImprovement', () => {
     const userPrompt = (client.complete as jest.Mock).mock.calls[0][0]
       .messages[1].content;
     expect(userPrompt).toContain('level is unknown');
+    // AUTO keeps the historic behaviour: corrections only, no extension.
+    expect(userPrompt).toContain('Correct the message only');
+    expect(userPrompt).not.toContain('Extend the message as well');
   });
 
   it('extracts the JSON object when the completion includes surrounding prose', async () => {
