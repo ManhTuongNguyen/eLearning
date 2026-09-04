@@ -1,0 +1,9 @@
+[[overrides]]
+include = ["**/models.py"]
+[overrides.rules]
+unresolved-attribute = "ignore"
+
+[[overrides]]
+include = ["**/test_*.py"]
+[overrides.rules]
+unresolved-attribute = "ignore"
