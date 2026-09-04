@@ -1,12 +1,13 @@
 /**
  * Message long-press menu (SPEC TASK-060, ROADMAP §8/§16): presents the
- * contextual actions available for one chat message. User messages offer
- * Suggest replies / Improve my English / Copy / Read aloud; assistant
- * messages drop the improvement action (it only applies to the learner's
- * own text). The menu is a bottom-sheet card over a dismissible backdrop:
- * it closes through the Close control, a backdrop tap or the Android back
- * button, and its container is marked as an accessibility modal with every
- * action exposed as a labeled button.
+ * contextual actions available for one chat message. Suggested replies are
+ * what the learner could say NEXT (TASK-061), so the action only exists for
+ * user messages; assistant messages offer Copy / Select text / Read aloud.
+ * User messages additionally offer Improve my English (it only applies to
+ * the learner's own text). The menu is a bottom-sheet card over a
+ * dismissible backdrop: it closes through the Close control, a backdrop tap
+ * or the Android back button, and its container is marked as an
+ * accessibility modal with every action exposed as a labeled button.
  *
  * Selecting an action reports it upward and lets the parent close the menu;
  * the behaviors live in their own tasks (suggestions → TASK-061,
@@ -45,13 +46,12 @@ const USER_ACTIONS: MessageActionItem[] = [
 ];
 
 const ASSISTANT_ACTIONS: MessageActionItem[] = [
-  {action: 'suggest-replies', label: 'Suggest replies'},
   {action: 'select-text', label: 'Select text'},
   {action: 'copy', label: 'Copy'},
   {action: 'speak', label: 'Read aloud'},
 ];
 
-function actionsForRole(role: 'user' | 'assistant'): MessageActionItem[] {
+function actionsForRole(role: 'user' | 'assistant' | null): MessageActionItem[] {
   return role === 'user' ? USER_ACTIONS : ASSISTANT_ACTIONS;
 }
 
@@ -107,8 +107,11 @@ function createStyles(c: ThemeColors) {
 interface MessageActionsMenuProps {
   /** Whether the overlay is presented; closed menus render nothing. */
   visible: boolean;
-  /** Role of the message the menu was opened for; drives the action list. */
-  role: 'user' | 'assistant';
+  /**
+   * Role of the message the menu was opened for; drives the action list.
+   * Null (no selection) renders no actions.
+   */
+  role: 'user' | 'assistant' | null;
   /**
    * Whether the server-backed vocabulary flow (Select text) is available;
    * serverless mode hides it (TASK-AUDIT-016). Defaults to true for the

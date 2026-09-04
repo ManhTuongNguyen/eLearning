@@ -1,10 +1,10 @@
 /**
  * Message actions menu tests (SPEC TASK-060): role-driven action matrix
- * (user rows gain Improve my English; assistant rows do not), the
- * TASK-AUDIT-016 mode gate that hides the server-only Select text entry,
- * dismissal through the Close control, backdrop tap and Android back, and
- * the accessibility surface (labeled buttons per action, accessibility
- * modal container).
+ * (Suggest replies and Improve my English target the learner's own text, so
+ * they exist for user rows only), the TASK-AUDIT-016 mode gate that hides
+ * the server-only Select text entry, dismissal through the Close control,
+ * backdrop tap and Android back, and the accessibility surface (labeled
+ * buttons per action, accessibility modal container).
  */
 import React from 'react';
 import {act, fireEvent, render, screen, within} from '@testing-library/react-native';
@@ -55,15 +55,16 @@ describe('MessageActionsMenu', () => {
     expect(screen.queryByTestId('chat-menu')).toBeNull();
   });
 
-  it('shows assistant-message actions without the improvement entry', async () => {
+  it('shows assistant-message actions without the learner-only entries', async () => {
     await renderMenu({role: 'assistant'});
 
     expect(visibleActionLabels()).toEqual([
-      'Suggest replies',
       'Select text',
       'Copy',
       'Read aloud',
     ]);
+    expect(screen.queryByTestId('chat-menu-suggest-replies')).toBeNull();
+    expect(screen.queryByTestId('chat-menu-improve-english')).toBeNull();
   });
 
   it('shows user-message actions including Improve my English', async () => {
@@ -87,7 +88,7 @@ describe('MessageActionsMenu', () => {
       expect(visibleActionLabels()).toEqual(
         role === 'user'
           ? ['Suggest replies', 'Improve my English', 'Copy', 'Read aloud']
-          : ['Suggest replies', 'Copy', 'Read aloud'],
+          : ['Copy', 'Read aloud'],
       );
       expect(screen.queryByTestId('chat-menu-select-text')).toBeNull();
     }
@@ -149,10 +150,11 @@ describe('MessageActionsMenu', () => {
   });
 
   it('keeps every action inside the sheet when open', async () => {
-    await renderMenu({role: 'assistant'});
+    await renderMenu({role: 'user'});
 
     const sheet = screen.getByTestId('chat-menu');
     expect(within(sheet).getByText('Suggest replies')).toBeOnTheScreen();
+    expect(within(sheet).getByText('Improve my English')).toBeOnTheScreen();
     expect(within(sheet).getByText('Copy')).toBeOnTheScreen();
     expect(within(sheet).getByText('Read aloud')).toBeOnTheScreen();
   });

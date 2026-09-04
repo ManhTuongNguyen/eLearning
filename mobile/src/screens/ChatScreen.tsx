@@ -35,21 +35,20 @@
  * re-arms that row locally exactly like the backend does and streams the
  * replacement attempt from POST .../messages/{id}/retry/ into the same
  * bubble through the shared turn pipeline. Long-pressing a message row with
- * real text (TASK-060) opens the contextual actions menu — Copy runs
- * immediately via the clipboard seam, Suggest replies (TASK-061) calls
- * the read-only suggestions endpoint and presents the three replies as
- * chips above the composer (tapping a chip inserts its text into the draft
- * without sending), Improve my English (TASK-064) calls the read-only
- * improvement endpoint and presents the outcome in a bottom sheet —
- * original vs. suggested rewrite plus a short explanation, with a Copy
- * action for the improved text — and Select text (TASK-069) opens a
- * bottom-sheet surface where a word, phrase or multi-word expression can be
- * selected inside that message and saved immediately (TASK-AUDIT-007 removed
- * the TASK-070 confirmation popup as redundant): pressing Save word closes
- * the sheet and fires the vocabulary API call at once (enrichment happens
- * server-side afterwards and is never awaited), success flashes a
- * self-dismissing toast and failure surfaces the normalized error as an
- * alert toast. Loading
+ * real text (TASK-060) opens the contextual actions menu — for user
+ * messages, Suggest replies (TASK-061) calls the read-only suggestions
+ * endpoint and presents the three replies as chips above the composer
+ * (tapping a chip inserts its text into the draft without sending), Improve
+ * my English (TASK-064) calls the read-only improvement endpoint and
+ * presents the outcome in a bottom sheet — original vs. suggested rewrite
+ * plus a short explanation, with a Copy action for the improved text — and
+ * Select text (TASK-069) opens a bottom-sheet surface where a word, phrase
+ * or multi-word expression can be selected inside that message and saved
+ * immediately (TASK-AUDIT-007 removed the TASK-070 confirmation popup as
+ * redundant): pressing Save word closes the sheet and fires the vocabulary
+ * API call at once (enrichment happens server-side afterwards and is never
+ * awaited), success flashes a self-dismissing toast and failure surfaces
+ * the normalized error as an alert toast. Loading
  * and error states cover both
  * generation round-trips; the suggestion strip clears on send and the
  * suggestion strip, improvement sheet and vocabulary feedback clear on session
@@ -658,12 +657,12 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
 
   /**
    * TASK-060 menu selection. Copy runs through the clipboard seam, Suggest
-   * replies generates three candidate messages (TASK-061) that the user can
-   * tap into the composer, Improve my English (TASK-064) opens the
-   * improvement sheet for that message and Select text (TASK-069) opens the
-   * vocabulary selection surface over its content; Read aloud (TASK-078)
-   * speaks that message — or stops it when it is already speaking. Every
-   * selection dismisses the menu.
+   * replies (user messages only) generates three candidate messages
+   * (TASK-061) that the user can tap into the composer, Improve my English
+   * (TASK-064) opens the improvement sheet for that message and Select text
+   * (TASK-069) opens the vocabulary selection surface over its content;
+   * Read aloud (TASK-078) speaks that message — or stops it when it is
+   * already speaking. Every selection dismisses the menu.
    */
   const handleMenuAction = useCallback(
     (action: MessageAction) => {
@@ -948,7 +947,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           />
           <MessageActionsMenu
             visible={menuMessage !== null}
-            role={menuMessage?.role ?? 'assistant'}
+            role={menuMessage?.role ?? null}
             // TASK-AUDIT-016: the vocabulary flow is server-only, so the
             // Select text entry disappears while serverless is active
             // instead of offering a save that could only fail.

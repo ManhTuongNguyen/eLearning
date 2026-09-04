@@ -394,7 +394,9 @@ describe('TASK-117 serverless journey', () => {
     );
 
     // ---- Suggest replies: three chips, tap fills the composer. ---------
-    await fireEvent(top('chat-message-2'), 'longPress');
+    // Suggest replies is a user-message action: it drafts what the learner
+    // could say NEXT, so the menu offers it on the learner's own row.
+    await fireEvent(top('chat-message-1'), 'longPress');
     await waitFor(() => expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen());
     fake.enqueueComplete({
       text: JSON.stringify(SUGGESTIONS),
@@ -461,13 +463,18 @@ describe('TASK-117 serverless journey', () => {
     // The message menu no longer offers Select text in serverless mode:
     // saving words is a server-only flow, so the entry disappears instead
     // of presenting an action that could only fail against the gate.
-    await fireEvent(top('chat-message-2'), 'longPress');
+    await fireEvent(top('chat-message-1'), 'longPress');
     await waitFor(() => expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen());
     expect(screen.queryByTestId('chat-menu-select-text')).toBeNull();
-    // The rest of the menu keeps working.
+    // The rest of the menu keeps working; the assistant menu additionally
+    // never offers the learner-only Suggest replies action.
     expect(screen.getByTestId('chat-menu-copy')).toBeOnTheScreen();
     expect(screen.getByTestId('chat-menu-suggest-replies')).toBeOnTheScreen();
     await pressTop('chat-menu-copy');
+    await fireEvent(top('chat-message-2'), 'longPress');
+    await waitFor(() => expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen());
+    expect(screen.queryByTestId('chat-menu-suggest-replies')).toBeNull();
+    expect(screen.getByTestId('chat-menu-copy')).toBeOnTheScreen();
 
     // And the selection sheet can never be reached through the UI.
     expect(screen.queryByTestId('chat-selection')).toBeNull();

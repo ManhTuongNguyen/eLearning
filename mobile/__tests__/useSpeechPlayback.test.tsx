@@ -4,8 +4,11 @@
  * or failing an utterance clears the visible state, starting another item
  * stops the current one first, stop()/unmount silence the engine and a
  * stale interrupted settlement never clobbers newer playback state. The
- * hook is exercised through a small harness component so the state flows
- * through real renders exactly like the chat screen consumes it.
+ * hook also sanitizes utterance text through the shared speech filter, so
+ * markdown delimiters and emoji/icons never reach the engine, and
+ * decoration-only content is a no-op. The hook is exercised through a
+ * small harness component so the state flows through real renders exactly
+ * like the chat screen consumes it.
  */
 import React from 'react';
 import {Pressable, Text, View} from 'react-native';
@@ -192,4 +195,50 @@ describe('useSpeechPlayback', () => {
 
     expect(stopMock).toHaveBeenCalledTimes(1);
   });
+
+  it('strips markdown markers and icons from the spoken text', async () => {
+    const {engine, spoken} = makeScriptedEngine();
+    await render(<SpeechHarnessWithText engine={engine} text={'**Great!** 🎉 Well done *now*.'} />);
+
+    await fireEvent.press(screen.getByTestId('speak-trigger'));
+
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]?.text).toBe('Great! Well done now.');
+  });
+
+  it('treats decoration-only content as a no-op without stopping current playback', async () => {
+    const {engine, spoken, stopMock} = makeScriptedEngine();
+    await render(
+      <View>
+        <SpeechHarness engine={engine} />
+        <SpeechHarnessWithText engine={engine} text="🎉 ⏹ ★" />
+      </View>,
+    );
+
+    await fireEvent.press(screen.getByTestId('speak-a'));
+    expect(spoken).toHaveLength(1);
+
+    await fireEvent.press(screen.getByTestId('speak-trigger'));
+
+    expect(spoken).toHaveLength(1);
+    expect(stopMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('speech-state')).toHaveTextContent('a');
+  });
 });
+
+/**
+ * Harness variant whose trigger speaks caller-provided text, for exercising
+ * the sanitizer path directly.
+ */
+function SpeechHarnessWithText({engine, text}: {engine: TextToSpeechEngine; text: string}) {
+  const {speak} = useSpeechPlayback(engine);
+  return (
+    <Pressable
+      testID="speak-trigger"
+      onPress={() => {
+        speak('custom', text);
+      }}>
+      <Text>speak custom</Text>
+    </Pressable>
+  );
+}

@@ -7,12 +7,18 @@
  * of crashing. Callers render their own visible playback state from the
  * exposed speaking id.
  *
+ * Utterance text is passed through the shared speech sanitizer
+ * (toSpeechText) first, so screen-oriented decorations — inline markdown
+ * delimiters, heading/bullet prefixes, emoji and pictographic icons — are
+ * never read aloud.
+ *
  * All mutable coordination lives in refs so speak()/stop() keep stable
  * identities across renders — screens may safely list them in effect
  * dependencies without re-triggering work.
  */
 import {useCallback, useEffect, useRef, useState} from 'react';
 
+import {toSpeechText} from './speechText';
 import type {TextToSpeechEngine} from './textToSpeech';
 import {getSpeechEngine} from './textToSpeech';
 
@@ -70,6 +76,14 @@ export function useSpeechPlayback(
   }, []);
 
   const speak = useCallback((id: SpeechItemId, text: string) => {
+    // Message surfaces hand over raw display content (markdown, emoji);
+    // the engine only ever hears the sanitized words. Decoration-only
+    // content has nothing to say: idle state and any current playback
+    // stay untouched.
+    const speakable = toSpeechText(text);
+    if (!speakable) {
+      return;
+    }
     const token = ++tokenRef.current;
     // Starting another item halts the current one first so playback never
     // overlaps; the native module additionally supersedes an in-flight
@@ -88,7 +102,7 @@ export function useSpeechPlayback(
     };
     try {
       engineRef.current
-        .speak(text)
+        .speak(speakable)
         .then(clearIfCurrent, () => {
           // Missing voice data or a provider failure only ends this item's
           // visible playback state; it must never crash the application.
