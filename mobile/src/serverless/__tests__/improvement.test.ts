@@ -10,6 +10,7 @@ describe('generateImprovement', () => {
   const VALID_JSON = JSON.stringify({
     improved: 'I went to the store yesterday.',
     explanation: 'Use the past tense "went".',
+    severity: 'critical',
   });
 
   const mockClient = (responseText: string): OpenRouterClient => ({
@@ -23,7 +24,7 @@ describe('generateImprovement', () => {
     listModels: jest.fn(),
   });
 
-  it('returns original, improved and explanation from a valid completion', async () => {
+  it('returns original, improved, explanation and severity from a valid completion', async () => {
     const client = mockClient(VALID_JSON);
 
     const result = await generateImprovement(client, {
@@ -35,8 +36,32 @@ describe('generateImprovement', () => {
       original: 'I go to store yesterday.',
       improved: 'I went to the store yesterday.',
       explanation: 'Use the past tense "went".',
+      severity: 'critical',
     });
     expect(client.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['none', 'none'],
+    ['minor', 'minor'],
+    ['critical', 'critical'],
+    ['Minor', 'minor'],
+    ['  CRITICAL  ', 'critical'],
+  ])('round-trips the %s severity (case-insensitive)', async (severity, expected) => {
+    const client = mockClient(
+      JSON.stringify({
+        improved: 'Fixed.',
+        explanation: 'why',
+        severity,
+      }),
+    );
+
+    const result = await generateImprovement(client, {
+      level: 'B1',
+      originalMessage: 'Hello!',
+    });
+
+    expect(result.severity).toBe(expected);
   });
 
   it('trims the echoed original but never alters the stored wording', async () => {
@@ -55,6 +80,7 @@ describe('generateImprovement', () => {
       JSON.stringify({
         improved: 'This looks fine to me.',
         explanation: 'The message is already correct; no changes were needed.',
+        severity: 'none',
       }),
     );
 
@@ -65,6 +91,7 @@ describe('generateImprovement', () => {
 
     expect(result.improved).toBe('This looks fine to me.');
     expect(result.explanation).toContain('already correct');
+    expect(result.severity).toBe('none');
   });
 
   it('sends a system prompt and a user prompt built from level and message', async () => {
@@ -79,6 +106,10 @@ describe('generateImprovement', () => {
     expect(request.messages[0].role).toBe('system');
     expect(request.messages[0].content).toContain('"improved"');
     expect(request.messages[0].content).toContain('"explanation"');
+    expect(request.messages[0].content).toContain('"severity"');
+    expect(request.messages[0].content).toContain('none');
+    expect(request.messages[0].content).toContain('minor');
+    expect(request.messages[0].content).toContain('critical');
 
     const userPrompt = request.messages[1].content;
     expect(userPrompt).toContain("The learner's English level is B2 (CEFR)");
@@ -109,6 +140,7 @@ describe('generateImprovement', () => {
 
     expect(result.improved).toBe('I went to the store yesterday.');
     expect(result.explanation).toBe('Use the past tense "went".');
+    expect(result.severity).toBe('critical');
   });
 
   it('rejects a blank original message before calling the provider', async () => {
@@ -149,10 +181,29 @@ describe('generateImprovement', () => {
   it.each([
     ['non-JSON text', 'Your sentence has a tense problem.'],
     ['a non-object payload', '"improved"'],
-    ['a missing improved field', '{"explanation": "why"}'],
-    ['a missing explanation field', '{"improved": "Fixed."}'],
-    ['a blank improved field', JSON.stringify({improved: '   ', explanation: 'why'})],
-    ['a non-string explanation', JSON.stringify({improved: 'Fixed.', explanation: 3})],
+    ['a missing improved field', '{"explanation": "why", "severity": "none"}'],
+    ['a missing explanation field', '{"improved": "Fixed.", "severity": "none"}'],
+    [
+      'a blank improved field',
+      JSON.stringify({improved: '   ', explanation: 'why', severity: 'none'}),
+    ],
+    [
+      'a non-string explanation',
+      JSON.stringify({improved: 'Fixed.', explanation: 3, severity: 'none'}),
+    ],
+    ['a missing severity field', '{"improved": "Fixed.", "explanation": "why"}'],
+    [
+      'a blank severity field',
+      JSON.stringify({improved: 'Fixed.', explanation: 'why', severity: '   '}),
+    ],
+    [
+      'an unknown severity value',
+      JSON.stringify({improved: 'Fixed.', explanation: 'why', severity: 'major'}),
+    ],
+    [
+      'a non-string severity value',
+      JSON.stringify({improved: 'Fixed.', explanation: 'why', severity: 3}),
+    ],
   ])('rejects %s with OpenRouterResponseError', async (_label, responseText) => {
     const client = mockClient(responseText);
 

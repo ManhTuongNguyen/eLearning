@@ -48,6 +48,8 @@ async function renderRow(overrides: Partial<ChatMessage> = {}) {
       onMessageLongPress={jest.fn()}
       onRetry={jest.fn()}
       onStopSpeech={jest.fn()}
+      grammarSeverity={null}
+      onGrammarBadgePress={jest.fn()}
     />,
   );
   return screen.getByTestId(`chat-message-${item.id}`);

@@ -17,6 +17,7 @@ import {improveMessage} from '../api/sessions';
 import type {AuthedRequester} from '../auth/authedRequest';
 import {toErrorMessage} from '../auth/AuthContext';
 import {getLocalDatabase} from '../db/database';
+import {saveMessageImprovement} from '../db/messageStore';
 import {getLearningProfile} from '../db/profileStore';
 import type {ApplicationMode} from '../mode/types';
 import {generateImprovement} from '../serverless/improvement';
@@ -61,12 +62,39 @@ export function useMessageImprovement(options: UseMessageImprovementOptions) {
   }, [authedRequest]);
 
   /**
-   * Improve one selected user message. Serverless mode (TASK-089) corrects
-   * the message locally with an LLM call using the user's own provider key;
-   * server mode (TASK-063) goes through the backend endpoint.
+   * Present an already-fetched improvement without any request (grammar
+   * auto-check cache or persisted history): the badge hands over its stored
+   * result and the sheet shows it immediately. Any in-flight manual request
+   * is dropped first, so the two paths can never interleave into a stale
+   * sheet.
+   */
+  const showImprovement = useCallback((result: DisplayedImprovement) => {
+    improvementRequestRef.current += 1;
+    setImprovementError(null);
+    setImprovementLoading(false);
+    setImprovement(result);
+  }, []);
+
+  /**
+   * Improve one selected user message on explicit menu action. The cache
+   * rules:
+   * - Server mode — the backend stores the improvement on the message row:
+   *   the first call generates and caches, every later call returns the
+   *   cache with zero provider work. The response is identical either way.
+   * - Serverless mode — a persisted local improvement (migration v2) is
+   *   shown directly; only an unchecked message runs the provider request,
+   *   and its result is written back to the local row before display so it
+   *   survives app restarts.
    */
   const startImprovement = useCallback(
     (sid: number, messageId: number) => {
+      const userMessage = messagesRef.current.find(m => m.id === messageId);
+      if (userMessage?.improvement && userMessage.improvement.improved.trim().length > 0) {
+        // Already checked (this visit or a previous one): show the stored
+        // suggestion — never another provider call.
+        showImprovement({...userMessage.improvement, messageId});
+        return;
+      }
       const requestId = ++improvementRequestRef.current;
       setImprovement(null);
       setImprovementError(null);
@@ -75,7 +103,6 @@ export function useMessageImprovement(options: UseMessageImprovementOptions) {
         try {
           if (mode === 'serverless') {
             const currentSession = sessionIdRef.current;
-            const userMessage = messagesRef.current.find(m => m.id === messageId);
             if (currentSession === undefined || !userMessage) {
               return;
             }
@@ -102,10 +129,24 @@ export function useMessageImprovement(options: UseMessageImprovementOptions) {
             ) {
               return;
             }
+            // Persist before display: an app death right after the request
+            // must not lose the paid-for suggestion.
+            await saveMessageImprovement(db, messageId, {
+              improved: result.improved,
+              explanation: result.explanation,
+              severity: result.severity,
+            });
+            if (
+              sessionIdRef.current !== currentSession ||
+              improvementRequestRef.current !== requestId
+            ) {
+              return;
+            }
             setImprovement({...result, messageId});
           } else {
             // Server mode (TASK-063): ask the backend to improve the message
-            // through the central authed requester (TASK-AUDIT-005).
+            // through the central authed requester (TASK-AUDIT-005). The
+            // endpoint serves its own persisted cache on repeat calls.
             if (
               sessionIdRef.current !== sid ||
               improvementRequestRef.current !== requestId
@@ -135,7 +176,7 @@ export function useMessageImprovement(options: UseMessageImprovementOptions) {
         }
       })();
     },
-    [mode],
+    [mode, showImprovement],
   );
 
   /**
@@ -154,6 +195,7 @@ export function useMessageImprovement(options: UseMessageImprovementOptions) {
     improvementLoading,
     improvementError,
     startImprovement,
+    showImprovement,
     invalidateImprovement,
   };
 }

@@ -5,23 +5,43 @@
  * concurrent writes cannot collide on the UNIQUE(session_id, sequence)
  * constraint. Status transitions support streaming (pending) and retryable
  * failures (failed) exactly like the backend message model (TASK-027).
+ *
+ * Each user message also carries its cached grammar improvement (migration
+ * v2): once stored, the check is never regenerated and badges survive app
+ * restarts.
  */
 import type {SqlDriver, SqlExecutor} from './driver';
 import {nowIso} from './driver';
-import type {LocalMessage, LocalMessageRole, LocalMessageStatus} from './types';
-
+import type {
+  ImprovementSeverity,
+  LocalMessage,
+  LocalMessageRole,
+  LocalMessageStatus,
+} from './types';
 const MESSAGE_COLUMNS =
-  'id, session_id, role, status, content, sequence, created_at';
+  'id, session_id, role, status, content, sequence, created_at, improvement_content, improvement_explanation, improvement_severity';
 
 function mapMessage(row: Record<string, unknown>): LocalMessage {
+  const content = String(row.content ?? '');
+  const improvementSeverities = String(row.improvement_severity ?? '');
   return {
     id: Number(row.id),
     session_id: Number(row.session_id),
     role: String(row.role) as LocalMessageRole,
     status: String(row.status ?? 'complete') as LocalMessageStatus,
-    content: String(row.content ?? ''),
+    content,
     sequence: Number(row.sequence),
     created_at: String(row.created_at ?? ''),
+    improvement:
+      improvementSeverities !== ''
+        ? {
+            // `original` is the row's own content — the cache never stores it.
+            original: content,
+            improved: String(row.improvement_content ?? ''),
+            explanation: String(row.improvement_explanation ?? ''),
+            severity: improvementSeverities as ImprovementSeverity,
+          }
+        : undefined,
   };
 }
 
@@ -125,6 +145,29 @@ export async function updateMessageStatus(
     content,
     messageId,
   ]);
+}
+
+/**
+ * Persist one grammar improvement onto a message row (idempotent by
+ * contract: callers only save once per message, because reads short-circuit
+ * regeneration). `original` is deliberately not stored — the row's own
+ * `content` is the original. Unknown ids simply update nothing.
+ */
+export async function saveMessageImprovement(
+  db: SqlExecutor,
+  messageId: number,
+  improvement: {
+    improved: string;
+    explanation: string;
+    severity: ImprovementSeverity;
+  },
+): Promise<void> {
+  await db.execute(
+    `UPDATE messages
+     SET improvement_content = ?, improvement_explanation = ?, improvement_severity = ?
+     WHERE id = ?`,
+    [improvement.improved, improvement.explanation, improvement.severity, messageId],
+  );
 }
 
 function messageQuery(): string {

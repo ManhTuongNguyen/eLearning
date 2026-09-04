@@ -31,13 +31,18 @@ pytestmark = pytest.mark.django_db
 SECRET_TEXT = "i has went to london last weekend"
 IMPROVED_TEXT = "I went to London last weekend."
 EXPLANATION = '"Went" replaces the incorrect past form "has went"; place names are capitalised.'
+SEVERITY = "critical"
 SERVED_MODEL = "served/chat"
 
 CONFLICT_DETAIL = "Improvement requires a non-empty user message."
 
 
-def correction_payload(improved: str = IMPROVED_TEXT, explanation: str = EXPLANATION) -> str:
-    return json.dumps({"improved": improved, "explanation": explanation})
+def correction_payload(
+    improved: str = IMPROVED_TEXT,
+    explanation: str = EXPLANATION,
+    severity: str = SEVERITY,
+) -> str:
+    return json.dumps({"improved": improved, "explanation": explanation, "severity": severity})
 
 
 class ScriptedProvider(LLMProvider):
@@ -292,8 +297,10 @@ class TestOnlyUserMessagesAreImprovable:
 
 
 class TestSuccessfulImprovement:
-    def test_returns_original_improved_and_explanation(self, chat_api, install_service, session):
-        padded = correction_payload(f"  {IMPROVED_TEXT}  ", f"  {EXPLANATION}  ")
+    def test_returns_original_improved_explanation_and_severity(
+        self, chat_api, install_service, session
+    ):
+        padded = correction_payload(f"  {IMPROVED_TEXT}  ", f"  {EXPLANATION}  ", f"  {SEVERITY}  ")
         target_row = append_user_message(session, content=f"  {SECRET_TEXT}  ")
         provider = install_service(text=padded)
 
@@ -302,14 +309,25 @@ class TestSuccessfulImprovement:
         assert response.status_code == 200
         assert response.headers["Content-Type"] == "application/json"
         # ``original`` is the stored message trimmed — never the model echo;
-        # improved/explanation arrive stripped through the value object.
+        # improved/explanation/severity arrive stripped through the value object.
         assert response.data == {
             "original": SECRET_TEXT,
             "improved": IMPROVED_TEXT,
             "explanation": EXPLANATION,
+            "severity": SEVERITY,
         }
         (request,) = provider.complete_requests
         assert [message.role for message in request.messages] == ["system", "user"]
+
+    def test_severity_levels_round_trip(self, chat_api, install_service, session):
+        for severity in ("none", "minor", "critical"):
+            target_row = append_user_message(session)
+            install_service(text=correction_payload(severity=severity))
+
+            response = chat_api.post(improve_url(session.pk, target_row.pk))
+
+            assert response.status_code == 200
+            assert response.data["severity"] == severity
 
     def test_model_echo_cannot_replace_the_original(self, chat_api, install_service, session):
         # Even a misbehaving completion carrying its own "original" key must
@@ -319,6 +337,7 @@ class TestSuccessfulImprovement:
                 "original": "MODEL-PARAPHRASED-ORIGINAL",
                 "improved": IMPROVED_TEXT,
                 "explanation": EXPLANATION,
+                "severity": SEVERITY,
             }
         )
         target_row = append_user_message(session)
@@ -342,6 +361,7 @@ class TestSuccessfulImprovement:
         assert "JSON" in system_prompt
         assert '"improved"' in system_prompt
         assert '"explanation"' in system_prompt
+        assert '"severity"' in system_prompt
         assert "The learner's English level is B2 (CEFR)" in user_prompt
         assert f'The learner\'s message: "{SECRET_TEXT}"' in user_prompt
 
@@ -374,12 +394,15 @@ class TestSuccessfulImprovement:
         assert f'"{second_row.content}"' in second_prompt
         assert first_prompt != second_prompt
 
-    def test_repeated_calls_are_independent(self, chat_api, install_service, session):
-        target_row = append_user_message(session)
+    def test_distinct_messages_are_generated_independently(
+        self, chat_api, install_service, session
+    ):
+        first_row = append_user_message(session, content="first draft sentence")
+        second_row = append_user_message(session, content="second draft sentence")
         provider = install_service()
 
-        first = chat_api.post(improve_url(session.pk, target_row.pk))
-        second = chat_api.post(improve_url(session.pk, target_row.pk))
+        first = chat_api.post(improve_url(session.pk, first_row.pk))
+        second = chat_api.post(improve_url(session.pk, second_row.pk))
 
         assert first.data["improved"] == IMPROVED_TEXT
         assert second.data["improved"] == IMPROVED_TEXT
@@ -426,14 +449,29 @@ class TestProviderFailures:
         assert response.status_code == 502
         assert response.data["detail"] == str(error)
 
+    def test_invalid_severity_completion_maps_to_502(self, chat_api, install_service, session):
+        target_row = append_user_message(session)
+        error = LLMResponseError(
+            "Improvement response is missing a valid 'severity' (none|minor|critical).",
+            provider="improvement",
+            model=SERVED_MODEL,
+        )
+        install_service(error=error)
+
+        response = chat_api.post(improve_url(session.pk, target_row.pk))
+
+        assert response.status_code == 502
+        assert response.data["detail"] == str(error)
+
 
 # ---------------------------------------------------------------------------
-# Purity: improvements are display data — nothing is written anywhere.
+# The cached improvement never overwrites the learner's original words, and
+# no background work (summaries) is scheduled by the flow.
 # ---------------------------------------------------------------------------
 
 
 class TestPurity:
-    def test_no_rows_change_and_no_background_work_is_scheduled(
+    def test_message_content_stays_untouched_and_no_background_work_is_scheduled(
         self, chat_api, install_service, session
     ):
         target_row = append_user_message(session)
@@ -445,8 +483,96 @@ class TestPurity:
         response = chat_api.post(improve_url(session.pk, target_row.pk))
 
         assert response.status_code == 200
-        assert snapshot(session) == before
+        # Only the improvement_* fields may change (see TestPersistenceAndIdempotence);
+        # the message text, roles and statuses are exactly as before.
+        after = snapshot(session)
+        assert [(row[0], row[1], row[2], row[3]) for row in after] == [
+            (row[0], row[1], row[2], row[3]) for row in before
+        ]
         assert list(connection.run_on_commit) == callbacks_before
+
+
+# ---------------------------------------------------------------------------
+# Persistence: the first call caches the improvement on the message row.
+# ---------------------------------------------------------------------------
+
+
+class TestPersistenceAndIdempotence:
+    def test_first_call_persists_the_cache(self, chat_api, install_service, session):
+        target_row = append_user_message(session)
+        install_service()
+        before = snapshot(session)
+
+        response = chat_api.post(improve_url(session.pk, target_row.pk))
+
+        assert response.status_code == 200
+        target_row.refresh_from_db()
+        assert target_row.improvement_content == IMPROVED_TEXT
+        assert target_row.improvement_explanation == EXPLANATION
+        assert target_row.improvement_severity == SEVERITY
+        # Only the improvement fields changed on the row.
+        after = [(pk, role, status, content) for pk, role, status, content in snapshot(session)]
+        assert [
+            (pk, role, status, content)
+            for pk, role, status, content in after
+            if pk == target_row.pk
+        ] == [(row[0], row[1], row[2], row[3]) for row in before if row[0] == target_row.pk]
+
+    def test_repeated_call_returns_the_cache_without_a_provider_call(
+        self, chat_api, install_service, session
+    ):
+        target_row = append_user_message(session)
+        install_service()
+        first = chat_api.post(improve_url(session.pk, target_row.pk))
+        assert first.status_code == 200
+        provider = install_service(text="SECOND-CALL-OUTPUT")
+        provider.complete_requests.clear()
+
+        second = chat_api.post(improve_url(session.pk, target_row.pk))
+
+        assert second.status_code == 200
+        assert second.data["improved"] == IMPROVED_TEXT  # cached, not regenerated
+        assert second.data["severity"] == SEVERITY
+        assert provider.complete_requests == []
+
+    def test_messages_endpoint_embeds_the_cached_improvement(
+        self, chat_api, install_service, session
+    ):
+        target_row = append_user_message(session)
+        install_service()
+        chat_api.post(improve_url(session.pk, target_row.pk))
+
+        response = chat_api.get(f"/api/v1/sessions/{session.pk}/messages/")
+
+        assert response.status_code == 200
+        rows = response.data["results"] if "results" in response.data else response.data
+        target = next(row for row in rows if row["id"] == target_row.pk)
+        assert target["improvement"] == {
+            "original": SECRET_TEXT,
+            "improved": IMPROVED_TEXT,
+            "explanation": EXPLANATION,
+            "severity": SEVERITY,
+        }
+
+    def test_uncached_message_serializes_null_improvement(self, chat_api, session):
+        append_user_message(session)
+
+        response = chat_api.get(f"/api/v1/sessions/{session.pk}/messages/")
+
+        assert response.status_code == 200
+        rows = response.data["results"] if "results" in response.data else response.data
+        assert rows[0]["improvement"] is None
+
+    def test_provider_failure_leaves_no_partial_cache(self, chat_api, install_service, session):
+        target_row = append_user_message(session)
+        install_service(error=LLMAvailabilityError("upstream collapsed"))
+
+        response = chat_api.post(improve_url(session.pk, target_row.pk))
+
+        assert response.status_code == 503
+        target_row.refresh_from_db()
+        assert target_row.improvement_severity == ""
+        assert target_row.improvement_content == ""
 
 
 # ---------------------------------------------------------------------------
@@ -474,8 +600,9 @@ class TestLogHygiene:
             success = chat_api.post(improve_url(session.pk, target_row.pk))
             assert success.status_code == 200
 
+            failed_row = append_user_message(session, content="another draft message")
             install_service(error=LLMAvailabilityError("upstream collapsed"))
-            failure = chat_api.post(improve_url(session.pk, target_row.pk))
+            failure = chat_api.post(improve_url(session.pk, failed_row.pk))
             assert failure.status_code == 503
 
         assert SECRET_TEXT not in caplog.text

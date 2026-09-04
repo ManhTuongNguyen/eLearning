@@ -369,6 +369,35 @@ availability) mới chuyển sang model tiếp theo; cấu hình invalid sẽ ra
 catalog của provider đã cấu hình (với OpenRouter: `vendor/model`, được liệt
 kê tại https://openrouter.ai/api/v1/models).
 
+### Tự động kiểm tra ngữ pháp
+
+Một trợ giúp học tập opt-in (mặc định tắt) được xây trên improvement
+pipeline. Khi được bật trong Settings → Grammar, mỗi tin nhắn user gửi đi sẽ
+được kiểm tra bằng cùng một LLM call tạo ra bản sửa "Improve my English", ở
+cả hai mode:
+
+- **Server mode** — app gọi `POST /api/v1/sessions/{id}/messages/{mid}/improve/` cho message row đã được persist.
+- **Serverless mode** — việc kiểm tra giống hệt chạy trên thiết bị qua key provider của chính user (không liên quan đến backend).
+
+Response mang theo phân loại `severity`: `none` (đã đúng), `minor` (lỗi nhỏ)
+hoặc `critical` (lỗi làm sai lệch ý nghĩa). Tin nhắn đúng không hiển thị gì;
+`minor` hiển thị badge cảnh báo nhỏ và `critical` hiển thị badge lỗi dưới
+tin nhắn của user. Nhấn vào badge mở improvement sheet với kết quả đã fetch
+sẵn — bản gốc, bản gợi ý sửa và giải thích — nên việc xem gợi ý không tốn
+thêm API call nào. Toggle có cảnh báo rằng bật tính năng này tốn thêm một AI
+request (và token) cho mỗi tin nhắn gửi đi, và lịch sử hội thoại đã load
+không bao giờ được kiểm tra hồi tố: chỉ những tin nhắn gửi đi khi tính năng
+đang bật mới được kiểm tra.
+
+Kết quả cải thiện được **lưu trữ vĩnh viễn ở cả hai phía**: backend lưu mỗi
+kết quả vào message row (endpoint improve là idempotent — gọi lại cho cùng
+một tin nhắn trả về gợi ý đã lưu mà không gọi LLM, và message list nhúng
+kết quả này), còn serverless mode lưu vào SQLite local (schema v2). Badge và
+gợi ý do đó vẫn còn sau khi reload hoặc khởi động lại app với chi phí
+provider bằng 0. Reply trò chuyện của tutor không bao giờ chứa chú thích
+meta về việc mô hình hóa hay sửa ngữ pháp — system prompt giới hạn mỗi reply
+chỉ trong nội dung tin nhắn hội thoại.
+
 ## Tính năng
 
 - Chủ đề hội thoại và hội thoại mẫu do AI tạo
@@ -376,6 +405,7 @@ kê tại https://openrouter.ai/api/v1/models).
 - Profile học tiếng Anh (CEFR levels A1–C2 + AUTO)
 - Lịch sử hội thoại với long-term memory qua rolling summaries
 - Gợi ý reply và sửa lỗi "Improve my English" theo yêu cầu
+- Tự động kiểm tra ngữ pháp (opt-in): tin nhắn gửi đi được phân loại (đúng / lỗi nhỏ / lỗi nghiêm trọng) và gắn badge — nhấn badge xem bản sửa đã fetch sẵn, không tốn thêm API call
 - Lưu vocabulary qua text selection với enrichment bất đồng bộ
 - Export CSV tương thích Anki
 - Text-to-speech (Android native)

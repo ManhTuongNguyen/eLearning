@@ -241,6 +241,7 @@ describe('sessions api bindings', () => {
         original: 'I go to store yesterday.',
         improved: 'I went to the store yesterday.',
         explanation: 'Use the past tense "went" and add the article "the".',
+        severity: 'critical',
       }),
     );
 
@@ -250,6 +251,7 @@ describe('sessions api bindings', () => {
       original: 'I go to store yesterday.',
       improved: 'I went to the store yesterday.',
       explanation: 'Use the past tense "went" and add the article "the".',
+      severity: 'critical',
     });
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE_URL}/api/v1/sessions/9/messages/44/improve/`,

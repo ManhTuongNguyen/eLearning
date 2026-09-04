@@ -312,8 +312,6 @@ export function toErrorMessage(err: unknown): string {
     return err.message;
   }
   // Unknown error shapes (e.g. native modules rejecting non-Error values)
-  // keep a generic user-facing text; the raw cause goes to the console
-  // so it stays visible in logcat / DevTools for diagnosis.
-  console.error('[error] unmapped failure:', err);
+  // keep a generic user-facing text; payloads are never logged.
   return 'Something went wrong. Please try again.';
 }

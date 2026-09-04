@@ -31,6 +31,8 @@ export interface ThemeColors {
   danger: string;
   /** Error/validation message text. */
   errorText: string;
+  /** Caution color (grammar warning badges and similar soft alerts). */
+  warning: string;
   /** Success confirmation text. */
   success: string;
 }
@@ -49,6 +51,7 @@ export const lightColors: ThemeColors = {
   accentSoft: '#eff6ff',
   danger: '#dc2626',
   errorText: '#b91c1c',
+  warning: '#b45309',
   success: '#15803d',
 };
 
@@ -66,5 +69,6 @@ export const darkColors: ThemeColors = {
   accentSoft: 'rgba(59,130,246,0.16)',
   danger: '#dc2626',
   errorText: '#fca5a5',
+  warning: '#fbbf24',
   success: '#4ade80',
 };

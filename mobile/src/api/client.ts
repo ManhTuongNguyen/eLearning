@@ -12,8 +12,8 @@
  * backend request keeps one wire contract.
  */
 
-import {assertServerApiAllowed} from '../mode/runtime';
-import {API_BASE_URL} from '../config';
+import { assertServerApiAllowed } from '../mode/runtime';
+import { API_BASE_URL } from '../config';
 
 /**
  * Request deadline for backend calls, matching the backend LLM read timeout
@@ -75,7 +75,7 @@ export function backendRequestHeaders(
   accept: string,
   contentType?: string,
 ): Record<string, string> {
-  const headers: Record<string, string> = {Accept: accept};
+  const headers: Record<string, string> = { Accept: accept };
   if (contentType) {
     headers['Content-Type'] = contentType;
   }
@@ -105,8 +105,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const timer =
     timeoutMs > 0
       ? setTimeout(() => {
-          controller.abort();
-        }, timeoutMs)
+        controller.abort();
+      }, timeoutMs)
       : null;
 
   let response: Response;
@@ -118,7 +118,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       signal: controller.signal,
     });
   } catch (err) {
-    // Distinguish timeout from general network failure when possible.
+    // Distinguish timeout from general network failure when possible. The
+    // cause is surfaced through the thrown ApiError, never logged.
     const isTimeout =
       err instanceof Error && (err.name === 'AbortError' || err.message.toLowerCase().includes('timeout'));
     if (isTimeout) {

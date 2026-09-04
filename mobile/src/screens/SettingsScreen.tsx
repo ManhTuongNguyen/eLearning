@@ -26,36 +26,51 @@
  * param, which flashes the self-dismissing success toast here — the same
  * transient-toast pattern the other screens already use.
  */
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
 
-import {useAuth} from '../auth/AuthContext';
-import {useApplicationMode} from '../mode/ModeContext';
-import type {ApplicationMode} from '../mode/types';
-import type {SettingsScreenProps} from '../navigation/types';
+import { useAuth } from '../auth/AuthContext';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { ApplicationMode } from '../mode/types';
+import type { SettingsScreenProps } from '../navigation/types';
+import {
+  loadGrammarCheckEnabled,
+  saveGrammarCheckEnabled,
+} from '../preferences/grammarCheck';
 import {
   clearAllServerlessData,
   loadServerlessOpenRouterConfig,
   loadServerlessProvider,
 } from '../serverless/settings';
-import {PROVIDER_DESCRIPTORS} from '../serverless/providerRegistry';
-import type {ProviderId} from '../serverless/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
-import type {ThemeMode} from '../theme/ThemeContext';
+import { PROVIDER_DESCRIPTORS } from '../serverless/providerRegistry';
+import type { ProviderId } from '../serverless/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { ThemeMode } from '../theme/ThemeContext';
 
-const THEME_OPTIONS: Array<{value: ThemeMode; label: string; testID: string}> = [
-  {value: 'light', label: 'Light', testID: 'settings-theme-light'},
-  {value: 'dark', label: 'Dark', testID: 'settings-theme-dark'},
-  {value: 'system', label: 'System', testID: 'settings-theme-system'},
+const THEME_OPTIONS: Array<{
+  value: ThemeMode;
+  label: string;
+  testID: string;
+}> = [
+  { value: 'light', label: 'Light', testID: 'settings-theme-light' },
+  { value: 'dark', label: 'Dark', testID: 'settings-theme-dark' },
+  { value: 'system', label: 'System', testID: 'settings-theme-system' },
 ];
 
 const APPLICATION_MODE_OPTIONS: Array<{
@@ -120,8 +135,9 @@ export function createStyles(c: ThemeColors) {
     },
     content: {
       alignItems: 'center',
-      gap: 20,
+      gap: 14,
       padding: 24,
+      paddingTop: 12,
       paddingBottom: 40,
     },
     title: {
@@ -300,6 +316,38 @@ export function createStyles(c: ThemeColors) {
     segmentTextSelected: {
       color: c.accent,
     },
+    /* Grammar auto-check toggle row */
+    toggleRow: {
+      alignSelf: 'stretch',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    toggleTexts: {
+      flex: 1,
+      gap: 4,
+    },
+    toggleTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.textPrimary,
+    },
+    toggleDescription: {
+      fontSize: 13,
+      color: c.textSecondary,
+      lineHeight: 18,
+    },
+    toggleWarning: {
+      fontSize: 13,
+      color: c.warning,
+      fontWeight: '600',
+    },
     /* Mode switcher cards */
     modeOption: {
       flexDirection: 'row',
@@ -399,7 +447,7 @@ export function createStyles(c: ThemeColors) {
       shadowColor: '#000',
       shadowOpacity: 0.15,
       shadowRadius: 8,
-      shadowOffset: {width: 0, height: 2},
+      shadowOffset: { width: 0, height: 2 },
       elevation: 6,
     },
     toastText: {
@@ -412,8 +460,16 @@ export function createStyles(c: ThemeColors) {
 }
 
 /** One status line of the serverless AI provider card. */
-function StatusLine({label, value, testID}: {label: string; value: string; testID?: string}) {
-  const {colors} = useTheme();
+function StatusLine({
+  label,
+  value,
+  testID,
+}: {
+  label: string;
+  value: string;
+  testID?: string;
+}) {
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.statusRow}>
@@ -425,24 +481,59 @@ function StatusLine({label, value, testID}: {label: string; value: string; testI
   );
 }
 
-export function SettingsScreen({navigation, route}: SettingsScreenProps) {
-  const {user, logout, busy} = useAuth();
+export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
+  const { user, logout, busy } = useAuth();
   // Two independent "mode" concepts live side by side here: the visual theme
   // and the SERVER/SERVERLESS application mode (TASK-080) — aliased apart.
-  const {mode: themeMode, setMode: setThemeMode, colors} = useTheme();
-  const {mode: appMode, status: modeStatus, setMode: setApplicationMode} = useApplicationMode();
+  const { mode: themeMode, setMode: setThemeMode, colors } = useTheme();
+  const {
+    mode: appMode,
+    status: modeStatus,
+    setMode: setApplicationMode,
+  } = useApplicationMode();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   /** Configuration state for the serverless AI provider card. */
-  const [providerStatus, setProviderStatus] = useState<'loading' | {
-    hasApiKey: boolean;
-    provider: ProviderId;
-    primaryModel: string | null;
-    fallbackCount: number;
-  }>('loading');
+  const [providerStatus, setProviderStatus] = useState<
+    | 'loading'
+    | {
+        hasApiKey: boolean;
+        provider: ProviderId;
+        primaryModel: string | null;
+        fallbackCount: number;
+      }
+  >('loading');
 
   /** While clearing local data, the button is disabled to prevent double-taps. */
   const [clearing, setClearing] = useState(false);
+
+  /**
+   * Grammar auto-check preference (default off). The toggle persists the
+   * change immediately so the chat screen picks it up on the next visit.
+   */
+  const [grammarCheckEnabled, setGrammarCheckEnabled] = useState<
+    boolean | null
+  >(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadGrammarCheckEnabled().then(enabled => {
+      if (!cancelled) {
+        setGrammarCheckEnabled(enabled);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleGrammarCheckToggle = useCallback((value: boolean) => {
+    setGrammarCheckEnabled(value);
+    saveGrammarCheckEnabled(value).catch(() => {
+      // Persistence failed: revert the switch so it reflects the stored
+      // (still disabled) state instead of lying to the user.
+      setGrammarCheckEnabled(false);
+    });
+  }, []);
 
   /**
    * TASK-IMPROVEMENT-005: the agent configuration editor pops back with
@@ -462,7 +553,7 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
       return;
     }
     setSavedToastVisible(true);
-    navigation.setParams({configSaved: undefined});
+    navigation.setParams({ configSaved: undefined });
   }, [navigation, route.params?.configSaved]);
 
   // The configuration-saved toast dismisses itself after a fixed delay.
@@ -487,7 +578,7 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
       'Clear local data?',
       'This will remove all serverless conversations, summaries, profile and AI provider settings from this device. Your account on the server is not affected.',
       [
-        {text: 'Cancel', style: 'cancel'},
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Clear',
           style: 'destructive',
@@ -501,11 +592,16 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
                 primaryModel: null,
                 fallbackCount: 0,
               });
-              Alert.alert('Local data cleared', 'All serverless data has been removed from this device.');
+              Alert.alert(
+                'Local data cleared',
+                'All serverless data has been removed from this device.',
+              );
             } catch (error) {
               Alert.alert(
                 'Clearing failed',
-                error instanceof Error ? error.message : 'Unable to clear local data.',
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to clear local data.',
               );
             } finally {
               setClearing(false);
@@ -599,7 +695,8 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
           accessibilityLabel="Go back"
           hitSlop={8}
           onPress={() => navigation.popToTop()}
-          testID="settings-back">
+          testID="settings-back"
+        >
           <Text style={styles.backText}>‹ Back</Text>
         </Pressable>
         <Text style={styles.title}>Settings</Text>
@@ -613,7 +710,11 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
             </View>
             <View style={styles.accountTexts}>
               <Text style={styles.accountHint}>Signed in as</Text>
-              <Text style={styles.accountEmail} numberOfLines={1} testID="settings-account-email">
+              <Text
+                style={styles.accountEmail}
+                numberOfLines={1}
+                testID="settings-account-email"
+              >
                 {email || 'Unknown account'}
               </Text>
             </View>
@@ -629,8 +730,12 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
                 accessibilityRole="button"
                 accessibilityLabel={row.title}
                 onPress={row.onPress}
-                style={({pressed}) => [styles.row, pressed && styles.rowPressed]}
-                testID={row.testID}>
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && styles.rowPressed,
+                ]}
+                testID={row.testID}
+              >
                 <View style={styles.rowTexts}>
                   <Text style={styles.rowTitle}>{row.title}</Text>
                   <Text style={styles.rowDescription}>{row.description}</Text>
@@ -646,23 +751,38 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
             accessibilityRole="button"
             accessibilityLabel="AI provider settings"
             onPress={() => navigation.navigate('AIProviderSettings')}
-            style={({pressed}) => [styles.aiProviderCard, pressed && styles.rowPressed]}
-            testID="settings-ai-provider-card">
+            style={({ pressed }) => [
+              styles.aiProviderCard,
+              pressed && styles.rowPressed,
+            ]}
+            testID="settings-ai-provider-card"
+          >
             <View style={styles.aiProviderCardHeader}>
-              <Text style={styles.aiProviderCardTitle} testID="settings-ai-provider-title">
+              <Text
+                style={styles.aiProviderCardTitle}
+                testID="settings-ai-provider-title"
+              >
                 {providerStatus === 'loading'
                   ? 'AI provider'
                   : PROVIDER_DESCRIPTORS[providerStatus.provider].label}
               </Text>
               {providerStatus === 'loading' ? (
-                <ActivityIndicator size="small" testID="settings-ai-provider-loading" />
+                <ActivityIndicator
+                  size="small"
+                  testID="settings-ai-provider-loading"
+                />
               ) : providerStatus.hasApiKey ? (
                 <View style={styles.badge} testID="settings-ai-provider-badge">
                   <Text style={styles.badgeText}>Ready</Text>
                 </View>
               ) : (
-                <View style={[styles.badge, styles.badgePending]} testID="settings-ai-provider-badge">
-                  <Text style={[styles.badgeText, styles.badgeTextPending]}>Not set up</Text>
+                <View
+                  style={[styles.badge, styles.badgePending]}
+                  testID="settings-ai-provider-badge"
+                >
+                  <Text style={[styles.badgeText, styles.badgeTextPending]}>
+                    Not set up
+                  </Text>
                 </View>
               )}
             </View>
@@ -672,8 +792,8 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
                 providerStatus === 'loading'
                   ? '…'
                   : providerStatus.hasApiKey
-                    ? 'Saved on this device'
-                    : 'Not configured'
+                  ? 'Saved on this device'
+                  : 'Not configured'
               }
               testID="settings-ai-provider-key-status"
             />
@@ -682,7 +802,7 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
               value={
                 providerStatus === 'loading'
                   ? '…'
-                  : (providerStatus.primaryModel ?? 'Not selected')
+                  : providerStatus.primaryModel ?? 'Not selected'
               }
               testID="settings-ai-provider-primary-status"
             />
@@ -692,8 +812,8 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
                 providerStatus === 'loading'
                   ? '…'
                   : providerStatus.fallbackCount > 0
-                    ? `${providerStatus.fallbackCount} selected`
-                    : 'None'
+                  ? `${providerStatus.fallbackCount} selected`
+                  : 'None'
               }
               testID="settings-ai-provider-fallback-status"
             />
@@ -706,8 +826,9 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
             accessibilityRole="button"
             accessibilityLabel="Text to speech settings"
             onPress={() => navigation.navigate('TTSSettings')}
-            style={({pressed}) => [styles.row, pressed && styles.rowPressed]}
-            testID="settings-open-tts">
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            testID="settings-open-tts"
+          >
             <View style={styles.rowTexts}>
               <Text style={styles.rowTitle}>Text to speech</Text>
               <Text style={styles.rowDescription}>
@@ -718,6 +839,38 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
           </Pressable>
         </View>
 
+        {/* Grammar auto-check: available in both modes because the check
+            rides the improvement pipeline each mode already uses. Off by
+            default — every sent message then costs one extra LLM request. */}
+        {grammarCheckEnabled !== null ? (
+          <View style={styles.rowGroup} testID="settings-grammar-section">
+            <Text style={styles.sectionLabel}>Grammar</Text>
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: grammarCheckEnabled }}
+              onPress={() => handleGrammarCheckToggle(!grammarCheckEnabled)}
+              style={styles.toggleRow}
+              testID="settings-grammar-toggle"
+            >
+              <View style={styles.toggleTexts}>
+                <Text style={styles.toggleTitle}>Grammar auto-check</Text>
+                <Text style={styles.toggleDescription}>
+                  Check every message you send and badge it when it has issues.
+                  Tap a badge to see the suggested improvement.
+                </Text>
+                <Text style={styles.toggleWarning}>
+                  Uses an extra AI request per message — consumes more tokens.
+                </Text>
+              </View>
+              <Switch
+                value={grammarCheckEnabled}
+                onValueChange={handleGrammarCheckToggle}
+                testID="settings-grammar-switch"
+              />
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={styles.rowGroup}>
           <Text style={styles.sectionLabel}>Theme</Text>
           <View style={styles.segmentRow}>
@@ -727,19 +880,21 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
                 <Pressable
                   key={option.value}
                   accessibilityRole="radio"
-                  accessibilityState={{checked: isSelected}}
+                  accessibilityState={{ checked: isSelected }}
                   onPress={() => setThemeMode(option.value)}
-                  style={({pressed}) => [
+                  style={({ pressed }) => [
                     styles.segment,
                     isSelected && styles.segmentSelected,
                     pressed && styles.buttonDisabled,
                   ]}
-                  testID={option.testID}>
+                  testID={option.testID}
+                >
                   <Text
                     style={[
                       styles.segmentText,
                       isSelected && styles.segmentTextSelected,
-                    ]}>
+                    ]}
+                  >
                     {option.label}
                   </Text>
                 </Pressable>
@@ -757,19 +912,21 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
               <Pressable
                 key={option.value}
                 accessibilityRole="radio"
-                accessibilityState={{checked: isSelected}}
+                accessibilityState={{ checked: isSelected }}
                 onPress={() => setApplicationMode(option.value)}
-                style={({pressed}) => [
+                style={({ pressed }) => [
                   styles.modeOption,
                   isSelected && styles.modeOptionSelected,
                   pressed && styles.buttonDisabled,
                 ]}
-                testID={option.testID}>
+                testID={option.testID}
+              >
                 <View
                   style={[
                     styles.modeRadioOuter,
                     isSelected && styles.modeRadioOuterSelected,
-                  ]}>
+                  ]}
+                >
                   {isSelected ? <View style={styles.modeRadioInner} /> : null}
                 </View>
                 <View style={styles.modeTexts}>
@@ -777,10 +934,13 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
                     style={[
                       styles.modeLabel,
                       isSelected && styles.modeLabelSelected,
-                    ]}>
+                    ]}
+                  >
                     {option.label}
                   </Text>
-                  <Text style={styles.modeDescription}>{option.description}</Text>
+                  <Text style={styles.modeDescription}>
+                    {option.description}
+                  </Text>
                 </View>
               </Pressable>
             );
@@ -795,10 +955,14 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Clear local data"
-              style={[styles.secondaryButton, clearing && styles.buttonDisabled]}
+              style={[
+                styles.secondaryButton,
+                clearing && styles.buttonDisabled,
+              ]}
               disabled={clearing}
               onPress={confirmClearLocalData}
-              testID="settings-clear-local">
+              testID="settings-clear-local"
+            >
               {clearing ? (
                 <ActivityIndicator color={colors.textPrimary} />
               ) : (
@@ -817,7 +981,8 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
             onPress={() => {
               logout();
             }}
-            testID="settings-logout">
+            testID="settings-logout"
+          >
             {busy ? (
               <ActivityIndicator color={colors.onPrimary} />
             ) : (
@@ -828,8 +993,16 @@ export function SettingsScreen({navigation, route}: SettingsScreenProps) {
       </ScrollView>
 
       {savedToastVisible ? (
-        <View pointerEvents="none" style={styles.toast} testID="settings-saved-toast">
-          <Text role="status" style={styles.toastText} testID="settings-saved-toast-text">
+        <View
+          pointerEvents="none"
+          style={styles.toast}
+          testID="settings-saved-toast"
+        >
+          <Text
+            role="status"
+            style={styles.toastText}
+            testID="settings-saved-toast-text"
+          >
             Configuration saved successfully.
           </Text>
         </View>

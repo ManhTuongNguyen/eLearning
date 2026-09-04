@@ -94,6 +94,14 @@ class SystemPromptSectionTests(SimpleTestCase):
     def test_identity_section_present(self) -> None:
         self.assertIn("AI English tutor", self.prompt)
 
+    def test_identity_section_forbids_meta_commentary(self) -> None:
+        # The tutor reply must be the chat message only: no parenthesized
+        # notes about modelling/corrections, no strategy talk (roadmap §5).
+        self.assertIn("ONLY the chat message itself", self.prompt)
+        self.assertIn("NEVER add notes", self.prompt)
+        self.assertIn("Never break character", self.prompt)
+        self.assertIn("modelling", self.prompt)
+
     def test_level_line_present(self) -> None:
         self.assertIn("English level is B2 (CEFR)", self.prompt)
 

@@ -200,12 +200,14 @@ Message representation:
   "status": "complete",
   "content": "Sure! Latte coming right up…",
   "sequence": 5,
-  "created_at": "2026-08-28T12:01:30Z"
+  "created_at": "2026-08-28T12:01:30Z",
+  "improvement": null
 }
 ```
 
 - `role`: `user` | `assistant`
 - `status`: `pending` (generation in progress) | `complete` | `failed` (retryable)
+- `improvement`: the cached grammar improvement for `user` messages — `null` until the improve endpoint has run for that message, then `{original, improved, explanation, severity}`; see [improve](#post-apisessionsidmessagesmessage_pkimprove--authenticated).
 
 ### `GET /api/v1/sessions/{id}/messages/` — authenticated
 
@@ -268,19 +270,22 @@ Inputs are persisted state only: the session's learning level + topic and every 
 
 ### `POST /api/v1/sessions/{id}/messages/{message_pk}/improve/` — authenticated
 
-Improve one user-authored message on explicit request. No body. Read-only — the stored message is never modified.
+Improve one user-authored message on explicit request. No body. The first call generates the correction and **persists it on the message row**; every later call for the same message returns the stored result verbatim with **no provider call** — the correction of a fixed text never changes.
 
 ```json
 // 200
 {
   "original": "i go to store yesterday",
   "improved": "I went to the store yesterday.",
-  "explanation": "Use past tense 'went' for a finished action…"
+  "explanation": "Use past tense 'went' for a finished action…",
+  "severity": "critical"
 }
 ```
 
 - Only `user` messages (non-empty) can be improved → assistant rows or blank content are `409 CONFLICT`.
-- Provider failure → `503`/`502`; `404` for foreign/nonexistent sessions/messages.
+- `severity` classifies how wrong the original was, classified by the same LLM call that produces the correction: `none` (already correct), `minor` (small slips a reader easily overlooks) or `critical` (mistakes that break or materially distort the meaning). Clients use it to badge the message — e.g. a warning badge for `minor`, an error badge for `critical` — and to show the improvement without a second API call.
+- The cache lives on the message row and also rides the message list payloads: `GET /api/v1/sessions/{id}/messages/` embeds `improvement: {original, improved, explanation, severity}` on user messages (or `null` while never generated), so badges and suggestions survive reloads and app restarts without extra round-trips.
+- Only the `improvement_*` columns are written; the message text, roles and statuses are untouched. Provider failures → `503`/`502` and leave no partial cache; `404` for foreign/nonexistent sessions/messages.
 
 ---
 

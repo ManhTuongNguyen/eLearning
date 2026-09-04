@@ -369,6 +369,34 @@ availability) move to the next model; invalid configuration raises
 follow the configured provider's catalog (for OpenRouter: `vendor/model`,
 listed at https://openrouter.ai/api/v1/models).
 
+### Grammar auto-check
+
+An opt-in learning aid (default off) built on the improvement pipeline. When
+enabled in Settings → Grammar, every message the user sends is checked by the
+same LLM call that produces "Improve my English" corrections, in both modes:
+
+- **Server mode** — the app calls `POST /api/v1/sessions/{id}/messages/{mid}/improve/` for the persisted message row.
+- **Serverless mode** — the identical check runs on-device through the user's own provider key (no backend involved).
+
+The response carries a `severity` classification: `none` (already correct),
+`minor` (small slips) or `critical` (meaning-breaking mistakes). Correct
+messages show nothing; `minor` renders a small warning badge and `critical`
+an error badge under the user's message. Tapping a badge opens the
+improvement sheet with the already-fetched result — original, suggested
+rewrite and explanation — so displaying a suggestion never costs a second
+API call. The toggle warns that enabling it consumes one extra AI request
+(and tokens) per sent message, and the session's loaded history is never
+retro-checked: only messages sent while the feature is on are checked.
+
+Improvements are **persisted on both sides**: the backend stores each result
+on the message row (the improve endpoint is idempotent — repeating a request
+for the same message returns the stored suggestion without any LLM call, and
+the message list embeds it), and serverless mode stores it in local SQLite
+(schema v2). Badges and suggestions therefore survive reloads and app
+restarts with zero additional provider traffic. The tutor's chat replies
+never contain meta-commentary about grammar modelling or corrections — the
+system prompt confines each reply to the conversation message itself.
+
 ## Features
 
 - AI-generated conversation topics and sample conversations
@@ -376,6 +404,7 @@ listed at https://openrouter.ai/api/v1/models).
 - English-learning profile (CEFR levels A1–C2 + AUTO)
 - Conversation history with long-term memory via rolling summaries
 - Suggested replies and on-demand "Improve my English" corrections
+- Opt-in grammar auto-check: sent messages are classified (correct / minor / critical) and badged — tapping a badge shows the improvement already fetched, no extra API call
 - Vocabulary saving via text selection with asynchronous enrichment
 - Anki-compatible CSV export
 - Text-to-speech (Android native)

@@ -25,6 +25,12 @@ export interface ChatMessage {
   content: string;
   sequence: number;
   created_at: string;
+  /**
+   * Cached grammar improvement for user messages; present once the message
+   * has been checked (server mode persists it on the backend, serverless in
+   * local SQLite). Restores badges and suggestions without new API calls.
+   */
+  improvement?: MessageImprovement;
 }
 
 /** One turn of the generated example conversation (backend SampleTurn). */
@@ -137,11 +143,22 @@ export function getMessageSuggestions(
   );
 }
 
+/** How wrong the original message was (backend Improvement.severity). */
+export type ImprovementSeverity = 'none' | 'minor' | 'critical';
+
 /** Grammar/wording improvement for one user message (TASK-063 contract). */
 export interface MessageImprovement {
   original: string;
   improved: string;
   explanation: string;
+  /**
+   * Classification of the original message: `none` when it was already
+   * correct, `minor` for small slips (warning badge) and `critical` for
+   * meaning-breaking mistakes (error badge). Returned by the same request
+   * that produces the correction, so the client can badge the message and
+   * show the improvement without a second API call.
+   */
+  severity: ImprovementSeverity;
 }
 
 /**

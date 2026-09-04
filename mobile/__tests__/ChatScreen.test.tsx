@@ -215,6 +215,7 @@ beforeEach(async () => {
     original: 'Default original',
     improved: 'Default improved',
     explanation: 'Default explanation',
+    severity: 'minor',
   });
   mockedVocabulary.saveVocabulary.mockResolvedValue({
     id: 9,
@@ -1543,6 +1544,7 @@ describe('ChatScreen', () => {
       original: 'I go to store yesterday.',
       improved: 'I went to the store yesterday.',
       explanation: 'Use the past tense "went" and add the article "the".',
+      severity: 'critical',
     };
 
     function renderOneConversation() {
@@ -1595,6 +1597,39 @@ describe('ChatScreen', () => {
       await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
 
       expect(screen.queryByTestId('chat-improvement-modal')).toBeNull();
+      expect(mockedSessions.improveMessage).not.toHaveBeenCalled();
+    });
+
+    it('restores the persisted badge from the message improvement without API calls', async () => {
+      // The loaded history row carries its cached improvement (server mode:
+      // backend persistence; serverless: local SQLite). The badge must show
+      // on reload and its press must display the stored suggestion with
+      // zero endpoint traffic.
+      mockedSessions.listMessages.mockResolvedValue(
+        pageOf([
+          makeMessage({
+            id: 801,
+            role: 'user',
+            sequence: 1,
+            content: 'I go to store yesterday.',
+            improvement: IMPROVEMENT,
+          }),
+          makeMessage({
+            id: 802,
+            role: 'assistant',
+            sequence: 2,
+            content: 'Nice! What did you buy?',
+          }),
+        ]),
+      );
+      await renderChat({sessionId: 5});
+      await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
+
+      expect(screen.getByTestId('chat-grammar-badge-801')).toBeOnTheScreen();
+
+      await fireEvent.press(screen.getByTestId('chat-grammar-badge-801'));
+
+      await expectResultShown();
       expect(mockedSessions.improveMessage).not.toHaveBeenCalled();
     });
 
@@ -1719,6 +1754,7 @@ describe('ChatScreen', () => {
           original: "She don't like it.",
           improved: "She doesn't like it.",
           explanation: 'Third-person singular subjects take "does not" in the present tense.',
+          severity: 'critical',
         });
       await renderChat({sessionId: 5});
       await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());

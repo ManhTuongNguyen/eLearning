@@ -105,9 +105,13 @@ import {
 } from '../hooks/useVocabularySave';
 import {useChatTurns} from '../hooks/useChatTurns';
 import {useChatKeyboardAvoidance} from '../hooks/useChatKeyboardAvoidance';
+import {useGrammarAutoCheck} from '../hooks/useGrammarAutoCheck';
 import {useFollowBottom} from '../hooks/useFollowBottom';
 import type {ChatScreenProps} from '../navigation/types';
 import {useApplicationMode} from '../mode/ModeContext';
+import {
+  loadGrammarCheckEnabled,
+} from '../preferences/grammarCheck';
 import {listFirstSessionPage, loadConversation} from '../services/conversationSource';
 import {
   CHAT_LIST_INITIAL_NUM_TO_RENDER,
@@ -451,12 +455,45 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     improvementLoading,
     improvementError,
     startImprovement,
+    showImprovement,
     invalidateImprovement,
   } = useMessageImprovement({sessionId, mode, authedRequest, messages});
 
   // TASK-069/070: immediate vocabulary save + self-dismissing toast.
   const {toast, saveVocabularySelection, invalidateVocabSave} = useVocabularySave({
     authedRequest,
+  });
+
+  // Grammar auto-check (opt-in): load the persisted preference once per
+  // mount; the Settings toggle change applies on the next chat visit.
+  const [grammarCheckEnabled, setGrammarCheckEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    loadGrammarCheckEnabled().then(enabled => {
+      if (!cancelled) {
+        setGrammarCheckEnabled(enabled);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // True once the session's initial history load has settled (messages and
+  // the loading flag settle in the same batch): the auto-check seeds that
+  // snapshot as already settled, so opening an old conversation never fires
+  // a burst of hidden provider requests.
+  const historySettled = !loading && error === null && sessionId !== undefined;
+
+  // Grammar auto-check pipeline: checks every newly sent user message when
+  // enabled and caches the improvement for the badge to display.
+  const {checks: grammarChecks, getResult: getGrammarCheck} = useGrammarAutoCheck({
+    sessionId,
+    mode,
+    authedRequest,
+    messages,
+    enabled: grammarCheckEnabled,
+    historySettled,
   });
 
   // Latest-ref seam: the load effect keys on (session, reload) only, so an
@@ -701,6 +738,25 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   }, []);
 
   /**
+   * Grammar badge press: show the improvement for this message directly —
+   * the persisted row cache (`improvement`) first, then the live auto-check
+   * cache. Both hold the already-fetched suggestion, so no second API call
+   * is ever made.
+   */
+  const handleGrammarBadgePress = useCallback(
+    (message: ChatMessage) => {
+      const check = getGrammarCheck(message.id);
+      const payload = check ?? (message.improvement && message.improvement.improved.trim().length > 0
+        ? {...message.improvement, messageId: message.id}
+        : null);
+      if (payload) {
+        showImprovement(payload);
+      }
+    },
+    [getGrammarCheck, showImprovement],
+  );
+
+  /**
    * TASK-069/070: the vocabulary save flow's entry point — the selection
    * sheet hands its confirmed trimmed expression here and closes, and the
    * save starts immediately (the toast flow lives in `useVocabularySave`).
@@ -717,18 +773,30 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   );
 
   const renderMessage = useCallback(
-    ({item}: {item: ChatMessage}) => (
-      <MessageRow
-        item={item}
-        styles={rowStyles}
-        streaming={streaming}
-        speaking={speakingMessageId === item.id}
-        spinnerColor={colors.textMuted}
-        onMessageLongPress={handleRowLongPress}
-        onRetry={handleRetry}
-        onStopSpeech={stopSpeech}
-      />
-    ),
+    ({item}: {item: ChatMessage}) => {
+      // Badge severity: the persisted improvement wins; the live auto-check
+      // result covers messages checked during this visit before a reload.
+      const persisted =
+        item.improvement && item.improvement.improved.trim().length > 0
+          ? item.improvement.severity
+          : null;
+      const live = getGrammarCheck(item.id)?.severity ?? null;
+      const severity = persisted ?? live;
+      return (
+        <MessageRow
+          item={item}
+          styles={rowStyles}
+          streaming={streaming}
+          speaking={speakingMessageId === item.id}
+          spinnerColor={colors.textMuted}
+          onMessageLongPress={handleRowLongPress}
+          onRetry={handleRetry}
+          onStopSpeech={stopSpeech}
+          grammarSeverity={severity}
+          onGrammarBadgePress={handleGrammarBadgePress}
+        />
+      );
+    },
     [
       rowStyles,
       streaming,
@@ -737,6 +805,8 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       handleRowLongPress,
       handleRetry,
       stopSpeech,
+      getGrammarCheck,
+      handleGrammarBadgePress,
     ],
   );
 
@@ -849,6 +919,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
               data={messages}
               keyExtractor={message => String(message.id)}
               renderItem={renderMessage}
+              // Grammar check results arrive for rows already on screen:
+              // the identity change makes FlatList re-render them so the
+              // badge appears as soon as the check lands.
+              extraData={grammarChecks}
               onScroll={handleScroll}
               scrollEventThrottle={16}
               onContentSizeChange={handleContentSizeChange}

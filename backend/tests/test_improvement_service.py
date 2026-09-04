@@ -5,7 +5,11 @@ from dataclasses import FrozenInstanceError
 
 from django.test import SimpleTestCase
 
-from conversations.improvement import Improvement, ImprovementService
+from conversations.improvement import (
+    SEVERITY_VALUES,
+    Improvement,
+    ImprovementService,
+)
 from learning.models import Level
 from llm.exceptions import (
     LLMAuthenticationError,
@@ -23,6 +27,7 @@ TRIMMED_ORIGINAL = ORIGINAL.strip()
 VALID_PAYLOAD = {
     "improved": "I went to the store yesterday.",
     "explanation": 'Use past simple ("went") with "yesterday" instead of present perfect.',
+    "severity": "critical",
 }
 
 
@@ -64,28 +69,52 @@ class ImprovementTests(SimpleTestCase):
     """Shape of the structured improvement result."""
 
     def test_improvement_is_frozen(self) -> None:
-        improvement = Improvement(original="a", improved="b", explanation="c")
+        improvement = Improvement(original="a", improved="b", explanation="c", severity="none")
 
         with self.assertRaises(FrozenInstanceError):
             improvement.improved = "x"  # type: ignore[misc]
 
     def test_blank_field_is_rejected(self) -> None:
         cases = (
-            {"original": "", "improved": "b", "explanation": "c"},
-            {"original": "   ", "improved": "b", "explanation": "c"},
-            {"original": "a", "improved": "", "explanation": "c"},
-            {"original": "a", "improved": "b", "explanation": ""},
-            {"original": None, "improved": "b", "explanation": "c"},
-            {"original": "a", "improved": 42, "explanation": "c"},  # type: ignore[dict-item]
+            {"original": "", "improved": "b", "explanation": "c", "severity": "none"},
+            {"original": "   ", "improved": "b", "explanation": "c", "severity": "none"},
+            {"original": "a", "improved": "", "explanation": "c", "severity": "none"},
+            {"original": "a", "improved": "b", "explanation": "", "severity": "none"},
+            {"original": None, "improved": "b", "explanation": "c", "severity": "none"},
+            {"original": "a", "improved": 42, "explanation": "c", "severity": "none"},  # type: ignore[dict-item]
         )
         for fields in cases:
             with self.subTest(fields=fields):
                 with self.assertRaises(ValueError):
                     Improvement(**fields)
 
+    def test_invalid_severity_is_rejected(self) -> None:
+        for severity in ("", "  ", "major", None, 42):
+            with self.subTest(severity=severity):
+                with self.assertRaises(ValueError):
+                    Improvement(original="a", improved="b", explanation="c", severity=severity)
+
+    def test_severity_is_normalized_to_lowercase(self) -> None:
+        for raw, normalized in (
+            ("NONE", "none"),
+            ("Minor", "minor"),
+            ("  CRITICAL  ", "critical"),
+        ):
+            with self.subTest(raw=raw):
+                improvement = Improvement(original="a", improved="b", explanation="c", severity=raw)
+                self.assertEqual(improvement.severity, normalized)
+
+    def test_allowed_severities_are_accepted(self) -> None:
+        for severity in SEVERITY_VALUES:
+            with self.subTest(severity=severity):
+                improvement = Improvement(
+                    original="a", improved="b", explanation="c", severity=severity
+                )
+                self.assertEqual(improvement.severity, severity)
+
     def test_improvements_compare_by_value(self) -> None:
-        first = Improvement(original="a", improved="b", explanation="c")
-        same = Improvement(original="a", improved="b", explanation="c")
+        first = Improvement(original="a", improved="b", explanation="c", severity="minor")
+        same = Improvement(original="a", improved="b", explanation="c", severity="minor")
 
         self.assertEqual(first, same)
 
@@ -146,6 +175,7 @@ class HappyPathTests(SimpleTestCase):
         padded_payload = {
             "improved": f"  {VALID_PAYLOAD['improved']} ",
             "explanation": f"\n{VALID_PAYLOAD['explanation']}\t",
+            "severity": f"  {VALID_PAYLOAD['severity']} ",
         }
         self.provider.response = make_response(json_payload(padded_payload))
 
@@ -154,6 +184,7 @@ class HappyPathTests(SimpleTestCase):
         self.assertEqual(improvement.original, TRIMMED_ORIGINAL)
         self.assertEqual(improvement.improved, VALID_PAYLOAD["improved"])
         self.assertEqual(improvement.explanation, VALID_PAYLOAD["explanation"])
+        self.assertEqual(improvement.severity, VALID_PAYLOAD["severity"])
 
     def test_original_is_never_taken_from_the_model_output(self) -> None:
         paraphrased = {**VALID_PAYLOAD, "original": "A PARAPHRASED ECHO"}
@@ -175,12 +206,25 @@ class HappyPathTests(SimpleTestCase):
         payload = {
             "improved": correct,
             "explanation": "Your message is already correct.",
+            "severity": "none",
         }
         self.provider.response = make_response(json_payload(payload))
 
         improvement = self.service.improve(level="C1", original_message=correct)
 
         self.assertEqual(improvement.original, improvement.improved)
+        self.assertEqual(improvement.severity, "none")
+
+    def test_minor_and_critical_severities_round_trip(self) -> None:
+        for severity in ("minor", "critical"):
+            with self.subTest(severity=severity):
+                service, _ = make_service(
+                    response=make_response(json_payload({**VALID_PAYLOAD, "severity": severity}))
+                )
+
+                improvement = service.improve(level="B1", original_message=ORIGINAL)
+
+                self.assertEqual(improvement.severity, severity)
 
     def test_request_contains_exactly_one_system_and_one_user_message(self) -> None:
         self.improve_default()
@@ -190,13 +234,17 @@ class HappyPathTests(SimpleTestCase):
         for message in request.messages:
             self.assertTrue(message.content.strip())
 
-    def test_system_prompt_demands_json_with_improved_and_explanation(self) -> None:
+    def test_system_prompt_demands_json_with_improved_explanation_and_severity(self) -> None:
         self.improve_default()
 
         system_content = self.provider.requests[0].messages[0].content
         self.assertIn("JSON", system_content)
         self.assertIn("improved", system_content)
         self.assertIn("explanation", system_content)
+        self.assertIn("severity", system_content)
+        self.assertIn("none", system_content)
+        self.assertIn("minor", system_content)
+        self.assertIn("critical", system_content)
 
     def test_user_prompt_quotes_the_learner_message(self) -> None:
         self.improve_default()
@@ -279,6 +327,12 @@ class InvalidOutputTests(SimpleTestCase):
         json_payload({"improved": "a", "explanation": None}),
         json_payload({"improved": 42, "explanation": "b"}),
         json_payload({"improved": ["a"], "explanation": "b"}),
+        json_payload({"improved": "a", "explanation": "b"}),  # severity missing
+        json_payload({**VALID_PAYLOAD, "severity": None}),
+        json_payload({**VALID_PAYLOAD, "severity": 42}),
+        json_payload({**VALID_PAYLOAD, "severity": ""}),
+        json_payload({**VALID_PAYLOAD, "severity": "major"}),
+        json_payload({**VALID_PAYLOAD, "severity": ["minor"]}),
         "```python\ndef broken(): pass\n```",
         "{not valid json at all}",
     )

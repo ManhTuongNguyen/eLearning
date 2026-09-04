@@ -21,7 +21,15 @@ EMAIL = "frida@example.com"
 PASSWORD = "pw-123456"
 
 SESSION_FIELDS = {"id", "title", "topic", "topic_hint", "learning_level", "created_at"}
-MESSAGE_FIELDS = {"id", "role", "status", "content", "sequence", "created_at"}
+MESSAGE_FIELDS = {
+    "id",
+    "role",
+    "status",
+    "content",
+    "sequence",
+    "created_at",
+    "improvement",
+}
 
 
 def make_session(user, title="A conversation", **overrides):

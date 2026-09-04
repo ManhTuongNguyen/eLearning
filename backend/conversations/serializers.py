@@ -50,8 +50,33 @@ class SessionRenameSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    """Read representation of a chat message."""
+    """Read representation of a chat message.
+
+    ``improvement`` embeds the cached grammar improvement for user messages
+    (``null`` while none has been generated yet), so clients can restore
+    grammar badges after a reload without extra round-trips.
+    """
+
+    improvement = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ["id", "role", "status", "content", "sequence", "created_at"]
+        fields = [
+            "id",
+            "role",
+            "status",
+            "content",
+            "sequence",
+            "created_at",
+            "improvement",
+        ]
+
+    def get_improvement(self, obj: Message) -> dict[str, str] | None:
+        if not obj.improvement_severity:
+            return None
+        return {
+            "original": obj.content.strip(),
+            "improved": obj.improvement_content,
+            "explanation": obj.improvement_explanation,
+            "severity": obj.improvement_severity,
+        }

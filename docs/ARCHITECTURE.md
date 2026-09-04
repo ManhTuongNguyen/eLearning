@@ -283,7 +283,10 @@ system instructions + learning profile + topic
 - **Context builder** (`conversations/context.py`): pure and deterministic;
   assembles the system prompt (tutor persona, CEFR level line, topic title and
   scenario, and — only if non-blank — the summary header block), then history
-  turns, then the current message.
+  turns, then the current message. The tutor persona explicitly confines the
+  reply to the chat message itself: no meta-commentary, no parenthesized
+  notes about modelling or correcting grammar, no strategy talk — correct
+  English is shown by using it, never by explaining that it is being shown.
 - **Recent window** (`conversations/window.py`): the last
   `CONTEXT_RECENT_MESSAGE_WINDOW` (default 20) `complete` messages after the
   summary boundary; the SQL query itself is bounded and ordered
@@ -412,6 +415,20 @@ copy, speak, select text). Text selection uses an editable `TextInput` mirror
 enrichment status appears in the vocabulary screen later. The list is windowed
 and `MessageRow` is memoized
 (`streamingUx.ts` tuning constants) for large histories.
+
+Grammar auto-check is an opt-in layer on top of the improvement pipeline
+(default off; Settings toggle with an explicit token-usage warning, persisted
+in AsyncStorage): when enabled, `useGrammarAutoCheck` checks every user
+message sent during the current chat visit — server mode through the improve
+endpoint, serverless through the local port — and keeps the result in memory
+keyed by message id. The response's `severity` classifies the original
+(`none` / `minor` / `critical`): correct messages stay untouched, `minor`
+renders a small warning badge and `critical` an error badge on the user
+bubble. Pressing a badge opens the improvement sheet with the cached result —
+no second provider call. The session's loaded history is seeded as already
+settled, so opening old conversations never triggers a burst of hidden
+provider requests; messages that arrive while the feature is off are never
+retro-checked.
 
 ### 8.4 Local SQLite database (serverless)
 

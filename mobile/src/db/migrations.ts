@@ -52,14 +52,28 @@ const MIGRATION_001: readonly string[] = [
       message_boundary INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-   )`,
+    )`,
+];
+
+/**
+ * Version 2: cached grammar improvements (opt-in auto-check + manual action).
+ * The improvement of a fixed text never changes, so it is stored on the
+ * message row: reopening a conversation (or the app) restores badges and
+ * suggestions with zero provider calls, and repeating a check for the same
+ * message never re-generates.
+ */
+const MIGRATION_002: readonly string[] = [
+  `ALTER TABLE messages ADD COLUMN improvement_content TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE messages ADD COLUMN improvement_explanation TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE messages ADD COLUMN improvement_severity TEXT NOT NULL DEFAULT ''
+     CHECK (improvement_severity IN ('', 'none', 'minor', 'critical'))`,
 ];
 
 /**
  * Ordered migration list; length is the current schema version. Append new
  * entries — never edit shipped ones.
  */
-export const MIGRATIONS: readonly (readonly string[])[] = [MIGRATION_001];
+export const MIGRATIONS: readonly (readonly string[])[] = [MIGRATION_001, MIGRATION_002];
 
 export const SCHEMA_VERSION: number = MIGRATIONS.length;
 

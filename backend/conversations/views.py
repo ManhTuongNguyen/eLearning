@@ -351,15 +351,20 @@ class MessageImprovementView(APIView):
     can be corrected: assistant rows (in any generation state) and any
     blank-content row are a 409 Conflict rejected before any LLM work.
 
-    Inputs to :class:`conversations.improvement.ImprovementService` come from
-    persisted state only — the session's learning level plus the message
-    content verbatim. The endpoint is read-only: nothing is persisted, no
-    summary maintenance is scheduled, and the stored message is never
-    modified — ``original`` in the response is composed from the stored row,
-    never from a model echo.
+    The generated improvement is cached on the message row (fields
+    ``improvement_*``): the first call runs
+    :class:`conversations.improvement.ImprovementService` and persists the
+    result atomically together with nothing else; every later call for the
+    same message returns the stored result verbatim and makes NO provider
+    call — the correction of a fixed text never changes, and repeating a
+    request (double-tap, app restart, reopening the sheet) must never cost
+    another generation. ``original`` in the response is composed from the
+    stored row, never from a model echo.
 
-    Success body: ``{"original": str, "improved": str, "explanation": str}``.
-    Provider failures map to 503 when retryable, 502 otherwise.
+    Success body: ``{"original": str, "improved": str, "explanation": str,
+    "severity": "none"|"minor"|"critical"}``.
+    Provider failures map to 503 when retryable, 502 otherwise, and leave no
+    partial cache behind.
     """
 
     permission_classes = [IsAuthenticated]
@@ -375,6 +380,15 @@ class MessageImprovementView(APIView):
             raise Http404("No Message matches the given query.") from None
         if message.role != Message.Role.USER or not message.content.strip():
             raise Conflict("Improvement requires a non-empty user message.")
+        if message.improvement_severity:
+            return Response(
+                {
+                    "original": message.content.strip(),
+                    "improved": message.improvement_content,
+                    "explanation": message.improvement_explanation,
+                    "severity": message.improvement_severity,
+                }
+            )
         try:
             improvement = get_improvement_service().improve(
                 level=session.learning_level,
@@ -382,6 +396,16 @@ class MessageImprovementView(APIView):
             )
         except LLMError as exc:
             raise exc
+        message.improvement_content = improvement.improved
+        message.improvement_explanation = improvement.explanation
+        message.improvement_severity = improvement.severity
+        message.save(
+            update_fields=[
+                "improvement_content",
+                "improvement_explanation",
+                "improvement_severity",
+            ]
+        )
         return Response(asdict(improvement))
 
 

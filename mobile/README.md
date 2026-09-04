@@ -75,6 +75,33 @@ State lives in `src/mode/`:
 
 The two modes are intentionally isolated; switching never merges or synchronizes their data (ROADMAP §15).
 
+## Grammar auto-check (opt-in)
+
+An opt-in learning aid (default off) built on the improvement pipeline of
+both modes. When enabled in Settings → Grammar (below Text to speech), every
+user message sent during the current chat visit is checked by one LLM
+request — server mode through the backend improve endpoint, serverless mode
+through the user's own provider key — and the response's `severity`
+classifies the original: `none` (already correct, nothing shown), `minor`
+(small warning badge) or `critical` (error badge) under the user's message.
+Pressing a badge opens the improvement sheet with the already-fetched
+result, so viewing a suggestion never performs a second API call. The
+toggle carries an explicit token-usage warning (one extra AI request per
+sent message), the loaded history is never retro-checked, and messages that
+arrive while the feature is off stay unchecked forever.
+
+Results are **persisted**: serverless mode stores each improvement on the
+local message row (schema v2); server mode stores it on the backend and the
+message payloads embed it. Reopening the conversation — or the app —
+restores badges and suggestions from the store with zero provider calls,
+and the manual "Improve my English" action reuses the stored suggestion for
+already-checked messages.
+
+State lives in `src/preferences/grammarCheck.ts` (AsyncStorage flag,
+default off) and `src/hooks/useGrammarAutoCheck.ts` (check pipeline, cache
+and stale-result guards); the badge renders inside `MessageRow` and reuses
+the `ImprovementSheet` of the manual "Improve my English" action.
+
 ## Local database (serverless)
 
 Serverless mode persists conversations on-device in SQLite (`src/db/`, SPEC TASK-081):

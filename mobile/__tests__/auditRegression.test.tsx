@@ -407,6 +407,8 @@ async function renderRow(role: ChatMessage['role']): Promise<TestInstance> {
       onMessageLongPress={jest.fn()}
       onRetry={jest.fn()}
       onStopSpeech={jest.fn()}
+      grammarSeverity={null}
+      onGrammarBadgePress={jest.fn()}
     />,
   );
   return screen.getByTestId(`chat-message-${item.id}`);

@@ -14,6 +14,10 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-na
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {useAuth} from '../src/auth/AuthContext';
+import {
+  loadGrammarCheckEnabled,
+  saveGrammarCheckEnabled,
+} from '../src/preferences/grammarCheck';
 import {ModeProvider} from '../src/mode/ModeContext';
 import {saveApplicationMode} from '../src/mode/modeStorage';
 import {setRuntimeApplicationMode} from '../src/mode/runtime';
@@ -36,6 +40,10 @@ jest.mock('../src/auth/AuthContext', () => ({
   AuthProvider: ({children}: {children: React.ReactNode}) => children,
 }));
 jest.mock('../src/serverless/settings');
+jest.mock('../src/preferences/grammarCheck');
+
+const mockedGrammarCheckEnabled = jest.mocked(loadGrammarCheckEnabled);
+const mockedSaveGrammarCheckEnabled = jest.mocked(saveGrammarCheckEnabled);
 
 const mockedConfig = jest.mocked(serverlessSettings.loadServerlessOpenRouterConfig);
 const mockedLoadProvider = jest.mocked(serverlessSettings.loadServerlessProvider);
@@ -122,6 +130,9 @@ beforeEach(() => {
   // individual tests override this.
   mockedConfig.mockResolvedValue(null);
   mockedLoadProvider.mockResolvedValue('openrouter');
+  // Grammar auto-check is off until the user explicitly enables it.
+  mockedGrammarCheckEnabled.mockResolvedValue(false);
+  mockedSaveGrammarCheckEnabled.mockResolvedValue(undefined);
   setRuntimeApplicationMode(DEFAULT_APPLICATION_MODE);
 });
 
@@ -417,5 +428,45 @@ describe('configuration-saved toast (TASK-IMPROVEMENT-005)', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('grammar auto-check toggle', () => {
+  it('appears in both modes and defaults to off', async () => {
+    await renderSettings('server');
+    expect(screen.getByTestId('settings-grammar-section')).toBeOnTheScreen();
+    expect(checkedStateOf('settings-grammar-toggle')).toBe(false);
+
+    await renderSettings('serverless');
+    expect(screen.getByTestId('settings-grammar-section')).toBeOnTheScreen();
+    expect(checkedStateOf('settings-grammar-toggle')).toBe(false);
+  });
+
+  it('warns that enabling consumes extra AI requests per message', async () => {
+    await renderSettings('server');
+
+    expect(
+      screen.getByText(/extra AI request per message/i),
+    ).toBeOnTheScreen();
+  });
+
+  it('persists the enabled state through the preference store', async () => {
+    await renderSettings('server');
+
+    fireEvent.press(screen.getByTestId('settings-grammar-toggle'));
+
+    await waitFor(() => expect(checkedStateOf('settings-grammar-toggle')).toBe(true));
+    expect(saveGrammarCheckEnabled).toHaveBeenCalledWith(true);
+  });
+
+  it('toggling off persists the disabled state', async () => {
+    mockedGrammarCheckEnabled.mockResolvedValue(true);
+    await renderSettings('serverless');
+    expect(checkedStateOf('settings-grammar-toggle')).toBe(true);
+
+    fireEvent.press(screen.getByTestId('settings-grammar-toggle'));
+
+    await waitFor(() => expect(checkedStateOf('settings-grammar-toggle')).toBe(false));
+    expect(saveGrammarCheckEnabled).toHaveBeenCalledWith(false);
   });
 });

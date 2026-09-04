@@ -18,6 +18,7 @@ import * as sessionStore from './sessionStore';
 import * as summaryStore from './summaryStore';
 import type {
   LocalMessage,
+  LocalMessageImprovement,
   LocalMessageRole,
   LocalMessageStatus,
   LocalSession,
@@ -96,5 +97,21 @@ export class LocalConversationRepository {
    */
   async saveSummary(input: NewRepositorySummary): Promise<LocalSummary> {
     return summaryStore.saveSummary(await this.openDb(), input);
+  }
+
+  /**
+   * Persist one grammar improvement onto a message row. The improvement of a
+   * fixed text never changes, so it is written once and re-served forever —
+   * across app restarts, without another provider call.
+   */
+  async saveMessageImprovement(
+    messageId: number,
+    improvement: LocalMessageImprovement,
+  ): Promise<void> {
+    await messageStore.saveMessageImprovement(
+      await this.openDb(),
+      messageId,
+      improvement,
+    );
   }
 }

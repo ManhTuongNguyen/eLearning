@@ -24,6 +24,7 @@ serverless is active.
 | AI chat (turn + retry) | Yes (SSE via backend) | Yes (direct provider) | `useChatTurns` mode branch |
 | Topic suggestions | Yes | Yes | `useMessageSuggestions` mode branch |
 | Improve my English | Yes | Yes | `useMessageImprovement` mode branch |
+| Grammar auto-check (badges, opt-in) | Yes | Yes | `useGrammarAutoCheck` mode branch |
 | Learning level | Yes | Yes | `LevelScreen` mode branch |
 | Saved vocabulary (save word) | Yes | No | `useVocabularySave` + runtime gate |
 | Vocabulary enrichment | Yes | No | backend Celery only |

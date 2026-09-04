@@ -84,6 +84,23 @@ class Message(models.Model):
         help_text="Blank is valid only while an assistant message is pending.",
     )
     sequence = models.PositiveIntegerField()
+    # Cached grammar improvement for USER messages (the "Improve my English"
+    # result). Blank while never generated; the severity of a stored result
+    # is "none" | "minor" | "critical". Once stored, the improvement endpoint
+    # returns this cache verbatim instead of calling the LLM again — the
+    # correction for one message never changes, so neither should the row.
+    improvement_content = models.TextField(blank=True, default="")
+    improvement_explanation = models.TextField(blank=True, default="")
+    improvement_severity = models.CharField(
+        blank=True,
+        default="",
+        max_length=16,
+        choices=[
+            ("none", "No issues"),
+            ("minor", "Minor issues"),
+            ("critical", "Critical issues"),
+        ],
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

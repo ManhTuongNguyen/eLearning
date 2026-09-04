@@ -18,7 +18,7 @@
 import React, {memo} from 'react';
 import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native';
 
-import type {ChatMessage} from '../api/sessions';
+import type {ChatMessage, ImprovementSeverity} from '../api/sessions';
 import type {ThemeColors} from '../theme/colors';
 import {createCodeStyle, MarkdownText} from './MarkdownText';
 
@@ -99,6 +99,35 @@ export function createRowStyles(c: ThemeColors) {
       fontSize: 13,
       fontWeight: '600',
     },
+    grammarBadge: {
+      alignSelf: 'flex-start',
+      marginTop: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingVertical: 2,
+      paddingHorizontal: 9,
+    },
+    grammarBadgeMinor: {
+      borderColor: c.warning,
+      backgroundColor: c.surface,
+    },
+    grammarBadgeCritical: {
+      borderColor: c.errorText,
+      backgroundColor: c.surface,
+    },
+    grammarBadgeText: {
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    grammarBadgeTextMinor: {
+      color: c.warning,
+    },
+    grammarBadgeTextCritical: {
+      color: c.errorText,
+    },
   });
 }
 
@@ -128,7 +157,21 @@ export interface MessageRowProps {
   onRetry: (message: ChatMessage) => void;
   /** Stops read-aloud playback (TASK-078). */
   onStopSpeech: () => void;
+  /**
+   * Grammar severity of this user message from the auto-check
+   * ("minor" → warning badge, "critical" → error badge); null when the
+   * message was correct or never checked. Pressing the badge opens the
+   * cached improvement — never a second API call.
+   */
+  grammarSeverity: ImprovementSeverity | null;
+  /** Opens the cached improvement for this row's grammar badge. */
+  onGrammarBadgePress: (message: ChatMessage) => void;
 }
+
+const GRAMMAR_BADGE_LABELS: Record<Exclude<ImprovementSeverity, 'none'>, string> = {
+  minor: 'Minor issues',
+  critical: 'Grammar issues',
+};
 
 function MessageRowImpl({
   item,
@@ -139,6 +182,8 @@ function MessageRowImpl({
   onMessageLongPress,
   onRetry,
   onStopSpeech,
+  grammarSeverity,
+  onGrammarBadgePress,
 }: MessageRowProps) {
   const isUser = item.role === 'user';
   const failed = !isUser && item.status === 'failed';
@@ -147,6 +192,8 @@ function MessageRowImpl({
   // pending spinners and failed rows carry nothing actionable, and the
   // backend rejects them as suggestion targets anyway.
   const menuEligible = item.status === 'complete' && item.content.trim().length > 0;
+  const hasGrammarBadge =
+    isUser && (grammarSeverity === 'minor' || grammarSeverity === 'critical');
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
       <View style={styles.bubbleWrapper}>
@@ -178,6 +225,35 @@ function MessageRowImpl({
             />
           )}
         </Pressable>
+        {hasGrammarBadge ? (
+          <Pressable
+            style={[
+              styles.grammarBadge,
+              grammarSeverity === 'critical'
+                ? styles.grammarBadgeCritical
+                : styles.grammarBadgeMinor,
+            ]}
+            onPress={() => {
+              onGrammarBadgePress(item);
+            }}
+            testID={`chat-grammar-badge-${item.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={
+              grammarSeverity === 'critical'
+                ? 'Serious grammar issues found, open suggestion'
+                : 'Minor grammar issues found, open suggestion'
+            }>
+            <Text
+              style={[
+                styles.grammarBadgeText,
+                grammarSeverity === 'critical'
+                  ? styles.grammarBadgeTextCritical
+                  : styles.grammarBadgeTextMinor,
+              ]}>
+              {GRAMMAR_BADGE_LABELS[grammarSeverity === 'critical' ? 'critical' : 'minor']}
+            </Text>
+          </Pressable>
+        ) : null}
         {failed ? (
           <Pressable
             style={[styles.messageRetry, streaming && styles.messageRetryDisabled]}

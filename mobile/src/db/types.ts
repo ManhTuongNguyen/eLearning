@@ -6,6 +6,9 @@
  * local rows are separate data, but structurally compatible).
  */
 import type {EnglishLevel} from '../api/profile';
+import type {ImprovementSeverity} from '../api/sessions';
+
+export type {ImprovementSeverity};
 
 export type LocalMessageRole = 'user' | 'assistant';
 
@@ -31,6 +34,15 @@ export interface NewLocalSession {
 }
 
 /** One chat message belonging to a local session. */
+export interface LocalMessageImprovement {
+  /** The learner's original wording (the row's own `content`). */
+  original: string;
+  improved: string;
+  explanation: string;
+  severity: ImprovementSeverity;
+}
+
+/** One chat message belonging to a local session. */
 export interface LocalMessage {
   id: number;
   session_id: number;
@@ -39,6 +51,11 @@ export interface LocalMessage {
   content: string;
   sequence: number;
   created_at: string;
+  /**
+   * Cached grammar improvement (migration v2); undefined while the message
+   * has never been checked. Persisted so badges survive app restarts.
+   */
+  improvement?: LocalMessageImprovement;
 }
 
 /**

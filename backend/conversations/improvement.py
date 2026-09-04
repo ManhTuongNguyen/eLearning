@@ -8,10 +8,14 @@ changed. The service owns four concerns:
    explanation is written; ``AUTO`` lets the model infer an appropriate
    level. The message under correction is quoted verbatim.
 2. Structured-output parsing — completions must decode into the
-   ``improved`` / ``explanation`` fields of a :class:`Improvement` value
-   object; anything else is a contract violation. The model is never asked
-   to echo the original text: ``original`` is composed from the caller's
-   input so the learner always sees exactly what they wrote.
+   ``improved`` / ``explanation`` / ``severity`` fields of a
+   :class:`Improvement` value object; anything else is a contract violation.
+   The model is never asked to echo the original text: ``original`` is
+   composed from the caller's input so the learner always sees exactly what
+   they wrote. ``severity`` classifies how wrong the original was —
+   ``none`` (already correct), ``minor`` (small slips) or ``critical``
+   (meaning-breaking mistakes) — so the mobile app can badge the message
+   without a second provider call.
 3. Failure normalization — transport/provider failures propagate unchanged
    as ``LLMError`` subclasses (callers above decide on retries), while
    malformed completions become :class:`~llm.exceptions.LLMResponseError`
@@ -46,12 +50,23 @@ SYSTEM_PROMPT = (
     "chat application.\n"
     "Respond with ONLY one JSON object and nothing else, using exactly this shape:\n"
     '{"improved": "<the corrected message>", '
-    '"explanation": "<short reason for the changes>"}\n'
+    '"explanation": "<short reason for the changes>", '
+    '"severity": "<none|minor|critical>"}\n'
     "Fix grammar, spelling, word choice and natural phrasing while keeping the "
     "learner's meaning and tone. If the message is already correct, return it "
-    'unchanged as "improved" and say so briefly. Keep the explanation to one '
-    "or two short sentences."
+    'unchanged as "improved", say so briefly and use severity "none". Rate '
+    'severity by how much the mistakes hurt understanding: "none" for a '
+    'correct message, "minor" for small slips a reader easily overlooks '
+    '(typos, a missing article), "critical" for mistakes that break or '
+    "materially distort the meaning (wrong verb tense changing when something "
+    "happened, wrong negation, wrong key vocabulary). Keep the explanation to "
+    "one or two short sentences."
 )
+
+SEVERITY_NONE = "none"
+SEVERITY_MINOR = "minor"
+SEVERITY_CRITICAL = "critical"
+SEVERITY_VALUES = (SEVERITY_NONE, SEVERITY_MINOR, SEVERITY_CRITICAL)
 
 USER_PROMPT_HEADER = (
     "Improve this English message that the learner wrote in an ongoing "
@@ -67,18 +82,27 @@ class Improvement:
     ``original`` is the learner's message exactly as supplied (whitespace-
     trimmed only); ``improved`` is the corrected version and ``explanation``
     concisely describes the important corrections at the learner's level.
-    Pure display data: never persisted over the original chat message.
+    ``severity`` classifies how wrong the original was — ``none`` (already
+    correct), ``minor`` (small slips) or ``critical`` (meaning-breaking
+    mistakes). Pure display data: never persisted over the original chat
+    message.
     """
 
     original: str
     improved: str
     explanation: str
+    severity: str
 
     def __post_init__(self) -> None:
         for field_name in ("original", "improved", "explanation"):
             value = getattr(self, field_name)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"Improvement {field_name} must be a non-empty string.")
+        if isinstance(self.severity, str):
+            # Case-insensitive by contract: "Minor" means "minor".
+            object.__setattr__(self, "severity", self.severity.strip().lower())
+        if self.severity not in SEVERITY_VALUES:
+            raise ValueError(f"Improvement severity must be one of: {', '.join(SEVERITY_VALUES)}.")
 
 
 class ImprovementService:
@@ -108,7 +132,7 @@ class ImprovementService:
         began = time.monotonic()
         response = self.provider.complete(request)
         try:
-            improved, explanation = _parse_correction(response.text, model=response.model)
+            improved, explanation, severity = _parse_correction(response.text, model=response.model)
         except LLMResponseError as exc:
             logger.warning(
                 "improvement produced unusable output after %.2fs: %s",
@@ -120,6 +144,7 @@ class ImprovementService:
             original=message,
             improved=improved,
             explanation=explanation,
+            severity=severity,
         )
         logger.info(
             "improvement generated model=%s in %.2fs",
@@ -146,13 +171,13 @@ def _build_user_prompt(*, level: str, message: str) -> str:
     return "\n".join(parts)
 
 
-def _parse_correction(text: str, *, model: str | None) -> tuple[str, str]:
-    """Decode one completion into ``(improved, explanation)``.
+def _parse_correction(text: str, *, model: str | None) -> tuple[str, str, str]:
+    """Decode one completion into ``(improved, explanation, severity)``.
 
     Tolerates JSON wrapped in code fences or surrounding prose (the outermost
     brace span is retried once), but rejects every other deviation: missing,
-    blank or non-string fields are all contract violations. Extra JSON keys
-    are ignored.
+    blank or non-string fields and severities outside the allowed set are all
+    contract violations. Extra JSON keys are ignored.
     """
     payload = _extract_json_object(text)
     if not isinstance(payload, dict):
@@ -171,7 +196,17 @@ def _parse_correction(text: str, *, model: str | None) -> tuple[str, str]:
                 model=model,
             )
         fields[field_name] = value.strip()
-    return fields["improved"], fields["explanation"]
+    raw_severity = payload.get("severity")
+    # Case-insensitive: models routinely answer "None"/"Minor"/"Critical";
+    # only genuinely unknown values stay contract violations.
+    severity = raw_severity.strip().lower() if isinstance(raw_severity, str) else raw_severity
+    if severity not in SEVERITY_VALUES:
+        raise LLMResponseError(
+            f"Improvement response is missing a valid 'severity' ({'|'.join(SEVERITY_VALUES)}).",
+            provider=ERROR_PROVIDER,
+            model=model,
+        )
+    return fields["improved"], fields["explanation"], severity
 
 
 def _extract_json_object(text: str) -> Any | None:
@@ -190,4 +225,4 @@ def _extract_json_object(text: str) -> Any | None:
         return None
 
 
-__all__ = ["Improvement", "ImprovementService"]
+__all__ = ["SEVERITY_VALUES", "Improvement", "ImprovementService"]

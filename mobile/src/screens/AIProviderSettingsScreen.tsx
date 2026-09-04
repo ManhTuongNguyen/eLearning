@@ -570,7 +570,6 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
           setModelsUpdatedAt(catalog?.fetchedAt ?? null);
         }
       } catch (err) {
-        console.error('[provider-models] initial load failed:', err);
         if (!cancelled) {
           setError(toErrorMessage(err));
         }
@@ -663,9 +662,8 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
       setModels(snapshot.models);
       setModelsUpdatedAt(snapshot.fetchedAt);
     } catch (err) {
-      // A failed refresh keeps whatever catalog was cached before.
-      // Surface the raw cause for on-device diagnosis (adb logcat / DevTools).
-      console.error('[provider-models] refresh failed:', err);
+      // A failed refresh keeps whatever catalog was cached before; the
+      // normalized error message is surfaced through the screen banner.
       setError(toErrorMessage(err));
     } finally {
       setRefreshing(false);

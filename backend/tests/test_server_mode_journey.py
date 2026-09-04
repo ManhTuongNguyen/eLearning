@@ -84,6 +84,7 @@ IMPROVED_TEXT = "Could you help me order a coffee, please?"
 IMPROVEMENT_PAYLOAD = {
     "improved": IMPROVED_TEXT,
     "explanation": "Polite requests usually add 'please' at the end.",
+    "severity": "minor",
 }
 ENRICHMENT_PAYLOAD = {
     "definition": "a coffee made with steamed milk",
@@ -391,6 +392,7 @@ class TestServerModeUserJourney:
         assert improvement.data["original"] == USER_TEXT
         assert improvement.data["improved"] == IMPROVED_TEXT
         assert improvement.data["explanation"] == IMPROVEMENT_PAYLOAD["explanation"]
+        assert improvement.data["severity"] == IMPROVEMENT_PAYLOAD["severity"]
         (improvement_request,) = provider.complete_requests[3:]
         assert USER_TEXT in improvement_request.messages[-1].content
 

@@ -137,6 +137,7 @@ const SUGGESTIONS = {
 const IMPROVEMENT = {
   improved: 'Hello! How are you doing today?',
   explanation: 'Added "doing" for a natural greeting.',
+  severity: 'minor',
 };
 
 interface CapturedAlertButton {
