@@ -83,3 +83,19 @@ export async function loadConversation(
   ]);
   return {messages: [...page.results].sort(bySequence), session: detail};
 }
+
+/**
+ * Serverless-only staleness probe: whether a session row still exists in
+ * the on-device store. Local data can vanish while the chat screen sits
+ * in the stack — Settings' "Clear local data" (TASK-094) wipes every
+ * session and History can delete the currently open one — so the screen
+ * re-validates its open session on refocus instead of trusting the state
+ * it loaded before. A failed read counts as existing: the probe must not
+ * eject the user from a live conversation because of a storage hiccup
+ * (authoritative load failures surface through the normal error path).
+ */
+export async function localSessionExists(sessionId: number): Promise<boolean> {
+  const db = await getLocalDatabase();
+  const row = await getLocalSession(db, sessionId).catch(() => null);
+  return row !== null;
+}

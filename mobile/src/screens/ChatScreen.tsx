@@ -112,7 +112,11 @@ import {useApplicationMode} from '../mode/ModeContext';
 import {
   loadGrammarCheckEnabled,
 } from '../preferences/grammarCheck';
-import {listFirstSessionPage, loadConversation} from '../services/conversationSource';
+import {
+  listFirstSessionPage,
+  loadConversation,
+  localSessionExists,
+} from '../services/conversationSource';
 import {
   CHAT_LIST_INITIAL_NUM_TO_RENDER,
   CHAT_LIST_MAX_TO_RENDER_PER_BATCH,
@@ -381,7 +385,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const hasSample = sampleTurns !== undefined && sampleTurns.length > 0;
   const {getAccessToken, authedRequest} = useAuth();
   const {colors} = useTheme();
-  const {mode} = useApplicationMode();
+  const {mode, status: modeStatus} = useApplicationMode();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   // Row styles are created once per theme so the memoized MessageRow sees a
@@ -507,6 +511,34 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const resetMessages = useCallback(() => {
     setMessages(prev => (prev.length > 0 ? [] : prev));
   }, []);
+
+  // TASK-094: "Clear local data" (Settings) and History's delete can wipe
+  // the open conversation while this screen sits in the stack — the rows are
+  // gone from the store but the loaded state remains. When the screen
+  // regains focus, probe the local store for the session row: a vanished
+  // row drops the stale params, which re-runs the load effect and lands on
+  // the empty state. Server mode data lives on the backend and cannot be
+  // cleared from the device, so the probe is serverless-only, and it waits
+  // for the mode restore so the pre-restore default ('serverless') never
+  // probes for a server-mode session.
+  const localDataRef = useRef(false);
+  useEffect(() => {
+    localDataRef.current = modeStatus === 'ready' && mode === 'serverless';
+  }, [modeStatus, mode]);
+  useEffect(() => {
+    if (sessionId === undefined || !localDataRef.current) {
+      return;
+    }
+    const currentSessionId = sessionId;
+    const unsubscribe = navigation.addListener?.('focus', () => {
+      localSessionExists(currentSessionId).then(exists => {
+        if (!exists && navigation.isFocused?.()) {
+          navigation.setParams({sessionId: undefined, sampleTurns: undefined});
+        }
+      });
+    });
+    return unsubscribe;
+  }, [navigation, sessionId, modeStatus, mode]);
 
   useEffect(() => {
     let cancelled = false;
