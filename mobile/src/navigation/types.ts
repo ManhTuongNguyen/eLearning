@@ -37,6 +37,8 @@ export type MainStackParamList = {
   TTSSettings: undefined;
   /** Voice manager (installed system voices) pushed from TTS settings (TASK-TTS-003). */
   VoiceManager: undefined;
+  /** Endless listening-practice trainer for spoken numbers and letters. */
+  Practice: undefined;
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -68,5 +70,7 @@ export type VoiceManagerScreenProps = NativeStackScreenProps<
   MainStackParamList,
   'VoiceManager'
 >;
+
+export type PracticeScreenProps = NativeStackScreenProps<MainStackParamList, 'Practice'>;
 
 export type SettingsScreenProps = NativeStackScreenProps<MainStackParamList, 'Settings'>;

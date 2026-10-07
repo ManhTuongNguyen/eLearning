@@ -680,6 +680,12 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
         onPress: () => navigation.navigate('Level'),
         testID: 'settings-open-level',
       },
+      {
+        title: 'Listening practice',
+        description: 'Train reflexes for numbers and letters you hear.',
+        onPress: () => navigation.navigate('Practice'),
+        testID: 'settings-open-practice',
+      },
     ];
     if (appMode === 'server') {
       rows.push({

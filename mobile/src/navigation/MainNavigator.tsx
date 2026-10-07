@@ -12,6 +12,7 @@ import {ChatScreen} from '../screens/ChatScreen';
 import {HistoryScreen} from '../screens/HistoryScreen';
 import {LevelScreen} from '../screens/LevelScreen';
 import {NewConversationScreen} from '../screens/NewConversationScreen';
+import {PracticeScreen} from '../screens/PracticeScreen';
 import {SettingsScreen} from '../screens/SettingsScreen';
 import {TTSSettingsScreen} from '../screens/TTSSettingsScreen';
 import {VoiceManagerScreen} from '../screens/VoiceManagerScreen';
@@ -32,6 +33,7 @@ export function MainNavigator() {
       <Stack.Screen name="AIProviderSettings" component={AIProviderSettingsScreen} />
       <Stack.Screen name="TTSSettings" component={TTSSettingsScreen} />
       <Stack.Screen name="VoiceManager" component={VoiceManagerScreen} />
+      <Stack.Screen name="Practice" component={PracticeScreen} />
     </Stack.Navigator>
   );
 }
