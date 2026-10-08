@@ -196,16 +196,16 @@ describe('main stack navigation', () => {
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
-    expect(focusedRouteName()).toBe('Settings');
-    // Exactly one Settings entry sits on top of Chat below the hub.
+    expect(focusedRouteName()).toBe('Settings');    // Exactly one Settings entry sits on top of Chat below the hub.
     expect(stackRouteNames()).toEqual(['Home', 'Chat', 'Settings']);
 
     await fireEvent.press(screen.getByTestId('settings-back'));
 
-    await waitFor(() => expect(focusedRouteName()).toBe('Chat'));
+    await waitFor(() => expect(focusedRouteName()).toBe('Home'));
+    expect(screen.queryByTestId('chat-screen')).toBeNull();
     expect(screen.queryByTestId('settings-screen')).toBeNull();
-    // goBack popped the entry instead of pushing another route.
-    expect(stackRouteNames()).toEqual(['Home', 'Chat']);
+    // goBack popped the Settings entry, returning to the hub.
+    expect(stackRouteNames()).toEqual(['Home']);
   });
 
   it('reaches Settings and returns to it after editing the learning level', async () => {
