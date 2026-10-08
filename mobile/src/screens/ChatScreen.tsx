@@ -851,6 +851,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
         <Text style={styles.headerTitle}>Chat</Text>
         <View style={styles.headerActions}>
           <Pressable
+            onPress={() => navigation.navigate('Home')}
+            testID="chat-open-home">
+            <Text style={styles.headerLink}>Home</Text>
+          </Pressable>
+          <Pressable
             onPress={() => navigation.navigate('NewConversation')}
             testID="chat-open-new">
             <Text style={styles.headerLink}>New</Text>

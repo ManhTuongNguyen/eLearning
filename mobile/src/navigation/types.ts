@@ -12,6 +12,12 @@ export type AuthStackParamList = {
 /** Stack shown to authenticated users. */
 export type MainStackParamList = {
   /**
+   * Homepage hub (TASK-HOME-001): the landing screen that routes to every
+   * main destination — conversations, listening practice, speaking
+   * practice, history and settings.
+   */
+  Home: undefined;
+  /**
    * Active conversation; absent until a session is opened/created.
    * `sampleTurns` carries the generated example conversation from session
    * creation (SPEC TASK-053) — it exists only in the creation response, so
@@ -39,6 +45,8 @@ export type MainStackParamList = {
   VoiceManager: undefined;
   /** Endless listening-practice trainer for spoken numbers and letters. */
   Practice: undefined;
+  /** Karaoke-style read-aloud speaking practice pushed from Home. */
+  SpeakingPractice: undefined;
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -72,5 +80,12 @@ export type VoiceManagerScreenProps = NativeStackScreenProps<
 >;
 
 export type PracticeScreenProps = NativeStackScreenProps<MainStackParamList, 'Practice'>;
+
+export type SpeakingPracticeScreenProps = NativeStackScreenProps<
+  MainStackParamList,
+  'SpeakingPractice'
+>;
+
+export type HomeScreenProps = NativeStackScreenProps<MainStackParamList, 'Home'>;
 
 export type SettingsScreenProps = NativeStackScreenProps<MainStackParamList, 'Settings'>;

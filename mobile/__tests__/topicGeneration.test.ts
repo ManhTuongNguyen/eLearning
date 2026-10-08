@@ -22,6 +22,8 @@ import {
   createServerlessSession,
   generateTopicWithSample,
   parseTopicWithSample,
+  splitHintQuestions,
+  stripListMarker,
 } from '../src/serverless/topicGeneration';
 
 const TOPIC = {
@@ -196,6 +198,41 @@ describe('serverless topic + sample generation (TASK-085/093)', () => {
     );
     expect(await repository.listSessions()).toHaveLength(0);
   });
+
+  test('the question list reaches the provider through session creation', async () => {
+    fake.enqueueComplete({
+      text: VALID_COMBINED_JSON,
+      model: 'vendor/model-a',
+      finishReason: 'stop',
+      requestId: null,
+    });
+
+    await createServerlessSession(
+      db,
+      request => fake.complete(request),
+      'Traveling\n- Where did you go last summer?\n- What do you pack first?',
+    );
+
+    const [request] = fake.completeRequests;
+    expect(request.messages[1].content).toContain('The learner provided these questions:');
+    expect(request.messages[1].content).toContain('Where did you go last summer?');
+  });
+
+  test('the raw multi-line hint is stored verbatim on the session row', async () => {
+    fake.enqueueComplete({
+      text: VALID_COMBINED_JSON,
+      model: 'vendor/model-a',
+      finishReason: 'stop',
+      requestId: null,
+    });
+
+    const {session} = await createServerlessSession(
+      db,
+      request => fake.complete(request),
+      'Traveling\n- Where did you go last summer?',
+    );
+    expect(session.topic_hint).toBe('Traveling\n- Where did you go last summer?');
+  });
 });
 
 describe('parseTopicWithSample', () => {
@@ -293,5 +330,36 @@ describe('buildTopicAndSampleUserPrompt', () => {
 
   test('MIN_SAMPLE_TURNS matches the backend contract of two', () => {
     expect(MIN_SAMPLE_TURNS).toBe(2);
+  });
+
+  test('stripListMarker removes numbered and bulleted prefixes only', () => {
+    expect(stripListMarker('1. Where did you go?')).toBe('Where did you go?');
+    expect(stripListMarker('2) What do you pack first?')).toBe('What do you pack first?');
+    expect(stripListMarker('- Do you like cities?')).toBe('Do you like cities?');
+    expect(stripListMarker('* Do you like cities?')).toBe('Do you like cities?');
+    expect(stripListMarker('• Plain bullet?')).toBe('Plain bullet?');
+    expect(stripListMarker('No marker at all')).toBe('No marker at all');
+    expect(stripListMarker('   spaced line ')).toBe('spaced line');
+  });
+
+  test('splitHintQuestions yields one bare question per non-empty line', () => {
+    expect(splitHintQuestions('Traveling')).toEqual(['Traveling']);
+    expect(
+      splitHintQuestions('Traveling\n\n1. Where did you go?\n- What do you pack first?\n'),
+    ).toEqual(['Traveling', 'Where did you go?', 'What do you pack first?']);
+    expect(splitHintQuestions('   \n\n')).toEqual([]);
+  });
+
+  test('a multi-line hint becomes a merged question list in the prompt', () => {
+    const prompted = buildTopicAndSampleUserPrompt(
+      'B1',
+      'Traveling\n1. Where did you go last summer?\n- What do you pack first?',
+    );
+    expect(prompted).toContain('The learner provided these questions:');
+    expect(prompted).toContain('Where did you go last summer?');
+    expect(prompted).toContain('What do you pack first?');
+    expect(prompted).toContain('Build ONE cohesive conversation topic around them');
+    // A question list must NOT fall back to the single-topic wording.
+    expect(prompted).not.toContain('Topic idea from the learner:');
   });
 });

@@ -69,7 +69,10 @@ describe('App authentication flow', () => {
 
     render(<App />);
 
-    // Session restored from secure storage survives an app restart.
+    // Session restored from secure storage survives an app restart; the
+    // homepage hub is the landing route, then open the conversations view.
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await fireEvent.press(screen.getByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     // Logout lives on the Settings screen of the main stack.
@@ -87,6 +90,8 @@ describe('App authentication flow', () => {
     mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await fireEvent.press(screen.getByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));

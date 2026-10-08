@@ -182,8 +182,10 @@ describe('TASK-112 vocabulary journey', () => {
 
     await render(<App />);
 
-    // The restored session lands in the chat; the most recent conversation
-    // is opened in place by the authoritative history check (TASK-AUDIT-008).
+    // The homepage hub is the landing screen; open Chat, where the most
+    // recent conversation is opened in place by the authoritative history
+    // check (TASK-AUDIT-008).
+    await fireEvent.press(await screen.findByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
 
     // Enter the conversation through History as well (a second Chat instance
@@ -261,6 +263,7 @@ describe('TASK-112 vocabulary journey', () => {
 
     await render(<App />);
 
+    await fireEvent.press(await screen.findByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     await fireEvent.press(screen.getByTestId('chat-open-history'));
     await fireEvent.press(await screen.findByTestId('history-item-5'));

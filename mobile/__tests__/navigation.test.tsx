@@ -37,6 +37,22 @@ const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
 
 type RootParamList = AuthStackParamList & MainStackParamList;
 
+/**
+ * Navigate from the homepage hub to the Chat screen — the journeys in this
+ * file assume the conversation view is on top of the stack.
+ */
+async function openChatFromHome() {
+  await fireEvent.press(await screen.findByTestId('home-open-chat'));
+  await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+}
+
+/** renderAuthenticated + the hub-to-Chat hop, returning the tracker helpers. */
+async function openChatAndTrack() {
+  const helpers = await renderAuthenticated();
+  await openChatFromHome();
+  return helpers;
+}
+
 async function renderRoot() {
   const ref = createNavigationContainerRef<RootParamList>();
 
@@ -126,12 +142,12 @@ describe('root switch', () => {
     expect(screen.queryByTestId('chat-screen')).toBeNull();
   });
 
-  it('authenticated users see the main application with Chat as entry', async () => {
+  it('authenticated users see the homepage hub as the entry', async () => {
     const {focusedRouteName} = await renderAuthenticated();
 
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('login-identifier')).toBeNull();
-    expect(focusedRouteName()).toBe('Chat');
+    expect(focusedRouteName()).toBe('Home');
   });
 
   it('a restored serverless mode mounts the main application without authentication (TASK-AUDIT-003)', async () => {
@@ -140,9 +156,9 @@ describe('root switch', () => {
 
     // Cold start lands directly in the main application: no login screen is
     // ever shown and no authentication request is made.
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('login-identifier')).toBeNull();
-    expect(focusedRouteName()).toBe('Chat');
+    expect(focusedRouteName()).toBe('Home');
     expect(mockedStorage.loadTokens).not.toHaveBeenCalled();
     expect(mockedAuth.getMe).not.toHaveBeenCalled();
   });
@@ -153,9 +169,9 @@ describe('root switch', () => {
     mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
     const {focusedRouteName} = await renderRoot();
 
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('login-identifier')).toBeNull();
-    expect(focusedRouteName()).toBe('Chat');
+    expect(focusedRouteName()).toBe('Home');
     // Serverless initialization makes no authentication requests; stored
     // credentials are simply left untouched.
     expect(mockedAuth.getMe).not.toHaveBeenCalled();
@@ -163,9 +179,8 @@ describe('root switch', () => {
 });
 
 describe('main stack navigation', () => {
-  it('navigates Chat -> History and back through the stack state', async () => {
-    const {focusedRouteName} = await renderAuthenticated();
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+  it('navigates Home -> Chat -> History and back through the stack state', async () => {
+    const {focusedRouteName} = await openChatAndTrack();
 
     await fireEvent.press(screen.getByTestId('chat-open-history'));
     expect(await screen.findByTestId('history-screen')).toBeOnTheScreen();
@@ -177,26 +192,24 @@ describe('main stack navigation', () => {
   });
 
   it('returns from Settings to Chat through the header back affordance without duplicating stack entries (TASK-AUDIT-006)', async () => {
-    const {focusedRouteName, stackRouteNames} = await renderAuthenticated();
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    const {focusedRouteName, stackRouteNames} = await openChatAndTrack();
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
     expect(focusedRouteName()).toBe('Settings');
-    // Exactly one Settings entry sits on top of Chat.
-    expect(stackRouteNames()).toEqual(['Chat', 'Settings']);
+    // Exactly one Settings entry sits on top of Chat below the hub.
+    expect(stackRouteNames()).toEqual(['Home', 'Chat', 'Settings']);
 
     await fireEvent.press(screen.getByTestId('settings-back'));
 
     await waitFor(() => expect(focusedRouteName()).toBe('Chat'));
     expect(screen.queryByTestId('settings-screen')).toBeNull();
     // goBack popped the entry instead of pushing another route.
-    expect(stackRouteNames()).toEqual(['Chat']);
+    expect(stackRouteNames()).toEqual(['Home', 'Chat']);
   });
 
   it('reaches Settings and returns to it after editing the learning level', async () => {
-    const {focusedRouteName} = await renderAuthenticated();
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    const {focusedRouteName} = await openChatAndTrack();
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
@@ -212,8 +225,7 @@ describe('main stack navigation', () => {
   });
 
   it('opens the saved vocabulary list from Settings and returns after closing (TASK-072)', async () => {
-    const {focusedRouteName} = await renderAuthenticated();
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    const {focusedRouteName} = await openChatAndTrack();
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
@@ -235,7 +247,7 @@ describe('main stack navigation', () => {
   it('logging out from Settings returns the user to the auth stack', async () => {
     const tokens = {access: 'token-a', refresh: 'token-r'};
     const {focusedRouteName} = await renderAuthenticated(tokens);
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    await openChatFromHome();
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));
     await fireEvent.press(await screen.findByTestId('settings-logout'));

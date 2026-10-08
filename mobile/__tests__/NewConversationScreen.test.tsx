@@ -341,7 +341,7 @@ describe('NewConversationScreen dynamic start action', () => {
     expect(screen.getByText('Start')).toBeOnTheScreen();
     expect(screen.queryByText('Let AI choose a topic')).toBeNull();
     expect(action.props.accessibilityLabel).toBe(
-      'Start conversation with your topic hint',
+      'Start conversation with your topic or questions',
     );
   });
 
@@ -397,6 +397,22 @@ describe('NewConversationScreen dynamic start action', () => {
     );
     await screen.findByTestId('chat-screen');
     expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 11);
+  });
+
+  it('ships a multi-line list of questions to the backend verbatim', async () => {
+    const multiLine = 'Traveling\n1. Where did you go last summer?\n- What do you pack first?';
+    mockedSessions.createSession.mockResolvedValue(makeSession({id: 12, topic_hint: multiLine}));
+    await renderScreen();
+    await screen.findByTestId('new-conversation-screen');
+
+    await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), multiLine);
+    await fireEvent.press(screen.getByTestId('new-conversation-start'));
+
+    await waitFor(() =>
+      expect(mockedSessions.createSession).toHaveBeenCalledWith(expect.any(Function), multiLine),
+    );
+    await screen.findByTestId('chat-screen');
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 12);
   });
 });
 

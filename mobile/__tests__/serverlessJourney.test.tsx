@@ -312,6 +312,8 @@ describe('TASK-117 serverless journey', () => {
     const fake = new FakeOpenRouterClient();
     mockedClientModule.__setFake(fake);
     const view = await render(launch(launchCount++));
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await pressTop('home-open-chat');
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     // ---- Enable serverless mode through Settings. ----------------------
@@ -364,6 +366,8 @@ describe('TASK-117 serverless journey', () => {
 
     // ---- Relaunch: the persisted serverless mode is restored. ----------
     await view.rerender(launch(launchCount++));
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await pressTop('home-open-chat');
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     expect(getRuntimeApplicationMode()).toBe('serverless');
 
@@ -481,6 +485,8 @@ describe('TASK-117 serverless journey', () => {
   it('keeps serverless vocabulary functionality unavailable (TASK-AUDIT-016)', async () => {
     const fake = new FakeOpenRouterClient();
     const view = await bootConfiguredServerlessApp(fake);
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await pressTop('home-open-chat');
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     // Settings hides the server-side vocabulary entry while serverless.
@@ -490,6 +496,8 @@ describe('TASK-117 serverless journey', () => {
 
     // Settings has no back control; a relaunch returns to Chat.
     await view.rerender(launch(launchCount++));
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await pressTop('home-open-chat');
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     await startConversationWithReply(fake);
 
@@ -523,6 +531,8 @@ describe('TASK-117 serverless journey', () => {
     // remove them either.
     await seedAuthKeychain();
     await bootConfiguredServerlessApp(fake);
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await pressTop('home-open-chat');
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     await startConversationWithReply(fake);
 
@@ -584,6 +594,8 @@ describe('TASK-117 serverless journey', () => {
     const view = await render(launch(launchCount++));
 
     // The main application mounts directly; the login screen is never shown.
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await pressTop('home-open-chat');
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('login-identifier')).toBeNull();
     expect(getRuntimeApplicationMode()).toBe('serverless');
@@ -600,6 +612,8 @@ describe('TASK-117 serverless journey', () => {
 
     // Closing and reopening keeps serverless mode active without login.
     await view.rerender(launch(launchCount++));
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await pressTop('home-open-chat');
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('login-identifier')).toBeNull();
 

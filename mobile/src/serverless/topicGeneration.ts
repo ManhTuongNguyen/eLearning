@@ -81,9 +81,33 @@ export interface TopicWithSample {
 export type CompleteFn = (request: CompletionRequest) => Promise<CompletionResult>;
 
 /**
+ * Strip one leading list marker ("1.", "1)", "-", "*", "•") from an input
+ * line, so a hint typed as a numbered/bulleted question list yields the bare
+ * questions. A plain line without a marker comes back unchanged.
+ */
+export function stripListMarker(line: string): string {
+  return line.replace(/^\s*(?:\d+[.)]|[-*•])\s+/, '').trim();
+}
+
+/**
+ * Split a multi-line hint into its individual question/topic lines: every
+ * non-empty line is one entry, with bullet markers removed. A single-line
+ * hint yields exactly one entry — the classic topic-hint shape.
+ */
+export function splitHintQuestions(hint: string): string[] {
+  return hint
+    .split(/\r?\n/)
+    .map(stripListMarker)
+    .filter(line => line.length > 0);
+}
+
+/**
  * Compose the single user-turn instruction from level and hint. The level
  * clause governs BOTH artifacts (the topic difficulty and the example's
  * vocabulary/grammar), mirroring the backend's two prompts merged into one.
+ * A multi-line hint is treated as a list of the learner's questions: they
+ * are merged into the topic instruction so the generated scenario weaves
+ * every question into the conversation.
  */
 export function buildTopicAndSampleUserPrompt(level: EnglishLevel, hint: string): string {
   const parts = [
@@ -102,7 +126,18 @@ export function buildTopicAndSampleUserPrompt(level: EnglishLevel, hint: string)
     );
   }
   if (hint) {
-    parts.push(`Topic idea from the learner: "${hint}". Build the topic around this idea.`);
+    const questions = splitHintQuestions(hint);
+    if (questions.length >= 2) {
+      parts.push(
+        'The learner provided these questions:\n' +
+          questions.map((question, index) => `${index + 1}. ${question}`).join('\n') +
+          '\nBuild ONE cohesive conversation topic around them: the tutor ' +
+          'conversation should naturally lead the learner through these ' +
+          'questions.',
+      );
+    } else {
+      parts.push(`Topic idea from the learner: "${hint}". Build the topic around this idea.`);
+    }
   } else {
     parts.push('The learner gave no preference; choose an engaging everyday topic.');
   }

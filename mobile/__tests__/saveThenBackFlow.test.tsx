@@ -91,6 +91,8 @@ async function renderMainStack() {
       </ThemeProvider>
     </ModeProvider>,
   );
+  // The homepage hub is the landing screen; open the conversations view.
+  fireEvent.press(await screen.findByTestId('home-open-chat'));
   await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 }
 

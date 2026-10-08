@@ -251,6 +251,8 @@ describe('serverless mode regression (TASK-AUDIT-003/016)', () => {
 
     await fireEvent.press(screen.getByTestId('login-serverless'));
 
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await fireEvent.press(screen.getByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('login-identifier')).toBeNull();
     expect(getRuntimeApplicationMode()).toBe('serverless');
@@ -264,12 +266,16 @@ describe('serverless mode regression (TASK-AUDIT-003/016)', () => {
     const view = await render(launch(launchCount++));
     await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());
     await fireEvent.press(screen.getByTestId('login-serverless'));
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await fireEvent.press(screen.getByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     // ---- Restart: the persisted mode is restored, still without login. --
     mockedAuth.getMe.mockClear();
     await view.rerender(launch(launchCount++));
 
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await fireEvent.press(screen.getByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('login-identifier')).toBeNull();
     expect(getRuntimeApplicationMode()).toBe('serverless');
@@ -308,6 +314,8 @@ describe('history after login regression (TASK-AUDIT-008)', () => {
 
     // The most recent conversation opens in place after login; the landing
     // route never claims an empty history while the server has sessions.
+    // The hub is the landing screen; open Chat first.
+    await fireEvent.press(await screen.findByTestId('home-open-chat'));
     await waitFor(() => expect(top('composer-input')).toBeOnTheScreen());
     expect(screen.queryByTestId('chat-no-session')).toBeNull();
     expect(mockedSessions.listSessions).toHaveBeenCalledWith(expect.any(Function), 1);
@@ -334,6 +342,8 @@ describe('immediate vocabulary save regression (TASK-AUDIT-007)', () => {
     mockedVocabulary.saveVocabulary.mockResolvedValue(makeItem());
 
     await render(launch(launchCount++));
+    await waitFor(() => expect(top('home-screen')).toBeOnTheScreen());
+    await pressTop('home-open-chat');
     await waitFor(() => expect(top('composer-input')).toBeOnTheScreen());
 
     // Reach the conversation through History (a second Chat instance mounts).

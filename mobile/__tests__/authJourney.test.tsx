@@ -116,6 +116,8 @@ describe('TASK-109 registration journey', () => {
 
     await fillRegistrationForm();
 
+    // The homepage hub is the landing screen; open the conversations view.
+    await fireEvent.press(await screen.findByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     expect(mockedAuth.register).toHaveBeenCalledWith({
       username: 'alice',
@@ -135,6 +137,8 @@ describe('TASK-109 login journey', () => {
 
     await fillLoginForm('alice@example.com', 'secret');
 
+    // The homepage hub is the landing screen; open the conversations view.
+    await fireEvent.press(await screen.findByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     expect(mockedAuth.login).toHaveBeenCalledWith('alice@example.com', 'secret');
     expect(await storedTokens()).toEqual(TOKENS);
@@ -158,7 +162,8 @@ describe('TASK-109 login journey', () => {
 
     // The landing route is replaced by the most recent conversation: the
     // "No conversation yet" empty state is never claimed despite history
-    // existing on the server.
+    // existing on the server. The hub is the landing screen; open Chat.
+    await fireEvent.press(await screen.findByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
     expect(screen.queryByTestId('chat-no-session')).toBeNull();
     expect(mockedSessions.listSessions).toHaveBeenCalledWith(expect.any(Function), 1);
@@ -172,6 +177,7 @@ describe('TASK-109 token restoration journey', () => {
     const view = await render(launch(0));
 
     await fillLoginForm('alice', 'secret');
+    await fireEvent.press(await screen.findByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     // ---- Restart with the same persisted keychain store. ---------------
@@ -180,6 +186,8 @@ describe('TASK-109 token restoration journey', () => {
     mockedAuth.getMe.mockResolvedValue(USER);
     await view.rerender(launch(1));
 
+    // The restart lands on the homepage hub; open Chat again.
+    await fireEvent.press(await screen.findByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     // Session restored via /me against the stored access token; no second
     // login ever happened.
@@ -197,6 +205,8 @@ describe('TASK-109 expired token handling', () => {
     mockedAuth.refreshAccessToken.mockResolvedValue({access: 'access-2'});
     await render(launch(0));
 
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await fireEvent.press(screen.getByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     expect(mockedAuth.refreshAccessToken).toHaveBeenCalledWith('refresh-1');
     expect(mockedAuth.getMe).toHaveBeenLastCalledWith('access-2');
@@ -222,6 +232,8 @@ describe('TASK-109 logout journey', () => {
     mockedAuth.getMe.mockResolvedValue(USER);
     mockedAuth.logout.mockResolvedValue(undefined);
     const view = await render(launch(0));
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
+    await fireEvent.press(screen.getByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     // Logout lives on the Settings screen of the main stack.

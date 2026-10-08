@@ -4,12 +4,17 @@
  * typed a non-empty hint the action is the primary "Start" button that ships
  * the hint to the backend; when the hint is blank the same control re-skins
  * to the secondary "Let AI choose a topic" style and sends an empty hint
- * (the server / provider picks the topic). In server mode both paths create
- * the session through POST /api/v1/sessions/; in serverless mode (TASK-085)
- * the topic is generated directly through the configured provider with the
- * user's own key and persisted in the local SQLite database — no backend
- * traffic happens (ROADMAP Rule 9). Both land in Chat; a blank Start behaves
- * exactly like the auto action, so empty input works too.
+ * (the server / provider picks the topic). The input accepts either a topic
+ * idea or a LIST of the learner's questions — one per line, with optional
+ * "1."/"-" bullets — and in serverless mode the lines are parsed and merged
+ * into the topic-generation prompt so one cohesive topic weaves them all in
+ * (see splitHintQuestions in ../serverless/topicGeneration). In server mode
+ * both paths create the session through POST /api/v1/sessions/; in
+ * serverless mode (TASK-085) the topic is generated directly through the
+ * configured provider with the user's own key and persisted in the local
+ * SQLite database — no backend traffic happens (ROADMAP Rule 9). Both land
+ * in Chat; a blank Start behaves exactly like the auto action, so empty
+ * input works too.
  * the server-mode creation response carries the generated sample conversation
  * (TASK-053), which is handed to Chat as a route param since no endpoint can
  * refetch it; serverless creation (TASK-093) generates the identical example
@@ -83,6 +88,9 @@ function createStyles(c: ThemeColors) {
       fontSize: 15,
       color: c.textPrimary,
       marginBottom: 16,
+      // Tall enough to type a list of questions, one per line.
+      minHeight: 96,
+      textAlignVertical: 'top',
     },
     primaryButton: {
       backgroundColor: c.primary,
@@ -205,13 +213,14 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
       </View>
 
       <Text style={styles.subtitle}>
-        What would you like to talk about? Leave it blank and the AI picks a
-        topic for you.
+        What would you like to talk about? Enter a topic or a list of
+        questions — one per line — or leave it blank and the AI picks a topic
+        for you.
       </Text>
 
       <TextInput
         style={styles.input}
-        placeholder="e.g. Traveling"
+        placeholder={"e.g. Traveling\n1. Where did you go last summer?\n- What do you pack first?"}
         placeholderTextColor={colors.textMuted}
         multiline
         value={hint}
@@ -231,7 +240,7 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
         const label = hintEmpty ? 'Let AI choose a topic' : 'Start';
         const a11yLabel = hintEmpty
           ? 'Let AI choose a topic'
-          : 'Start conversation with your topic hint';
+          : 'Start conversation with your topic or questions';
         return (
           <Pressable
             style={buttonStyle}
