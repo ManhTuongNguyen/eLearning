@@ -32,23 +32,29 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Slider from '@react-native-community/slider';
 
 import {
   generateSpeakingPracticeText,
+  splitPracticeParagraphs,
 } from '../serverless/speakingPractice';
 import {
   countWords,
   formatElapsed,
   stepOffset,
 } from '../practice/karaokeScroll';
-import {createProviderClient} from '../serverless/providerRegistry';
-import {loadServerlessOpenRouterConfig} from '../serverless/settings';
-import {getLocalDatabase} from '../db/database';
-import {toErrorMessage} from '../auth/AuthContext';
-import type {SpeakingPracticeScreenProps} from '../navigation/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import { createProviderClient } from '../serverless/providerRegistry';
+import { loadServerlessOpenRouterConfig } from '../serverless/settings';
+import { getLocalDatabase } from '../db/database';
+import { getLearningProfile } from '../db/profileStore';
+import { createSpeakingPracticeRecord } from '../db/speakingPracticeRepository';
+import {
+  SPEED_DEFAULT_PX_PER_S,
+  loadSpeakingScrollSpeed,
+} from '../preferences/speakingScrollSpeed';
+import { toErrorMessage } from '../auth/AuthContext';
+import type { SpeakingPracticeScreenProps } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 /** Session-length chips in minutes (the AI sizes the text to these). */
 const MINUTES_OPTIONS = [1, 2, 3, 5, 10] as const;
@@ -56,11 +62,16 @@ const MINUTES_OPTIONS = [1, 2, 3, 5, 10] as const;
 /** Auto-scroll tick interval; small enough to look smooth, cheap enough on JS. */
 const SCROLL_TICK_MS = 16;
 
-/** Scroll speed bounds (pixels per second). Slow by design. */
-export const SPEED_MIN_PX_PER_S = 10;
-export const SPEED_MAX_PX_PER_S = 150;
-export const SPEED_STEP_PX_PER_S = 5;
-const SPEED_DEFAULT_PX_PER_S = 30;
+/**
+ * Blank lead-in lines rendered above the first paragraph of the generated
+ * text: reading never starts right at the top edge of the box, and the
+ * auto-scroll gives the learner a moment before the first words arrive.
+ */
+const LEAD_IN_BLANK_LINES = 3;
+
+// The scroll-speed bounds, step and default live in
+// ../preferences/speakingScrollSpeed together with their persistence; the
+// speed slider itself lives on the Settings screen.
 
 type Phase = 'form' | 'practicing' | 'complete';
 
@@ -93,10 +104,11 @@ function createStyles(c: ThemeColors) {
       color: c.textPrimary,
     },
     subtitle: {
-      marginTop: 8,
-      marginBottom: 12,
+      marginTop: 6,
+      marginBottom: 10,
       fontSize: 14,
       color: c.textSecondary,
+      textAlign: 'center',
     },
     input: {
       borderWidth: 1,
@@ -104,7 +116,8 @@ function createStyles(c: ThemeColors) {
       borderRadius: 10,
       backgroundColor: c.surface,
       paddingHorizontal: 14,
-      paddingVertical: 12,
+      paddingTop: 10,
+      paddingBottom: 14,
       fontSize: 15,
       color: c.textPrimary,
       marginBottom: 16,
@@ -137,8 +150,10 @@ function createStyles(c: ThemeColors) {
     primaryButton: {
       backgroundColor: c.primary,
       borderRadius: 10,
-      paddingVertical: 14,
+      paddingVertical: 16,
+      paddingHorizontal: 20,
       alignItems: 'center',
+      marginTop: 4,
     },
     buttonDisabled: {
       opacity: 0.5,
@@ -153,7 +168,8 @@ function createStyles(c: ThemeColors) {
       borderColor: c.borderStrong,
       backgroundColor: c.surface,
       borderRadius: 10,
-      paddingVertical: 12,
+      paddingVertical: 16,
+      paddingHorizontal: 20,
       alignItems: 'center',
     },
     secondaryButtonText: {
@@ -177,7 +193,6 @@ function createStyles(c: ThemeColors) {
       fontSize: 13,
       color: c.textSecondary,
     },
-    // Practice view: timer + controls above the karaoke surface.
     statusBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -202,21 +217,9 @@ function createStyles(c: ThemeColors) {
       fontSize: 14,
       fontWeight: '600',
     },
-    speedRow: {
-      paddingVertical: 4,
-    },
-    speedHeader: {
+    controlsRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
-    speedLabel: {
-      fontSize: 13,
-      color: c.textSecondary,
-    },
-    speedValue: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: c.textPrimary,
+      gap: 8,
     },
     karaoke: {
       flex: 1,
@@ -230,6 +233,9 @@ function createStyles(c: ThemeColors) {
       flexGrow: 1,
       justifyContent: 'center',
       paddingHorizontal: 20,
+      // Lead-in space above and below the reading text: the first line never
+      // starts glued to the top edge, so it is easy to begin speaking.
+      paddingVertical: 48,
     },
     paragraph: {
       fontSize: 22,
@@ -244,10 +250,10 @@ function createStyles(c: ThemeColors) {
       borderColor: c.border,
       backgroundColor: c.surface,
       borderRadius: 14,
-      padding: 20,
+      padding: 24,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 10,
+      gap: 12,
     },
     summaryTitle: {
       fontSize: 18,
@@ -262,26 +268,54 @@ function createStyles(c: ThemeColors) {
   });
 }
 
-export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps) {
-  const {colors} = useTheme();
+export function SpeakingPracticeScreen({
+  navigation,
+  route,
+}: SpeakingPracticeScreenProps) {
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [phase, setPhase] = useState<Phase>('form');
-  const [material, setMaterial] = useState('');
-  const [minutes, setMinutes] = useState(3);
+  // SpeakingHistory hands over a saved session: the screen then opens
+  // directly in the reading phase with the stored text — no provider call,
+  // no form. Read once for the initial state; later param changes on a
+  // live instance (e.g. popping back) do not restart a running session.
+  const resumeText = route.params?.text ?? '';
+  const resumeMaterial = route.params?.material ?? '';
+  const resumeMinutes = route.params?.minutes;
+
+  const [phase, setPhase] = useState<Phase>(resumeText ? 'practicing' : 'form');
+  const [material, setMaterial] = useState(resumeMaterial);
+  const [minutes, setMinutes] = useState(
+    resumeMinutes !== undefined &&
+      (MINUTES_OPTIONS as readonly number[]).includes(resumeMinutes)
+      ? resumeMinutes
+      : 3,
+  );
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Practice-view state: paragraphs, elapsed timer, pause and scroll speed.
-  const [paragraphs, setParagraphs] = useState<string[]>([]);
-  const [fullText, setFullText] = useState('');
+  const [paragraphs, setParagraphs] = useState<string[]>(() =>
+    resumeText ? splitPracticeParagraphs(resumeText) : [],
+  );
+  const [fullText, setFullText] = useState(resumeText);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Starts at the shared default and picks up the persisted Settings value
+  // as soon as it loads.
   const [speed, setSpeed] = useState(SPEED_DEFAULT_PX_PER_S);
 
-  // Latest-ref seams (the app's TASK-048 gotcha pattern): the scroll loop
-  // and the finish callback read fresh values from stable refs, so speed
-  // changes and paragraph loads never re-trigger the interval effect.
+  useEffect(() => {
+    let cancelled = false;
+    loadSpeakingScrollSpeed().then(value => {
+      if (!cancelled) {
+        setSpeed(value);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const speedRef = useRef(speed);
   speedRef.current = speed;
   const pausedRef = useRef(paused);
@@ -292,11 +326,32 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
   const contentHeightRef = useRef(0);
   const viewportHeightRef = useRef(0);
 
-  const finish = useCallback(() => {
-    setPhase(currentPhase => (currentPhase === 'practicing' ? 'complete' : currentPhase));
-  }, []);
+  const words = useMemo(() => countWords(fullText), [fullText]);
 
-  // Elapsed timer: one second at a time while practicing and not paused.
+  const finish = useCallback(async () => {
+    if (phase !== 'practicing') {
+      return;
+    }
+    // Save practice history record
+    try {
+      const db = await getLocalDatabase();
+      const profile = await getLearningProfile(db);
+      await createSpeakingPracticeRecord(db, {
+        userId: 0, // Anonymous user in serverless mode
+        title: material.trim() || 'Untitled practice',
+        description: '',
+        rawPrompt: `Topic: ${material.trim()}, Minutes: ${minutes}`,
+        englishLevel: profile.level,
+        text: fullText,
+        minutes,
+        wordCount: words,
+      });
+    } catch {
+      // Silently ignore history save failures
+    }
+    setPhase('complete');
+  }, [phase, material, minutes, fullText, words]);
+
   useEffect(() => {
     if (phase !== 'practicing' || paused) {
       return;
@@ -307,9 +362,6 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
     return () => clearInterval(id);
   }, [phase, paused]);
 
-  // Smooth slow auto-scroll: every tick advances the offset by speed × dt,
-  // clamped to the scrollable range, and the scroll position is applied
-  // without animation so the motion follows the slider in real time.
   useEffect(() => {
     if (phase !== 'practicing' || paused) {
       return;
@@ -319,15 +371,23 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
       const now = Date.now();
       const dt = now - last;
       last = now;
-      const maxOffset = Math.max(0, contentHeightRef.current - viewportHeightRef.current);
-      const next = stepOffset(offsetRef.current, speedRef.current, dt, maxOffset);
+      const maxOffset = Math.max(
+        0,
+        contentHeightRef.current - viewportHeightRef.current,
+      );
+      const next = stepOffset(
+        offsetRef.current,
+        speedRef.current,
+        dt,
+        maxOffset,
+      );
       offsetRef.current = next.offset;
       if (next.done) {
-        scrollRef.current?.scrollTo({y: next.offset, animated: false});
+        scrollRef.current?.scrollTo({ y: next.offset, animated: false });
         finish();
         return;
       }
-      scrollRef.current?.scrollTo({y: next.offset, animated: false});
+      scrollRef.current?.scrollTo({ y: next.offset, animated: false });
     }, SCROLL_TICK_MS);
     return () => clearInterval(id);
   }, [phase, paused, finish]);
@@ -336,10 +396,9 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
     offsetRef.current = 0;
     setElapsedMs(0);
     setPaused(false);
-    scrollRef.current?.scrollTo({y: 0, animated: false});
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, []);
 
-  /** Generate the practice text through the configured serverless provider. */
   const handleGenerate = useCallback(async () => {
     if (generating) {
       return;
@@ -355,11 +414,12 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
       }
       const client = createProviderClient(config);
       const db = await getLocalDatabase();
-      const {text, paragraphs: displayParagraphs} = await generateSpeakingPracticeText(
-        db,
-        request => client.complete(request),
-        {material: material.trim(), minutes},
-      );
+      const { text, paragraphs: displayParagraphs } =
+        await generateSpeakingPracticeText(
+          db,
+          request => client.complete(request),
+          { material: material.trim(), minutes },
+        );
       setFullText(text);
       setParagraphs(displayParagraphs);
       setElapsedMs(0);
@@ -374,13 +434,12 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
   }, [generating, material, minutes]);
 
   const handlePracticeAgain = useCallback(() => {
-    setParagraphs([]);
-    setFullText('');
+    offsetRef.current = 0;
     setElapsedMs(0);
-    setPhase('form');
+    setPaused(false);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    setPhase('practicing');
   }, []);
-
-  const words = useMemo(() => countWords(fullText), [fullText]);
 
   if (phase === 'complete') {
     return (
@@ -390,7 +449,8 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
             accessibilityLabel="Go back"
             hitSlop={8}
             onPress={() => navigation.goBack()}
-            testID="speaking-back">
+            testID="speaking-back"
+          >
             <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
           <Text style={styles.title}>Speaking practice</Text>
@@ -405,8 +465,26 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
             accessibilityRole="button"
             onPress={handlePracticeAgain}
             style={styles.primaryButton}
-            testID="speaking-practice-again">
-            <Text style={styles.primaryButtonText}>Practice again</Text>
+            testID="speaking-practice-again"
+          >
+            <Text style={styles.primaryButtonText}>
+              Practice again — same text
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Generate a new practice text"
+            onPress={() => {
+              setPhase('form');
+              setMaterial('');
+              setParagraphs([]);
+              setFullText('');
+              setElapsedMs(0);
+            }}
+            style={styles.secondaryButton}
+            testID="speaking-practice-new"
+          >
+            <Text style={styles.secondaryButtonText}>Practice new text</Text>
           </Pressable>
         </View>
       </View>
@@ -421,7 +499,8 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
             accessibilityLabel="Go back"
             hitSlop={8}
             onPress={() => navigation.goBack()}
-            testID="speaking-back">
+            testID="speaking-back"
+          >
             <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
           <Text style={styles.title}>Speaking practice</Text>
@@ -432,61 +511,60 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
           <Text style={styles.elapsed} testID="speaking-elapsed">
             {formatElapsed(elapsedMs)}
           </Text>
-          <View style={{flexDirection: 'row', gap: 8}}>
+          <View style={styles.controlsRow}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={paused ? 'Resume scrolling' : 'Pause scrolling'}
+              accessibilityLabel={
+                paused ? 'Resume scrolling' : 'Pause scrolling'
+              }
               onPress={() => setPaused(current => !current)}
               style={styles.controlButton}
-              testID="speaking-pause">
-              <Text style={styles.controlButtonText}>{paused ? 'Resume' : 'Pause'}</Text>
+              testID="speaking-pause"
+            >
+              <Text style={styles.controlButtonText}>
+                {paused ? 'Resume' : 'Pause'}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Restart from the beginning"
               onPress={rewind}
               style={styles.controlButton}
-              testID="speaking-restart">
+              testID="speaking-restart"
+            >
               <Text style={styles.controlButtonText}>Restart</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="End practice"
-              onPress={finish}
+              onPress={async () => await finish()}
               style={styles.controlButton}
-              testID="speaking-end">
+              testID="speaking-end"
+            >
               <Text style={styles.controlButtonText}>End</Text>
             </Pressable>
           </View>
-        </View>
-
-        <View style={styles.speedRow}>
-          <View style={styles.speedHeader}>
-            <Text style={styles.speedLabel}>Scroll speed</Text>
-            <Text style={styles.speedValue} testID="speaking-speed-value">
-              {speed} px/s
-            </Text>
-          </View>
-          <Slider
-            minimumValue={SPEED_MIN_PX_PER_S}
-            maximumValue={SPEED_MAX_PX_PER_S}
-            step={SPEED_STEP_PX_PER_S}
-            value={speed}
-            onValueChange={setSpeed}
-            testID="speaking-speed"
-          />
         </View>
 
         <View style={styles.karaoke} testID="speaking-karaoke">
           <ScrollView
             ref={scrollRef}
             contentContainerStyle={styles.textArea}
-            scrollEventThrottle={16}>
+            scrollEventThrottle={16}
+            scrollEnabled={paused}
+            pointerEvents={phase === 'practicing' && !paused ? 'none' : 'auto'}
+          >
             <View
               testID="speaking-text-block"
               onLayout={event => {
                 contentHeightRef.current = event.nativeEvent.layout.height;
-              }}>
+              }}
+            >
+              {Array.from({ length: LEAD_IN_BLANK_LINES }, (_, index) => (
+                <Text key={`lead-in-${index}`} style={styles.paragraph}>
+                  {' '}
+                </Text>
+              ))}
               {paragraphs.map((paragraph, index) => (
                 <Text key={index} style={styles.paragraph}>
                   {paragraph}
@@ -503,13 +581,15 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'android' ? undefined : 'padding'}
-      testID="speaking-practice-screen">
+      testID="speaking-practice-screen"
+    >
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
           hitSlop={8}
           onPress={() => navigation.goBack()}
-          testID="speaking-back">
+          testID="speaking-back"
+        >
           <Text style={styles.backText}>‹ Back</Text>
         </Pressable>
         <Text style={styles.title}>Speaking practice</Text>
@@ -517,18 +597,21 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
       </View>
 
       <Text style={styles.subtitle}>
-        Read aloud while the text scrolls at your speed. Type a topic, a list
-        of questions, or your own text, and pick how long you want to speak.
+        Read aloud while the text scrolls at your speed. Type a topic, a list of
+        questions, or your own text, and pick how long you want to speak.
       </Text>
 
       <TextInput
         style={styles.input}
-        placeholder="e.g. My weekend plans — or paste your own text"
+        placeholder={
+          'Tap here to start typing\n\n\ne.g. My weekend plans\nor paste your own text'
+        }
         placeholderTextColor={colors.textMuted}
         multiline
         value={material}
         onChangeText={setMaterial}
         editable={!generating}
+        textAlignVertical="top"
         testID="speaking-input"
       />
 
@@ -539,13 +622,14 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
             <Pressable
               key={option}
               accessibilityRole="radio"
-              accessibilityState={{checked: isSelected}}
+              accessibilityState={{ checked: isSelected }}
               onPress={() => setMinutes(option)}
               style={[
                 styles.minutesChip,
                 isSelected && styles.minutesChipSelected,
               ]}
-              testID={`speaking-minutes-${option}`}>
+              testID={`speaking-minutes-${option}`}
+            >
               <Text style={styles.minutesText}>{`${option} min`}</Text>
             </Pressable>
           );
@@ -558,7 +642,8 @@ export function SpeakingPracticeScreen({navigation}: SpeakingPracticeScreenProps
         onPress={handleGenerate}
         disabled={generating}
         style={[styles.primaryButton, generating && styles.buttonDisabled]}
-        testID="speaking-generate">
+        testID="speaking-generate"
+      >
         <Text style={styles.primaryButtonText}>Generate text</Text>
       </Pressable>
 

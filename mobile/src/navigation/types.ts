@@ -45,8 +45,17 @@ export type MainStackParamList = {
   VoiceManager: undefined;
   /** Endless listening-practice trainer for spoken numbers and letters. */
   Practice: undefined;
-  /** Karaoke-style read-aloud speaking practice pushed from Home. */
-  SpeakingPractice: undefined;
+  /**
+   * Karaoke-style read-aloud speaking practice pushed from Home.
+   * `text` (with optional `material`/`minutes`) resumes a saved session
+   * from SpeakingHistory: the screen opens directly in the reading phase
+   * with the stored text instead of regenerating.
+   */
+  SpeakingPractice:
+    | {text: string; material?: string; minutes?: number}
+    | undefined;
+  /** History of completed speaking practice sessions. */
+  SpeakingHistory: undefined;
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -84,6 +93,11 @@ export type PracticeScreenProps = NativeStackScreenProps<MainStackParamList, 'Pr
 export type SpeakingPracticeScreenProps = NativeStackScreenProps<
   MainStackParamList,
   'SpeakingPractice'
+>;
+
+export type SpeakingHistoryScreenProps = NativeStackScreenProps<
+  MainStackParamList,
+  'SpeakingHistory'
 >;
 
 export type HomeScreenProps = NativeStackScreenProps<MainStackParamList, 'Home'>;

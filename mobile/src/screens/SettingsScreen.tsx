@@ -45,6 +45,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 
 import { useAuth } from '../auth/AuthContext';
 import { useApplicationMode } from '../mode/ModeContext';
@@ -54,6 +55,13 @@ import {
   loadGrammarCheckEnabled,
   saveGrammarCheckEnabled,
 } from '../preferences/grammarCheck';
+import {
+  SPEED_MAX_PX_PER_S,
+  SPEED_MIN_PX_PER_S,
+  SPEED_STEP_PX_PER_S,
+  loadSpeakingScrollSpeed,
+  saveSpeakingScrollSpeed,
+} from '../preferences/speakingScrollSpeed';
 import {
   clearAllServerlessData,
   loadServerlessOpenRouterConfig,
@@ -98,6 +106,13 @@ const APPLICATION_MODE_OPTIONS: Array<{
 
 /** How long the configuration-saved toast stays visible (TASK-IMPROVEMENT-005). */
 export const CONFIG_SAVED_TOAST_DURATION_MS = 2500;
+
+/**
+ * How long the scroll-speed slider waits after the last change before the
+ * value is persisted: dragging updates the display live, but the store
+ * write happens once, after the user stops for this period — not per tick.
+ */
+export const SCROLL_SPEED_SAVE_DELAY_MS = 600;
 
 /** Row shape shared by both mode-specific sections. */
 interface SettingsRow {
@@ -432,6 +447,28 @@ export function createStyles(c: ThemeColors) {
       fontSize: 16,
       fontWeight: '600',
     },
+    /* Speaking practice scroll speed */
+    speedCard: {
+      alignSelf: 'stretch',
+      flexDirection: 'column',
+      gap: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    speedHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    speedValue: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.textPrimary,
+    },
     /* TASK-IMPROVEMENT-005: transient success toast, mirroring the
        self-dismissing toast the chat and vocabulary screens already use. */
     toast: {
@@ -536,6 +573,75 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
       setGrammarCheckEnabled(false);
     });
   }, []);
+
+  /**
+   * Speaking-practice karaoke scroll speed (px/s). The slider updates the
+   * displayed value live while dragging; persistence is debounced by
+   * SCROLL_SPEED_SAVE_DELAY_MS so the store is written once after the user
+   * stops, not on every tick.
+   */
+  const [scrollSpeed, setScrollSpeed] = useState<number | null>(null);
+  const scrollSpeedSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingScrollSpeedRef = useRef<number | null>(null);
+
+  const persistScrollSpeed = useCallback((value: number) => {
+    saveSpeakingScrollSpeed(value).catch(() => {
+      // Persistence failed: revert the slider so it reflects the stored
+      // (previous) value instead of silently diverging from it.
+      loadSpeakingScrollSpeed().then(stored => setScrollSpeed(stored));
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadSpeakingScrollSpeed().then(value => {
+      if (!cancelled) {
+        setScrollSpeed(value);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Leaving Settings while a debounced save is still waiting out its period
+  // must not drop the user's choice: flush the pending value on unmount.
+  useEffect(() => {
+    return () => {
+      if (scrollSpeedSaveTimerRef.current !== null) {
+        clearTimeout(scrollSpeedSaveTimerRef.current);
+        scrollSpeedSaveTimerRef.current = null;
+      }
+      const pending = pendingScrollSpeedRef.current;
+      pendingScrollSpeedRef.current = null;
+      if (pending !== null) {
+        saveSpeakingScrollSpeed(pending).catch(() => {
+          // Best-effort flush on unmount: there is no UI left to revert.
+        });
+      }
+    };
+  }, []);
+
+  const handleScrollSpeedChange = useCallback(
+    (value: number) => {
+      setScrollSpeed(value);
+      pendingScrollSpeedRef.current = value;
+      if (scrollSpeedSaveTimerRef.current !== null) {
+        clearTimeout(scrollSpeedSaveTimerRef.current);
+      }
+      // Debounced: the change is saved only after this period elapses with
+      // no further movement — never immediately on the slider tick.
+      scrollSpeedSaveTimerRef.current = setTimeout(() => {
+        scrollSpeedSaveTimerRef.current = null;
+        const pending = pendingScrollSpeedRef.current;
+        pendingScrollSpeedRef.current = null;
+        if (pending !== null) {
+          persistScrollSpeed(pending);
+        }
+      }, SCROLL_SPEED_SAVE_DELAY_MS);
+    },
+    [persistScrollSpeed],
+  );
 
   /**
    * TASK-IMPROVEMENT-005: the agent configuration editor pops back with
@@ -679,12 +785,6 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
         description: 'Set the level used to shape topics and corrections.',
         onPress: () => navigation.navigate('Level'),
         testID: 'settings-open-level',
-      },
-      {
-        title: 'Listening practice',
-        description: 'Train reflexes for numbers and letters you hear.',
-        onPress: () => navigation.navigate('Practice'),
-        testID: 'settings-open-practice',
       },
     ];
     if (appMode === 'server') {
@@ -883,6 +983,34 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
             <Text style={styles.chevron}>›</Text>
           </Pressable>
         </View>
+
+        {/* Speaking practice: the karaoke scroll speed lives here instead of
+            inside the practice flow, so the reading view stays uncluttered. */}
+        {scrollSpeed !== null ? (
+          <View style={styles.rowGroup} testID="settings-speaking-speed-section">
+            <Text style={styles.sectionLabel}>Speaking practice</Text>
+            <View style={styles.speedCard}>
+              <View style={styles.speedHeader}>
+                <Text style={styles.toggleTitle}>Reading scroll speed</Text>
+                <Text style={styles.speedValue} testID="settings-speaking-speed-value">
+                  {scrollSpeed} px/s
+                </Text>
+              </View>
+              <Text style={styles.toggleDescription}>
+                How fast the text scrolls while you read aloud during speaking
+                practice.
+              </Text>
+              <Slider
+                minimumValue={SPEED_MIN_PX_PER_S}
+                maximumValue={SPEED_MAX_PX_PER_S}
+                step={SPEED_STEP_PX_PER_S}
+                value={scrollSpeed}
+                onValueChange={handleScrollSpeedChange}
+                testID="settings-speaking-speed"
+              />
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.rowGroup}>
           <Text style={styles.sectionLabel}>Theme</Text>

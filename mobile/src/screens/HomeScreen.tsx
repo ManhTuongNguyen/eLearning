@@ -21,25 +21,53 @@ interface HomeRow {
   testID: string;
 }
 
+interface HomeSection {
+  title: string;
+  rows: HomeRow[];
+}
+
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
       paddingTop: 16,
-      paddingHorizontal: 24,
-      paddingBottom: 24,
+      paddingHorizontal: 20,
+      paddingBottom: 16,
+    },
+    content: {
+      paddingBottom: 28,
+      gap: 18,
+    },
+    heroCard: {
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 16,
+      paddingVertical: 16,
+      paddingHorizontal: 16,
+      gap: 6,
     },
     title: {
       fontSize: 26,
       fontWeight: '700',
       color: c.textPrimary,
-      marginBottom: 6,
     },
     subtitle: {
-      fontSize: 14,
-      color: c.textSecondary,
-      marginBottom: 20,
+      fontSize: 15,
+      lineHeight: 21,
+      color: c.textMuted,
+    },
+    section: {
+      gap: 10,
+    },
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
+      color: c.textMuted,
+      paddingHorizontal: 2,
     },
     rowGroup: {
       backgroundColor: c.surface,
@@ -49,20 +77,18 @@ function createStyles(c: ThemeColors) {
       overflow: 'hidden',
     },
     row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      minHeight: 60,
       paddingVertical: 14,
       paddingHorizontal: 16,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: c.border,
+      gap: 6,
     },
     rowPressed: {
       backgroundColor: c.accentSoft,
+      opacity: 0.9,
     },
-    rowTexts: {
-      flex: 1,
-      paddingRight: 12,
+    rowDivider: {
+      borderTopWidth: 1,
+      borderTopColor: c.border,
     },
     rowTitle: {
       fontSize: 16,
@@ -71,12 +97,8 @@ function createStyles(c: ThemeColors) {
     },
     rowDescription: {
       fontSize: 13,
-      color: c.textSecondary,
-      marginTop: 2,
-    },
-    chevron: {
-      fontSize: 18,
       color: c.textMuted,
+      lineHeight: 18,
     },
   });
 }
@@ -85,37 +107,58 @@ export function HomeScreen({navigation}: HomeScreenProps) {
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const rows: HomeRow[] = useMemo(
+  const sections: HomeSection[] = useMemo(
     () => [
       {
-        title: 'Conversations',
-        description: 'Chat with the AI tutor about a topic or your questions.',
-        onPress: () => navigation.navigate('Chat'),
-        testID: 'home-open-chat',
+        title: 'Continue learning',
+        rows: [
+          {
+            title: 'Conversations',
+            description: 'Chat with the AI tutor about a topic or your questions.',
+            onPress: () => navigation.navigate('Chat'),
+            testID: 'home-open-chat',
+          },
+          {
+            title: 'History',
+            description: 'Revisit your past conversations.',
+            onPress: () => navigation.navigate('History'),
+            testID: 'home-open-history',
+          },
+        ],
       },
       {
-        title: 'Listening practice',
-        description: 'Train reflexes for numbers and letters you hear.',
-        onPress: () => navigation.navigate('Practice'),
-        testID: 'home-open-listening',
+        title: 'Practice',
+        rows: [
+          {
+            title: 'Listening practice',
+            description: 'Train reflexes for numbers and letters you hear.',
+            onPress: () => navigation.navigate('Practice'),
+            testID: 'home-open-listening',
+          },
+          {
+            title: 'Speaking practice',
+            description: 'Read aloud with a karaoke-style scrolling text.',
+            onPress: () => navigation.navigate('SpeakingPractice'),
+            testID: 'home-open-speaking',
+          },
+          {
+            title: 'Speaking history',
+            description: 'Review your completed speaking practice sessions.',
+            onPress: () => navigation.navigate('SpeakingHistory'),
+            testID: 'home-open-speaking-history',
+          },
+        ],
       },
       {
-        title: 'Speaking practice',
-        description: 'Read aloud with a karaoke-style scrolling text.',
-        onPress: () => navigation.navigate('SpeakingPractice'),
-        testID: 'home-open-speaking',
-      },
-      {
-        title: 'History',
-        description: 'Revisit your past conversations.',
-        onPress: () => navigation.navigate('History'),
-        testID: 'home-open-history',
-      },
-      {
-        title: 'Settings',
-        description: 'Account, AI provider, level, speech and theme.',
-        onPress: () => navigation.navigate('Settings'),
-        testID: 'home-open-settings',
+        title: 'Account and app',
+        rows: [
+          {
+            title: 'Settings',
+            description: 'Account, AI provider, level, speech and theme.',
+            onPress: () => navigation.navigate('Settings'),
+            testID: 'home-open-settings',
+          },
+        ],
       },
     ],
     [navigation],
@@ -123,24 +166,35 @@ export function HomeScreen({navigation}: HomeScreenProps) {
 
   return (
     <View style={styles.container} testID="home-screen">
-      <Text style={styles.title}>Home</Text>
-      <Text style={styles.subtitle}>Where would you like to practice today?</Text>
-      <ScrollView bounces={false}>
-        <View style={styles.rowGroup}>
-          {rows.map(row => (
-            <Pressable
-              key={row.testID}
-              accessibilityRole="button"
-              accessibilityLabel={row.title}
-              onPress={row.onPress}
-              style={({pressed}) => [styles.row, pressed && styles.rowPressed]}
-              testID={row.testID}>
-              <View style={styles.rowTexts}>
-                <Text style={styles.rowTitle}>{row.title}</Text>
-                <Text style={styles.rowDescription}>{row.description}</Text>
+      <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          <View style={styles.heroCard}>
+            <Text style={styles.title}>Home</Text>
+            <Text style={styles.subtitle}>What would you like to practice today?</Text>
+          </View>
+          {sections.map(section => (
+            <View key={section.title} style={styles.section}>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <View style={styles.rowGroup}>
+                {section.rows.map((row, index) => (
+                  <Pressable
+                    key={row.testID}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${row.title} — ${row.description}`}
+                    hitSlop={6}
+                    onPress={row.onPress}
+                    style={({pressed}) => [
+                      styles.row,
+                      index > 0 && styles.rowDivider,
+                      pressed && styles.rowPressed,
+                    ]}
+                    testID={row.testID}>
+                    <Text style={styles.rowTitle}>{row.title}</Text>
+                    <Text style={styles.rowDescription}>{row.description}</Text>
+                  </Pressable>
+                ))}
               </View>
-              <Text style={styles.chevron}>›</Text>
-            </Pressable>
+            </View>
           ))}
         </View>
       </ScrollView>

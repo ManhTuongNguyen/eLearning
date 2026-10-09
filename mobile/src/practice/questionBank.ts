@@ -47,12 +47,12 @@ export const PRACTICE_RECENT_ANSWER_LIMIT = 8;
 
 /** Options are shuffled with a seeded PRNG (mulberry32) in tests. */
 export function mulberry32(seed: number): () => number {
-  let state = seed >>> 0;
+  let state = seed >>> 0; // eslint-disable-line no-bitwise
   return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    state = (state + 0x6d2b79f5) >>> 0; // eslint-disable-line no-bitwise
+    let t = Math.imul(state ^ (state >>> 15), 1 | state); // eslint-disable-line no-bitwise
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; // eslint-disable-line no-bitwise
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296; // eslint-disable-line no-bitwise
   };
 }
 
