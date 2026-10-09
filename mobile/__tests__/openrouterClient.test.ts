@@ -349,12 +349,20 @@ describe('complete', () => {
     await expect(makeClient(['f']).complete({messages: [{role: 'user', content: 'Hi'}]}))
       .rejects.toBeInstanceOf(OpenRouterResponseError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 
-    jest
+  it('treats an empty choices list as retryable so the fallback chain advances', async () => {
+    const fetchMock = jest
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jsonResponse(200, {choices: []}));
+
     await expect(makeClient(['f']).complete({messages: [{role: 'user', content: 'Hi'}]}))
-      .rejects.toBeInstanceOf(OpenRouterResponseError);
+      .rejects.toBeInstanceOf(OpenRouterAvailabilityError);
+
+    await expect(makeClient(['f', 'g']).complete({messages: [{role: 'user', content: 'Hi'}]}))
+      .rejects.toBeInstanceOf(OpenRouterAvailabilityError);
+    // makeClient always includes vendor/primary: ['f'] → 2 attempts, ['f','g'] → 3.
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
   it('an explicit model pin replaces the whole chain', async () => {

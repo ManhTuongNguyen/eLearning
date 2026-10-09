@@ -67,10 +67,16 @@ export class LLMAvailabilityError extends LLMError {
   }
 }
 
-/** The provider returned a malformed or unusable response (not retryable). */
+/**
+ * The provider returned a malformed or unusable response. Not retryable by
+ * default; a caller may pass `retryable` for payloads where another attempt
+ * (or the next fallback model) may legitimately succeed — e.g. an empty
+ * choices list, which some gateways return transiently when the upstream
+ * model is unavailable.
+ */
 export class LLMResponseError extends LLMError {
-  constructor(message: string, model: string | null = null) {
-    super(message, {model, retryable: false});
+  constructor(message: string, model: string | null = null, retryable = false) {
+    super(message, {model, retryable});
     this.name = 'LLMResponseError';
   }
 }

@@ -70,10 +70,36 @@ const MIGRATION_002: readonly string[] = [
 ];
 
 /**
+ * Version 3: local speaking-practice history (TASK-101/102). One row per
+ * completed read-aloud session, shown by SpeakingHistoryScreen.
+ */
+const MIGRATION_003: readonly string[] = [
+  `CREATE TABLE speaking_practice_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL DEFAULT 0,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      raw_prompt TEXT NOT NULL DEFAULT '',
+      english_level TEXT NOT NULL DEFAULT 'A1'
+        CHECK (english_level IN ('A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'AUTO')),
+      text TEXT NOT NULL DEFAULT '',
+      minutes INTEGER NOT NULL DEFAULT 0,
+      word_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+   )`,
+  `CREATE INDEX idx_speaking_history_user ON speaking_practice_history (user_id, created_at)`,
+];
+
+/**
  * Ordered migration list; length is the current schema version. Append new
  * entries — never edit shipped ones.
  */
-export const MIGRATIONS: readonly (readonly string[])[] = [MIGRATION_001, MIGRATION_002];
+export const MIGRATIONS: readonly (readonly string[])[] = [
+  MIGRATION_001,
+  MIGRATION_002,
+  MIGRATION_003,
+];
 
 export const SCHEMA_VERSION: number = MIGRATIONS.length;
 

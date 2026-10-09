@@ -17,6 +17,7 @@ import {LevelScreen} from '../screens/LevelScreen';
 import {NewConversationScreen} from '../screens/NewConversationScreen';
 import {PracticeScreen} from '../screens/PracticeScreen';
 import {SettingsScreen} from '../screens/SettingsScreen';
+import {SpeakingHistoryScreen} from '../screens/SpeakingHistoryScreen';
 import {SpeakingPracticeScreen} from '../screens/SpeakingPracticeScreen';
 import {TTSSettingsScreen} from '../screens/TTSSettingsScreen';
 import {VoiceManagerScreen} from '../screens/VoiceManagerScreen';
@@ -40,6 +41,7 @@ export function MainNavigator() {
       <Stack.Screen name="VoiceManager" component={VoiceManagerScreen} />
       <Stack.Screen name="Practice" component={PracticeScreen} />
       <Stack.Screen name="SpeakingPractice" component={SpeakingPracticeScreen} />
+      <Stack.Screen name="SpeakingHistory" component={SpeakingHistoryScreen} />
     </Stack.Navigator>
   );
 }

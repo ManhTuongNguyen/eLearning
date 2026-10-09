@@ -85,6 +85,10 @@ function createStyles(c: ThemeColors) {
       color: c.textPrimary,
       letterSpacing: 1,
     },
+    borderlessField: {
+      borderWidth: 0,
+      backgroundColor: 'transparent',
+    },
     eyeButton: {
       width: 44,
       height: 44,
@@ -199,10 +203,7 @@ export function SecretInput({
     <View style={[styles.wrapper, containerStyle]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <View
-        style={[
-          styles.fieldRow,
-          !showBorder && { borderWidth: 0, backgroundColor: 'transparent' },
-        ]}
+        style={[styles.fieldRow, !showBorder && styles.borderlessField]}
       >
         <TextInput
           style={[styles.input, inputStyle]}

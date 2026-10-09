@@ -27,6 +27,7 @@ import type {MainStackParamList, SettingsScreenProps} from '../src/navigation/ty
 import {
   CONFIG_SAVED_TOAST_DURATION_MS,
   createStyles,
+  SCROLL_SPEED_SAVE_DELAY_MS,
   SettingsScreen,
 } from '../src/screens/SettingsScreen';
 import * as serverlessSettings from '../src/serverless/settings';
@@ -475,5 +476,48 @@ describe('grammar auto-check toggle', () => {
 
     await waitFor(() => expect(checkedStateOf('settings-grammar-toggle')).toBe(false));
     expect(saveGrammarCheckEnabled).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('speaking practice scroll speed', () => {
+  it('shows the default 15 px/s when nothing was saved', async () => {
+    await renderSettings('serverless');
+
+    expect(await screen.findByTestId('settings-speaking-speed-section')).toBeOnTheScreen();
+    expect(screen.getByTestId('settings-speaking-speed-value')).toHaveTextContent('15 px/s');
+  });
+
+  it('updates the value live but persists it only after the debounce period', async () => {
+    await asyncStorage.setItem('app.speakingScrollSpeedPxPerS', '40');
+    await renderSettings('server');
+
+    expect(await screen.findByTestId('settings-speaking-speed-value')).toHaveTextContent('40 px/s');
+
+    // fireEvent is async in RNTL v14: await it so the state flushes.
+    await fireEvent(screen.getByTestId('settings-speaking-speed'), 'onValueChange', 55);
+
+    // The displayed value follows the slider immediately…
+    expect(screen.getByTestId('settings-speaking-speed-value')).toHaveTextContent('55 px/s');
+    // …but nothing is written yet — the save waits out its period.
+    expect(asyncStorage.setItem).not.toHaveBeenCalledWith(
+      'app.speakingScrollSpeedPxPerS',
+      '55',
+    );
+
+    // Once the debounce period elapses, exactly that value lands in storage.
+    await waitFor(
+      () =>
+        expect(asyncStorage.setItem).toHaveBeenCalledWith(
+          'app.speakingScrollSpeedPxPerS',
+          '55',
+        ),
+      {timeout: SCROLL_SPEED_SAVE_DELAY_MS * 3},
+    );
+  });
+
+  it('no longer shows the removed Listening practice navigation', async () => {
+    await renderSettings('serverless');
+
+    expect(screen.queryByTestId('settings-open-practice')).toBeNull();
   });
 });

@@ -76,3 +76,20 @@ export interface LocalLearningProfile {
   level: EnglishLevel;
   updated_at: string;
 }
+
+/**
+ * A speaking practice history entry for a single practice session.
+ */
+export interface LocalPracticeHistoryRecord {
+  id: number;
+  user_id: number;
+  title: string;
+  description: string;
+  raw_prompt: string;
+  english_level: EnglishLevel;
+  text: string;
+  minutes: number;
+  word_count: number;
+  created_at: string;
+  updated_at: string;
+}

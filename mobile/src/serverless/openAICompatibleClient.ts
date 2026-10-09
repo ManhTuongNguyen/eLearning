@@ -262,13 +262,46 @@ export function createOpenAICompatibleClient(
         throw new LLMResponseError('Provider returned a non-object JSON payload.', model);
       }
       const record = body as Record<string, unknown>;
+
+      // Some gateways report upstream failures inside an HTTP 200 body as
+      // {"error": {...}} alongside an empty choices list — e.g. when the
+      // model has no available provider. Surface the provider's own message
+      // instead of the generic 'no choices' text so the cause is visible.
+      const inlineError = record.error;
+      if (inlineError !== undefined) {
+        if (typeof inlineError === 'object' && inlineError !== null) {
+          const errorRecord = inlineError as Record<string, unknown>;
+          const errorMessage =
+            typeof errorRecord.message === 'string' && errorRecord.message.trim()
+              ? errorRecord.message
+              : 'The AI provider reported an error with no details.';
+          const code = typeof errorRecord.code === 'number' ? errorRecord.code : null;
+          throw (
+            code !== null
+              ? normalizeHttpFailure(code, errorMessage, model, spec.label)
+              : new LLMResponseError(errorMessage, model, true)
+          );
+        }
+        throw new LLMResponseError(String(inlineError), model, true);
+      }
+
       const choices = record.choices;
       if (!Array.isArray(choices) || choices.length === 0) {
-        throw new LLMResponseError('Response contains no choices.', model);
+        throw new LLMResponseError(
+          `The AI returned an empty response for model ${model}. The model ` +
+            'may be unavailable or unable to answer — check the selected ' +
+            'model in Settings or try again.',
+          model,
+          true,
+        );
       }
       const choice = choices[0];
       if (typeof choice !== 'object' || choice === null) {
-        throw new LLMResponseError('Response contains no choices.', model);
+        throw new LLMResponseError(
+          `The AI returned an invalid response for model ${model}.`,
+          model,
+          true,
+        );
       }
       const message = (choice as Record<string, unknown>).message;
       const content =
@@ -276,7 +309,12 @@ export function createOpenAICompatibleClient(
           ? (message as Record<string, unknown>).content
           : undefined;
       if (typeof content !== 'string') {
-        throw new LLMResponseError('Response choice has no string message content.', model);
+        throw new LLMResponseError(
+          `The AI returned no message content for model ${model}. The reply ` +
+            'may have been filtered or the model may not support this ' +
+            'request — try another model in Settings.',
+          model,
+        );
       }
 
       const headerRequestId = response.headers.get('x-request-id');
