@@ -13,6 +13,14 @@
  * slider (pixels per second), playback pauses/resumes, restart rewinds and
  * the elapsed timer keeps the session honest. Reaching the end of the text
  * (or pressing End) shows the summary with the elapsed time and word count.
+ *
+ * Listen mode (route param mode: 'listen', pushed from SpeakingHistory):
+ * the TTS engine speaks the stored text aloud and the teleprompter scroll
+ * follows the engine's REAL pace through per-word SpeechProgress events —
+ * the Settings speed slider is deliberately ignored. Pause halts speech at
+ * the last spoken word; Resume re-speaks from that word (Android TTS cannot
+ * continue a stopped utterance); End/finish never saves a new history
+ * record — the session was opened from one.
  */
 import React, {
   useCallback,
@@ -23,10 +31,12 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
+  PanResponder,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -40,10 +50,16 @@ import {
 import {
   countWords,
   formatElapsed,
-  stepOffset,
+  offsetForCharProgress,
+  offsetForSpokenChar,
+  paragraphCharRanges,
+  type ParagraphSpan,
 } from '../practice/karaokeScroll';
+import { getSpeechEngine } from '../tts/textToSpeech';
+import { setKeepScreenAwake } from '../tts/keepAwake';
+import { copyText } from '../utils/clipboard';
 import { createProviderClient } from '../serverless/providerRegistry';
-import { loadServerlessOpenRouterConfig } from '../serverless/settings';
+import { loadServerlessConfig } from '../serverless/settings';
 import { getLocalDatabase } from '../db/database';
 import { getLearningProfile } from '../db/profileStore';
 import { createSpeakingPracticeRecord } from '../db/speakingPracticeRepository';
@@ -59,9 +75,6 @@ import { useTheme } from '../theme/ThemeContext';
 /** Session-length chips in minutes (the AI sizes the text to these). */
 const MINUTES_OPTIONS = [1, 2, 3, 5, 10] as const;
 
-/** Auto-scroll tick interval; small enough to look smooth, cheap enough on JS. */
-const SCROLL_TICK_MS = 16;
-
 /**
  * Blank lead-in lines rendered above the first paragraph of the generated
  * text: reading never starts right at the top edge of the box, and the
@@ -69,11 +82,120 @@ const SCROLL_TICK_MS = 16;
  */
 const LEAD_IN_BLANK_LINES = 3;
 
+/** Vertical padding of the karaoke text area (lead-in room above/below). */
+const TEXT_AREA_PADDING_V = 48;
+
+/** Tolerance (px) for treating the scroll as having reached its end. */
+const SCROLL_END_EPSILON_PX = 0.5;
+
+/**
+ * Listen-mode glide bounds (milliseconds). Each spoken word retargets the
+ * native glide over the time since the previous word, clamped to this range,
+ * so the text keeps moving continuously between words.
+ */
+const LISTEN_MIN_GLIDE_MS = 180;
+const LISTEN_MAX_GLIDE_MS = 700;
+/** Glide used for the first word after (re)starting playback. */
+const LISTEN_FIRST_GLIDE_MS = 400;
+/** Glide that carries the text to its end once speech has finished. */
+const LISTEN_SETTLE_MS = 1200;
+/** Read mode: time the session keeps running after the glide reaches the end. */
+const READ_END_HOLD_MS = 30000;
+
 // The scroll-speed bounds, step and default live in
 // ../preferences/speakingScrollSpeed together with their persistence; the
 // speed slider itself lives on the Settings screen.
 
 type Phase = 'form' | 'practicing' | 'complete';
+
+type ScreenStyles = ReturnType<typeof createStyles>;
+
+interface KaraokeTextProps {
+  paragraphs: readonly string[];
+  styles: ScreenStyles;
+  onContentLayout: (height: number) => void;
+  onParagraphLayout: (index: number, y: number, height: number) => void;
+}
+
+/**
+ * Hand-drawn clipboard icon (outlined board with a filled clip on top), built
+ * from plain Views like the eye icon: no icon library.
+ */
+function ClipboardIcon({ color }: { color: string }) {
+  return (
+    <View
+      style={clipboardStyles.container}
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+    >
+      <View style={[clipboardStyles.board, { borderColor: color }]} />
+      <View style={[clipboardStyles.clip, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
+const CLIPBOARD_SIZE = 20;
+
+const clipboardStyles = StyleSheet.create({
+  container: {
+    width: CLIPBOARD_SIZE,
+    height: CLIPBOARD_SIZE,
+    alignItems: 'center',
+  },
+  board: {
+    position: 'absolute',
+    top: 3,
+    width: CLIPBOARD_SIZE - 4,
+    height: CLIPBOARD_SIZE - 3,
+    borderWidth: 2,
+    borderRadius: 3,
+  },
+  clip: {
+    position: 'absolute',
+    top: 0,
+    width: 8,
+    height: 5,
+    borderRadius: 2,
+  },
+});
+
+/**
+ * The teleprompter text block. Memoized so the once-a-second elapsed-timer
+ * re-render of the screen does not reconcile the whole text while the
+ * scroll is running.
+ */
+const KaraokeText = React.memo(function KaraokeText({
+  paragraphs,
+  styles,
+  onContentLayout,
+  onParagraphLayout,
+}: KaraokeTextProps) {
+  return (
+    <View
+      testID="speaking-text-block"
+      onLayout={event => onContentLayout(event.nativeEvent.layout.height)}
+    >
+      {Array.from({ length: LEAD_IN_BLANK_LINES }, (_, index) => (
+        <Text key={`lead-in-${index}`} style={styles.paragraph}>
+          {' '}
+        </Text>
+      ))}
+      {paragraphs.map((paragraph, index) => (
+        <Text
+          key={index}
+          selectable
+          style={styles.paragraph}
+          onLayout={event => {
+            const { y, height } = event.nativeEvent.layout;
+            onParagraphLayout(index, y, height);
+          }}
+        >
+          {paragraph}
+        </Text>
+      ))}
+    </View>
+  );
+});
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -97,6 +219,15 @@ function createStyles(c: ThemeColors) {
     },
     headerSpacer: {
       width: 48,
+    },
+    copyButton: {
+      position: 'absolute',
+      top: 10,
+      right: 10,
+      zIndex: 1,
+      padding: 6,
+      borderRadius: 8,
+      backgroundColor: c.surface,
     },
     title: {
       fontSize: 20,
@@ -230,12 +361,14 @@ function createStyles(c: ThemeColors) {
       overflow: 'hidden',
     },
     textArea: {
-      flexGrow: 1,
-      justifyContent: 'center',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
       paddingHorizontal: 20,
       // Lead-in space above and below the reading text: the first line never
       // starts glued to the top edge, so it is easy to begin speaking.
-      paddingVertical: 48,
+      paddingVertical: TEXT_AREA_PADDING_V,
     },
     paragraph: {
       fontSize: 22,
@@ -282,6 +415,9 @@ export function SpeakingPracticeScreen({
   const resumeText = route.params?.text ?? '';
   const resumeMaterial = route.params?.material ?? '';
   const resumeMinutes = route.params?.minutes;
+  // 'listen' = TTS session: the engine speaks, the scroll follows the
+  // playback pace instead of the learner reading (and the Settings speed).
+  const [listenMode, setListenMode] = useState(route.params?.mode === 'listen');
 
   const [phase, setPhase] = useState<Phase>(resumeText ? 'practicing' : 'form');
   const [material, setMaterial] = useState(resumeMaterial);
@@ -305,6 +441,11 @@ export function SpeakingPracticeScreen({
   const [speed, setSpeed] = useState(SPEED_DEFAULT_PX_PER_S);
 
   useEffect(() => {
+    // Listen mode derives the scroll from the TTS progress events; the
+    // persisted Settings speed is deliberately not loaded or applied.
+    if (listenMode) {
+      return;
+    }
     let cancelled = false;
     loadSpeakingScrollSpeed().then(value => {
       if (!cancelled) {
@@ -314,43 +455,371 @@ export function SpeakingPracticeScreen({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [listenMode]);
 
   const speedRef = useRef(speed);
   speedRef.current = speed;
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
 
-  const scrollRef = useRef<ScrollView | null>(null);
   const offsetRef = useRef(0);
   const contentHeightRef = useRef(0);
   const viewportHeightRef = useRef(0);
 
+  // Listen-mode playback coordination (all in refs so callbacks keep
+  // stable identities): a monotonic token supersedes stale utterances —
+  // a late settlement of a stopped/superseded speak() must never finish
+  // a newer playback — and the last spoken character anchors both the
+  // scroll target and where Resume re-speaks from. A finished utterance
+  // glides the text to its true end before the session is closed, instead
+  // of ending while the text is still moving.
+  const playbackTokenRef = useRef(0);
+  const spokenCharRef = useRef(0);
+  const speakBaseRef = useRef(0);
+  const targetOffsetRef = useRef(0);
+  const finishRef = useRef<() => Promise<void>>(async () => {});
+  const lastProgressAtRef = useRef<number | null>(null);
+
+  /**
+   * Largest scroll offset: the text block plus the text area's vertical
+   * padding (the lead-in and trailing room) minus the viewport. Measuring
+   * only the block would stop the scroll short of the last lines.
+   */
+  const maxScrollOffset = useCallback(
+    () =>
+      Math.max(
+        0,
+        contentHeightRef.current +
+          2 * TEXT_AREA_PADDING_V -
+          viewportHeightRef.current,
+      ),
+    [],
+  );
+
+  // Listen-mode scroll geometry: the character ranges of the displayed
+  // paragraphs within the spoken text, plus their measured on-screen boxes
+  // (filled as layout reports them). Together they map a spoken character
+  // position onto the ACTUAL rendered position of that word, so the
+  // teleprompter tracks the text evenly regardless of paragraph lengths.
+  const paragraphRanges = useMemo(
+    () => paragraphCharRanges(fullText, paragraphs),
+    [fullText, paragraphs],
+  );
+  const paragraphLayoutsRef = useRef<
+    Array<{ y: number; height: number } | null>
+  >([]);
+
+  /**
+   * Target scroll offset for the currently spoken character: layout-based
+   * when every paragraph box has been measured, whole-text proportional
+   * mapping until then (first frames after mount).
+   */
+  const computeTargetOffset = useCallback(
+    (absoluteChar: number): number => {
+      const maxOffset = maxScrollOffset();
+      const layouts = paragraphLayoutsRef.current;
+      const complete =
+        paragraphRanges.length > 0 &&
+        paragraphRanges.every((_, index) => layouts[index] != null);
+      if (complete) {
+        const spans: ParagraphSpan[] = paragraphRanges.map((range, index) => ({
+          ...range,
+          y: layouts[index]?.y ?? 0,
+          height: layouts[index]?.height ?? 0,
+        }));
+        return offsetForSpokenChar(
+          absoluteChar,
+          spans,
+          TEXT_AREA_PADDING_V,
+          viewportHeightRef.current,
+          maxOffset,
+        );
+      }
+      return offsetForCharProgress(absoluteChar, fullText.length, maxOffset);
+    },
+    [fullText.length, paragraphRanges, maxScrollOffset],
+  );
+
+  /**
+   * The teleprompter position is a native-driven Animated value that slides
+   * the text layer on the UI thread. It replaces per-tick ScrollView.scrollTo
+   * calls, which re-laid out the content from JS and produced the ghosted,
+   * jittery text during playback.
+   */
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  // The glide in flight, described in JS: its start time and endpoints let
+  // the paused position be computed synchronously. A native-driven value
+  // reports its position back asynchronously, which is too late for Resume.
+  const activeGlideRef = useRef<{
+    from: number;
+    to: number;
+    startedAt: number;
+    duration: number;
+  } | null>(null);
+  // A text shorter than the viewport is vertically centered (the text area
+  // used to flex-center it); longer texts start at the top, so the centering
+  // shift is zero once the text scrolls.
+  const [centerShift, setCenterShift] = useState(0);
+  const layerTranslate = useMemo(
+    () => Animated.subtract(centerShift, scrollY),
+    [centerShift, scrollY],
+  );
+  const updateCenterShift = useCallback(() => {
+    if (contentHeightRef.current <= 0 || viewportHeightRef.current <= 0) {
+      return;
+    }
+    const blockHeight = contentHeightRef.current + 2 * TEXT_AREA_PADDING_V;
+    setCenterShift(Math.max(0, (viewportHeightRef.current - blockHeight) / 2));
+  }, []);
+
+  const readEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Where the text layer is right now: the linear position of the glide in
+   * flight, or the last settled offset when nothing is moving.
+   */
+  const currentScrollOffset = useCallback((): number => {
+    const glide = activeGlideRef.current;
+    if (glide === null) {
+      return offsetRef.current;
+    }
+    const elapsed = Math.min(glide.duration, Date.now() - glide.startedAt);
+    return glide.from + (glide.to - glide.from) * (elapsed / glide.duration);
+  }, []);
+
+  /**
+   * Freezes the teleprompter at its current position. The exact position is
+   * pinned into the native value and the JS mirror, so the next glide (Resume)
+   * starts from where the text stopped rather than the pre-pause offset.
+   */
+  const stopScroll = useCallback(() => {
+    const position = currentScrollOffset();
+    scrollAnimRef.current?.stop();
+    scrollAnimRef.current = null;
+    activeGlideRef.current = null;
+    if (readEndTimerRef.current !== null) {
+      clearTimeout(readEndTimerRef.current);
+      readEndTimerRef.current = null;
+    }
+    scrollY.setValue(position);
+    offsetRef.current = position;
+  }, [currentScrollOffset, scrollY]);
+
+  /** Glides the text layer to `toOffset` over `durationMs` on the native thread. */
+  const glideScrollTo = useCallback(
+    (toOffset: number, durationMs: number, onArrive?: () => void) => {
+      const from = currentScrollOffset();
+      stopScroll();
+      const duration = Math.max(1, durationMs);
+      activeGlideRef.current = {
+        from,
+        to: toOffset,
+        startedAt: Date.now(),
+        duration,
+      };
+      const animation = Animated.timing(scrollY, {
+        toValue: toOffset,
+        duration,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      });
+      scrollAnimRef.current = animation;
+      animation.start(({ finished }) => {
+        if (finished && scrollAnimRef.current === animation) {
+          scrollAnimRef.current = null;
+          activeGlideRef.current = null;
+          offsetRef.current = toOffset;
+          onArrive?.();
+        }
+      });
+    },
+    [currentScrollOffset, scrollY, stopScroll],
+  );
+
+  const jumpScrollTo = useCallback(
+    (offset: number) => {
+      stopScroll();
+      scrollY.setValue(offset);
+      offsetRef.current = offset;
+    },
+    [scrollY, stopScroll],
+  );
+
+  // New paragraphs (regenerated text) invalidate every measured box; the
+  // next layout pass refills the cache.
+  useEffect(() => {
+    paragraphLayoutsRef.current = [];
+  }, [paragraphs]);
+
+  /** Re-aim the scroll target after a layout measurement lands. */
+  const remeasureParagraph = useCallback(
+    (index: number, y: number, height: number) => {
+      const layouts = paragraphLayoutsRef.current;
+      while (layouts.length <= index) {
+        layouts.push(null);
+      }
+      layouts[index] = { y, height };
+      if (spokenCharRef.current > 0) {
+        // Words were already spoken before layout finished: re-derive the
+        // target from the fresh geometry instead of waiting for the next.
+        targetOffsetRef.current = computeTargetOffset(spokenCharRef.current);
+      }
+    },
+    [computeTargetOffset],
+  );
+
+  const handleContentLayout = useCallback(
+    (height: number) => {
+      contentHeightRef.current = height;
+      updateCenterShift();
+      refreshReadScrollRef.current();
+    },
+    [updateCenterShift],
+  );
+
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const finishingRef = useRef(false);
+
   const words = useMemo(() => countWords(fullText), [fullText]);
 
   const finish = useCallback(async () => {
-    if (phase !== 'practicing') {
+    // phaseRef (not phase) so async callers — the TTS completion callback
+    // created in an earlier render — still see the live phase.
+    if (phaseRef.current !== 'practicing' || finishingRef.current) {
       return;
     }
-    // Save practice history record
-    try {
-      const db = await getLocalDatabase();
-      const profile = await getLearningProfile(db);
-      await createSpeakingPracticeRecord(db, {
-        userId: 0, // Anonymous user in serverless mode
-        title: material.trim() || 'Untitled practice',
-        description: '',
-        rawPrompt: `Topic: ${material.trim()}, Minutes: ${minutes}`,
-        englishLevel: profile.level,
-        text: fullText,
-        minutes,
-        wordCount: words,
-      });
-    } catch {
-      // Silently ignore history save failures
+    finishingRef.current = true;
+    if (listenMode) {
+      // A listen session replays an EXISTING history record; saving again
+      // would duplicate it. Only silence any still-running playback.
+      playbackTokenRef.current += 1;
+      stopScroll();
+      getSpeechEngine().stop();
+      setKeepScreenAwake(false);
+      setPhase('complete');
+      return;
     }
     setPhase('complete');
-  }, [phase, material, minutes, fullText, words]);
+  }, [listenMode, stopScroll]);
+
+  finishRef.current = finish;
+
+  /**
+   * Start (or resume from `fromChar`) TTS playback of the practice text in
+   * listen mode. Per-word progress events map the spoken character
+   * position onto a scroll target, so the teleprompter follows the engine's
+   * real pace. Natural completion or a terminal engine failure ends the
+   * session; stale settlements (superseded by pause/stop/restart) are
+   * ignored via the playback token.
+   */
+  const startPlayback = useCallback(
+    (fromChar: number) => {
+      const token = ++playbackTokenRef.current;
+      speakBaseRef.current = fromChar;
+      lastProgressAtRef.current = null;
+      const text = fullText.slice(fromChar);
+      if (!text.trim()) {
+        finishRef.current();
+        return;
+      }
+      const settleIfCurrent = () => {
+        if (playbackTokenRef.current !== token) {
+          return;
+        }
+        // Speech ended: glide the teleprompter to the real end of the text
+        // and close the session only once it arrives there. A text that fits
+        // without scrolling closes right away.
+        const end = maxScrollOffset();
+        targetOffsetRef.current = end;
+        if (end <= SCROLL_END_EPSILON_PX) {
+          finishRef.current();
+          return;
+        }
+        glideScrollTo(end, LISTEN_SETTLE_MS, () => {
+          if (playbackTokenRef.current === token) {
+            finishRef.current();
+          }
+        });
+      };
+      try {
+        getSpeechEngine()
+          .speak(text, progress => {
+            if (playbackTokenRef.current !== token) {
+              return;
+            }
+            const absolute = speakBaseRef.current + progress.charEnd;
+            if (absolute > spokenCharRef.current) {
+              spokenCharRef.current = absolute;
+            }
+            const now = Date.now();
+            const gap =
+              lastProgressAtRef.current === null
+                ? LISTEN_FIRST_GLIDE_MS
+                : now - lastProgressAtRef.current;
+            lastProgressAtRef.current = now;
+            const target = Math.min(
+              Math.max(computeTargetOffset(absolute), 0),
+              maxScrollOffset(),
+            );
+            targetOffsetRef.current = target;
+            glideScrollTo(
+              target,
+              Math.min(LISTEN_MAX_GLIDE_MS, Math.max(LISTEN_MIN_GLIDE_MS, gap)),
+            );
+          })
+          .then(settleIfCurrent, settleIfCurrent);
+      } catch {
+        settleIfCurrent();
+      }
+      // Long read-alouds must not let the display sleep mid-sentence.
+      setKeepScreenAwake(true);
+    },
+    [fullText, computeTargetOffset, maxScrollOffset, glideScrollTo],
+  );
+
+  /** Supersede any in-flight utterance and silence the engine. */
+  const stopPlayback = useCallback(() => {
+    playbackTokenRef.current += 1;
+    stopScroll();
+    getSpeechEngine().stop();
+    setKeepScreenAwake(false);
+  }, [stopScroll]);
+
+  // Kick off TTS playback when a listen session first reaches the reading
+  // phase. startedRef keeps this to one start per screen instance; Restart
+  // and Practice-again re-invoke startPlayback explicitly.
+  const listenStartedRef = useRef(false);
+  useEffect(() => {
+    if (!listenMode || listenStartedRef.current || phase !== 'practicing') {
+      return;
+    }
+    listenStartedRef.current = true;
+    startPlayback(0);
+  }, [listenMode, phase, startPlayback]);
+
+  // Leaving the screen silences any running listen-mode playback and
+  // releases the screen-awake hold.
+  useEffect(
+    () => () => {
+      playbackTokenRef.current += 1;
+      stopScroll();
+      if (listenMode) {
+        getSpeechEngine().stop();
+        setKeepScreenAwake(false);
+      }
+    },
+    [listenMode, stopScroll],
+  );
+
+  useEffect(() => {
+    if (phase !== 'practicing' || paused) {
+      return;
+    }
+    setKeepScreenAwake(true);
+    return () => setKeepScreenAwake(false);
+  }, [phase, paused]);
 
   useEffect(() => {
     if (phase !== 'practicing' || paused) {
@@ -362,42 +831,106 @@ export function SpeakingPracticeScreen({
     return () => clearInterval(id);
   }, [phase, paused]);
 
-  useEffect(() => {
-    if (phase !== 'practicing' || paused) {
+  /**
+   * Read mode: glide to the end of the text at the Settings speed. The
+   * native animation is cancelled on pause, restart and leaving the screen.
+   * When the glide arrives the session keeps running for READ_END_HOLD_MS so
+   * the learner can finish the last lines, then ends by itself (End still
+   * ends it sooner).
+   */
+  const startReadScroll = useCallback(() => {
+    const maxOffset = maxScrollOffset();
+    const speedPx = speedRef.current;
+    if (maxOffset <= 0 || speedPx <= 0) {
       return;
     }
-    let last = Date.now();
-    const id = setInterval(() => {
-      const now = Date.now();
-      const dt = now - last;
-      last = now;
-      const maxOffset = Math.max(
-        0,
-        contentHeightRef.current - viewportHeightRef.current,
-      );
-      const next = stepOffset(
-        offsetRef.current,
-        speedRef.current,
-        dt,
-        maxOffset,
-      );
-      offsetRef.current = next.offset;
-      if (next.done) {
-        scrollRef.current?.scrollTo({ y: next.offset, animated: false });
-        finish();
-        return;
-      }
-      scrollRef.current?.scrollTo({ y: next.offset, animated: false });
-    }, SCROLL_TICK_MS);
-    return () => clearInterval(id);
-  }, [phase, paused, finish]);
+    const remaining = Math.max(0, maxOffset - currentScrollOffset());
+    glideScrollTo(maxOffset, (remaining / speedPx) * 1000, () => {
+      readEndTimerRef.current = setTimeout(() => {
+        readEndTimerRef.current = null;
+        finishRef.current();
+      }, READ_END_HOLD_MS);
+    });
+  }, [currentScrollOffset, glideScrollTo, maxScrollOffset]);
+
+  useEffect(() => {
+    if (listenMode || phase !== 'practicing' || paused) {
+      return;
+    }
+    startReadScroll();
+    return stopScroll;
+  }, [listenMode, phase, paused, speed, startReadScroll, stopScroll]);
+
+  /** Re-aim the read glide when a layout measurement changes the scroll range. */
+  const refreshReadScrollRef = useRef<() => void>(() => {});
+  refreshReadScrollRef.current = () => {
+    if (
+      !listenMode &&
+      phaseRef.current === 'practicing' &&
+      !pausedRef.current
+    ) {
+      startReadScroll();
+    }
+  };
+
+  const dragStartOffsetRef = useRef(0);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) =>
+          pausedRef.current &&
+          Math.abs(gesture.dy) > 4 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderGrant: () => {
+          stopScroll();
+          dragStartOffsetRef.current = currentScrollOffset();
+        },
+        onPanResponderMove: (_event, gesture) => {
+          const next = Math.min(
+            Math.max(dragStartOffsetRef.current - gesture.dy, 0),
+            maxScrollOffset(),
+          );
+          offsetRef.current = next;
+          targetOffsetRef.current = next;
+          scrollY.setValue(next);
+        },
+      }),
+    [currentScrollOffset, maxScrollOffset, scrollY, stopScroll],
+  );
 
   const rewind = useCallback(() => {
-    offsetRef.current = 0;
+    targetOffsetRef.current = 0;
+    spokenCharRef.current = 0;
+    lastProgressAtRef.current = null;
     setElapsedMs(0);
     setPaused(false);
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, []);
+    jumpScrollTo(0);
+    if (listenMode) {
+      stopPlayback();
+      startPlayback(0);
+    } else {
+      refreshReadScrollRef.current();
+    }
+  }, [listenMode, stopPlayback, startPlayback, jumpScrollTo]);
+
+  /**
+   * Pause/Resume: in listen mode a pause silences the engine at the last
+   * spoken word, and resume re-speaks from that word onward (Android TTS
+   * cannot continue a stopped utterance). Read mode just flips the flag.
+   */
+  const togglePause = useCallback(() => {
+    if (!listenMode) {
+      setPaused(current => !current);
+      return;
+    }
+    if (pausedRef.current) {
+      setPaused(false);
+      startPlayback(spokenCharRef.current);
+    } else {
+      setPaused(true);
+      stopPlayback();
+    }
+  }, [listenMode, startPlayback, stopPlayback]);
 
   const handleGenerate = useCallback(async () => {
     if (generating) {
@@ -406,7 +939,7 @@ export function SpeakingPracticeScreen({
     setGenerating(true);
     setError(null);
     try {
-      const config = await loadServerlessOpenRouterConfig();
+      const config = await loadServerlessConfig();
       if (!config) {
         throw new Error(
           'Add your provider API key in Settings to generate practice text.',
@@ -420,25 +953,70 @@ export function SpeakingPracticeScreen({
           request => client.complete(request),
           { material: material.trim(), minutes },
         );
+      const profile = await getLearningProfile(db);
+      try {
+        await createSpeakingPracticeRecord(db, {
+          userId: 0, // Anonymous user in serverless mode
+          title: material.trim() || 'Untitled practice',
+          description: '',
+          rawPrompt: `Topic: ${material.trim()}, Minutes: ${minutes}`,
+          englishLevel: profile.level,
+          text,
+          minutes,
+          wordCount: countWords(text),
+        });
+      } catch {
+        // Silently ignore history save failures
+      }
       setFullText(text);
       setParagraphs(displayParagraphs);
       setElapsedMs(0);
       setPaused(false);
-      offsetRef.current = 0;
+      jumpScrollTo(0);
+      finishingRef.current = false;
       setPhase('practicing');
     } catch (err) {
       setError(toErrorMessage(err));
     } finally {
       setGenerating(false);
     }
-  }, [generating, material, minutes]);
+  }, [generating, material, minutes, jumpScrollTo]);
 
-  const handlePracticeAgain = useCallback(() => {
-    offsetRef.current = 0;
+  const startSameText = useCallback(
+    (asListen: boolean) => {
+      targetOffsetRef.current = 0;
+      spokenCharRef.current = 0;
+      lastProgressAtRef.current = null;
+      setElapsedMs(0);
+      setPaused(false);
+      jumpScrollTo(0);
+      finishingRef.current = false;
+      setListenMode(asListen);
+      setPhase('practicing');
+      if (asListen) {
+        startPlayback(0);
+      }
+    },
+    [startPlayback, jumpScrollTo],
+  );
+
+  const handlePracticeSpeakingAgain = useCallback(
+    () => startSameText(false),
+    [startSameText],
+  );
+
+  const handleListeningAgain = useCallback(
+    () => startSameText(true),
+    [startSameText],
+  );
+
+  const handlePracticeNewText = useCallback(() => {
+    setListenMode(false);
+    setPhase('form');
+    setMaterial('');
+    setParagraphs([]);
+    setFullText('');
     setElapsedMs(0);
-    setPaused(false);
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
-    setPhase('practicing');
   }, []);
 
   if (phase === 'complete') {
@@ -453,34 +1031,41 @@ export function SpeakingPracticeScreen({
           >
             <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
-          <Text style={styles.title}>Speaking practice</Text>
+          <Text style={styles.title}>
+            {listenMode ? 'Listening practice' : 'Speaking practice'}
+          </Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.summary} testID="speaking-summary">
-          <Text style={styles.summaryTitle}>Practice complete</Text>
+          <Text style={styles.summaryTitle}>
+            {listenMode ? 'Listening complete' : 'Practice complete'}
+          </Text>
           <Text style={styles.summaryDetail} testID="speaking-summary-detail">
-            {formatElapsed(elapsedMs)} of reading · {words} words
+            {formatElapsed(elapsedMs)} of {listenMode ? 'listening' : 'reading'}{' '}
+            · {words} words
           </Text>
           <Pressable
             accessibilityRole="button"
-            onPress={handlePracticeAgain}
+            onPress={handlePracticeSpeakingAgain}
             style={styles.primaryButton}
             testID="speaking-practice-again"
           >
             <Text style={styles.primaryButtonText}>
-              Practice again — same text
+              Practice speaking again
             </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
+            onPress={handleListeningAgain}
+            style={styles.secondaryButton}
+            testID="speaking-listen-again"
+          >
+            <Text style={styles.secondaryButtonText}>Listening again</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
             accessibilityLabel="Generate a new practice text"
-            onPress={() => {
-              setPhase('form');
-              setMaterial('');
-              setParagraphs([]);
-              setFullText('');
-              setElapsedMs(0);
-            }}
+            onPress={handlePracticeNewText}
             style={styles.secondaryButton}
             testID="speaking-practice-new"
           >
@@ -503,7 +1088,9 @@ export function SpeakingPracticeScreen({
           >
             <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
-          <Text style={styles.title}>Speaking practice</Text>
+          <Text style={styles.title}>
+            {listenMode ? 'Listening practice' : 'Speaking practice'}
+          </Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -517,7 +1104,7 @@ export function SpeakingPracticeScreen({
               accessibilityLabel={
                 paused ? 'Resume scrolling' : 'Pause scrolling'
               }
-              onPress={() => setPaused(current => !current)}
+              onPress={togglePause}
               style={styles.controlButton}
               testID="speaking-pause"
             >
@@ -546,32 +1133,41 @@ export function SpeakingPracticeScreen({
           </View>
         </View>
 
-        <View style={styles.karaoke} testID="speaking-karaoke">
-          <ScrollView
-            ref={scrollRef}
-            contentContainerStyle={styles.textArea}
-            scrollEventThrottle={16}
-            scrollEnabled={paused}
-            pointerEvents={phase === 'practicing' && !paused ? 'none' : 'auto'}
-          >
-            <View
-              testID="speaking-text-block"
-              onLayout={event => {
-                contentHeightRef.current = event.nativeEvent.layout.height;
-              }}
+        <View
+          style={styles.karaoke}
+          testID="speaking-karaoke"
+          {...panResponder.panHandlers}
+          onLayout={event => {
+            viewportHeightRef.current = event.nativeEvent.layout.height;
+            updateCenterShift();
+            refreshReadScrollRef.current();
+          }}
+        >
+          {paused ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Copy the whole text"
+              hitSlop={8}
+              onPress={() => copyText(fullText)}
+              style={styles.copyButton}
+              testID="speaking-copy"
             >
-              {Array.from({ length: LEAD_IN_BLANK_LINES }, (_, index) => (
-                <Text key={`lead-in-${index}`} style={styles.paragraph}>
-                  {' '}
-                </Text>
-              ))}
-              {paragraphs.map((paragraph, index) => (
-                <Text key={index} style={styles.paragraph}>
-                  {paragraph}
-                </Text>
-              ))}
-            </View>
-          </ScrollView>
+              <ClipboardIcon color={colors.accent} />
+            </Pressable>
+          ) : null}
+          <Animated.View
+            style={[
+              styles.textArea,
+              { transform: [{ translateY: layerTranslate }] },
+            ]}
+          >
+            <KaraokeText
+              paragraphs={paragraphs}
+              styles={styles}
+              onContentLayout={handleContentLayout}
+              onParagraphLayout={remeasureParagraph}
+            />
+          </Animated.View>
         </View>
       </View>
     );
@@ -604,7 +1200,7 @@ export function SpeakingPracticeScreen({
       <TextInput
         style={styles.input}
         placeholder={
-          'Tap here to start typing\n\n\ne.g. My weekend plans\nor paste your own text'
+          'Tap here to start typing\ne.g. My weekend plans\nor paste your own text'
         }
         placeholderTextColor={colors.textMuted}
         multiline

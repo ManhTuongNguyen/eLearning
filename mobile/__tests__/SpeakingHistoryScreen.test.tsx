@@ -3,8 +3,10 @@
  * and each record with a reading text is the entry point to practice it
  * again — the WHOLE row is pressable and pushes SpeakingPractice with the
  * stored text/material/minutes so the practice screen can reopen directly
- * in the reading phase. Records without text are not pressable. The nested
- * Delete button keeps its own tap target on every row.
+ * in the reading phase. Each such record additionally offers a "Listen"
+ * button at the row bottom that pushes the same text in TTS listen mode
+ * (mode: 'listen'). Records without text expose neither affordance. The
+ * nested Delete button keeps its own tap target on every row.
  */
 import React from 'react';
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
@@ -97,8 +99,23 @@ describe('SpeakingHistoryScreen', () => {
     await renderHistory([makeRecord({text: ''})]);
 
     expect(screen.queryByTestId('history-practice-again')).toBeNull();
+    // The TTS listen button is text-bound as well.
+    expect(screen.queryByTestId('history-listen')).toBeNull();
     // Deletion is still available on every row.
     expect(screen.getByTestId('history-delete')).toBeOnTheScreen();
+  });
+
+  it('opens the practice screen in TTS listen mode when the Listen button is pressed', async () => {
+    await renderHistory([makeRecord({minutes: 2, title: 'Airport check-in'})]);
+
+    fireEvent.press(screen.getByTestId('history-listen'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('SpeakingPractice', {
+      text: 'I wake up early.\n\nThen I drink coffee.',
+      material: 'Airport check-in',
+      minutes: 2,
+      mode: 'listen',
+    });
   });
 
   it('keeps delete working alongside the practice action', async () => {

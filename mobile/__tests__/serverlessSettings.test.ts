@@ -27,14 +27,14 @@ import {
 } from '../src/serverless/secureApiKey';
 import {
   clearAllServerlessData,
-  clearServerlessOpenRouterConfig,
+  clearServerlessConfig,
   fallbackModelsSettingKey,
-  isServerlessOpenRouterConfigured,
-  loadServerlessOpenRouterConfig,
+  isServerlessConfigured,
+  loadServerlessConfig,
   loadServerlessProvider,
   loadServerlessProviderState,
   primaryModelSettingKey,
-  saveServerlessOpenRouterConfig,
+  saveServerlessConfig,
 } from '../src/serverless/settings';
 import {openSqlJsDriver} from '../testing/sqlJsDriver';
 
@@ -79,17 +79,17 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     await mockDb.execute('DELETE FROM sessions');
   });
 
-  describe('loadServerlessOpenRouterConfig', () => {
+  describe('loadServerlessConfig', () => {
     test('resolves null while no API key is stored', async () => {
       await setSetting(mockDb, 'serverless_primary_model', 'vendor/model-a');
 
-      await expect(loadServerlessOpenRouterConfig()).resolves.toBeNull();
+      await expect(loadServerlessConfig()).resolves.toBeNull();
     });
 
     test('resolves null while the primary model is missing', async () => {
       await saveServerlessApiKey(SECRET);
 
-      await expect(loadServerlessOpenRouterConfig()).resolves.toBeNull();
+      await expect(loadServerlessConfig()).resolves.toBeNull();
     });
 
     test('assembles provider, key, primary model and trimmed fallback models', async () => {
@@ -97,7 +97,7 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
       await setSetting(mockDb, 'serverless_primary_model', 'vendor/model-a');
       await setSetting(mockDb, 'serverless_fallback_models', ' vendor/model-b ,, vendor/model-c , ');
 
-      await expect(loadServerlessOpenRouterConfig()).resolves.toEqual({
+      await expect(loadServerlessConfig()).resolves.toEqual({
         provider: 'openrouter',
         apiKey: SECRET,
         primaryModel: 'vendor/model-a',
@@ -109,20 +109,20 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
       await saveServerlessApiKey(SECRET);
       await setSetting(mockDb, 'serverless_primary_model', 'vendor/model-a');
 
-      const config = await loadServerlessOpenRouterConfig();
+      const config = await loadServerlessConfig();
 
       expect(config?.fallbackModels).toEqual([]);
     });
 
     test('loads the active provider configuration from its namespace', async () => {
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         provider: 'gemini',
         apiKey: GEMINI_SECRET,
         primaryModel: 'gemini-2.0-flash',
         fallbackModels: ['gemini-1.5-pro'],
       });
 
-      await expect(loadServerlessOpenRouterConfig()).resolves.toEqual({
+      await expect(loadServerlessConfig()).resolves.toEqual({
         provider: 'gemini',
         apiKey: GEMINI_SECRET,
         primaryModel: 'gemini-2.0-flash',
@@ -136,13 +136,13 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
       await setSetting(mockDb, 'serverless_provider', 'gemini');
       await setSetting(mockDb, 'serverless_primary_model_gemini', 'gemini-2.0-flash');
 
-      await expect(loadServerlessOpenRouterConfig()).resolves.toBeNull();
+      await expect(loadServerlessConfig()).resolves.toBeNull();
     });
   });
 
-  describe('saveServerlessOpenRouterConfig', () => {
+  describe('saveServerlessConfig', () => {
     test('stores the key in the keychain and the models in the settings table', async () => {
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         apiKey: SECRET,
         primaryModel: 'vendor/model-a',
         fallbackModels: ['vendor/model-b', 'vendor/model-c'],
@@ -157,7 +157,7 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     });
 
     test('never writes the API key into the local database', async () => {
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         apiKey: SECRET,
         primaryModel: 'vendor/model-a',
         fallbackModels: ['vendor/model-b'],
@@ -172,17 +172,17 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     });
 
     test('round-trips through load and overwrites a previous configuration', async () => {
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         apiKey: SECRET,
         primaryModel: 'vendor/model-a',
       });
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         apiKey: 'sk-or-v1-replaced-key',
         primaryModel: 'vendor/model-z',
         fallbackModels: ['vendor/model-y'],
       });
 
-      await expect(loadServerlessOpenRouterConfig()).resolves.toEqual({
+      await expect(loadServerlessConfig()).resolves.toEqual({
         provider: 'openrouter',
         apiKey: 'sk-or-v1-replaced-key',
         primaryModel: 'vendor/model-z',
@@ -191,12 +191,12 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     });
 
     test('namespaces non-default providers away from the historic OpenRouter keys', async () => {
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         provider: 'openrouter',
         apiKey: SECRET,
         primaryModel: 'vendor/model-a',
       });
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         provider: 'gemini',
         apiKey: GEMINI_SECRET,
         primaryModel: 'gemini-2.0-flash',
@@ -215,31 +215,31 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     });
 
     test('switching providers never mixes primary models across namespaces', async () => {
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         provider: 'openrouter',
         apiKey: SECRET,
         primaryModel: 'vendor/model-a',
         fallbackModels: ['vendor/model-b'],
       });
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         provider: 'gemini',
         apiKey: GEMINI_SECRET,
         primaryModel: 'gemini-2.0-flash',
       });
 
-      await expect(loadServerlessOpenRouterConfig()).resolves.toMatchObject({
+      await expect(loadServerlessConfig()).resolves.toMatchObject({
         provider: 'gemini',
         primaryModel: 'gemini-2.0-flash',
       });
 
       // Saving OpenRouter again restores its own stored models.
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         provider: 'openrouter',
         apiKey: SECRET,
         primaryModel: 'vendor/model-a',
         fallbackModels: ['vendor/model-b'],
       });
-      await expect(loadServerlessOpenRouterConfig()).resolves.toMatchObject({
+      await expect(loadServerlessConfig()).resolves.toMatchObject({
         provider: 'openrouter',
         primaryModel: 'vendor/model-a',
         fallbackModels: ['vendor/model-b'],
@@ -248,7 +248,7 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
 
     test('rejects unknown provider ids', async () => {
       await expect(
-        saveServerlessOpenRouterConfig({
+        saveServerlessConfig({
           provider: 'not-a-provider' as never,
           apiKey: SECRET,
           primaryModel: 'vendor/model-a',
@@ -300,16 +300,16 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     });
   });
 
-  describe('clearServerlessOpenRouterConfig', () => {
+  describe('clearServerlessConfig', () => {
     test('clears the key and both model settings but keeps unrelated settings', async () => {
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         apiKey: SECRET,
         primaryModel: 'vendor/model-a',
         fallbackModels: ['vendor/model-b'],
       });
       await setSetting(mockDb, 'unrelated_setting', 'stays');
 
-      await clearServerlessOpenRouterConfig();
+      await clearServerlessConfig();
 
       await expect(loadServerlessApiKey()).resolves.toBeNull();
       expect(await getSetting(mockDb, 'serverless_primary_model')).toBeNull();
@@ -319,18 +319,18 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     });
 
     test('clears only the active provider namespace', async () => {
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         provider: 'openrouter',
         apiKey: SECRET,
         primaryModel: 'vendor/model-a',
       });
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         provider: 'gemini',
         apiKey: GEMINI_SECRET,
         primaryModel: 'gemini-2.0-flash',
       });
 
-      await clearServerlessOpenRouterConfig();
+      await clearServerlessConfig();
 
       // The active provider (Gemini) is cleared; OpenRouter stays intact.
       await expect(loadServerlessApiKey('gemini')).resolves.toBeNull();
@@ -340,33 +340,33 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     });
   });
 
-  describe('isServerlessOpenRouterConfigured', () => {
+  describe('isServerlessConfigured', () => {
     test('tracks the configuration lifecycle', async () => {
-      await expect(isServerlessOpenRouterConfigured()).resolves.toBe(false);
+      await expect(isServerlessConfigured()).resolves.toBe(false);
 
-      await saveServerlessOpenRouterConfig({apiKey: SECRET, primaryModel: 'vendor/model-a'});
-      await expect(isServerlessOpenRouterConfigured()).resolves.toBe(true);
+      await saveServerlessConfig({apiKey: SECRET, primaryModel: 'vendor/model-a'});
+      await expect(isServerlessConfigured()).resolves.toBe(true);
 
-      await clearServerlessOpenRouterConfig();
-      await expect(isServerlessOpenRouterConfigured()).resolves.toBe(false);
+      await clearServerlessConfig();
+      await expect(isServerlessConfigured()).resolves.toBe(false);
     });
 
     test('is false when only a key without a primary model exists', async () => {
       await saveServerlessApiKey(SECRET);
 
-      await expect(isServerlessOpenRouterConfigured()).resolves.toBe(false);
+      await expect(isServerlessConfigured()).resolves.toBe(false);
     });
   });
 
   describe('clearAllServerlessData', () => {
     test('wipes conversations, settings and keys but keeps auth tokens', async () => {
       await asyncStorage.setItem('auth_token', AUTH_TOKEN);
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         apiKey: SECRET,
         primaryModel: 'vendor/model-a',
         fallbackModels: ['vendor/model-b'],
       });
-      await saveServerlessOpenRouterConfig({
+      await saveServerlessConfig({
         provider: 'gemini',
         apiKey: GEMINI_SECRET,
         primaryModel: 'gemini-2.0-flash',

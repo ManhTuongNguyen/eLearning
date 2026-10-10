@@ -52,7 +52,7 @@ jest.mock('../src/serverless/providerRegistry', () => ({
 
 const mockedLoadProvider = jest.mocked(serverlessSettings.loadServerlessProvider);
 const mockedLoadProviderState = jest.mocked(serverlessSettings.loadServerlessProviderState);
-const mockedSaveConfig = jest.mocked(serverlessSettings.saveServerlessOpenRouterConfig);
+const mockedSaveConfig = jest.mocked(serverlessSettings.saveServerlessConfig);
 const mockedGetCached = jest.mocked(modelCatalog.getCachedModelCatalog);
 const mockedRefresh = jest.mocked(modelCatalog.refreshModelCatalog);
 const mockedListProviderModels = jest.mocked(providerRegistry.listProviderModels);

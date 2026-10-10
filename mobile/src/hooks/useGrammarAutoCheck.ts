@@ -39,7 +39,7 @@ import {saveMessageImprovement} from '../db/messageStore';
 import type {ApplicationMode} from '../mode/types';
 import {generateImprovement} from '../serverless/improvement';
 import {createProviderClient} from '../serverless/providerRegistry';
-import {loadServerlessOpenRouterConfig} from '../serverless/settings';
+import {loadServerlessConfig} from '../serverless/settings';
 
 /** One finished check, tied to its source message. */
 export type GrammarCheckResult = MessageImprovement & {messageId: number};
@@ -176,7 +176,7 @@ export function useGrammarAutoCheck(
       try {
         let result: MessageImprovement;
         if (mode === 'serverless') {
-          const config = await loadServerlessOpenRouterConfig();
+          const config = await loadServerlessConfig();
           if (!config) {
             return;
           }

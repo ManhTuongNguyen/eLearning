@@ -54,7 +54,7 @@ export async function loadServerlessProvider(): Promise<ProviderId> {
 }
 
 /** Load the complete serverless provider configuration (null when unset). */
-export async function loadServerlessOpenRouterConfig(): Promise<LLMClientConfig | null> {
+export async function loadServerlessConfig(): Promise<LLMClientConfig | null> {
   const provider = await loadServerlessProvider();
   const state = await loadServerlessProviderState(provider);
   if (!state.apiKey || !state.primaryModel) {
@@ -79,7 +79,7 @@ export interface ServerlessProviderState {
 /**
  * Load one provider's stored configuration regardless of completeness:
  * the settings editor needs the partial state (key saved but no model
- * chosen yet, etc.) which `loadServerlessOpenRouterConfig` collapses to
+ * chosen yet, etc.) which `loadServerlessConfig` collapses to
  * null. Reads the key from the provider's keychain namespace and the
  * models from the provider's settings namespace.
  */
@@ -117,7 +117,7 @@ export async function loadServerlessProviderState(
 }
 
 /** Save the serverless provider configuration. */
-export async function saveServerlessOpenRouterConfig(config: LLMClientConfig): Promise<void> {
+export async function saveServerlessConfig(config: LLMClientConfig): Promise<void> {
   const db = await getLocalDatabase();
   // Writes are editor-driven and must only ever contain supported ids:
   // reject invalid values instead of silently rewriting them to the
@@ -150,7 +150,7 @@ export async function saveServerlessOpenRouterConfig(config: LLMClientConfig): P
 }
 
 /** Clear the serverless configuration for the persisted provider. */
-export async function clearServerlessOpenRouterConfig(): Promise<void> {
+export async function clearServerlessConfig(): Promise<void> {
   const db = await getLocalDatabase();
   const provider = await loadServerlessProvider();
   await clearServerlessApiKey(provider);
@@ -167,7 +167,7 @@ export async function clearAllServerlessData(): Promise<void> {
 }
 
 /** Check if the serverless provider is configured. */
-export async function isServerlessOpenRouterConfigured(): Promise<boolean> {
-  const config = await loadServerlessOpenRouterConfig();
+export async function isServerlessConfigured(): Promise<boolean> {
+  const config = await loadServerlessConfig();
   return config !== null;
 }

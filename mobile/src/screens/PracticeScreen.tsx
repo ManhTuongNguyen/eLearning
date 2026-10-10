@@ -47,13 +47,15 @@ const MODE_OPTIONS: Array<{
 }> = [
   {value: 'numbers', label: 'Numbers', testID: 'practice-mode-numbers'},
   {value: 'letters', label: 'Letters', testID: 'practice-mode-letters'},
+  {value: 'phones', label: 'Phones', testID: 'practice-mode-phones'},
   {value: 'mixed', label: 'Mixed', testID: 'practice-mode-mixed'},
 ];
 
 const QUESTION_PROMPT: Record<PracticeMode, string> = {
   numbers: 'Tap play, then choose the digits you heard.',
   letters: 'Tap play, then choose the letter you heard.',
-  mixed: 'Tap play, then choose the number or letter you heard.',
+  mixed: 'Tap play, then choose the number, letter or phone number you heard.',
+  phones: 'Tap play, then choose the phone number you heard.',
 };
 
 export function createStyles(c: ThemeColors) {

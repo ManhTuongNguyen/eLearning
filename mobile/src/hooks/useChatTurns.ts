@@ -31,7 +31,7 @@ import {
 } from '../serverless/conversationContext';
 import {retryServerlessTurn, streamServerlessTurn} from '../serverless/chatStreaming';
 import {createProviderClient} from '../serverless/providerRegistry';
-import {loadServerlessOpenRouterConfig} from '../serverless/settings';
+import {loadServerlessConfig} from '../serverless/settings';
 import type {LLMClient, ServerlessStreamEvent} from '../serverless/types';
 import {bySequence} from '../services/conversationSource';
 import {DeltaBuffer, STREAM_FLUSH_INTERVAL_MS} from '../screens/streamingUx';
@@ -291,7 +291,7 @@ export function useChatTurns(options: UseChatTurnsOptions): UseChatTurnsResult {
       ) => Promise<ChatStreamHandle>,
     ) => {
       (async () => {
-        const config = await loadServerlessOpenRouterConfig();
+        const config = await loadServerlessConfig();
         if (!config) {
           failTurn(NO_SERVERLESS_CONFIG_MESSAGE);
           return;

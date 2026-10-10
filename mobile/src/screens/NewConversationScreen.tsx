@@ -40,7 +40,7 @@ import {getLocalDatabase} from '../db/database';
 import {useApplicationMode} from '../mode/ModeContext';
 import {createProviderClient} from '../serverless/providerRegistry';
 import {createServerlessSession} from '../serverless/topicGeneration';
-import {loadServerlessOpenRouterConfig} from '../serverless/settings';
+import {loadServerlessConfig} from '../serverless/settings';
 import type {NewConversationScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
@@ -167,7 +167,7 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
           // OpenAI) with their own key; nothing touches the
           // backend (Rule 9). TASK-093: the created session also carries
           // its generated example conversation, mirroring the server flow.
-          const config = await loadServerlessOpenRouterConfig();
+          const config = await loadServerlessConfig();
           if (!config) {
             throw new Error(
               'Add your provider API key in Settings to chat without the server.',

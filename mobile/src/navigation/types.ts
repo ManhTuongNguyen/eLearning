@@ -46,13 +46,17 @@ export type MainStackParamList = {
   /** Endless listening-practice trainer for spoken numbers and letters. */
   Practice: undefined;
   /**
-   * Karaoke-style read-aloud speaking practice pushed from Home.
+   * Karaoke-style speaking practice pushed from Home.
    * `text` (with optional `material`/`minutes`) resumes a saved session
    * from SpeakingHistory: the screen opens directly in the reading phase
    * with the stored text instead of regenerating.
+   * `mode: 'listen'` turns that resume into a text-to-speech session: the
+   * engine speaks the stored text aloud and the teleprompter scroll follows
+   * the real playback pace (no Settings speed), instead of the learner
+   * reading aloud themselves.
    */
   SpeakingPractice:
-    | {text: string; material?: string; minutes?: number}
+    | {text: string; material?: string; minutes?: number; mode?: 'read' | 'listen'}
     | undefined;
   /** History of completed speaking practice sessions. */
   SpeakingHistory: undefined;

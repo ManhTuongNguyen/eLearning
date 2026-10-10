@@ -28,7 +28,7 @@ export const SPEAKING_PRACTICE_SYSTEM_PROMPT =
   'paragraphs with one blank line.';
 
 /** Words per minute of comfortable read-aloud speech (prompt sizing basis). */
-export const WORDS_PER_MINUTE = 130;
+export const WORDS_PER_MINUTE = 140;
 
 /** Inputs for one speaking-text generation. */
 export interface SpeakingPracticeInput {

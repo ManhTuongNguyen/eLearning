@@ -8,6 +8,10 @@
  * 9719, B/D/P/T…) and the screen speaks the `spoken` word form through the
  * app's normal TTS engine.
  *
+ * Phone numbers follow the IELTS listening format: 11-digit UK numbers
+ * (mobile "07942 153 860" or landline "020 7946 0123") spoken digit by
+ * digit with "oh" for zero and short pauses between the groups.
+ *
  * Two hard guarantees drive the design:
  *  - Answers never repeat within a short window: callers hand back the
  *    recent answers (PRACTICE_RECENT_ANSWER_LIMIT) and the generator
@@ -24,12 +28,12 @@
  */
 
 /** Practice focus picked on the screen. */
-export type PracticeMode = 'numbers' | 'letters' | 'mixed';
+export type PracticeMode = 'numbers' | 'letters' | 'mixed' | 'phones';
 
 /** One generated question: what to speak and what to choose from. */
 export interface PracticeQuestion {
   /** Kind of item, so the screen can label the reveal after an answer. */
-  kind: 'number' | 'letter';
+  kind: 'number' | 'letter' | 'phone';
   /** Digits/letters shown as answer options (the ground truth). */
   answer: string;
   /** Word form handed to the TTS engine, e.g. "nineteen ninety-seven". */
@@ -326,6 +330,151 @@ function buildNumberQuestion(
 }
 
 /* ------------------------------------------------------------------ *
+ * Phone numbers (IELTS listening format)
+ * ------------------------------------------------------------------ */
+
+const DIGIT_WORDS = [
+  'oh',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+] as const;
+
+/**
+ * Digit pairs that are easy to mishear over the phone (five/nine,
+ * three/six, two/oh). Used as the engineered substitution distractors.
+ */
+const CONFUSABLE_PHONE_DIGITS: Readonly<Record<string, string>> = {
+  '5': '9',
+  '9': '5',
+  '3': '6',
+  '6': '3',
+  '2': '0',
+  '0': '2',
+};
+
+/** IELTS-style group layouts: mobile 5-3-3, landline 3-4-4 (11 digits). */
+const PHONE_GROUPINGS = [
+  {prefix: '07', groups: [5, 3, 3]},
+  {prefix: '02', groups: [3, 4, 4]},
+] as const;
+
+/** Joins digits into groups separated by single spaces. */
+function groupDigits(digits: string, groups: readonly number[]): string {
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const size of groups) {
+    parts.push(digits.slice(cursor, cursor + size));
+    cursor += size;
+  }
+  return parts.join(' ');
+}
+
+/**
+ * Reads a grouped phone number the way it is spoken in listening tests:
+ * each digit on its own ("oh seven nine four two"), a comma pause between
+ * groups so the learner can keep up.
+ */
+export function phoneToWords(phone: string): string {
+  return phone
+    .split(' ')
+    .map(group => [...group].map(digit => DIGIT_WORDS[Number(digit)]).join(' '))
+    .join(', ');
+}
+
+/**
+ * Engineered phone distractors, strongest first, all keeping the same
+ * length and grouping: teen/tens swaps ("15" → "50", fifteen ↔ fifty),
+ * confusable digit substitutions (5 ↔ 9, 3 ↔ 6, 2 ↔ 0), and adjacent
+ * digit transpositions. The area prefix (first two digits) is never
+ * changed. The deterministic ±1 reserve guarantees three distractors.
+ */
+export function phoneDistractors(
+  phone: string,
+  random: () => number = Math.random,
+): string[] {
+  const digits = phone.replace(/ /g, '');
+  const grouping = PHONE_GROUPINGS.find(entry => digits.startsWith(entry.prefix))
+    ?.groups ?? [digits.length];
+  const variant = (index: number, replacement: string): string => {
+    const next = digits.split('');
+    next.splice(index, replacement.length, ...replacement.split(''));
+    return next.join('');
+  };
+  const teenTens: string[] = [];
+  const substitutions: string[] = [];
+  const transpositions: string[] = [];
+  for (let i = 2; i < digits.length - 1; i += 1) {
+    const first = digits[i];
+    const second = digits[i + 1];
+    if (first === '1' && second >= '3' && second <= '9') {
+      teenTens.push(variant(i, `${second}0`));
+    }
+    if (first >= '3' && first <= '9' && second === '0') {
+      teenTens.push(variant(i, `1${first}`));
+    }
+  }
+  for (let i = 2; i < digits.length; i += 1) {
+    const swapped = CONFUSABLE_PHONE_DIGITS[digits[i]];
+    if (swapped !== undefined) {
+      substitutions.push(variant(i, swapped));
+    }
+  }
+  for (let i = 2; i < digits.length - 1; i += 1) {
+    if (digits[i] !== digits[i + 1]) {
+      transpositions.push(variant(i, `${digits[i + 1]}${digits[i]}`));
+    }
+  }
+  const candidates = [
+    ...shuffled(teenTens, random),
+    ...shuffled(substitutions, random),
+    ...shuffled(transpositions, random),
+  ];
+  const picked: string[] = [];
+  const push = (value: string): void => {
+    const grouped = groupDigits(value, grouping);
+    if (
+      picked.length < 3 &&
+      value !== digits &&
+      !picked.includes(grouped)
+    ) {
+      picked.push(grouped);
+    }
+  };
+  for (const candidate of candidates) {
+    push(candidate);
+  }
+  for (let i = 2; picked.length < 3 && i < digits.length; i += 1) {
+    push(variant(i, String((Number(digits[i]) + 1) % 10)));
+  }
+  return picked;
+}
+
+/** Builds one UK-style phone number question in the IELTS format. */
+function buildPhoneQuestion(random: () => number): PracticeQuestion {
+  const layout = pick(PHONE_GROUPINGS, random);
+  const restLength = 11 - layout.prefix.length;
+  let rest = '';
+  for (let i = 0; i < restLength; i += 1) {
+    rest += String(Math.floor(random() * 10));
+  }
+  const digits = `${layout.prefix}${rest}`;
+  const answer = groupDigits(digits, layout.groups);
+  return {
+    kind: 'phone',
+    answer,
+    spoken: phoneToWords(answer),
+    options: shuffled([answer, ...phoneDistractors(answer, random)], random),
+  };
+}
+
+/* ------------------------------------------------------------------ *
  * Letters
  * ------------------------------------------------------------------ */
 
@@ -364,6 +513,11 @@ function buildLetterQuestion(random: () => number): PracticeQuestion {
  * Public API
  * ------------------------------------------------------------------ */
 
+/** Mixed mode draws evenly from numbers, letters and phone numbers. */
+function pickMixedKind(random: () => number): PracticeQuestion['kind'] {
+  return pick(['number', 'letter', 'phone'] as const, random);
+}
+
 /**
  * Builds one fresh question for the given practice mode. `recentAnswers`
  * (the caller's sliding window of recent answers) are rejected so the same
@@ -379,18 +533,22 @@ export function createPracticeQuestion(
   const recent = new Set(
     recentAnswers.slice(-PRACTICE_RECENT_ANSWER_LIMIT),
   );
-  const kind =
+  const kind: PracticeQuestion['kind'] =
     mode === 'numbers'
       ? 'number'
       : mode === 'letters'
         ? 'letter'
-        : random() < 0.5
-          ? 'number'
-          : 'letter';
-  const build = (): PracticeQuestion =>
-    kind === 'number'
+        : mode === 'phones'
+          ? 'phone'
+          : pickMixedKind(random);
+  const build = (): PracticeQuestion => {
+    if (kind === 'phone') {
+      return buildPhoneQuestion(random);
+    }
+    return kind === 'number'
       ? buildNumberQuestion(random, 0.5)
       : buildLetterQuestion(random);
+  };
   const first = build();
   if (!recent.has(first.answer)) {
     return first;

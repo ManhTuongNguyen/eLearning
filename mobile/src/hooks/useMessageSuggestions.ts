@@ -20,7 +20,7 @@ import {getLearningProfile} from '../db/profileStore';
 import type {LocalMessage} from '../db/types';
 import type {ApplicationMode} from '../mode/types';
 import {createProviderClient} from '../serverless/providerRegistry';
-import {loadServerlessOpenRouterConfig} from '../serverless/settings';
+import {loadServerlessConfig} from '../serverless/settings';
 import {generateSuggestions} from '../serverless/suggestions';
 
 /** The suggestion set currently displayed, tied to its source message. */
@@ -89,7 +89,7 @@ export function useMessageSuggestions(options: UseMessageSuggestionsOptions) {
             }
 
             // Load the on-device provider configuration and client.
-            const serverlessConfig = await loadServerlessOpenRouterConfig();
+            const serverlessConfig = await loadServerlessConfig();
             if (!serverlessConfig) {
               return;
             }

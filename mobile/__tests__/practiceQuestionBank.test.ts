@@ -12,6 +12,8 @@ import {
   mulberry32,
   numberDistractors,
   numberToWords,
+  phoneDistractors,
+  phoneToWords,
   PRACTICE_RECENT_ANSWER_LIMIT,
   yearDistractors,
   yearToWords,
@@ -73,7 +75,7 @@ describe('yearToWords', () => {
 });
 
 describe('createPracticeQuestion invariants', () => {
-  const modes: PracticeMode[] = ['numbers', 'letters', 'mixed'];
+  const modes: PracticeMode[] = ['numbers', 'letters', 'mixed', 'phones'];
 
   it('always shows four unique options containing the answer exactly once', () => {
     const random = mulberry32(42);
@@ -189,14 +191,13 @@ describe('createPracticeQuestion invariants', () => {
     }
   });
 
-  it('generates both kinds in mixed mode', () => {
+  it('draws numbers, letters and phone numbers in mixed mode', () => {
     const random = mulberry32(77);
     const kinds = new Set<string>();
-    for (let i = 0; i < 200; i += 1) {
+    for (let i = 0; i < 300; i += 1) {
       kinds.add(createPracticeQuestion('mixed', random).kind);
     }
-    expect(kinds.has('number')).toBe(true);
-    expect(kinds.has('letter')).toBe(true);
+    expect(kinds).toEqual(new Set(['number', 'letter', 'phone']));
   });
 
   it('is deterministic for a given seed', () => {
@@ -207,5 +208,81 @@ describe('createPracticeQuestion invariants', () => {
       );
     };
     expect(run()).toEqual(run());
+  });
+});
+
+describe('phoneToWords', () => {
+  it('speaks every digit separately with "oh" for zero and pauses between groups', () => {
+    expect(phoneToWords('07942 153 860')).toBe(
+      'oh seven nine four two, one five three, eight six oh',
+    );
+    expect(phoneToWords('020 7946 0123')).toBe(
+      'oh two oh, seven nine four six, oh one two three',
+    );
+  });
+});
+
+describe('phone number questions (IELTS format)', () => {
+  const PHONE_SHAPE = /^(07\d{3} \d{3} \d{3}|020 \d{4} \d{4}|02[0-9] \d{4} \d{4})$/;
+
+  it('generates 11-digit UK numbers in IELTS group layouts', () => {
+    const random = mulberry32(31);
+    for (let i = 0; i < 200; i += 1) {
+      const question = createPracticeQuestion('phones', random);
+      expect(question.kind).toBe('phone');
+      expect(question.answer).toMatch(PHONE_SHAPE);
+      expect(question.answer.replace(/ /g, '')).toHaveLength(11);
+      for (const option of question.options) {
+        expect(option).toMatch(PHONE_SHAPE);
+      }
+    }
+  });
+
+  it('speaks the answer digit by digit, never as a whole number', () => {
+    const random = mulberry32(8);
+    for (let i = 0; i < 50; i += 1) {
+      const question = createPracticeQuestion('phones', random);
+      expect(question.spoken).toBe(phoneToWords(question.answer));
+      expect(question.spoken.split(', ')).toHaveLength(
+        question.answer.split(' ').length,
+      );
+    }
+  });
+
+  it('always offers four unique options with the answer exactly once', () => {
+    const random = mulberry32(64);
+    for (let i = 0; i < 200; i += 1) {
+      const question = createPracticeQuestion('phones', random);
+      expect(new Set(question.options).size).toBe(4);
+      expect(question.options.filter(o => o === question.answer)).toHaveLength(
+        1,
+      );
+    }
+  });
+
+  it('builds confusable distractors that keep length and grouping', () => {
+    const distractors = phoneDistractors('07942 153 860', mulberry32(3));
+    expect(distractors).toHaveLength(3);
+    for (const distractor of distractors) {
+      expect(distractor).toMatch(PHONE_SHAPE);
+      expect(distractor.replace(/ /g, '')).toHaveLength(11);
+      expect(distractor.startsWith('07')).toBe(true);
+    }
+    // Teen/tens swap: 153 → 503 is among the strongest candidates for "15".
+    expect(phoneDistractors('07942 153 860', () => 0.99)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^07942 [0-9]{3} 860$/)]),
+    );
+  });
+
+  it('keeps phone answers out of the recent window', () => {
+    const random = mulberry32(12);
+    const recent: string[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      const question = createPracticeQuestion('phones', random, recent);
+      expect(recent.slice(-PRACTICE_RECENT_ANSWER_LIMIT)).not.toContain(
+        question.answer,
+      );
+      recent.push(question.answer);
+    }
   });
 });

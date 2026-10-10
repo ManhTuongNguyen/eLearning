@@ -99,7 +99,7 @@ describe('generateSpeakingText', () => {
     const [request] = fake.completeRequests;
     expect(request.messages).toHaveLength(2);
     expect(request.messages[0].role).toBe('system');
-    expect(request.messages[1].content).toContain('roughly 260 words');
+    expect(request.messages[1].content).toContain('roughly 280 words');
     expect(request.messages[1].content).toContain('A day at the beach');
   });
 

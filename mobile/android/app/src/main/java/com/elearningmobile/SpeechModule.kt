@@ -2,6 +2,7 @@ package com.elearningmobile
 
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.view.WindowManager
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -9,6 +10,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableArray
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 
@@ -47,6 +49,14 @@ class SpeechModule(reactContext: ReactApplicationContext) :
     const val E_ENGINE_ERROR = "E_TTS_ENGINE"
     const val E_LANGUAGE_UNAVAILABLE = "E_TTS_LANGUAGE_UNAVAILABLE"
     const val E_VOICE_UNAVAILABLE = "E_TTS_VOICE_UNAVAILABLE"
+
+    /**
+     * JS event carrying per-word playback progress for the in-flight
+     * utterance: {charStart, charEnd} character offsets into the spoken
+     * text. Lets the teleprompter follow the engine's actual pace
+     * (onRangeStart) instead of an estimated constant scroll speed.
+     */
+    const val EVENT_PROGRESS = "SpeechProgress"
 
     private const val UTTERANCE_PREFIX = "elearning-"
 
@@ -203,6 +213,33 @@ class SpeechModule(reactContext: ReactApplicationContext) :
       } catch (_: Exception) {
         // Idle/unavailable engines are fine to stop silently.
       }
+    }
+  }
+
+  /**
+   * Holds (or releases) FLAG_KEEP_SCREEN_ON on the current activity window
+   * so the display does not sleep while a long TTS playback — e.g. the
+   * karaoke listen session — is running. Best-effort: with no attached
+   * activity (or a destroyed window) the call is a no-op, and playback
+   * never depends on it.
+   */
+  @ReactMethod
+  fun setKeepScreenOn(enabled: Boolean) {
+    try {
+      val activity = reactApplicationContext.currentActivity ?: return
+      activity.runOnUiThread {
+        try {
+          if (enabled) {
+            activity.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+          } else {
+            activity.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+          }
+        } catch (_: Exception) {
+          // A destroyed window is fine to ignore.
+        }
+      }
+    } catch (_: Exception) {
+      // Keep-awake is an enhancement; failures must never crash playback.
     }
   }
 
@@ -444,9 +481,41 @@ class SpeechModule(reactContext: ReactApplicationContext) :
             override fun onError(utteranceId: String?, errorCode: Int) {
               settle(utteranceId, "Playback failed ($errorCode)")
             }
+
+            override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
+              emitProgress(utteranceId, start, end)
+            }
           })
     } catch (_: Exception) {
       // Without a listener promises still resolve via stop()/replacement.
+    }
+  }
+
+  /**
+   * Emits a SpeechProgress event for the in-flight utterance only: after a
+   * stop()/supersede the old id no longer matches, so late range callbacks
+   * from a flushed utterance can never drive a newer playback's UI.
+   */
+  private fun emitProgress(utteranceId: String?, start: Int, end: Int) {
+    if (utteranceId == null) {
+      return
+    }
+    synchronized(lock) {
+      val current = pendingSpeak
+      if (current == null || current.first != utteranceId) {
+        return
+      }
+    }
+    try {
+      val params = Arguments.createMap().apply {
+        putInt("charStart", start)
+        putInt("charEnd", end)
+      }
+      reactApplicationContext
+          .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+          .emit(EVENT_PROGRESS, params)
+    } catch (_: Exception) {
+      // Progress is best-effort; playback continues without it.
     }
   }
 
