@@ -2,7 +2,7 @@
  * AI provider settings editor (SPEC TASK-092, TASK-AUDIT-013): configures
  * the active provider (OpenRouter, Gemini, OpenAI), the user's API key,
  * primary model and ordered fallback models. Keys live only in secure
- * storage via saveServerlessOpenRouterConfig (TASK-088/093) — they are
+ * storage via saveServerlessConfig (TASK-088/093) — they are
  * never rendered, logged or sent anywhere except the selected provider's
  * auth header, and each provider gets its own keychain/settings/catalog
  * namespace so switching providers never mixes secrets or model ids.
@@ -64,7 +64,7 @@ import {
 import {
   loadServerlessProvider,
   loadServerlessProviderState,
-  saveServerlessOpenRouterConfig,
+  saveServerlessConfig,
 } from '../serverless/settings';
 import type {LLMClientConfig, ModelInfo, ProviderId} from '../serverless/types';
 import type {ThemeColors} from '../theme/colors';
@@ -734,7 +734,7 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
     setSaving(true);
     try {
       const config: LLMClientConfig = {provider, apiKey, primaryModel, fallbackModels};
-      await saveServerlessOpenRouterConfig(config);
+      await saveServerlessConfig(config);
       // The typed key has been persisted; forget it from component state so
       // it cannot linger longer than necessary.
       setStoredKey(apiKey);

@@ -5,8 +5,11 @@
  * also the entry point to practice it again — the WHOLE row is pressable and
  * pushes SpeakingPractice with the stored text, so the screen reopens
  * directly in the reading phase without a provider call (the nested Delete
- * button keeps its own tap target). Serverless mode only — no backend
- * traffic.
+ * button keeps its own tap target). Each record with a text additionally
+ * carries a "Listen" button at the bottom of the row: it reopens the same
+ * text in TTS listen mode, where the engine reads it aloud and the
+ * teleprompter scroll follows the playback pace. Serverless mode only — no
+ * backend traffic.
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
@@ -68,6 +71,7 @@ function describeError(err: unknown): string {
 interface RecordRowProps {
   record: LocalPracticeHistoryRecord;
   onPractice: (record: LocalPracticeHistoryRecord) => void;
+  onListen: (record: LocalPracticeHistoryRecord) => void;
   onDelete: (id: number) => void;
   confirmingDelete: boolean;
   colors: ThemeColors;
@@ -76,6 +80,7 @@ interface RecordRowProps {
 function RecordRow({
   record,
   onPractice,
+  onListen,
   onDelete,
   confirmingDelete,
   colors,
@@ -112,36 +117,51 @@ function RecordRow({
         canPractice ? `Practice speaking again: ${record.title}` : undefined
       }
       testID={canPractice ? 'history-practice-again' : undefined}>
-      <View style={styles.content}>{content}</View>
-      {confirmingDelete ? (
-        <View style={styles.confirmRow}>
+      <View style={styles.topRow}>
+        <View style={styles.content}>{content}</View>
+        {confirmingDelete ? (
+          <View style={styles.confirmRow}>
+            <Pressable
+              onPress={() => onDelete(record.id)}
+              style={[styles.button, styles.confirmButton]}
+              accessibilityRole="button"
+              accessibilityLabel="Confirm delete"
+              testID="history-confirm-delete">
+              <Text style={styles.confirmButtonText}>Delete</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {}}
+              style={[styles.button, styles.cancelButton]}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel delete"
+              testID="history-cancel-delete">
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+          </View>
+        ) : (
           <Pressable
             onPress={() => onDelete(record.id)}
-            style={[styles.button, styles.confirmButton]}
+            style={styles.deleteButton}
             accessibilityRole="button"
-            accessibilityLabel="Confirm delete"
-            testID="history-confirm-delete">
-            <Text style={styles.confirmButtonText}>Delete</Text>
+            accessibilityLabel="Delete this practice session"
+            testID="history-delete">
+            <Text style={styles.deleteButtonText}>Delete</Text>
           </Pressable>
-          <Pressable
-            onPress={() => {}}
-            style={[styles.button, styles.cancelButton]}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel delete"
-            testID="history-cancel-delete">
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </Pressable>
-        </View>
-      ) : (
+        )}
+      </View>
+      {canPractice ? (
+        // TTS listen mode: the engine reads the saved text aloud and the
+        // scroll follows the spoken pace. Sits BELOW the row so it never
+        // competes with the whole-row "practice again" tap or Delete.
         <Pressable
-          onPress={() => onDelete(record.id)}
-          style={styles.deleteButton}
+          onPress={() => onListen(record)}
+          style={styles.listenButton}
           accessibilityRole="button"
-          accessibilityLabel="Delete this practice session"
-          testID="history-delete">
-          <Text style={styles.deleteButtonText}>Delete</Text>
+          accessibilityLabel={`Listen to this session with text to speech: ${record.title}`}
+          testID="history-listen">
+          <Text style={styles.listenButtonText}>Listen (text to speech)</Text>
         </Pressable>
-      )}
+      ) : null}
     </Pressable>
   );
 }
@@ -149,8 +169,6 @@ function RecordRow({
 function createRowStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
       backgroundColor: c.surface,
       borderWidth: 1,
       borderColor: c.border,
@@ -158,6 +176,10 @@ function createRowStyles(c: ThemeColors) {
       padding: 12,
       marginHorizontal: 16,
       marginVertical: 6,
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
     },
     content: {
       flex: 1,
@@ -220,6 +242,20 @@ function createRowStyles(c: ThemeColors) {
     deleteButtonText: {
       color: c.danger,
       fontSize: 13,
+      fontWeight: '600',
+    },
+    listenButton: {
+      marginTop: 10,
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: c.accentSoft,
+      borderWidth: 1,
+      borderColor: c.accent,
+      alignItems: 'center',
+    },
+    listenButtonText: {
+      color: c.accent,
+      fontSize: 14,
       fontWeight: '600',
     },
   });
@@ -323,6 +359,22 @@ export function SpeakingHistoryScreen({navigation}: SpeakingHistoryScreenProps) 
     [navigation],
   );
 
+  /** Reopen a saved session's text in TTS listen mode (engine reads it). */
+  const handleListen = useCallback(
+    (record: LocalPracticeHistoryRecord) => {
+      if (!record.text.trim()) {
+        return;
+      }
+      navigation.navigate('SpeakingPractice', {
+        text: record.text,
+        material: record.title,
+        minutes: record.minutes,
+        mode: 'listen',
+      });
+    },
+    [navigation],
+  );
+
   if (loading) {
     return (
       <View style={styles.container} testID="speaking-history-screen">
@@ -368,6 +420,7 @@ export function SpeakingHistoryScreen({navigation}: SpeakingHistoryScreenProps) 
             <RecordRow
               record={item}
               onPractice={handlePractice}
+              onListen={handleListen}
               onDelete={handleDelete}
               confirmingDelete={deletingId === item.id}
               colors={colors}

@@ -37,7 +37,7 @@ jest.mock('../src/serverless/providerRegistry', () => ({
 }));
 jest.mock('../src/serverless/settings', () => ({
   __esModule: true,
-  loadServerlessOpenRouterConfig: jest.fn(),
+  loadServerlessConfig: jest.fn(),
 }));jest.mock('../src/db/database', () => ({
   __esModule: true,
   getLocalDatabase: jest.fn(),
@@ -136,7 +136,7 @@ async function renderHook(options: {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedImproveMessage.mockResolvedValue(improvementOf());
-  jest.mocked(serverlessSettings.loadServerlessOpenRouterConfig).mockResolvedValue({
+  jest.mocked(serverlessSettings.loadServerlessConfig).mockResolvedValue({
     apiKey: 'test-key',
     primaryModel: 'test/model',
     fallbackModels: [],

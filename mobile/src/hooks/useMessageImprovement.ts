@@ -22,7 +22,7 @@ import {getLearningProfile} from '../db/profileStore';
 import type {ApplicationMode} from '../mode/types';
 import {generateImprovement} from '../serverless/improvement';
 import {createProviderClient} from '../serverless/providerRegistry';
-import {loadServerlessOpenRouterConfig} from '../serverless/settings';
+import {loadServerlessConfig} from '../serverless/settings';
 
 /** The improvement result currently displayed, tied to its source message. */
 export type DisplayedImprovement = MessageImprovement & {messageId: number};
@@ -108,7 +108,7 @@ export function useMessageImprovement(options: UseMessageImprovementOptions) {
             }
 
             // Load the on-device provider configuration and client.
-            const serverlessConfig = await loadServerlessOpenRouterConfig();
+            const serverlessConfig = await loadServerlessConfig();
             if (!serverlessConfig) {
               return;
             }

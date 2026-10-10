@@ -9,9 +9,27 @@
  * without producing audio. Playback-state tracking lives with the caller.
  */
 
+/**
+ * Per-word progress report while an utterance speaks: the character range
+ * of the text currently being voiced. Engines that cannot report progress
+ * simply never invoke the callback.
+ */
+export interface SpeechProgressReport {
+  readonly charStart: number;
+  readonly charEnd: number;
+}
+
+export type SpeechProgressCallback = (progress: SpeechProgressReport) => void;
+
 export interface TextToSpeechEngine {
-  /** Begin speaking the given text; resolves when playback finishes. */
-  speak(text: string): Promise<void>;
+  /**
+   * Begin speaking the given text; resolves when playback finishes. When
+   * `onProgress` is given and the engine supports it, it fires per spoken
+   * word range so callers can follow the real playback pace (teleprompter
+   * scroll). The callback is never invoked after the returned promise
+   * settles.
+   */
+  speak(text: string, onProgress?: SpeechProgressCallback): Promise<void>;
   /** Stop current playback immediately; safe when nothing is playing. */
   stop(): void;
 }

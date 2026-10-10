@@ -51,7 +51,7 @@ import {
   setRuntimeApplicationMode,
 } from '../src/mode/runtime';
 import * as openrouterClient from '../src/serverless/openrouterClient';
-import {saveServerlessOpenRouterConfig} from '../src/serverless/settings';
+import {saveServerlessConfig} from '../src/serverless/settings';
 import {getSpeechEngine} from '../src/tts/textToSpeech';
 import {FakeOpenRouterClient} from '../testing/fakeOpenRouter';
 
@@ -224,7 +224,7 @@ async function bootConfiguredServerlessApp(
   fake: FakeOpenRouterClient,
 ): Promise<ReactTestRendererLike> {
   await saveApplicationMode('serverless');
-  await saveServerlessOpenRouterConfig({
+  await saveServerlessConfig({
     apiKey: API_KEY,
     primaryModel: 'vendor/model-a',
     fallbackModels: ['vendor/model-b'],
@@ -584,7 +584,7 @@ describe('TASK-117 serverless journey', () => {
     // No auth keychain seeding at all: serverless is independent of server
     // authentication. Only the mode flag and OpenRouter config are stored.
     await saveApplicationMode('serverless');
-    await saveServerlessOpenRouterConfig({
+    await saveServerlessConfig({
       apiKey: API_KEY,
       primaryModel: 'vendor/model-a',
       fallbackModels: [],

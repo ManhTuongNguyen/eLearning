@@ -68,7 +68,7 @@ beforeEach(async () => {
     primaryModel: 'vendor/model-a',
     fallbackModels: [],
   });
-  mockedSettings.loadServerlessOpenRouterConfig.mockResolvedValue(null);
+  mockedSettings.loadServerlessConfig.mockResolvedValue(null);
   mockedCatalog.getCachedModelCatalog.mockResolvedValue(null);
   await saveApplicationMode('serverless');
   setRuntimeApplicationMode('serverless');

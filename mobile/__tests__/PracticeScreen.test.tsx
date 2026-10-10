@@ -245,6 +245,55 @@ describe('PracticeScreen', () => {
     );
   });
 
+  it('lists the Phones mode before Mixed, which comes last', async () => {
+    await renderPractice();
+    const order = screen
+      .getAllByTestId(/^practice-mode-/)
+      .map(node => node.props.testID);
+    expect(order).toEqual([
+      'practice-mode-numbers',
+      'practice-mode-letters',
+      'practice-mode-phones',
+      'practice-mode-mixed',
+    ]);
+  });
+
+  it('phones mode loads a phone-number round and speaks it digit by digit', async () => {
+    await renderPractice();
+    await waitForOptions();
+
+    mockedCreate.mockReturnValueOnce({
+      kind: 'phone',
+      answer: '07942 153 860',
+      spoken: 'oh seven nine four two, one five three, eight six oh',
+      options: [
+        '07942 153 860',
+        '07942 503 860',
+        '07942 153 869',
+        '07942 153 806',
+      ],
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('practice-mode-phones'));
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('practice-option-07942 153 860'),
+      ).toBeOnTheScreen(),
+    );
+    expect(mockedCreate).toHaveBeenLastCalledWith(
+      'phones',
+      expect.any(Function),
+      expect.any(Array),
+    );
+    await waitFor(() =>
+      expect(fakeEngine.speak).toHaveBeenLastCalledWith(
+        'oh seven nine four two, one five three, eight six oh',
+      ),
+    );
+  });
+
   it('end practice shows the summary and restart zeroes it', async () => {
     await renderPractice();
     await waitForOptions();

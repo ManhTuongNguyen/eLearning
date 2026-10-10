@@ -47,7 +47,7 @@ jest.mock('../src/preferences/grammarCheck');
 const mockedGrammarCheckEnabled = jest.mocked(loadGrammarCheckEnabled);
 const mockedSaveGrammarCheckEnabled = jest.mocked(saveGrammarCheckEnabled);
 
-const mockedConfig = jest.mocked(serverlessSettings.loadServerlessOpenRouterConfig);
+const mockedConfig = jest.mocked(serverlessSettings.loadServerlessConfig);
 const mockedLoadProvider = jest.mocked(serverlessSettings.loadServerlessProvider);
 const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
   __resetAsyncStorageStore: () => void;

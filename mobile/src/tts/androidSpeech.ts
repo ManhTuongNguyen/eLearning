@@ -17,6 +17,7 @@
  */
 import {NativeModules} from 'react-native';
 
+import {addSpeechProgressListener} from './speechProgress';
 import {loadSpeechPreferences} from './speechSettings';
 import type {
   SpeechEngineInfo,
@@ -29,7 +30,10 @@ import {
   voiceInfoFromNative,
 } from './types';
 import {getSpeechEngine, setSpeechEngine} from './textToSpeech';
-import type {TextToSpeechEngine} from './textToSpeech';
+import type {
+  SpeechProgressCallback,
+  TextToSpeechEngine,
+} from './textToSpeech';
 
 /** Raw voice/engine rows arrive from the bridge as plain records. */
 type NativeRecord = Record<string, unknown>;
@@ -133,9 +137,20 @@ export function androidSpeechEngine(): TextToSpeechEngine {
     throw new Error('Android speech module is not available');
   }
   return {
-    async speak(text: string) {
+    async speak(text: string, onProgress?: SpeechProgressCallback) {
       await ensurePreferencesLoaded();
-      await native.speakWith(text, nativeOptions(activePreferences));
+      // Subscribe before speaking so the first words are not lost; the
+      // subscription is torn down as soon as this utterance settles, and
+      // the native side only emits for the in-flight utterance, so a
+      // superseded playback can never feed stale ranges to the callback.
+      const unsubscribe = onProgress
+        ? addSpeechProgressListener(onProgress)
+        : null;
+      try {
+        await native.speakWith(text, nativeOptions(activePreferences));
+      } finally {
+        unsubscribe?.();
+      }
     },
     stop() {
       native.stop();

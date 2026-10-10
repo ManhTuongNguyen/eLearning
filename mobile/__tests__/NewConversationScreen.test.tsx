@@ -41,7 +41,7 @@ import {resetLocalDatabase} from '../src/db/database';
 import * as nativeDriver from '../src/db/nativeDriver';
 import {saveApplicationMode} from '../src/mode/modeStorage';
 import {getRuntimeApplicationMode} from '../src/mode/runtime';
-import {saveServerlessOpenRouterConfig} from '../src/serverless/settings';
+import {saveServerlessConfig} from '../src/serverless/settings';
 import {ChatScreen} from '../src/screens/ChatScreen';
 import {NewConversationScreen} from '../src/screens/NewConversationScreen';
 import {ThemeProvider} from '../src/theme/ThemeContext';
@@ -455,7 +455,7 @@ describe('serverless creation honors the configured provider (TASK-AUDIT-013/019
     // Persist the serverless mode and a Gemini provider configuration the
     // same way the settings screen does (keychain key + settings-table ids).
     await saveApplicationMode('serverless');
-    await saveServerlessOpenRouterConfig({
+    await saveServerlessConfig({
       provider: 'gemini',
       apiKey: GEMINI_KEY,
       primaryModel: GEMINI_MODEL,

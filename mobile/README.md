@@ -118,6 +118,8 @@ Tests run against real SQL via a sql.js-backed driver (`testing/sqlJsDriver.ts`,
 
 ```bash
 cd android && ./gradlew assembleRelease
+
+./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a  # for a single architecture (faster, smaller)
 ```
 
 Output: `android/app/build/outputs/apk/release/`.

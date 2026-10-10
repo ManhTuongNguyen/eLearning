@@ -64,7 +64,7 @@ import {
 } from '../preferences/speakingScrollSpeed';
 import {
   clearAllServerlessData,
-  loadServerlessOpenRouterConfig,
+  loadServerlessConfig,
   loadServerlessProvider,
 } from '../serverless/settings';
 import { PROVIDER_DESCRIPTORS } from '../serverless/providerRegistry';
@@ -732,7 +732,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
   const loadProviderStatus = useCallback((): void => {
     const requestId = ++providerStatusRequestRef.current;
     setProviderStatus('loading');
-    Promise.all([loadServerlessOpenRouterConfig(), loadServerlessProvider()])
+    Promise.all([loadServerlessConfig(), loadServerlessProvider()])
       .then(([config, provider]) => {
         if (providerStatusRequestRef.current === requestId) {
           setProviderStatus({
