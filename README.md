@@ -10,7 +10,7 @@ A mobile application for learning English through natural AI conversation, built
 
 ## Download
 
-📦 **Download the APK:** [eLearning-v1.0.0-arm64-v8a.apk](https://github.com/ManhTuongNguyen/eLearning/releases/download/v1.0.0/eLearning-release.apk)
+📦 **Download the APK:** [eLearning-v1.1-arm64-v8a.apk](https://github.com/ManhTuongNguyen/eLearning/releases/download/v1.1/eLearning-release.apk)
 
 > ⚠️ **Device compatibility warning:** this APK is built for **arm64-v8a devices only**. It will not install on 32-bit ARM (`armeabi-v7a`), `x86` or `x86_64` devices/emulators. Most modern Android phones (2016 and later) use arm64-v8a — check your device's CPU architecture before downloading. If your device has a different architecture, you need to [build the app yourself](#running-mobile).
 
@@ -414,6 +414,11 @@ system prompt confines each reply to the conversation message itself.
 - Vocabulary saving via text selection with asynchronous enrichment
 - Anki-compatible CSV export
 - Text-to-speech (Android native)
+- Listening practice trainer: hear numbers, letters and UK phone numbers, then pick what you heard from acoustically confusable options (on-device, no AI calls)
+- Speaking practice (karaoke-style): the AI writes a reading-aloud text sized to your session length, shown as a teleprompter that scrolls at an adjustable speed
+- Listen mode: the device TTS reads the text aloud while the scroll follows the speech in real time, with pause/resume and the screen kept awake
+- Speaking history: completed speaking sessions are saved locally, reviewable and replayable in listen mode
+- Adjustable teleprompter scroll speed in Settings
 - Two isolated modes: authenticated **Server mode** and local **Serverless mode**
 - Multi-provider LLM support (OpenRouter, Google Gemini, OpenAI, 9Router, OpenAI-compatible) with ordered model fallback
 

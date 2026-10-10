@@ -10,7 +10,7 @@
 
 ## Tải xuống (Download)
 
-📦 **Tải file APK:** [eLearning-v1.0.0-arm64-v8a.apk](https://github.com/ManhTuongNguyen/eLearning/releases/download/v1.0.0/eLearning-release.apk)
+📦 **Tải file APK:** [eLearning-v1.1-arm64-v8a.apk](https://github.com/ManhTuongNguyen/eLearning/releases/download/v1.1/eLearning-release.apk)
 
 > ⚠️ **Cảnh báo tương thích thiết bị:** file APK này chỉ dành cho thiết bị **arm64-v8a**. Nó sẽ không cài đặt được trên thiết bị/giả lập ARM 32-bit (`armeabi-v7a`), `x86` hoặc `x86_64`. Hầu hết điện thoại Android hiện đại (từ 2016 trở đi) đều dùng arm64-v8a — hãy kiểm tra kiến trúc CPU của thiết bị trước khi tải. Nếu thiết bị của bạn dùng kiến trúc khác, bạn cần [tự build ứng dụng](#chạy-mobile).
 
@@ -415,6 +415,11 @@ chỉ trong nội dung tin nhắn hội thoại.
 - Lưu vocabulary qua text selection với enrichment bất đồng bộ
 - Export CSV tương thích Anki
 - Text-to-speech (Android native)
+- Luyện nghe (Listening practice): nghe số, chữ cái và số điện thoại UK, sau đó chọn đáp án đúng từ các lựa chọn dễ nhầm lẫn về âm (chạy trên thiết bị, không gọi AI)
+- Luyện nói (Speaking practice, kiểu karaoke): AI tạo đoạn văn để đọc to theo độ dài buổi luyện, hiển thị dạng teleprompter cuộn với tốc độ điều chỉnh được
+- Chế độ nghe (Listen mode): TTS của thiết bị đọc đoạn văn trong khi màn hình cuộn theo giọng đọc theo thời gian thực, hỗ trợ tạm dừng/tiếp tục và giữ màn hình luôn sáng
+- Lịch sử luyện nói: các buổi luyện đã hoàn thành được lưu cục bộ, xem lại và phát lại ở chế độ nghe
+- Điều chỉnh tốc độ cuộn teleprompter trong Settings
 - Hai mode biệt lập: **Server mode** (đã authenticate) và **Serverless mode** chạy local
 - Hỗ trợ đa LLM provider (OpenRouter, Google Gemini, OpenAI, 9Router, OpenAI-compatible) với model fallback có thứ tự
 
