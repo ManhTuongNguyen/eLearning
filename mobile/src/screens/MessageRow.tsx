@@ -99,34 +99,48 @@ export function createRowStyles(c: ThemeColors) {
       fontSize: 13,
       fontWeight: '600',
     },
+    // Corner status mark: a small circle hanging off the bubble's top-right
+    // edge. The 44px hitSlop keeps it tappable while the visible mark stays
+    // small; the whole bubble is also tappable when a check exists.
     grammarBadge: {
-      alignSelf: 'flex-start',
-      marginTop: 6,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      borderRadius: 999,
+      position: 'absolute',
+      top: -8,
+      right: -8,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
       borderWidth: 1,
-      paddingVertical: 2,
-      paddingHorizontal: 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.surface,
     },
     grammarBadgeMinor: {
       borderColor: c.warning,
-      backgroundColor: c.surface,
     },
     grammarBadgeCritical: {
       borderColor: c.errorText,
-      backgroundColor: c.surface,
+    },
+    grammarBadgeNone: {
+      borderColor: c.success,
     },
     grammarBadgeText: {
-      fontSize: 11,
-      fontWeight: '600',
+      fontSize: 10,
+      fontWeight: '800',
+      lineHeight: 12,
+      includeFontPadding: false,
     },
     grammarBadgeTextMinor: {
       color: c.warning,
     },
+    grammarBadgeTextNone: {
+      color: c.success,
+    },
     grammarBadgeTextCritical: {
       color: c.errorText,
+    },
+    bubbleWithBadge: {
+      // Room so the first line of text doesn't run under the corner mark.
+      paddingTop: 12,
     },
   });
 }
@@ -168,9 +182,18 @@ export interface MessageRowProps {
   onGrammarBadgePress: (message: ChatMessage) => void;
 }
 
-const GRAMMAR_BADGE_LABELS: Record<Exclude<ImprovementSeverity, 'none'>, string> = {
-  minor: 'Minor issues',
-  critical: 'Grammar issues',
+/** Visible glyph per status; the shape differs so color is not the only cue. */
+const GRAMMAR_BADGE_GLYPHS: Record<'none' | 'minor' | 'critical', string> = {
+  none: '✓',
+  minor: '!',
+  critical: '✕',
+};
+
+/** Screen-reader labels: the words the icon itself no longer shows. */
+const GRAMMAR_BADGE_A11Y: Record<'none' | 'minor' | 'critical', string> = {
+  none: 'Looks good, open feedback',
+  minor: 'Minor grammar issues found, open suggestion',
+  critical: 'Serious grammar issues found, open suggestion',
 };
 
 function MessageRowImpl({
@@ -192,14 +215,30 @@ function MessageRowImpl({
   // pending spinners and failed rows carry nothing actionable, and the
   // backend rejects them as suggestion targets anyway.
   const menuEligible = item.status === 'complete' && item.content.trim().length > 0;
-  const hasGrammarBadge =
-    isUser && (grammarSeverity === 'minor' || grammarSeverity === 'critical');
+  const hasGrammarBadge = isUser && grammarSeverity !== null;
+  const badgeTone =
+    grammarSeverity === 'critical' ? 'critical' : grammarSeverity === 'minor' ? 'minor' : 'none';
+  // A checked user message opens its feedback on a tap anywhere in the bubble
+  // (long-press still opens the actions menu, so the gestures don't clash).
+  const bubbleTappable = hasGrammarBadge;
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
       <View style={styles.bubbleWrapper}>
         <Pressable
-          style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
+          style={[
+            styles.bubble,
+            isUser ? styles.bubbleUser : styles.bubbleAssistant,
+            hasGrammarBadge && styles.bubbleWithBadge,
+          ]}
           testID={`chat-message-${item.id}`}
+          onPress={
+            bubbleTappable
+              ? () => {
+                  onGrammarBadgePress(item);
+                }
+              : undefined
+          }
+          accessibilityHint={bubbleTappable ? 'Opens the improvement suggestion' : undefined}
           onLongPress={
             menuEligible
               ? () => {
@@ -229,28 +268,32 @@ function MessageRowImpl({
           <Pressable
             style={[
               styles.grammarBadge,
-              grammarSeverity === 'critical'
+              badgeTone === 'critical'
                 ? styles.grammarBadgeCritical
-                : styles.grammarBadgeMinor,
+                : badgeTone === 'minor'
+                  ? styles.grammarBadgeMinor
+                  : styles.grammarBadgeNone,
             ]}
             onPress={() => {
               onGrammarBadgePress(item);
             }}
+            hitSlop={14}
             testID={`chat-grammar-badge-${item.id}`}
             accessibilityRole="button"
-            accessibilityLabel={
-              grammarSeverity === 'critical'
-                ? 'Serious grammar issues found, open suggestion'
-                : 'Minor grammar issues found, open suggestion'
-            }>
+            accessibilityLabel={GRAMMAR_BADGE_A11Y[badgeTone]}>
+            {/* Shape carries the meaning too (check / ! / !), so the status
+                reads without relying on color alone. */}
             <Text
+              importantForAccessibility="no"
               style={[
                 styles.grammarBadgeText,
-                grammarSeverity === 'critical'
+                badgeTone === 'critical'
                   ? styles.grammarBadgeTextCritical
-                  : styles.grammarBadgeTextMinor,
+                  : badgeTone === 'minor'
+                    ? styles.grammarBadgeTextMinor
+                    : styles.grammarBadgeTextNone,
               ]}>
-              {GRAMMAR_BADGE_LABELS[grammarSeverity === 'critical' ? 'critical' : 'minor']}
+              {GRAMMAR_BADGE_GLYPHS[badgeTone]}
             </Text>
           </Pressable>
         ) : null}

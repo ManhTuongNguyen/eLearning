@@ -157,6 +157,85 @@ describe('serverless conversation context (TASK-111)', () => {
       expect(request.messages[0].content).toContain('Conversation topic: "Just chatting".');
       expect(request.messages[0].content).toContain('Topic scenario: Just chatting');
     });
+
+    test('keeps the learner hint on later turns so the tutor stays on topic', async () => {
+      const session = await repository.createSession({
+        topic: 'Travel Plans',
+        topic_hint: 'Where to go this summer?\n- What to pack?',
+        learning_level: 'B1',
+      });
+      const firstUser = await repository.addMessage({
+        session_id: session.id,
+        role: 'user',
+        content: 'Hi',
+      });
+
+      const firstRequest = await buildServerlessContext({
+        session,
+        userMessage: firstUser,
+        assistantMessage: {...firstUser, id: firstUser.id + 1, role: 'assistant', status: 'pending', content: ''},
+      });
+
+      expect(firstRequest.messages[0].content).toContain('Questions the learner wants to cover');
+      expect(firstRequest.messages[0].content).toContain('Where to go this summer?');
+      expect(firstRequest.messages[0].content).toContain('What to pack?');
+
+      const secondUser = await repository.addMessage({
+        session_id: session.id,
+        role: 'user',
+        content: 'Tell me more',
+      });
+      const secondRequest = await buildServerlessContext({
+        session,
+        userMessage: secondUser,
+        assistantMessage: {...secondUser, id: secondUser.id + 1, role: 'assistant', status: 'pending', content: ''},
+      });
+
+      // The hint should persist so the tutor keeps the learner's questions in view.
+      expect(secondRequest.messages[0].content).toContain('Questions the learner wants to cover');
+    });
+
+    test('omits the hint when it is a single topic title rather than a question list', async () => {
+      const session = await repository.createSession({
+        topic: 'Travel Plans',
+        topic_hint: 'Traveling',
+        learning_level: 'B1',
+      });
+      const userMessage = await repository.addMessage({
+        session_id: session.id,
+        role: 'user',
+        content: 'Hi',
+      });
+
+      const request = await buildServerlessContext({
+        session,
+        userMessage,
+        assistantMessage: {...userMessage, id: userMessage.id + 1, role: 'assistant', status: 'pending', content: ''},
+      });
+
+      expect(request.messages[0].content).not.toContain('Questions the learner wants to cover');
+    });
+
+    test('omits the hint when only one question was provided', async () => {
+      const session = await repository.createSession({
+        topic: 'Travel Plans',
+        topic_hint: 'Where to go this summer?',
+        learning_level: 'B1',
+      });
+      const userMessage = await repository.addMessage({
+        session_id: session.id,
+        role: 'user',
+        content: 'Hi',
+      });
+
+      const request = await buildServerlessContext({
+        session,
+        userMessage,
+        assistantMessage: {...userMessage, id: userMessage.id + 1, role: 'assistant', status: 'pending', content: ''},
+      });
+
+      expect(request.messages[0].content).not.toContain('Questions the learner wants to cover');
+    });
   });
 
   describe('updateSummaryIfNeeded', () => {

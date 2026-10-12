@@ -1,10 +1,11 @@
 /**
  * Message actions menu tests (SPEC TASK-060): role-driven action matrix
- * (Suggest replies and Improve my English target the learner's own text, so
- * they exist for user rows only), the TASK-AUDIT-016 mode gate that hides
- * the server-only Select text entry, dismissal through the Close control,
- * backdrop tap and Android back, and the accessibility surface (labeled
- * buttons per action, accessibility modal container).
+ * (Improve my English exists for user rows only; Suggest replies exists for
+ * the latest assistant reply only, gated by `suggestRepliesAvailable`), the
+ * TASK-AUDIT-016 mode gate that hides the server-only Select text entry,
+ * dismissal through the Close control, backdrop tap and Android back, and
+ * the accessibility surface (labeled buttons per action, accessibility modal
+ * container).
  */
 import React from 'react';
 import {act, fireEvent, render, screen, within} from '@testing-library/react-native';
@@ -17,6 +18,7 @@ interface MenuOverrides {
   visible?: boolean;
   role?: 'user' | 'assistant';
   vocabularyEnabled?: boolean;
+  suggestRepliesAvailable?: boolean;
   onClose?: () => void;
   onSelect?: (action: MessageAction) => void;
 }
@@ -28,6 +30,7 @@ async function renderMenu(overrides: MenuOverrides = {}) {
         visible={overrides.visible ?? true}
         role={overrides.role ?? 'assistant'}
         vocabularyEnabled={overrides.vocabularyEnabled}
+        suggestRepliesAvailable={overrides.suggestRepliesAvailable}
         onClose={overrides.onClose ?? (() => undefined)}
         onSelect={overrides.onSelect ?? (() => undefined)}
       />
@@ -58,20 +61,32 @@ describe('MessageActionsMenu', () => {
   it('shows assistant-message actions without the learner-only entries', async () => {
     await renderMenu({role: 'assistant'});
 
+    expect(visibleActionLabels()).toEqual(['Select text', 'Copy', 'Read aloud']);
+    expect(screen.queryByTestId('chat-menu-suggest-replies')).toBeNull();
+    expect(screen.queryByTestId('chat-menu-improve-english')).toBeNull();
+  });
+
+  it('offers Suggest replies on an assistant message only when it is the latest reply', async () => {
+    await renderMenu({role: 'assistant', suggestRepliesAvailable: true});
+
     expect(visibleActionLabels()).toEqual([
+      'Suggest replies',
       'Select text',
       'Copy',
       'Read aloud',
     ]);
+  });
+
+  it('never offers Suggest replies on a user message, even when flagged', async () => {
+    await renderMenu({role: 'user', suggestRepliesAvailable: true});
+
     expect(screen.queryByTestId('chat-menu-suggest-replies')).toBeNull();
-    expect(screen.queryByTestId('chat-menu-improve-english')).toBeNull();
   });
 
   it('shows user-message actions including Improve my English', async () => {
     await renderMenu({role: 'user'});
 
     expect(visibleActionLabels()).toEqual([
-      'Suggest replies',
       'Improve my English',
       'Select text',
       'Copy',
@@ -82,23 +97,23 @@ describe('MessageActionsMenu', () => {
   // TASK-AUDIT-016: serverless mode has no server vocabulary flow, so the
   // Select text entry disappears for both roles while the rest stay put.
   it('hides Select text when the vocabulary flow is unavailable (serverless)', async () => {
-    for (const role of ['user', 'assistant'] as const) {
-      await renderMenu({role, vocabularyEnabled: false});
+    await renderMenu({role: 'user', vocabularyEnabled: false});
+    expect(visibleActionLabels()).toEqual(['Improve my English', 'Copy', 'Read aloud']);
+    expect(screen.queryByTestId('chat-menu-select-text')).toBeNull();
 
-      expect(visibleActionLabels()).toEqual(
-        role === 'user'
-          ? ['Suggest replies', 'Improve my English', 'Copy', 'Read aloud']
-          : ['Copy', 'Read aloud'],
-      );
-      expect(screen.queryByTestId('chat-menu-select-text')).toBeNull();
-    }
+    await renderMenu({
+      role: 'assistant',
+      vocabularyEnabled: false,
+      suggestRepliesAvailable: true,
+    });
+    expect(visibleActionLabels()).toEqual(['Suggest replies', 'Copy', 'Read aloud']);
+    expect(screen.queryByTestId('chat-menu-select-text')).toBeNull();
   });
 
   it('exposes every action as a labeled button inside an accessibility modal', async () => {
     await renderMenu({role: 'user'});
 
     for (const testId of [
-      'chat-menu-suggest-replies',
       'chat-menu-improve-english',
       'chat-menu-select-text',
       'chat-menu-copy',
@@ -153,8 +168,8 @@ describe('MessageActionsMenu', () => {
     await renderMenu({role: 'user'});
 
     const sheet = screen.getByTestId('chat-menu');
-    expect(within(sheet).getByText('Suggest replies')).toBeOnTheScreen();
     expect(within(sheet).getByText('Improve my English')).toBeOnTheScreen();
+    expect(within(sheet).getByText('Select text')).toBeOnTheScreen();
     expect(within(sheet).getByText('Copy')).toBeOnTheScreen();
     expect(within(sheet).getByText('Read aloud')).toBeOnTheScreen();
   });

@@ -102,6 +102,13 @@ class SystemPromptSectionTests(SimpleTestCase):
         self.assertIn("Never break character", self.prompt)
         self.assertIn("modelling", self.prompt)
 
+    def test_identity_section_never_corrects_the_learner(self) -> None:
+        # Corrections belong to "Improve my English" only; the chat reply must
+        # not repeat or fix the learner's wording (regression: corrections
+        # leaked into the AI's message).
+        self.assertIn("NEVER correct, quote, rephrase or comment", self.prompt)
+        self.assertNotIn("gently model correct English", self.prompt)
+
     def test_level_line_present(self) -> None:
         self.assertIn("English level is B2 (CEFR)", self.prompt)
 

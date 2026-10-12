@@ -182,4 +182,34 @@ describe('buildContext', () => {
 
     expect(request1).toEqual(request2);
   });
+
+  it('includes a single-line hint as a topic idea in list-of-questions mode', () => {
+    const request = buildContext({...baseInput, hint: 'Where to go this summer?'});
+
+    // A single line is not a question list, so the hint is omitted.
+    expect(request.messages[0].content).not.toContain(
+      'Questions the learner wants to cover',
+    );
+  });
+
+  it('formats a multi-line hint as a list of questions', () => {
+    const request = buildContext({
+      ...baseInput,
+      hint: 'Where to go this summer?\n1. Where did you go?\n- What to pack?',
+    });
+
+    const systemPrompt = request.messages[0].content;
+    expect(systemPrompt).toContain('Questions the learner wants to cover');
+    expect(systemPrompt).toContain('Where to go this summer?');
+    expect(systemPrompt).toContain('Where did you go?');
+    expect(systemPrompt).toContain('What to pack?');
+  });
+
+  it('omits the hint section when absent', () => {
+    const request = buildContext({...baseInput, hint: ''});
+
+    expect(request.messages[0].content).not.toContain(
+      'Questions the learner wants to cover',
+    );
+  });
 });

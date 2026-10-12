@@ -1135,16 +1135,27 @@ describe('ChatScreen', () => {
       expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
     });
 
-    it('offers assistant-message actions on long-press without the learner-only entries', async () => {
+    it('offers Suggest replies only on the latest assistant message', async () => {
       mockedSessions.listMessages.mockResolvedValue(
-        pageOf([makeMessage({id: 802, role: 'assistant', sequence: 1})]),
+        pageOf([
+          makeMessage({id: 801, role: 'assistant', sequence: 1, content: 'First reply.'}),
+          makeMessage({id: 802, role: 'user', sequence: 2, content: 'My answer.'}),
+          makeMessage({id: 803, role: 'assistant', sequence: 3, content: 'Latest reply.'}),
+        ]),
       );
       await renderChat({sessionId: 5});
-      await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
+      await waitFor(() => expect(screen.getByTestId('chat-message-803')).toBeOnTheScreen());
 
-      await fireEvent(screen.getByTestId('chat-message-802'), 'longPress');
+      await fireEvent(screen.getByTestId('chat-message-803'), 'longPress');
+      expect(visibleMenuActionTestIds()).toEqual([
+        'chat-menu-suggest-replies',
+        'chat-menu-select-text',
+        'chat-menu-copy',
+        'chat-menu-speak',
+      ]);
+      await fireEvent.press(screen.getByTestId('chat-menu-close'));
 
-      expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen();
+      await fireEvent(screen.getByTestId('chat-message-801'), 'longPress');
       expect(visibleMenuActionTestIds()).toEqual([
         'chat-menu-select-text',
         'chat-menu-copy',
@@ -1164,12 +1175,12 @@ describe('ChatScreen', () => {
       await fireEvent(screen.getByTestId('chat-message-801'), 'longPress');
 
       expect(visibleMenuActionTestIds()).toEqual([
-        'chat-menu-suggest-replies',
         'chat-menu-improve-english',
         'chat-menu-select-text',
         'chat-menu-copy',
         'chat-menu-speak',
       ]);
+      expect(screen.queryByTestId('chat-menu-suggest-replies')).toBeNull();
     });
 
     it('copies the chosen message and dismisses when Copy is selected', async () => {
@@ -1408,7 +1419,7 @@ describe('ChatScreen', () => {
       return renderChat({sessionId: 5});
     }
 
-    /** Long-press a row and pick Suggest replies from its menu. */
+    /** Long-press an assistant row and pick Suggest replies from its menu. */
     async function requestSuggestionsFor(messageId: number): Promise<void> {
       await fireEvent(screen.getByTestId(`chat-message-${messageId}`), 'longPress');
       await fireEvent.press(screen.getByTestId('chat-menu-suggest-replies'));
@@ -1442,12 +1453,12 @@ describe('ChatScreen', () => {
         }),
       );
 
-      await requestSuggestionsFor(801);
+      await requestSuggestionsFor(802);
 
       // The menu dismissed and the read-only endpoint was asked for exactly
       // this conversation + message with the current token.
       expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
-      expect(mockedSessions.getMessageSuggestions).toHaveBeenCalledWith(expect.any(Function), 5, 801);
+      expect(mockedSessions.getMessageSuggestions).toHaveBeenCalledWith(expect.any(Function), 5, 802);
       expect(mockedStream).not.toHaveBeenCalled();
       expect(screen.getByTestId('chat-suggestions-loading')).toBeOnTheScreen();
 
@@ -1460,7 +1471,7 @@ describe('ChatScreen', () => {
       mockedSessions.getMessageSuggestions.mockResolvedValueOnce({replies: REPLIES});
       await renderOneMessage();
       await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
-      await requestSuggestionsFor(801);
+      await requestSuggestionsFor(802);
       await expectChips(REPLIES);
 
       await fireEvent.press(screen.getByTestId('chat-suggestion-1'));
@@ -1477,6 +1488,20 @@ describe('ChatScreen', () => {
       ).toBe(false);
     });
 
+    it('closes the suggestion strip with the × button without filling the composer', async () => {
+      mockedSessions.getMessageSuggestions.mockResolvedValueOnce({replies: REPLIES});
+      await renderOneMessage();
+      await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
+      await requestSuggestionsFor(802);
+      await expectChips(REPLIES);
+
+      await fireEvent.press(screen.getByTestId('chat-suggestions-close'));
+
+      expect(screen.queryByTestId('chat-suggestions')).toBeNull();
+      expect(screen.getByTestId('composer-input').props.value).toBe('');
+      expect(mockedStream).not.toHaveBeenCalled();
+    });
+
     it('surfaces suggestion failures as an error state and recovers on retry', async () => {
       await renderOneMessage();
       await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
@@ -1484,13 +1509,13 @@ describe('ChatScreen', () => {
         .mockRejectedValueOnce(new ApiError(503, 'Provider temporarily unavailable.'))
         .mockResolvedValueOnce({replies: REPLIES});
 
-      await requestSuggestionsFor(801);
+      await requestSuggestionsFor(802);
 
       const banner = await screen.findByTestId('chat-suggestions-error');
       expect(banner).toHaveTextContent(/server is unreachable right now/i);
       expect(screen.queryByTestId('chat-suggestions')).toBeNull();
 
-      await requestSuggestionsFor(801);
+      await requestSuggestionsFor(802);
 
       await expectChips(REPLIES);
       expect(screen.queryByTestId('chat-suggestions-error')).toBeNull();
@@ -1503,28 +1528,29 @@ describe('ChatScreen', () => {
         .mockResolvedValueOnce({replies: REPLIES});
       mockedSessions.listMessages.mockResolvedValue(
         pageOf([
-          makeMessage({id: 801, role: 'user', sequence: 1, content: 'I went to the store yesterday.'}),
-          makeMessage({id: 802, role: 'assistant', sequence: 2, content: 'Nice! What did you buy?'}),
-          makeMessage({id: 803, role: 'user', sequence: 3, content: 'Not yet — maybe tomorrow.'}),
+          makeMessage({id: 801, role: 'user', sequence: 1, content: 'Hi, how are you?'}),
+          makeMessage({id: 802, role: 'assistant', sequence: 2, content: 'Great, thanks!'}),
         ]),
       );
       await renderChat({sessionId: 5});
-      await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
+      await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
 
-      await requestSuggestionsFor(801);
+      // Suggest replies is only offered on the latest assistant reply, so a
+      // second request for it is the case where displayed chips get replaced.
+      await requestSuggestionsFor(802);
       await expectChips(olderReplies);
 
-      await requestSuggestionsFor(803);
+      await requestSuggestionsFor(802);
       await expectChips(REPLIES);
       expect(screen.queryByText('Old B')).toBeNull();
-      expect(mockedSessions.getMessageSuggestions).toHaveBeenLastCalledWith(expect.any(Function), 5, 803);
+      expect(mockedSessions.getMessageSuggestions).toHaveBeenLastCalledWith(expect.any(Function), 5, 802);
     });
 
     it('clears the suggestion strip when the user sends a message', async () => {
       mockedSessions.getMessageSuggestions.mockResolvedValueOnce({replies: REPLIES});
       await renderOneMessage();
       await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
-      await requestSuggestionsFor(801);
+      await requestSuggestionsFor(802);
       await expectChips(REPLIES);
 
       await fireEvent.changeText(screen.getByTestId('composer-input'), 'My own message');

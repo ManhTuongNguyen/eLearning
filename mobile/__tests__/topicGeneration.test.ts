@@ -338,7 +338,11 @@ describe('buildTopicAndSampleUserPrompt', () => {
     expect(stripListMarker('- Do you like cities?')).toBe('Do you like cities?');
     expect(stripListMarker('* Do you like cities?')).toBe('Do you like cities?');
     expect(stripListMarker('• Plain bullet?')).toBe('Plain bullet?');
+    expect(stripListMarker('1- Where did you go?')).toBe('Where did you go?');
+    expect(stripListMarker('1: Where did you go?')).toBe('Where did you go?');
+    expect(stripListMarker('1.Where did you go?')).toBe('Where did you go?');
     expect(stripListMarker('No marker at all')).toBe('No marker at all');
+    expect(stripListMarker('2024 was a great year?')).toBe('2024 was a great year?');
     expect(stripListMarker('   spaced line ')).toBe('spaced line');
   });
 
@@ -353,7 +357,7 @@ describe('buildTopicAndSampleUserPrompt', () => {
   test('a multi-line hint becomes a merged question list in the prompt', () => {
     const prompted = buildTopicAndSampleUserPrompt(
       'B1',
-      'Traveling\n1. Where did you go last summer?\n- What do you pack first?',
+      'Where did you go last summer?\n- What do you pack first?',
     );
     expect(prompted).toContain('The learner provided these questions:');
     expect(prompted).toContain('Where did you go last summer?');
@@ -361,5 +365,11 @@ describe('buildTopicAndSampleUserPrompt', () => {
     expect(prompted).toContain('Build ONE cohesive conversation topic around them');
     // A question list must NOT fall back to the single-topic wording.
     expect(prompted).not.toContain('Topic idea from the learner:');
+  });
+
+  test('a single-line hint stays a topic idea, even when it is a question', () => {
+    const prompted = buildTopicAndSampleUserPrompt('B1', 'Where did you go last summer?');
+    expect(prompted).toContain('Topic idea from the learner: "Where did you go last summer?"');
+    expect(prompted).not.toContain('Topic title from the learner:');
   });
 });

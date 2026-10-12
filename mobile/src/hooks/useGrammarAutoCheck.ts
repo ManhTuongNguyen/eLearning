@@ -19,8 +19,8 @@
  * provider traffic. Only the LIVE view (this hook's cache) adds nothing: it
  * is seeded from the persisted rows on load.
  *
- * Display mapping: severity "none" → no badge; "minor" → small warning
- * badge; "critical" → error badge. Badges hand the cached result to the
+ * Display mapping: severity "none" → "Looks good" success badge; "minor" →
+ * small warning badge; "critical" → error badge. Badges hand the cached result to the
  * improvement sheet, so showing the suggestion never performs a second API
  * call. Only messages that ARRIVE while the hook watches are checked — the
  * already-checked history is seeded as settled, so opening old chats never
@@ -44,9 +44,9 @@ import {loadServerlessConfig} from '../serverless/settings';
 /** One finished check, tied to its source message. */
 export type GrammarCheckResult = MessageImprovement & {messageId: number};
 
-/** Severity values that render a badge (severity "none" stays invisible). */
+/** Every checked severity renders a badge, including "none" ("Looks good"). */
 export function badgeSeverity(severity: ImprovementSeverity): ImprovementSeverity | null {
-  return severity === 'none' ? null : severity;
+  return severity;
 }
 
 export interface UseGrammarAutoCheckOptions {

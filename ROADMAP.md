@@ -344,13 +344,15 @@ No regeneration of successful responses is required.
 
 ## Suggest replies
 
-Long-pressing any chat message provides:
+Long-pressing the latest assistant message provides:
 
 ```text
 Suggest replies
 ```
 
-The system generates exactly three possible replies.
+Suggest replies is not offered on user messages or older assistant messages.
+The system generates exactly three possible replies, shown as a strip above the
+composer with a × button to close it.
 
 Suggestions are based on:
 

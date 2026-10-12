@@ -329,6 +329,24 @@ function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 8,
+      // Narrow gutter for the absolutely positioned close button, so the
+      // chips barely shrink.
+      paddingRight: 28,
+    },
+    suggestionsClose: {
+      position: 'absolute',
+      top: 2,
+      right: 2,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    suggestionsCloseText: {
+      fontSize: 16,
+      lineHeight: 18,
+      color: c.textMuted,
     },
     suggestionChip: {
       borderWidth: 1,
@@ -398,6 +416,16 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Suggest replies is offered only on the latest assistant reply (messages
+  // are chronological), so the learner gets a reply hint where they need one.
+  const lastAssistantId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') {
+        return messages[i].id;
+      }
+    }
+    return null;
+  }, [messages]);
   const [session, setSession] = useState<Session | null>(null);
   const [topicExpanded, setTopicExpanded] = useState(false);
   const [exampleVisible, setExampleVisible] = useState(false);
@@ -735,7 +763,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
 
   /**
    * TASK-060 menu selection. Copy runs through the clipboard seam, Suggest
-   * replies (user messages only) generates three candidate messages
+   * replies (latest assistant message only) generates three candidate messages
    * (TASK-061) that the user can tap into the composer, Improve my English
    * (TASK-064) opens the improvement sheet for that message and Select text
    * (TASK-069) opens the vocabulary selection surface over its content;
@@ -1010,6 +1038,15 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             </View>
           ) : suggestions !== null ? (
             <View style={[styles.suggestionsBar, styles.suggestionsRow]} testID="chat-suggestions">
+              <Pressable
+                style={styles.suggestionsClose}
+                onPress={clearSuggestions}
+                hitSlop={8}
+                testID="chat-suggestions-close"
+                accessibilityRole="button"
+                accessibilityLabel="Close suggested replies">
+                <Text style={styles.suggestionsCloseText}>×</Text>
+              </Pressable>
               {suggestions.replies.map((reply, index) => (
                 <Pressable
                   key={`${suggestions.messageId}-${index}`}
@@ -1071,6 +1108,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             // Select text entry disappears while serverless is active
             // instead of offering a save that could only fail.
             vocabularyEnabled={mode === 'server'}
+            suggestRepliesAvailable={menuMessage !== null && menuMessage.id === lastAssistantId}
             onClose={() => {
               setMenuMessage(null);
             }}

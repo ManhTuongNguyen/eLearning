@@ -18,9 +18,10 @@
  * 3. Pure — no database access and no provider calls
  */
 
-import type {EnglishLevel} from '../api/profile';
-import type {LocalMessage} from '../db/types';
-import type {CompletionMessage, CompletionRequest} from './types';
+import type { EnglishLevel } from '../api/profile';
+import type { LocalMessage } from '../db/types';
+import { splitHintQuestions } from './topicGeneration';
+import type { CompletionMessage, CompletionRequest } from './types';
 
 const HISTORY_ROLES = new Set(['user', 'assistant']);
 
@@ -28,7 +29,18 @@ const IDENTITY_SECTION =
   'You are an AI English tutor chatting with a learner who practises ' +
   'conversational English with you.\n' +
   'Keep your replies natural, friendly and appropriate for the learner\'s ' +
-  'level, and gently model correct English.';
+  'level. Respond to what the learner means, as a real conversation partner ' +
+  'would.\n' +
+  'Your reply must be ONLY the chat message itself: one natural, ' +
+  'conversational turn, as if spoken aloud in the conversation.\n' +
+  'NEVER correct, quote, rephrase or comment on the learner\'s wording, ' +
+  'spelling or grammar in your reply. Corrections are handled separately, ' +
+  'so do not point out any mistake, even a small one.\n' +
+  'NEVER add notes, explanations or commentary about your teaching choices, ' +
+  'grammar modelling, corrections or strategy — not even in parentheses, ' +
+  'brackets or as a postscript after the message. Never say or imply that ' +
+  'you are modelling, demonstrating or correcting grammar. Never break ' +
+  'character or talk about your role as a tutor inside the reply.';
 
 const LEVEL_LINES: Record<EnglishLevel, string> = {
   A1: 'The learner\'s English level is A1 (CEFR); keep vocabulary, grammar and explanations at that level.',
@@ -42,6 +54,27 @@ const LEVEL_LINES: Record<EnglishLevel, string> = {
 
 const TOPIC_TITLE_LINE = 'Conversation topic: "{title}".';
 const TOPIC_SCENARIO_LINE = 'Topic scenario: {description}';
+// The learner's own topic hint, surfaced once at the start of the chat so the
+// tutor can ask the questions the learner actually wanted to cover. The
+// hint may contain a list of questions with list markers; stripListMarker
+// removes those so the tutor sees clean text.
+export function stripListMarker(line: string): string {
+  return line.replace(/^\s*(?:\d+\s*[.):-]|[-*•])\s*/, '').trim();
+}
+function formatHint(hint: string): string {
+  if (!hint.trim()) {
+    return '';
+  }
+  const lines = splitHintQuestions(hint);
+  if (lines.length === 0) {
+    return '';
+  }
+  if (lines.length === 1) {
+    // A single topic idea: pass it through verbatim so the model decides.
+    return hint.trim();
+  }
+  return 'Questions the learner wants to cover:\n' + lines.join('\n');
+}
 
 const SUMMARY_HEADER = 'Summary of the earlier conversation:';
 
@@ -58,6 +91,8 @@ export interface ContextInput {
   summary?: string;
   recentMessages?: readonly LocalMessage[];
   currentMessage: string;
+  /** Learner's topic hint (often a list of questions). */
+  hint?: string;
 }
 
 /**
@@ -69,7 +104,7 @@ export interface ContextInput {
  * means "no summary yet" and omits the section entirely.
  */
 export function buildContext(input: ContextInput): CompletionRequest {
-  const {level, topic, currentMessage} = input;
+  const { level, topic, currentMessage } = input;
   const summary = input.summary ?? '';
   const recentMessages = input.recentMessages ?? [];
 
@@ -85,20 +120,21 @@ export function buildContext(input: ContextInput): CompletionRequest {
     throw new Error('currentMessage must not be empty.');
   }
 
-  const systemPrompt = buildSystemPrompt(level, topic, summary);
+  const systemPrompt = buildSystemPrompt(level, topic, summary, input.hint);
   const messages: CompletionMessage[] = [
-    {role: 'system', content: systemPrompt},
+    { role: 'system', content: systemPrompt },
     ...historyTurns(recentMessages),
-    {role: 'user', content: stripped},
+    { role: 'user', content: stripped },
   ];
 
-  return {messages};
+  return { messages };
 }
 
 function buildSystemPrompt(
   level: EnglishLevel,
   topic: GeneratedTopic,
   summary: string,
+  hint?: string,
 ): string {
   const blocks: string[] = [
     IDENTITY_SECTION,
@@ -108,6 +144,11 @@ function buildSystemPrompt(
       TOPIC_SCENARIO_LINE.replace('{description}', topic.description),
     ].join('\n'),
   ];
+
+  const formattedHint = formatHint(hint ?? '');
+  if (formattedHint) {
+    blocks.push(formattedHint);
+  }
 
   if (summary.trim()) {
     blocks.push([SUMMARY_HEADER, summary].join('\n'));
@@ -132,7 +173,7 @@ function historyTurns(
     }
     // Only include complete messages with content
     if (msg.status === 'complete' && msg.content.trim()) {
-      turns.push({role: msg.role, content: msg.content});
+      turns.push({ role: msg.role, content: msg.content });
     }
   }
   return turns;

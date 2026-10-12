@@ -28,6 +28,7 @@ import type {CompletionRequest, OpenRouterClient} from './types';
 import {selectRecentMessages} from './windowSelector';
 import {archiveRange} from './summaryTrigger';
 import {generateSummary} from './summarizer';
+import {splitHintQuestions} from './topicGeneration';
 
 /**
  * Build the LLM context for one serverless chat turn (the TurnRequestBuilder
@@ -67,6 +68,8 @@ export async function buildServerlessContext(
   const priorMessages = messages.filter(msg => msg.sequence < turn.userMessage.sequence);
   const recentMessages = selectRecentMessages(priorMessages);
 
+  const hint = normalizeHint(turn.session.topic_hint);
+
   return buildContext({
     level: turn.session.learning_level,
     topic: {
@@ -76,7 +79,17 @@ export async function buildServerlessContext(
     summary: summary?.content,
     recentMessages,
     currentMessage: turn.userMessage.content,
+    hint,
   });
+}
+
+/** Normalize the stored hint and only surface it in list-of-questions mode. */
+function normalizeHint(hint: string): string {
+  const questions = splitHintQuestions(hint);
+  if (questions.length < 2) {
+    return '';
+  }
+  return 'Questions the learner wants to cover:\n' + questions.join('\n');
 }
 
 /**

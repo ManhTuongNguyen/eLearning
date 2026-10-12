@@ -1267,19 +1267,29 @@ Initial actions:
 For user messages:
 
 ```text
-Suggest replies
 Improve my English
 Copy
 TTS
 ```
 
-For assistant messages:
+For the latest assistant message only:
 
 ```text
 Suggest replies
 Copy
 TTS
 ```
+
+For other assistant messages:
+
+```text
+Copy
+TTS
+```
+
+Suggest replies is offered only on the most recent assistant reply, because
+the learner needs reply ideas right after the AI speaks. Improve my English
+is offered only on user messages, because it corrects the learner's own text.
 
 Acceptance criteria:
 

@@ -1,10 +1,11 @@
 /**
  * Message long-press menu (SPEC TASK-060, ROADMAP §8/§16): presents the
  * contextual actions available for one chat message. Suggested replies are
- * what the learner could say NEXT (TASK-061), so the action only exists for
- * user messages; assistant messages offer Copy / Select text / Read aloud.
- * User messages additionally offer Improve my English (it only applies to
- * the learner's own text). The menu is a bottom-sheet card over a
+ * what the learner could say NEXT (TASK-061), so the action is offered only
+ * on the latest assistant message (the parent sets `suggestRepliesAvailable`).
+ * Assistant messages otherwise offer Copy / Select text / Read aloud. User
+ * messages offer Improve my English (it only applies to the learner's own
+ * text) plus Copy / Select text / Read aloud. The menu is a bottom-sheet card over a
  * dismissible backdrop: it closes through the Close control, a backdrop tap
  * or the Android back button, and its container is marked as an
  * accessibility modal with every action exposed as a labeled button.
@@ -38,7 +39,6 @@ export interface MessageActionItem {
 }
 
 const USER_ACTIONS: MessageActionItem[] = [
-  {action: 'suggest-replies', label: 'Suggest replies'},
   {action: 'improve-english', label: 'Improve my English'},
   {action: 'select-text', label: 'Select text'},
   {action: 'copy', label: 'Copy'},
@@ -46,13 +46,22 @@ const USER_ACTIONS: MessageActionItem[] = [
 ];
 
 const ASSISTANT_ACTIONS: MessageActionItem[] = [
+  {action: 'suggest-replies', label: 'Suggest replies'},
   {action: 'select-text', label: 'Select text'},
   {action: 'copy', label: 'Copy'},
   {action: 'speak', label: 'Read aloud'},
 ];
 
-function actionsForRole(role: 'user' | 'assistant' | null): MessageActionItem[] {
-  return role === 'user' ? USER_ACTIONS : ASSISTANT_ACTIONS;
+function actionsForRole(
+  role: 'user' | 'assistant' | null,
+  suggestRepliesAvailable: boolean,
+): MessageActionItem[] {
+  if (role === 'user') {
+    return USER_ACTIONS;
+  }
+  return suggestRepliesAvailable
+    ? ASSISTANT_ACTIONS
+    : ASSISTANT_ACTIONS.filter(item => item.action !== 'suggest-replies');
 }
 
 function testIdForAction(action: MessageAction): string {
@@ -118,6 +127,12 @@ interface MessageActionsMenuProps {
    * server-mode applications that are the menu's original context.
    */
   vocabularyEnabled?: boolean;
+  /**
+   * Whether Suggest replies is offered for an assistant message. Only the
+   * latest assistant reply qualifies, so the parent passes true for that
+   * message alone. Ignored for user messages.
+   */
+  suggestRepliesAvailable?: boolean;
   /** Dismissal callback (Close button, backdrop tap and Android back). */
   onClose: () => void;
   /** Selection callback; the parent closes the menu and runs the action. */
@@ -128,6 +143,7 @@ export function MessageActionsMenu({
   visible,
   role,
   vocabularyEnabled = true,
+  suggestRepliesAvailable = false,
   onClose,
   onSelect,
 }: MessageActionsMenuProps) {
@@ -135,10 +151,10 @@ export function MessageActionsMenu({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const actions = useMemo(
     () =>
-      actionsForRole(role).filter(
+      actionsForRole(role, suggestRepliesAvailable).filter(
         item => vocabularyEnabled || item.action !== 'select-text',
       ),
-    [role, vocabularyEnabled],
+    [role, suggestRepliesAvailable, vocabularyEnabled],
   );
 
   if (!visible) {

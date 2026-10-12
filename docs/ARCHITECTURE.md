@@ -408,8 +408,8 @@ user echo plus a pending assistant bubble (synthetic negative ids), streamed
 deltas buffered by `DeltaBuffer`, authoritative replacement from the
 `completed` event, then a silent message re-sync. Topic header is collapsible;
 the sample conversation renders in a modal with per-turn TTS. Long-press opens
-`MessageActionsMenu` (suggest replies, improve English — user messages only —
-copy, speak, select text). Text selection uses an editable `TextInput` mirror
+`MessageActionsMenu` (improve English — user messages only; suggest replies —
+latest assistant message only; copy, speak, select text). Text selection uses an editable `TextInput` mirror
 (`TextSelectionSheet`); its `Save word` action saves immediately via
 `useVocabularySave` with a success toast — no second confirmation step — and
 enrichment status appears in the vocabulary screen later. The list is windowed

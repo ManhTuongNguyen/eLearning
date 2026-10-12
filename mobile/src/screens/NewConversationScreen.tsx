@@ -88,8 +88,11 @@ function createStyles(c: ThemeColors) {
       fontSize: 15,
       color: c.textPrimary,
       marginBottom: 16,
-      // Tall enough to type a list of questions, one per line.
+      // Tall enough to type a list of questions, one per line. Capped so a
+      // long list scrolls inside the box instead of pushing the Start button
+      // off screen.
       minHeight: 96,
+      maxHeight: 200,
       textAlignVertical: 'top',
     },
     primaryButton: {

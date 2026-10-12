@@ -86,7 +86,10 @@ export type CompleteFn = (request: CompletionRequest) => Promise<CompletionResul
  * questions. A plain line without a marker comes back unchanged.
  */
 export function stripListMarker(line: string): string {
-  return line.replace(/^\s*(?:\d+[.)]|[-*•])\s+/, '').trim();
+  // Numbers followed by ".", ")", "-" or ":", or a bullet, then the text.
+  // Only the marker is removed, so a question that starts with a number
+  // ("2024 was fun?") keeps its digits when no separator follows.
+  return line.replace(/^\s*(?:\d+\s*[.):-]|[-*•])\s*/, '').trim();
 }
 
 /**

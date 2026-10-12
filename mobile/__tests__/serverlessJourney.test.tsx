@@ -431,9 +431,9 @@ describe('TASK-117 serverless journey', () => {
     );
 
     // ---- Suggest replies: three chips, tap fills the composer. ---------
-    // Suggest replies is a user-message action: it drafts what the learner
-    // could say NEXT, so the menu offers it on the learner's own row.
-    await fireEvent(top('chat-message-1'), 'longPress');
+    // Suggest replies is offered on the latest assistant reply only: it
+    // drafts what the learner could say NEXT after the AI's last message.
+    await fireEvent(top('chat-message-2'), 'longPress');
     await waitFor(() => expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen());
     fake.enqueueComplete({
       text: JSON.stringify(SUGGESTIONS),
@@ -453,6 +453,8 @@ describe('TASK-117 serverless journey', () => {
 
     // ---- Improve my English on the user message. -----------------------
     await fireEvent(top('chat-message-1'), 'longPress');
+    await waitFor(() => expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen());
+    expect(screen.queryByTestId('chat-menu-suggest-replies')).toBeNull();
     await waitFor(() => expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen());
     fake.enqueueComplete({
       text: JSON.stringify(IMPROVEMENT),
@@ -507,14 +509,13 @@ describe('TASK-117 serverless journey', () => {
     await fireEvent(top('chat-message-1'), 'longPress');
     await waitFor(() => expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen());
     expect(screen.queryByTestId('chat-menu-select-text')).toBeNull();
-    // The rest of the menu keeps working; the assistant menu additionally
-    // never offers the learner-only Suggest replies action.
+    // The rest of the menu keeps working; the latest assistant reply also
+    // offers Suggest replies.
     expect(screen.getByTestId('chat-menu-copy')).toBeOnTheScreen();
-    expect(screen.getByTestId('chat-menu-suggest-replies')).toBeOnTheScreen();
     await pressTop('chat-menu-copy');
     await fireEvent(top('chat-message-2'), 'longPress');
     await waitFor(() => expect(screen.getByTestId('chat-menu-modal')).toBeOnTheScreen());
-    expect(screen.queryByTestId('chat-menu-suggest-replies')).toBeNull();
+    expect(screen.getByTestId('chat-menu-suggest-replies')).toBeOnTheScreen();
     expect(screen.getByTestId('chat-menu-copy')).toBeOnTheScreen();
 
     // And the selection sheet can never be reached through the UI.

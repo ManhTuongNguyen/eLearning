@@ -1,11 +1,12 @@
 /**
  * Grammar badge rendering on the message row.
  *
- * Covers the badge contract end to end: only user messages carry a badge,
- * severity "minor" renders the warning-styled badge and "critical" the
- * error-styled one, "none"/unchecked render nothing, the badge is
- * pressable through the cached-improvement handler (never a new API call
- * — the handler receives the message) and the bubble text is untouched.
+ * Covers the badge contract end to end: only user messages carry a corner
+ * status mark, severity "none" renders a check, "minor" a "!" and "critical"
+ * a "✕", in warning and error colors, unchecked messages render nothing, the mark
+ * and a tap anywhere on a checked bubble open the cached improvement
+ * (never a new API call — the handler receives the message), and the
+ * bubble text is untouched.
  */
 import React from 'react';
 import {render, screen, fireEvent} from '@testing-library/react-native';
@@ -65,29 +66,45 @@ describe('MessageRow grammar badge', () => {
     expect(screen.queryByTestId('chat-grammar-badge-101')).toBeNull();
   });
 
-  it('renders no badge when the message was already correct (none)', async () => {
+  it('renders a success-styled check mark when the message was already correct (none)', async () => {
     await renderRow({}, 'none');
-    expect(screen.queryByTestId('chat-grammar-badge-101')).toBeNull();
+
+    const badge = screen.getByTestId('chat-grammar-badge-101');
+    expect(badge.props.accessibilityLabel).toBe('Looks good, open feedback');
+    expect(screen.getByText('✓')).toBeOnTheScreen();
+    expect(flattenStyle(badge.props.style)).toMatchObject({borderColor: lightColors.success});
   });
 
-  it('renders a warning-styled badge for minor severity', async () => {
+  it('renders a warning-styled "!" mark for minor severity', async () => {
     await renderRow({}, 'minor');
 
     const badge = screen.getByTestId('chat-grammar-badge-101');
-    expect(screen.getByText('Minor issues')).toBeOnTheScreen();
-
-    const badgeStyle = flattenStyle(badge.props.style);
-    expect(badgeStyle).toMatchObject({borderColor: lightColors.warning});
+    expect(badge.props.accessibilityLabel).toBe('Minor grammar issues found, open suggestion');
+    expect(screen.getByText('!')).toBeOnTheScreen();
+    expect(flattenStyle(badge.props.style)).toMatchObject({borderColor: lightColors.warning});
   });
 
-  it('renders an error-styled badge for critical severity', async () => {
+  it('renders an error-styled "✕" mark for critical severity', async () => {
     await renderRow({}, 'critical');
 
     const badge = screen.getByTestId('chat-grammar-badge-101');
-    expect(screen.getByText('Grammar issues')).toBeOnTheScreen();
+    expect(badge.props.accessibilityLabel).toBe('Serious grammar issues found, open suggestion');
+    expect(screen.getByText('✕')).toBeOnTheScreen();
+    expect(screen.queryByText('!')).toBeNull();
+    expect(flattenStyle(badge.props.style)).toMatchObject({borderColor: lightColors.errorText});
+  });
 
-    const badgeStyle = flattenStyle(badge.props.style);
-    expect(badgeStyle).toMatchObject({borderColor: lightColors.errorText});
+  it('keeps the corner mark small and absolutely positioned', async () => {
+    await renderRow({}, 'minor');
+
+    const badge = screen.getByTestId('chat-grammar-badge-101');
+    expect(flattenStyle(badge.props.style)).toMatchObject({
+      position: 'absolute',
+      width: 16,
+      height: 16,
+    });
+    // 16px visible mark + 14px slop each side ≈ 44px touch target.
+    expect(badge.props.hitSlop).toBe(14);
   });
 
   it('never renders a badge on assistant rows', async () => {
@@ -104,6 +121,29 @@ describe('MessageRow grammar badge', () => {
 
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(onPress).toHaveBeenCalledWith(item);
+  });
+
+  it('opens the cached improvement when the whole bubble is tapped, for any checked severity', async () => {
+    const onPress = jest.fn();
+    const item = await renderRow({}, 'minor', onPress);
+
+    fireEvent.press(screen.getByTestId('chat-message-101'));
+
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(onPress).toHaveBeenCalledWith(item);
+    expect(screen.getByTestId('chat-message-101').props.accessibilityHint).toBe(
+      'Opens the improvement suggestion',
+    );
+  });
+
+  it('keeps an unchecked bubble non-tappable for the feedback sheet', async () => {
+    const onPress = jest.fn();
+    await renderRow({}, null, onPress);
+
+    fireEvent.press(screen.getByTestId('chat-message-101'));
+
+    expect(onPress).not.toHaveBeenCalled();
+    expect(screen.getByTestId('chat-message-101').props.accessibilityHint).toBeUndefined();
   });
 
   it('keeps the message text verbatim next to the badge', async () => {

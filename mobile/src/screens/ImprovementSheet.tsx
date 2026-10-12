@@ -67,6 +67,12 @@ function createStyles(c: ThemeColors) {
       lineHeight: 20,
       paddingVertical: 16,
     },
+    correctLabel: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.success,
+      marginTop: 8,
+    },
     sectionLabel: {
       fontSize: 12,
       fontWeight: '600',
@@ -143,6 +149,13 @@ export function ImprovementSheet({
     }
   }, [result]);
 
+  // severity "none" = already correct (positive state, not an error). The
+  // suggestion is still shown when it differs from the original, because a
+  // correct message can be extended into a fuller version.
+  const isCorrect = result?.severity === 'none';
+  const hasSuggestion =
+    result !== null && result.improved.trim().length > 0 && result.improved.trim() !== result.original.trim();
+
   if (!visible) {
     return null;
   }
@@ -154,11 +167,16 @@ export function ImprovementSheet({
       testID="chat-improvement-modal"
       transparent
       visible>
-      <Pressable
-        style={styles.backdrop}
-        onPress={onClose}
-        testID="chat-improvement-backdrop">
-        <Pressable style={styles.sheet} testID="chat-improvement">
+      <View style={styles.backdrop}>
+        {/* The backdrop is a sibling layer behind the sheet, not an ancestor:
+            a Pressable wrapping the sheet would claim the long-press that
+            text selection in the rewrite needs. */}
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          testID="chat-improvement-backdrop"
+        />
+        <View style={styles.sheet} testID="chat-improvement">
           <View accessibilityViewIsModal testID="chat-improvement-content">
             <View style={styles.header}>
               <Text style={styles.title}>Improved English</Text>
@@ -181,31 +199,50 @@ export function ImprovementSheet({
               </Text>
             ) : result !== null ? (
               <>
+                {isCorrect ? (
+                  <Text style={styles.correctLabel} testID="chat-improvement-correct">
+                    Your English looks good
+                  </Text>
+                ) : null}
                 <Text style={styles.sectionLabel}>Your message</Text>
                 <View testID="chat-improvement-original">
                   <Text style={styles.originalText}>{result.original}</Text>
                 </View>
-                <Text style={styles.sectionLabel}>Suggested improvement</Text>
-                <View style={styles.improvedCard} testID="chat-improvement-improved">
-                  <Text style={styles.improvedText}>{result.improved}</Text>
-                </View>
+                {/* A correct message can still be extended with a fuller
+                    version, so the card stays whenever the text differs. */}
+                {hasSuggestion ? (
+                  <>
+                    <Text style={styles.sectionLabel}>
+                      {isCorrect ? 'You could say it this way' : 'Suggested improvement'}
+                    </Text>
+                    <View style={styles.improvedCard} testID="chat-improvement-improved">
+                      {/* selectable lets Android 11+ show the native text
+                          selection toolbar, which includes Translate. */}
+                      <Text selectable style={styles.improvedText}>
+                        {result.improved}
+                      </Text>
+                    </View>
+                  </>
+                ) : null}
                 <Text style={styles.sectionLabel}>What changed</Text>
                 <View testID="chat-improvement-explanation">
                   <Text style={styles.explanationText}>{result.explanation}</Text>
                 </View>
-                <Pressable
-                  style={styles.copyButton}
-                  onPress={copyImproved}
-                  testID="chat-improvement-copy"
-                  accessibilityRole="button"
-                  accessibilityLabel="Copy improved text">
-                  <Text style={styles.copyButtonText}>Copy improved text</Text>
-                </Pressable>
+                {hasSuggestion ? (
+                  <Pressable
+                    style={styles.copyButton}
+                    onPress={copyImproved}
+                    testID="chat-improvement-copy"
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy improved text">
+                    <Text style={styles.copyButtonText}>Copy improved text</Text>
+                  </Pressable>
+                ) : null}
               </>
             ) : null}
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
