@@ -32,7 +32,7 @@ Debug builds fetch JS from Metro. For an emulator on the same machine, Metro is 
 
 ## Native dependencies (icons)
 
-`react-native-svg` and `lucide-react-native` provide the icon set used by the Home hub (TASK-SENT-001). Every icon is rendered through the single seam `src/components/Icon.tsx` — screens never import the icon library directly.
+`react-native-svg` and `lucide-react-native` provide the icon set used by the Home hub and the Real-life sentences screens (TASK-SENT-001). Every icon is rendered through the single seam `src/components/Icon.tsx` — screens never import the icon library directly.
 
 `react-native-svg` contains native Android code, so an existing checkout must be rebuilt after pulling these dependencies; reloading Metro is not enough:
 
@@ -88,6 +88,74 @@ State lives in `src/mode/`:
 
 The two modes are intentionally isolated; switching never merges or synchronizes their data (ROADMAP §15).
 
+## Real-life sentences (serverless)
+
+A local bank of the everyday English a native speaker actually uses, drilled with
+spaced repetition. The feature is **serverless-only**: it never calls the Django
+backend. Its Home row is hidden in server mode, the topics screen shows a mode
+notice there instead of reading SQLite, and the practice-mode setting is hidden as
+well.
+
+### Topics and generation
+
+- Home → **Real-life sentences** lists topics newest first with each topic's
+  sentence count and how many sentences are due now. The Home row carries a due
+  badge that disappears at zero.
+- A topic has a required title and an optional English description, for example
+  "meeting someone new in a new city". Creating one opens its (empty) sentence
+  list.
+- Every sentence stores the English `text`, an English-only `meaning` paraphrase
+  and a short real-life `situation`. There is no Vietnamese anywhere in this
+  feature.
+- The topic screen shows the sentence, its meaning and situation, a due/status
+  hint, a speaker button for TTS and a delete action.
+- **Generate** offers 1 / 5 / 10 sentences (default 5) through the learner's own
+  serverless provider. The request carries the topic, the learner's CEFR level
+  and up to 50 existing sentences. A review modal then keeps all candidates, a
+  selection, or discards the batch; kept candidates are written in one
+  transaction and normalized duplicates are skipped.
+- **Practice** unlocks at 5 sentences. A session contains only due, non-suspended
+  cards, oldest due first, capped at 20. A sentence graded `Again` returns once
+  later in the same session; a second `Again` does not requeue it.
+
+### Again / Good / Easy schedule
+
+| Grade | New / learning card | Review card |
+| --- | --- | --- |
+| **Again** | learning step, due in 10 minutes; lapses +1, ease −0.20 | same 10-minute learning step |
+| **Good** | review, due in 1 day | due in `interval × ease` (never shorter) |
+| **Easy** | review, due in 4 days; ease +0.15 | due in `interval × ease × 1.3`; ease +0.15 |
+
+Ease starts at 2.5, is clamped to `[1.3, 3.0]`, and intervals are capped at 365
+days. Repeated `Good` on a fresh sentence grows the gap 1 day → 2.5 days → 6.25
+days → about 15.6 days → about 39 days. The schedule is computed by the pure
+`src/srs/scheduler.ts` and persisted by `src/db/sentenceRepository.ts`.
+
+### Practice modes
+
+Settings → **Sentence practice mode** (serverless only, persisted in AsyncStorage,
+default `auto`):
+
+- **Auto** — `new` / `learning` sentences are dictation cards; `review` sentences
+  are situation-recall cards.
+- **Dictation** — every card is a dictation: the sentence is spoken once, the
+  learner types it, and a word-level diff pre-selects `Good` or `Again`. The
+  learner can always override with Again / Good / Easy.
+- **Recall** — every card shows the situation and an optional English meaning
+  hint; revealing the answer plays TTS, then the grade buttons appear.
+
+Both card types allow one playback at a time and silence it on card change or
+unmount.
+
+### Storage and icons
+
+The bank lives in schema version 4 of the local SQLite database
+(`sentence_topics`, `sentences`, `sentence_review_log`).
+`src/db/sentenceRepository.ts` owns every statement, and **Clear local data**
+empties all three tables in the same transaction. The screens use the shared
+`src/components/Icon.tsx` seam, so the native dependency and rebuild requirement
+in [Native dependencies (icons)](#native-dependencies-icons) applies.
+
 ## Grammar auto-check (opt-in)
 
 An opt-in learning aid (default off) built on the improvement pipeline of
@@ -123,7 +191,7 @@ Serverless mode persists conversations on-device in SQLite (`src/db/`, SPEC TASK
 - `nativeDriver.ts` — adapter over `react-native-sqlite-storage`; enables foreign keys so deleting a session cascades to its messages and summary.
 - `migrations.ts` — append-only, ordered migration list; the applied version is stored in SQLite's `user_version`. Each migration runs in a transaction and a failure leaves the recorded version untouched.
 - `database.ts` — `getLocalDatabase()` opens and migrates the database automatically on first use.
-- Entity stores (`sessionStore`, `messageStore`, `summaryStore`, `profileStore`, `settingsStore`) expose typed CRUD mirroring the backend serializers. The OpenRouter API key must not be stored here (secure storage only).
+- Entity stores (`sessionStore`, `messageStore`, `summaryStore`, `profileStore`, `settingsStore`, `sentenceRepository`) expose typed CRUD mirroring the backend serializers. The OpenRouter API key must not be stored here (secure storage only).
 
 Tests run against real SQL via a sql.js-backed driver (`testing/sqlJsDriver.ts`, dev-only, never bundled); `react-native-sqlite-storage` is mocked globally in `jest.setup.js`.
 

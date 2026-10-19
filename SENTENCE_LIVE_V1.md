@@ -743,7 +743,7 @@ Priority: `P1`
 
 ## TASK-SENT-015 — Documentation
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P2`
 

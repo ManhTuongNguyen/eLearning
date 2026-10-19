@@ -376,7 +376,8 @@ State management is plain React Context — no external store library.
 loading      → SplashScreen
 unauthenticated → AuthNavigator   (Login, Register)
 authenticated   → MainNavigator   (Chat, NewConversation, History,
-                                   Settings, Level, Vocabulary, AIProviderSettings)
+                                   Settings, Level, Vocabulary, AIProviderSettings,
+                                   SentenceTopics, SentenceTopic, SentencePractice)
 ```
 
 Navigation params are fully typed (`src/navigation/types.ts`), including the
@@ -439,14 +440,17 @@ retro-checked.
   tracked in `PRAGMA user_version` (`src/db/migrations.ts`): `learning_profile`
   (single row), `settings` (key/value), `sessions`, `messages`
   (unique `(session_id, sequence)`, cascading delete), `summaries`
-  (one per session with `message_boundary`).
+  (one per session with `message_boundary`), and the schema-v4 sentence bank
+  (`sentence_topics`, `sentences`, `sentence_review_log`).
 - Typed entity stores (`sessionStore`, `messageStore`, `summaryStore`,
   `profileStore`, `settingsStore`) are wrapped by
-  `LocalConversationRepository` (`src/db/conversationRepository.ts`); feature
-  code never writes SQL.
+  `LocalConversationRepository` (`src/db/conversationRepository.ts`), and
+  `sentenceRepository` owns the sentence-bank tables; feature code never writes
+  SQL.
 - `clearServerlessLocalData()` (`src/db/clearLocalData.ts`) wipes serverless
-  tables in one transaction and clears the stored provider keys — it never
-  touches auth tokens, the theme preference, or the mode flag.
+  tables — including sentence topics, sentences and the review log — in one
+  transaction and clears the stored provider keys — it never touches auth
+  tokens, the theme preference, or the mode flag.
 
 ### 8.5 Serverless LLM provider layer
 
@@ -474,6 +478,7 @@ retro-checked.
   `settings` table (`settings.ts`, `modelCatalog.ts`; a catalog is refreshed
   only on success so a failed refresh never destroys the cache).
 - Local feature services mirror the backend: `topicGeneration.ts`,
+  `sentenceGeneration.ts` (real-life sentence bank, below),
   `contextBuilder.ts` / `conversationContext.ts` (identical context shape and
   thresholds), `summarizer.ts` + `summaryTrigger.ts` (same trigger math),
   `suggestions.ts` (exactly three replies), `improvement.ts`.
@@ -498,6 +503,60 @@ English voice-data availability (`E_TTS_LANGUAGE_UNAVAILABLE`) and single
 pending-promise playback. `useSpeechPlayback` enforces one active playback and
 silences on unmount/session switch.
 
+### 8.7 Real-life sentence bank (serverless)
+
+A local, English-only bank of everyday sentences with spaced-repetition
+practice. It never calls the Django backend. The Home row exists only in
+serverless mode; in server mode `SentenceTopicsScreen` renders an explicit mode
+notice and performs zero local reads, while before the persisted mode has been
+restored it shows a spinner.
+
+**Store.** `src/db/sentenceRepository.ts` owns every SQL statement for schema
+version 4: `sentence_topics`, `sentences` and `sentence_review_log` (migration
+in `src/db/migrations.ts`). It provides typed topic CRUD, batch insertion,
+sentence listing and deletion, review-state persistence, review logging and due
+queries (`countDueSentences`, `countDueSentencesForTopic`, `listDueSentences`).
+Batch insertion computes `normalized_text` and silently skips duplicates within
+a topic; a generated sentence is due immediately. Deleting a topic cascades to
+its sentences and log rows, and `clearServerlessLocalData()` clears all three
+tables. The same repository backs the Home due badge and the per-topic due
+counts.
+
+**Pure scheduler.** `src/srs/scheduler.ts` implements `scheduleNext(state,
+grade, now)` with no clock, storage or React. `Again` moves a card to a
+10-minute learning step, counts a lapse and lowers ease by 0.20. `Good`
+graduates a new/learning card to 1 day and grows a review interval by
+`interval × ease`. `Easy` graduates to 4 days or, in review, uses
+`interval × ease × 1.3`, and raises ease by 0.15. Ease starts at 2.5 and is
+clamped to `[1.3, 3.0]`; review intervals never shrink and are capped at 365
+days. `src/srs/session.ts` holds the session rules: only non-suspended cards
+with `due_at <= now`, oldest due first, at most 20 cards, practice unlocked at
+5 sentences, and an `Again` card requeued once per session.
+`src/srs/answerCheck.ts` supplies the word-level diff and the Good/Again
+suggestion for dictation; `src/srs/normalize.ts` is the shared duplicate key.
+
+**Generation service.** `src/serverless/sentenceGeneration.ts` makes one
+completion through the existing registry seam (the user's own provider,
+resolved by `createProviderClient` + `loadServerlessConfig`) and reads the
+learner's CEFR level from the local profile. The prompt carries the topic,
+level, requested count (1 / 5 / 10) and up to 50 existing sentences. The parser
+tolerates fenced or prose-wrapped JSON, drops entries without a sentence or
+meaning, defaults a missing situation to blank, and filters duplicates through
+the normalized key; only an empty valid result is fatal. Kept candidates are
+persisted in one transaction from the review modal.
+
+**Card modes and screens.** `src/srs/cardMode.ts` maps `auto` to dictation for
+`new`/`learning` sentences and recall for `review` sentences;
+`src/preferences/practiceMode.ts` persists the `auto | dictation | recall`
+preference in AsyncStorage (default `auto`, invalid values fall back to
+`auto`). The Settings row is serverless-only and applies to the next card.
+`SentencePracticeScreen` builds a due-only session, plays TTS through the shared
+speech seam (one playback, silenced on card change or unmount), persists the
+scheduler result and a review-log row with the card mode after every grade, and
+ends with a summary of cards reviewed and Again/Good/Easy counts. When nothing
+is due it shows "All caught up" and the next due time instead of allowing
+practice ahead.
+
 ---
 
 ## 9. Testing strategy
@@ -520,4 +579,6 @@ silences on unmount/session switch.
   in-memory mocks for keychain/AsyncStorage/SQLite/share. Component,
   navigation, streaming-state, mode-isolation, serverless-journey and
   serverless service tests all run without a device (`pnpm test`, `pnpm lint`,
-  `pnpm typecheck`).
+  `pnpm typecheck`). The sentence bank adds schema/repository tests, pure
+  scheduler/session/answer-check tests, generation-parser tests, and screen
+  tests for topics, topic generation/review, practice cards and mode gating.

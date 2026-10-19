@@ -418,8 +418,9 @@ system prompt confines each reply to the conversation message itself.
 - Speaking practice (karaoke-style): the AI writes a reading-aloud text sized to your session length, shown as a teleprompter that scrolls at an adjustable speed
 - Listen mode: the device TTS reads the text aloud while the scroll follows the speech in real time, with pause/resume and the screen kept awake
 - Speaking history: completed speaking sessions are saved locally, reviewable and replayable in listen mode
+- Real-life sentences (serverless only): collect everyday English per topic, generate new sentences through your own provider, and drill them with Again / Good / Easy spaced repetition, dictation and situation recall
 - Adjustable teleprompter scroll speed in Settings
-- Two isolated modes: authenticated **Server mode** and local **Serverless mode**
+- Two isolated modes: authenticated **Server mode** and local **Serverless mode** (Real-life sentences are available in serverless mode only)
 - Multi-provider LLM support (OpenRouter, Google Gemini, OpenAI, 9Router, OpenAI-compatible) with ordered model fallback
 
 ## Architecture
