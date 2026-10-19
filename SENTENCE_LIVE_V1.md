@@ -352,7 +352,7 @@ dependency-safe task.
 
 ## TASK-SENT-001 — Add the icon dependency and the Icon seam
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

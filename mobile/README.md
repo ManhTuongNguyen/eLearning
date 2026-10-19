@@ -30,6 +30,19 @@ pnpm android        # build + install + launch on a connected device/emulator
 
 Debug builds fetch JS from Metro. For an emulator on the same machine, Metro is reachable via `adb reverse tcp:8081 tcp:8081` (done automatically by `run-android`).
 
+## Native dependencies (icons)
+
+`react-native-svg` and `lucide-react-native` provide the icon set used by the Home hub (TASK-SENT-001). Every icon is rendered through the single seam `src/components/Icon.tsx` — screens never import the icon library directly.
+
+`react-native-svg` contains native Android code, so an existing checkout must be rebuilt after pulling these dependencies; reloading Metro is not enough:
+
+```bash
+pnpm install
+pnpm android                      # or: cd android && ./gradlew assembleRelease
+```
+
+Under Jest the library is mapped to its published CommonJS entry in `jest.config.js`, so the ~3800 icon modules are not transformed on every suite.
+
 ## Configuration (backend server URL)
 
 The backend base URL is environment-driven (`src/config.ts` reads it from the virtual `@env` module via the `react-native-dotenv` babel plugin) — it is never hard-coded in application source.

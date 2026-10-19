@@ -108,7 +108,10 @@ async function renderSettings(mode: 'server' | 'serverless', params?: MainStackP
   await saveApplicationMode(mode);
   const props = settingsProps(params);
 
-  render(
+  // React Native Testing Library 14 renders asynchronously: the tree (and the
+  // shared `screen` binding) only exist once this promise settles. Awaiting it
+  // removes the intermittent "unable to find testID" race in this helper.
+  await render(
     <ModeProvider>
       <ThemeProvider>
         <SettingsScreen {...props} />
