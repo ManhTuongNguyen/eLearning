@@ -574,7 +574,7 @@ Priority: `P1`
 
 ## TASK-SENT-009 — Sentence topic screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
