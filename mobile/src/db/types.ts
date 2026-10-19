@@ -152,3 +152,41 @@ export interface SentenceReviewLogRecord {
   mode: ReviewCardMode;
   reviewed_at: string;
 }
+
+/** Attributes accepted when creating a topic; omitted fields default. */
+export interface NewSentenceTopic {
+  title: string;
+  description?: string;
+  english_level?: EnglishLevel;
+}
+
+/** One generated (or hand-written) sentence before it has an id. */
+export interface NewSentence {
+  text: string;
+  meaning: string;
+  situation?: string;
+}
+
+/** A topic row plus the counts the topic list shows. */
+export interface SentenceTopicSummary extends SentenceTopicRecord {
+  /** Sentences in the topic, suspended ones included. */
+  sentence_count: number;
+  /** Sentences due at the reference time, suspended ones excluded. */
+  due_count: number;
+}
+
+/**
+ * The review-state half of a sentence row: exactly what the scheduler returns
+ * and the repository persists. Kept separate from the content columns so a
+ * review can never accidentally rewrite the sentence the learner studies.
+ */
+export interface SentenceReviewState {
+  status: SentenceStatus;
+  reps: number;
+  lapses: number;
+  ease: number;
+  interval_days: number;
+  due_at: string;
+  last_grade: ReviewGrade;
+  last_reviewed_at: string;
+}

@@ -428,7 +428,7 @@ Priority: `P1`
 
 ## TASK-SENT-004 — Sentence repository
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
