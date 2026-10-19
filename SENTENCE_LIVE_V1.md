@@ -461,7 +461,7 @@ duplicates instead of throwing; it returns the rows actually inserted.
 
 ## TASK-SENT-005 — Spaced-repetition scheduler
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
