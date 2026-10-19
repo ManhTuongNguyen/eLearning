@@ -16,6 +16,7 @@ import {HomeScreen} from '../screens/HomeScreen';
 import {LevelScreen} from '../screens/LevelScreen';
 import {NewConversationScreen} from '../screens/NewConversationScreen';
 import {PracticeScreen} from '../screens/PracticeScreen';
+import {SentenceTopicsScreen} from '../screens/SentenceTopicsScreen';
 import {SettingsScreen} from '../screens/SettingsScreen';
 import {SpeakingHistoryScreen} from '../screens/SpeakingHistoryScreen';
 import {SpeakingPracticeScreen} from '../screens/SpeakingPracticeScreen';
@@ -42,6 +43,7 @@ export function MainNavigator() {
       <Stack.Screen name="Practice" component={PracticeScreen} />
       <Stack.Screen name="SpeakingPractice" component={SpeakingPracticeScreen} />
       <Stack.Screen name="SpeakingHistory" component={SpeakingHistoryScreen} />
+      <Stack.Screen name="SentenceTopics" component={SentenceTopicsScreen} />
     </Stack.Navigator>
   );
 }

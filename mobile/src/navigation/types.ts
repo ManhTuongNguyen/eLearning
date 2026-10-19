@@ -60,6 +60,12 @@ export type MainStackParamList = {
     | undefined;
   /** History of completed speaking practice sessions. */
   SpeakingHistory: undefined;
+  /** Real-life sentences: topic list, topic editor, practice (TASK-SENT-008+). */
+  SentenceTopics: undefined;
+  /** A topic's sentence bank (TASK-SENT-009). */
+  SentenceTopic: {topicId: number};
+  /** Spaced-repetition practice for one topic (TASK-SENT-012). */
+  SentencePractice: {topicId: number};
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -102,6 +108,21 @@ export type SpeakingPracticeScreenProps = NativeStackScreenProps<
 export type SpeakingHistoryScreenProps = NativeStackScreenProps<
   MainStackParamList,
   'SpeakingHistory'
+>;
+
+export type SentenceTopicsScreenProps = NativeStackScreenProps<
+  MainStackParamList,
+  'SentenceTopics'
+>;
+
+export type SentenceTopicScreenProps = NativeStackScreenProps<
+  MainStackParamList,
+  'SentenceTopic'
+>;
+
+export type SentencePracticeScreenProps = NativeStackScreenProps<
+  MainStackParamList,
+  'SentencePractice'
 >;
 
 export type HomeScreenProps = NativeStackScreenProps<MainStackParamList, 'Home'>;
