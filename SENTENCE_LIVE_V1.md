@@ -658,7 +658,7 @@ Priority: `P2`
 
 ## TASK-SENT-012 — Practice screen: dictation and recall cards
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
