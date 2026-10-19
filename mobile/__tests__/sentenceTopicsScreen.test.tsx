@@ -8,9 +8,12 @@
  * rather than stubs.
  */
 import React from 'react';
-import {fireEvent, render, waitFor} from '@testing-library/react-native';
+import {act, fireEvent, render, waitFor} from '@testing-library/react-native';
 
-import {createSentenceTopic} from '../src/db/sentenceRepository';
+import {
+  createSentenceTopic,
+  insertSentences,
+} from '../src/db/sentenceRepository';
 import {openSqlJsDriver} from '../testing/sqlJsDriver';
 import type {SqlDriver} from '../src/db/driver';
 import {SentenceTopicsScreen} from '../src/screens/SentenceTopicsScreen';
@@ -41,8 +44,10 @@ const database = jest.mocked(require('../src/db/database'));
 
 const navigate = jest.fn();
 let listeners: Record<string, (() => void)[]> = {};
-function flushFocus() {
-  (listeners.focus ?? []).forEach(callback => callback());
+function flushFocus(): Promise<void> {
+  return act(async () => {
+    (listeners.focus ?? []).forEach(callback => callback());
+  });
 }
 function screenProps(): SentenceTopicsScreenProps {
   return {
@@ -73,6 +78,13 @@ async function renderInMode(mode: 'server' | 'serverless' = 'serverless') {
       </ThemeProvider>
     </ModeProvider>,
   );
+  if (mode === 'serverless') {
+    // Let the first load finish (and migrate the database) before callers
+    // write directly against the driver.
+    await waitFor(() => {
+      expect(view.queryByTestId('sentence-loading')).toBeFalsy();
+    });
+  }
   return {view, db};
 }
 
@@ -116,7 +128,7 @@ describe('SentenceTopicsScreen — topic list', () => {
     await createSentenceTopic(localDb, {title: 'Neighbours', description: ''});
 
     // Re-list by simulating the screen regaining focus.
-    flushFocus();
+    await flushFocus();
     await waitFor(() => {
       expect(view.getByTestId('topic-2')).toBeTruthy();
     });
@@ -125,12 +137,34 @@ describe('SentenceTopicsScreen — topic list', () => {
     expect(view.getByText('Coffee')).toBeTruthy();
   });
 
-  test('shows a due-count badge reflecting due sentences', async () => {
+  test('shows sentence and due counts read from the repository', async () => {
+    const {view, db: localDb} = await renderInMode();
+    const topic = await createSentenceTopic(localDb, {
+      title: 'Coffee',
+      description: '',
+    });
+    await insertSentences(localDb, topic.id, [
+      {
+        text: 'Could I get a flat white, please?',
+        meaning: 'Ask for a coffee politely.',
+        situation: 'Ordering at a café.',
+      },
+    ]);
+
+    // Re-list by simulating the screen regaining focus.
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByTestId(`topic-${topic.id}-due`)).toBeTruthy();
+      expect(view.getByText('1 due')).toBeTruthy();
+      expect(view.getByText('1 sentence')).toBeTruthy();
+    });
+  });
+
+  test('shows an "all done" badge when nothing is due', async () => {
     const {view, db: localDb} = await renderInMode();
     await createSentenceTopic(localDb, {title: 'Coffee', description: ''});
 
-    // Re-list and assert the "all done" badge appears when nothing is due.
-    flushFocus();
+    await flushFocus();
     await waitFor(() => {
       expect(view.getByTestId('topic-1-done')).toBeTruthy();
       expect(view.getByText('all done')).toBeTruthy();

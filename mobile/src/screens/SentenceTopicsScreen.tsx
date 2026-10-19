@@ -448,11 +448,19 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
             <FlatList
               data={topics}
               keyExtractor={item => String(item.id)}
-              renderItem={({item}) => (
-                <SentenceTopicRow item={item} onPress={handleTopicPress} colors={colors} styles={styles} />
+              renderItem={({item, index}) => (
+                <>
+                  {index > 0 ? <View style={styles.rowDivider} /> : null}
+                  <SentenceTopicRow
+                    item={item}
+                    onPress={handleTopicPress}
+                    colors={colors}
+                    styles={styles}
+                  />
+                </>
               )}
               contentContainerStyle={styles.listContent}
-              ItemSeparatorComponent={() => <View style={styles.rowDivider} />}              onRefresh={() => setReloadKey(key => key + 1)}
+              onRefresh={() => setReloadKey(key => key + 1)}
               refreshing={loading}
             />
           )}

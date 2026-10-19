@@ -543,7 +543,7 @@ Priority: `P1`
 
 ## TASK-SENT-008 — Routes and the sentence topics screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
