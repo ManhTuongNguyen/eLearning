@@ -11,9 +11,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {fireEvent, render, waitFor} from '@testing-library/react-native';
 
 import {saveThemeMode} from '../src/preferences/theme';
+import {saveApplicationMode} from '../src/mode/modeStorage';
 import {HomeScreen} from '../src/screens/HomeScreen';
 import type {HomeScreenProps} from '../src/navigation/types';
 import {darkColors, lightColors} from '../src/theme/colors';
+import {ModeProvider} from '../src/mode/ModeContext';
 import {ThemeProvider} from '../src/theme/ThemeContext';
 
 const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
@@ -37,6 +39,12 @@ const ROWS = [
     testID: 'home-open-speaking-history',
     route: 'SpeakingHistory',
     title: 'Speaking history',
+  },
+  {
+    icon: 'sentences',
+    testID: 'home-open-sentences',
+    route: 'SentenceTopics',
+    title: 'Real-life sentences',
   },
   {icon: 'settings', testID: 'home-open-settings', route: 'Settings', title: 'Settings'},
 ] as const;
@@ -79,11 +87,19 @@ function flattenStyle(style: unknown): Record<string, unknown> {
 }
 
 async function renderHome(props: HomeScreenProps = homeProps()) {
+  await saveApplicationMode('serverless');
   const view = await render(
-    <ThemeProvider>
-      <HomeScreen {...props} />
-    </ThemeProvider>,
+    <ModeProvider>
+      <ThemeProvider>
+        <HomeScreen {...props} />
+      </ThemeProvider>
+    </ModeProvider>,
   );
+  // The serverless-only sentence row appears once ModeProvider has restored
+  // the persisted mode (TASK-SENT-014).
+  await waitFor(() => {
+    expect(view.getByTestId('home-open-sentences')).toBeTruthy();
+  });
   return {view, props};
 }
 

@@ -21,6 +21,7 @@ serverless is active.
 | Server authentication (JWT + refresh) | Yes | No | `authedRequest`, `api/auth` |
 | Server conversation history | Yes | No | `api/sessions` |
 | Local conversation history | No | Yes | `db/sessionStore`, `db/messageStore` |
+| Real-life sentences (topics, AI generation, SRS practice) | No | Yes | `db/sentenceRepository`, `srs/*`, `Sentence*Screen` |
 | AI chat (turn + retry) | Yes (SSE via backend) | Yes (direct provider) | `useChatTurns` mode branch |
 | Topic suggestions | Yes | Yes | `useMessageSuggestions` mode branch |
 | Improve my English | Yes | Yes | `useMessageImprovement` mode branch |
@@ -56,6 +57,9 @@ both the mode and the auth restore have settled.
 | `Settings` | Main | Account card, learning rows, logout | Learning level row, provider card, clear-local, switcher | Conditioned rendering |
 | `Level` | Main | `GET/PATCH /profile` | Local `learning_profile` | Mode-branched, waits for mode-ready |
 | `Vocabulary` | Main | List + enrichment + CSV export | Server-only notice, zero API calls | In-screen guard (TASK-AUDIT-016) |
+| `SentenceTopics` | Main | Hidden from Home; server-only notice if pushed, zero local reads | Topic list, create and due counts | Home row + in-screen guard (TASK-SENT-008/014) |
+| `SentenceTopic` | Main | Reachable only through `SentenceTopics`; local sentence bank UI | Sentence bank, generation, TTS, delete, Practice | Serverless-only parent route (TASK-SENT-009) |
+| `SentencePractice` | Main | Reachable only through `SentenceTopics`; local SRS session | Due-only dictation/recall session (max 20) | Serverless-only parent route (TASK-SENT-012) |
 | `AIProviderSettings` | Main | Serverless-only notice, no config reads | Full provider editor | In-screen guard (TASK-AUDIT-016) |
 
 ## 3. Enforcement layers
@@ -74,7 +78,9 @@ both the mode and the auth restore have settled.
    modes (serverless backs it with the local SQLite profile, TASK-091) and
    hides the vocabulary row / account / logout in serverless plus the
    provider card / clear-local in server mode; `MessageActionsMenu` hides
-   the server-only `Select text` entry in serverless (TASK-AUDIT-016).
+   the server-only `Select text` entry in serverless (TASK-AUDIT-016); the
+   Home "Real-life sentences" row exists only in serverless and carries the
+   due-today badge (TASK-SENT-014).
 5. **Auth restore isolation** — `AuthProvider` skips keychain reads and
    `/auth/me` entirely while serverless; stored server credentials are
    neither used nor removed by serverless usage.
@@ -92,4 +98,5 @@ both the mode and the auth restore have settled.
 | Vocabulary server mode + serverless notice/no-fetch | `VocabularyScreen.test.tsx` |
 | AI provider editor serverless + server-mode notice/no-reads | `AIProviderSettingsScreen.test.tsx`, `aiProviderSettingsLayout.test.tsx` |
 | Menu action gating (`vocabularyEnabled`) | `MessageActionsMenu.test.tsx` |
+| Home sentence row visibility, due badge and clear-data wipe | `homeSentenceRow.test.tsx`, `clearLocalData.test.ts` |
 | Serverless entry from login | `LoginScreen.test.tsx` |

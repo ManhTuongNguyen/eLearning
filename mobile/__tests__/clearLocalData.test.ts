@@ -25,6 +25,11 @@ import {
   setSetting,
 } from '../src/db/settingsStore';
 import {saveSummary} from '../src/db/summaryStore';
+import {
+  createSentenceTopic,
+  insertSentences,
+  logSentenceReview,
+} from '../src/db/sentenceRepository';
 import {loadServerlessApiKey, saveServerlessApiKey} from '../src/serverless/secureApiKey';
 import {openSqlJsDriver} from '../testing/sqlJsDriver';
 
@@ -174,6 +179,55 @@ describe('clearLocalData (TASK-094)', () => {
     // New session after clear should start from 1
     const newSession = await insertSession(db, {title: 'After clear'});
     expect(newSession.id).toBe(1);
+
+    await db.close();
+  });
+
+  it('clears sentence topics, sentences and the review log', async () => {
+    const db = await openLocalDatabase(() => openSqlJsDriver());
+
+    const topic = await createSentenceTopic(db, {
+      title: 'Coffee',
+      description: 'Ordering at a café',
+    });
+    const inserted = await insertSentences(db, topic.id, [
+      {
+        text: 'Could I get a flat white, please?',
+        meaning: 'Ask for a coffee politely.',
+        situation: 'Ordering at a café.',
+      },
+    ]);
+    const sentence = inserted[0];
+    if (!sentence) {
+      throw new Error('expected the sentence to be inserted');
+    }
+    await logSentenceReview(db, {
+      sentence_id: sentence.id,
+      topic_id: topic.id,
+      grade: 'good',
+      mode: 'recall',
+    });
+    await insertSession(db, {title: 'Separate conversation'});
+
+    await clearServerlessLocalData(() => Promise.resolve(db));
+
+    // The sentence bank and its review trail are gone.
+    for (const table of ['sentence_topics', 'sentences', 'sentence_review_log']) {
+      const result = await db.execute(`SELECT COUNT(*) AS n FROM ${table}`);
+      expect(Number(result.rows[0]?.n)).toBe(0);
+    }
+    expect((await listSessions(db)).length).toBe(0);
+
+    // Auto-increment counters restart so the next topic/sentence starts at 1.
+    const nextTopic = await createSentenceTopic(db, {title: 'After clear'});
+    expect(nextTopic.id).toBe(1);
+    const nextSentences = await insertSentences(db, nextTopic.id, [
+      {
+        text: 'Thanks for waiting.',
+        meaning: 'Acknowledge a short wait.',
+      },
+    ]);
+    expect(nextSentences[0]?.id).toBe(1);
 
     await db.close();
   });

@@ -1,6 +1,6 @@
 /**
  * Local data clearing for serverless mode (SPEC TASK-094,
- * TASK-AUDIT-013).
+ * TASK-AUDIT-013, TASK-SENT-014).
  *
  * Removes all serverless-mode data from on-device storage while preserving
  * the authentication tokens used by server mode. The operation is
@@ -16,6 +16,7 @@ import {clearServerlessApiKey} from '../serverless/secureApiKey';
  *
  * Deletes:
  * - All conversation sessions, messages, and summaries (cascade via FKs)
+ * - All sentence topics, sentences and their review log (TASK-SENT-014)
  * - Learning profile row
  * - Serverless settings (model selections)
  * - Secure provider API keys from the keychain, for every supported
@@ -38,10 +39,20 @@ export async function clearServerlessLocalData(
     await tx.execute('DELETE FROM learning_profile');
     await tx.execute('DELETE FROM settings');
 
+    // Real-life sentence bank: delete the dependent review log first, then
+    // the sentences and their topics (TASK-SENT-014). Deleting the topics
+    // alone would cascade too; the explicit order keeps the wipe legible.
+    await tx.execute('DELETE FROM sentence_review_log');
+    await tx.execute('DELETE FROM sentences');
+    await tx.execute('DELETE FROM sentence_topics');
+
     // Reset the auto-increment counters so new sessions start from 1.
     // SQLite keeps counters in sqlite_sequence; deleting from that table
     // resets AUTOINCREMENT for the named tables.
-    await tx.execute("DELETE FROM sqlite_sequence WHERE name IN ('sessions', 'messages', 'summaries')");
+    await tx.execute(
+      "DELETE FROM sqlite_sequence WHERE name IN " +
+        "('sessions', 'messages', 'summaries', 'sentence_topics', 'sentences', 'sentence_review_log')",
+    );
   });
 
   // Secure storage is outside the SQLite transaction; clear it after

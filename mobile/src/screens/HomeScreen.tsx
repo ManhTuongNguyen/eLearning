@@ -11,12 +11,19 @@
  * seam, so the hub is scannable at a glance. The icon sits in a fixed-width
  * column and the text column keeps `flex: 1`, which is what keeps long
  * descriptions wrapping instead of being squeezed on narrow screens.
+ *
+ * Real-life sentences (TASK-SENT-014) are on-device only: the row exists in
+ * serverless mode and carries a due-today badge read from the local review
+ * schedule. Server mode never shows the row or touches the local database.
  */
-import React, {useMemo} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 
 import {Icon} from '../components/Icon';
 import type {IconName} from '../components/Icon';
+import {getLocalDatabase} from '../db/database';
+import {countDueSentences} from '../db/sentenceRepository';
+import {useApplicationMode} from '../mode/ModeContext';
 import type {HomeScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
@@ -27,6 +34,10 @@ interface HomeRow {
   icon: IconName;
   onPress: () => void;
   testID: string;
+  /** Rendered only in these modes; omitted means every mode. */
+  modes?: ('server' | 'serverless')[];
+  /** Trailing count pill; zero (or omitted) hides it. */
+  badgeCount?: number;
 }
 
 interface HomeSection {
@@ -101,6 +112,20 @@ function createStyles(c: ThemeColors) {
       flex: 1,
       gap: 4,
     },
+    rowBadge: {
+      minWidth: 26,
+      height: 26,
+      borderRadius: 13,
+      paddingHorizontal: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.primary,
+    },
+    rowBadgeText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.onPrimary,
+    },
     rowPressed: {
       backgroundColor: c.accentSoft,
       opacity: 0.9,
@@ -123,8 +148,45 @@ function createStyles(c: ThemeColors) {
 }
 
 export function HomeScreen({navigation}: HomeScreenProps) {
+  const {status: modeStatus, mode} = useApplicationMode();
   const {colors} = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Real-life sentences are on-device only; the row appears once the
+  // persisted mode has been restored and only in serverless mode
+  // (TASK-SENT-014), so server-mode users never see a dead destination.
+  const serverlessReady = modeStatus === 'ready' && mode === 'serverless';
+  const [dueCount, setDueCount] = useState(0);
+
+  const loadDueCount = useCallback(async () => {
+    if (!serverlessReady) {
+      setDueCount(0);
+      return;
+    }
+    try {
+      const db = await getLocalDatabase();
+      setDueCount(await countDueSentences(db));
+    } catch {
+      // The badge is advisory: a local database failure must never take the
+      // Home hub down with it.
+      setDueCount(0);
+    }
+  }, [serverlessReady]);
+
+  useEffect(() => {
+    loadDueCount();
+  }, [loadDueCount]);
+
+  // Refresh after practice or topic edits; the badge is computed when Home
+  // regains focus rather than polled.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener?.('focus', () => {
+      loadDueCount();
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [navigation, loadDueCount]);
 
   const sections: HomeSection[] = useMemo(
     () => [
@@ -171,6 +233,16 @@ export function HomeScreen({navigation}: HomeScreenProps) {
             onPress: () => navigation.navigate('SpeakingHistory'),
             testID: 'home-open-speaking-history',
           },
+          {
+            title: 'Real-life sentences',
+            description:
+              'Collect everyday English and drill it with spaced repetition.',
+            icon: 'sentences',
+            onPress: () => navigation.navigate('SentenceTopics'),
+            testID: 'home-open-sentences',
+            modes: ['serverless'],
+            badgeCount: dueCount,
+          },
         ],
       },
       {
@@ -186,7 +258,7 @@ export function HomeScreen({navigation}: HomeScreenProps) {
         ],
       },
     ],
-    [navigation],
+    [navigation, dueCount],
   );
 
   return (
@@ -197,35 +269,54 @@ export function HomeScreen({navigation}: HomeScreenProps) {
             <Text style={styles.title}>Home</Text>
             <Text style={styles.subtitle}>What would you like to practice today?</Text>
           </View>
-          {sections.map(section => (
-            <View key={section.title} style={styles.section}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <View style={styles.rowGroup}>
-                {section.rows.map((row, index) => (
-                  <Pressable
-                    key={row.testID}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${row.title} — ${row.description}`}
-                    hitSlop={6}
-                    onPress={row.onPress}
-                    style={({pressed}) => [
-                      styles.row,
-                      index > 0 && styles.rowDivider,
-                      pressed && styles.rowPressed,
-                    ]}
-                    testID={row.testID}>
-                    <View style={styles.rowIcon}>
-                      <Icon name={row.icon} color={colors.accent} />
-                    </View>
-                    <View style={styles.rowText}>
-                      <Text style={styles.rowTitle}>{row.title}</Text>
-                      <Text style={styles.rowDescription}>{row.description}</Text>
-                    </View>
-                  </Pressable>
-                ))}
+          {sections.map(section => {
+            const rows = section.rows.filter(row => {
+              if (!row.modes) {
+                return true;
+              }
+              return modeStatus === 'ready' && row.modes.includes(mode);
+            });
+            if (rows.length === 0) {
+              return null;
+            }
+            return (
+              <View key={section.title} style={styles.section}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <View style={styles.rowGroup}>
+                  {rows.map((row, index) => (
+                    <Pressable
+                      key={row.testID}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${row.title} — ${row.description}`}
+                      hitSlop={6}
+                      onPress={row.onPress}
+                      style={({pressed}) => [
+                        styles.row,
+                        index > 0 && styles.rowDivider,
+                        pressed && styles.rowPressed,
+                      ]}
+                      testID={row.testID}>
+                      <View style={styles.rowIcon}>
+                        <Icon name={row.icon} color={colors.accent} />
+                      </View>
+                      <View style={styles.rowText}>
+                        <Text style={styles.rowTitle}>{row.title}</Text>
+                        <Text style={styles.rowDescription}>{row.description}</Text>
+                      </View>
+                      {row.badgeCount && row.badgeCount > 0 ? (
+                        <View
+                          accessibilityLabel={`${row.badgeCount} due today`}
+                          style={styles.rowBadge}
+                          testID={`${row.testID}-badge`}>
+                          <Text style={styles.rowBadgeText}>{row.badgeCount}</Text>
+                        </View>
+                      ) : null}
+                    </Pressable>
+                  ))}
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
     </View>

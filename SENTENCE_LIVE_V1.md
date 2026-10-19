@@ -716,7 +716,7 @@ Priority: `P2`
 
 ## TASK-SENT-014 — Home row, due badge and server-mode gating
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
