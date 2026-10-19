@@ -635,7 +635,7 @@ Priority: `P1`
 
 ## TASK-SENT-011 — Practice card mode selection
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P2`
 
