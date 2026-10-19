@@ -6,10 +6,17 @@
  * conversation (TASK-AUDIT-008) or offers the new-conversation form.
  * The layout follows the Settings row-group pattern so every destination
  * reads as one familiar list.
+ *
+ * Every row carries a leading icon (TASK-SENT-002) rendered through the icon
+ * seam, so the hub is scannable at a glance. The icon sits in a fixed-width
+ * column and the text column keeps `flex: 1`, which is what keeps long
+ * descriptions wrapping instead of being squeezed on narrow screens.
  */
 import React, {useMemo} from 'react';
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 
+import {Icon} from '../components/Icon';
+import type {IconName} from '../components/Icon';
 import type {HomeScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
@@ -17,6 +24,7 @@ import {useTheme} from '../theme/ThemeContext';
 interface HomeRow {
   title: string;
   description: string;
+  icon: IconName;
   onPress: () => void;
   testID: string;
 }
@@ -77,10 +85,21 @@ function createStyles(c: ThemeColors) {
       overflow: 'hidden',
     },
     row: {
+      flexDirection: 'row',
+      alignItems: 'center',
       minHeight: 60,
       paddingVertical: 14,
       paddingHorizontal: 16,
-      gap: 6,
+      gap: 14,
+    },
+    rowIcon: {
+      width: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rowText: {
+      flex: 1,
+      gap: 4,
     },
     rowPressed: {
       backgroundColor: c.accentSoft,
@@ -115,12 +134,14 @@ export function HomeScreen({navigation}: HomeScreenProps) {
           {
             title: 'Conversations',
             description: 'Chat with the AI tutor about a topic or your questions.',
+            icon: 'chat',
             onPress: () => navigation.navigate('Chat'),
             testID: 'home-open-chat',
           },
           {
             title: 'History',
             description: 'Revisit your past conversations.',
+            icon: 'history',
             onPress: () => navigation.navigate('History'),
             testID: 'home-open-history',
           },
@@ -132,18 +153,21 @@ export function HomeScreen({navigation}: HomeScreenProps) {
           {
             title: 'Listening practice',
             description: 'Train reflexes for numbers and letters you hear.',
+            icon: 'listening',
             onPress: () => navigation.navigate('Practice'),
             testID: 'home-open-listening',
           },
           {
             title: 'Speaking practice',
             description: 'Read aloud with a karaoke-style scrolling text.',
+            icon: 'speaking',
             onPress: () => navigation.navigate('SpeakingPractice'),
             testID: 'home-open-speaking',
           },
           {
             title: 'Speaking history',
             description: 'Review your completed speaking practice sessions.',
+            icon: 'speakingHistory',
             onPress: () => navigation.navigate('SpeakingHistory'),
             testID: 'home-open-speaking-history',
           },
@@ -155,6 +179,7 @@ export function HomeScreen({navigation}: HomeScreenProps) {
           {
             title: 'Settings',
             description: 'Account, AI provider, level, speech and theme.',
+            icon: 'settings',
             onPress: () => navigation.navigate('Settings'),
             testID: 'home-open-settings',
           },
@@ -189,8 +214,13 @@ export function HomeScreen({navigation}: HomeScreenProps) {
                       pressed && styles.rowPressed,
                     ]}
                     testID={row.testID}>
-                    <Text style={styles.rowTitle}>{row.title}</Text>
-                    <Text style={styles.rowDescription}>{row.description}</Text>
+                    <View style={styles.rowIcon}>
+                      <Icon name={row.icon} color={colors.accent} />
+                    </View>
+                    <View style={styles.rowText}>
+                      <Text style={styles.rowTitle}>{row.title}</Text>
+                      <Text style={styles.rowDescription}>{row.description}</Text>
+                    </View>
                   </Pressable>
                 ))}
               </View>

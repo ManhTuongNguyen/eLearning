@@ -379,7 +379,7 @@ Priority: `P1`
 
 ## TASK-SENT-002 — Home hub: left icons on every row
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
