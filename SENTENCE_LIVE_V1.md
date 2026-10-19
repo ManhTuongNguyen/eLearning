@@ -513,7 +513,7 @@ Priority: `P1`
 
 ## TASK-SENT-007 — Serverless sentence generation service
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
