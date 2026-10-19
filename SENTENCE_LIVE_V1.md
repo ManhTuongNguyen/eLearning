@@ -404,7 +404,7 @@ Priority: `P1`
 
 ## TASK-SENT-003 — Schema version 4 and row types
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

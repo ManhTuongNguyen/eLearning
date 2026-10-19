@@ -93,3 +93,62 @@ export interface LocalPracticeHistoryRecord {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * Spaced-repetition state of one sentence (migration v4, TASK-SENT-003).
+ *
+ * `new` has never been reviewed; `learning` is the ten-minute relearning step
+ * after an `Again`; `review` is the graduated, day-scale schedule; `suspended`
+ * is excluded from every session.
+ */
+export type SentenceStatus = 'new' | 'learning' | 'review' | 'suspended';
+
+/** The three rating buttons of the review session. */
+export type ReviewGrade = 'again' | 'good' | 'easy';
+
+/** Which card shape produced a review: listen-and-type or situation recall. */
+export type ReviewCardMode = 'dictation' | 'recall';
+
+/** A learner-created topic holding a bank of real-life sentences. */
+export interface SentenceTopicRecord {
+  id: number;
+  title: string;
+  description: string;
+  english_level: EnglishLevel;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * One sentence plus its review schedule. `normalized_text` is the duplicate
+ * key (unique per topic) and `due_at` is an ISO timestamp — a freshly
+ * generated sentence is due immediately.
+ */
+export interface SentenceRecord {
+  id: number;
+  topic_id: number;
+  text: string;
+  normalized_text: string;
+  meaning: string;
+  situation: string;
+  status: SentenceStatus;
+  reps: number;
+  lapses: number;
+  ease: number;
+  interval_days: number;
+  due_at: string;
+  last_grade: ReviewGrade | '';
+  last_reviewed_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One append-only review event, used for per-sentence statistics. */
+export interface SentenceReviewLogRecord {
+  id: number;
+  sentence_id: number;
+  topic_id: number;
+  grade: ReviewGrade;
+  mode: ReviewCardMode;
+  reviewed_at: string;
+}

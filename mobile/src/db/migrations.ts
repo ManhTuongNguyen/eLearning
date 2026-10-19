@@ -92,6 +92,61 @@ const MIGRATION_003: readonly string[] = [
 ];
 
 /**
+ * Version 4: real-life sentence bank and its spaced-repetition state
+ * (TASK-SENT-003).
+ *
+ * A topic holds the situations the learner wants to talk about; each sentence
+ * holds the English text, an English meaning, the real-life situation, and its
+ * own review schedule. `normalized_text` is the duplicate key (unique per
+ * topic) and the review log is an append-only trail used for stats.
+ */
+const MIGRATION_004: readonly string[] = [
+  `CREATE TABLE sentence_topics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      english_level TEXT NOT NULL DEFAULT 'AUTO'
+        CHECK (english_level IN ('A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'AUTO')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE sentences (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic_id INTEGER NOT NULL REFERENCES sentence_topics (id) ON DELETE CASCADE,
+      text TEXT NOT NULL,
+      normalized_text TEXT NOT NULL,
+      meaning TEXT NOT NULL DEFAULT '',
+      situation TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'new'
+        CHECK (status IN ('new', 'learning', 'review', 'suspended')),
+      reps INTEGER NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0,
+      ease REAL NOT NULL DEFAULT 2.5,
+      interval_days REAL NOT NULL DEFAULT 0,
+      due_at TEXT NOT NULL,
+      last_grade TEXT NOT NULL DEFAULT ''
+        CHECK (last_grade IN ('', 'again', 'good', 'easy')),
+      last_reviewed_at TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`,
+  `CREATE UNIQUE INDEX idx_sentences_topic_normalized
+      ON sentences (topic_id, normalized_text)`,
+  `CREATE INDEX idx_sentences_topic ON sentences (topic_id, due_at)`,
+  `CREATE INDEX idx_sentences_due ON sentences (due_at)`,
+  `CREATE TABLE sentence_review_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sentence_id INTEGER NOT NULL REFERENCES sentences (id) ON DELETE CASCADE,
+      topic_id INTEGER NOT NULL,
+      grade TEXT NOT NULL CHECK (grade IN ('again', 'good', 'easy')),
+      mode TEXT NOT NULL CHECK (mode IN ('dictation', 'recall')),
+      reviewed_at TEXT NOT NULL
+    )`,
+  `CREATE INDEX idx_sentence_review_log_sentence
+      ON sentence_review_log (sentence_id, reviewed_at)`,
+];
+
+/**
  * Ordered migration list; length is the current schema version. Append new
  * entries — never edit shipped ones.
  */
@@ -99,6 +154,7 @@ export const MIGRATIONS: readonly (readonly string[])[] = [
   MIGRATION_001,
   MIGRATION_002,
   MIGRATION_003,
+  MIGRATION_004,
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS.length;
