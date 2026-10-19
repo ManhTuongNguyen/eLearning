@@ -770,7 +770,7 @@ Priority: `P2`
 
 ## TASK-SENT-016 — Final quality gates and regression audit
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
