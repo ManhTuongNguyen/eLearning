@@ -279,6 +279,8 @@ export function SentenceReviewModal({
             <Text style={styles.actionText}>Keep all</Text>
           </Pressable>
           <Pressable
+            accessibilityRole="button"
+            accessibilityState={{disabled: !hasSelection}}
             onPress={handleKeepSelected}
             testID="sentence-keep-selected"
             disabled={!hasSelection}

@@ -608,7 +608,7 @@ Create `mobile/src/screens/SentenceTopicScreen.tsx`:
 
 ## TASK-SENT-010 — Generation review modal
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

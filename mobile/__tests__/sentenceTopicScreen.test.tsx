@@ -343,6 +343,84 @@ describe('SentenceTopicScreen — generation', () => {
     expect(await listSentencesByTopic(db, topic.id)).toHaveLength(2);
   });
 
+  test('Keep all persists every generated candidate', async () => {
+    const topic = await createTopicWithSentences(0);
+    complete.mockResolvedValue({
+      text: JSON.stringify([
+        {sentence: 'Could I get a flat white, please?', meaning: 'Order coffee politely.', situation: 'At a café.'},
+        {sentence: 'I will have the same, thanks.', meaning: 'Order what they ordered.', situation: 'At a restaurant.'},
+      ]),
+      model: 'test-model',
+      finishReason: 'stop',
+      requestId: null,
+    });
+
+    const view = await renderScreen(topic.id);
+    await fireEvent.press(view.getByTestId('sentence-generate-open'));
+    await fireEvent.press(view.getByTestId('sentence-generate-run'));
+    await view.findByTestId('sentence-review-modal');
+    await fireEvent.press(view.getByTestId('sentence-keep-all'));
+
+    await waitFor(() => {
+      expect(view.getByTestId('sentence-success')).toHaveTextContent('2 sentences added.');
+    });
+    expect(await listSentencesByTopic(db, topic.id)).toHaveLength(2);
+  });
+
+  test('Discard all closes the review without writing anything', async () => {
+    const topic = await createTopicWithSentences(0);
+    complete.mockResolvedValue({
+      text: JSON.stringify([
+        {sentence: 'Could I get a flat white, please?', meaning: 'Order coffee politely.'},
+        {sentence: 'I will have the same, thanks.', meaning: 'Order what they ordered.'},
+      ]),
+      model: 'test-model',
+      finishReason: 'stop',
+      requestId: null,
+    });
+
+    const view = await renderScreen(topic.id);
+    await fireEvent.press(view.getByTestId('sentence-generate-open'));
+    await fireEvent.press(view.getByTestId('sentence-generate-run'));
+    await view.findByTestId('sentence-review-modal');
+    await fireEvent.press(view.getByTestId('sentence-discard-all'));
+
+    await waitFor(() => {
+      expect(view.queryByTestId('sentence-review-modal')).toBeFalsy();
+    });
+    expect(await listSentencesByTopic(db, topic.id)).toHaveLength(0);
+    expect(view.queryByTestId('sentence-success')).toBeFalsy();
+  });
+
+  test('does not insert a duplicate candidate twice', async () => {
+    const topic = await createTopicWithSentences(0);
+    // The parser's comparison is weaker than the storage duplicate key: an
+    // expanded contraction slips through generation but must be skipped by
+    // the repository so the sentence exists only once.
+    complete.mockResolvedValue({
+      text: JSON.stringify([
+        {sentence: "I'm happy to help.", meaning: 'Offer help.'},
+        {sentence: 'I am happy to help.', meaning: 'Say you can help.'},
+      ]),
+      model: 'test-model',
+      finishReason: 'stop',
+      requestId: null,
+    });
+
+    const view = await renderScreen(topic.id);
+    await fireEvent.press(view.getByTestId('sentence-generate-open'));
+    await fireEvent.press(view.getByTestId('sentence-generate-run'));
+    await view.findByTestId('sentence-review-modal');
+    await fireEvent.press(view.getByTestId('sentence-keep-all'));
+
+    await waitFor(() => {
+      expect(view.getByTestId('sentence-success')).toHaveTextContent('1 sentence added.');
+    });
+    const stored = await listSentencesByTopic(db, topic.id);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].text).toBe("I'm happy to help.");
+  });
+
   test('shows an actionable notice when no provider is configured', async () => {
     const topic = await createTopicWithSentences(0);
     settings.loadServerlessConfig.mockResolvedValue(null);
