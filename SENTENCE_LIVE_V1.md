@@ -485,7 +485,7 @@ Priority: `P1`
 
 ## TASK-SENT-006 — Answer checking and word-level diff
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
