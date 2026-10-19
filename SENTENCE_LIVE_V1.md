@@ -694,7 +694,7 @@ Create `mobile/src/screens/SentencePracticeScreen.tsx`:
 
 ## TASK-SENT-013 — Practice mode setting in Settings
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P2`
 

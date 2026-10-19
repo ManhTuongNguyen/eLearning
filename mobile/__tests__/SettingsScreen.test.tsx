@@ -19,6 +19,7 @@ import {
   loadGrammarCheckEnabled,
   saveGrammarCheckEnabled,
 } from '../src/preferences/grammarCheck';
+import {loadPracticeMode} from '../src/preferences/practiceMode';
 import {ModeProvider} from '../src/mode/ModeContext';
 import {saveApplicationMode} from '../src/mode/modeStorage';
 import {setRuntimeApplicationMode} from '../src/mode/runtime';
@@ -479,6 +480,61 @@ describe('grammar auto-check toggle', () => {
 
     await waitFor(() => expect(checkedStateOf('settings-grammar-toggle')).toBe(false));
     expect(saveGrammarCheckEnabled).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('sentence practice mode setting (TASK-SENT-013)', () => {
+  it('defaults to auto and offers all three modes in serverless mode', async () => {
+    await renderSettings('serverless');
+
+    expect(
+      await screen.findByTestId('settings-practice-mode-section'),
+    ).toBeOnTheScreen();
+    expect(checkedStateOf('settings-practice-mode-auto')).toBe(true);
+    expect(checkedStateOf('settings-practice-mode-dictation')).toBe(false);
+    expect(checkedStateOf('settings-practice-mode-recall')).toBe(false);
+  });
+
+  it('persists a change and applies it to the next practice session', async () => {
+    await renderSettings('serverless');
+
+    await fireEvent.press(screen.getByTestId('settings-practice-mode-dictation'));
+
+    await waitFor(() =>
+      expect(checkedStateOf('settings-practice-mode-dictation')).toBe(true),
+    );
+    // The preference store the practice screen reads on mount now holds the
+    // chosen mode, so the next card is dictated.
+    await expect(loadPracticeMode()).resolves.toBe('dictation');
+  });
+
+  it('keeps the chosen mode across a remount', async () => {
+    await renderSettings('serverless');
+    await fireEvent.press(screen.getByTestId('settings-practice-mode-recall'));
+    await waitFor(() =>
+      expect(checkedStateOf('settings-practice-mode-recall')).toBe(true),
+    );
+
+    screen.unmount();
+
+    await renderSettings('serverless');
+
+    expect(
+      await screen.findByTestId('settings-practice-mode-section'),
+    ).toBeOnTheScreen();
+    await waitFor(() =>
+      expect(checkedStateOf('settings-practice-mode-recall')).toBe(true),
+    );
+    expect(checkedStateOf('settings-practice-mode-auto')).toBe(false);
+  });
+
+  it('hides the setting in server mode', async () => {
+    await renderSettings('server');
+
+    expect(screen.queryByTestId('settings-practice-mode-section')).toBeNull();
+    expect(screen.queryByTestId('settings-practice-mode-auto')).toBeNull();
+    expect(screen.queryByTestId('settings-practice-mode-dictation')).toBeNull();
+    expect(screen.queryByTestId('settings-practice-mode-recall')).toBeNull();
   });
 });
 

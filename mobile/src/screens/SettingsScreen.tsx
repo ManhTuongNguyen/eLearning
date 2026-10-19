@@ -15,7 +15,7 @@
  * selection (TASK-044), the learning-level editor — backed by the on-device
  * SQLite profile while serverless (TASK-091) — the application-mode
  * switcher (TASK-090) and — serverless only — local data clearing
- * (TASK-094).
+ * (TASK-094) and the real-life sentence practice mode (TASK-SENT-013).
  *
  * The screen is pushed onto the main stack from Chat, so the header carries
  * the same ‹ Back affordance as the other pushed screens (TASK-AUDIT-006).
@@ -55,6 +55,12 @@ import {
   loadGrammarCheckEnabled,
   saveGrammarCheckEnabled,
 } from '../preferences/grammarCheck';
+import {
+  DEFAULT_PRACTICE_MODE,
+  loadPracticeMode,
+  savePracticeMode,
+} from '../preferences/practiceMode';
+import type {PracticeMode} from '../preferences/practiceMode';
 import {
   SPEED_MAX_PX_PER_S,
   SPEED_MIN_PX_PER_S,
@@ -101,6 +107,28 @@ const APPLICATION_MODE_OPTIONS: Array<{
     description:
       'Conversations stay on this device and AI requests go directly to your configured provider.',
     testID: 'settings-mode-serverless',
+  },
+];
+
+const SENTENCE_PRACTICE_MODE_OPTIONS: Array<{
+  value: PracticeMode;
+  label: string;
+  testID: string;
+}> = [
+  {
+    value: 'auto',
+    label: 'Auto',
+    testID: 'settings-practice-mode-auto',
+  },
+  {
+    value: 'dictation',
+    label: 'Dictation',
+    testID: 'settings-practice-mode-dictation',
+  },
+  {
+    value: 'recall',
+    label: 'Recall',
+    testID: 'settings-practice-mode-recall',
   },
 ];
 
@@ -469,6 +497,18 @@ export function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.textPrimary,
     },
+    /* Sentence practice mode (TASK-SENT-013): a preference card with the
+       same surface/border treatment as the other Settings blocks. */
+    practiceModeCard: {
+      alignSelf: 'stretch',
+      gap: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
     /* TASK-IMPROVEMENT-005: transient success toast, mirroring the
        self-dismissing toast the chat and vocabulary screens already use. */
     toast: {
@@ -571,6 +611,38 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
       // Persistence failed: revert the switch so it reflects the stored
       // (still disabled) state instead of lying to the user.
       setGrammarCheckEnabled(false);
+    });
+  }, []);
+
+  /**
+   * Sentence practice mode (TASK-SENT-013): `null` until the persisted value
+   * has loaded, so the row never flashes the wrong choice. The preference is
+   * serverless-only, so it is read only once that mode has been restored.
+   */
+  const [practiceMode, setPracticeMode] = useState<PracticeMode | null>(null);
+  useEffect(() => {
+    if (modeStatus !== 'ready' || appMode !== 'serverless') {
+      return;
+    }
+    let cancelled = false;
+    loadPracticeMode().then(mode => {
+      if (!cancelled) {
+        setPracticeMode(mode);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [modeStatus, appMode]);
+
+  const handlePracticeModeChange = useCallback((mode: PracticeMode) => {
+    setPracticeMode(mode);
+    savePracticeMode(mode).catch(() => {
+      // Persistence failed: fall back to whatever is actually stored so the
+      // segmented control never claims a choice that was not saved.
+      loadPracticeMode()
+        .then(stored => setPracticeMode(stored))
+        .catch(() => setPracticeMode(DEFAULT_PRACTICE_MODE));
     });
   }, []);
 
@@ -962,6 +1034,51 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                 testID="settings-grammar-switch"
               />
             </Pressable>
+          </View>
+        ) : null}
+
+        {/* Sentence practice mode (TASK-SENT-013): serverless-only because
+            real-life sentences are an on-device feature. The choice is read
+            by the practice screen when it builds the next session. */}
+        {appMode === 'serverless' && practiceMode !== null ? (
+          <View style={styles.rowGroup} testID="settings-practice-mode-section">
+            <Text style={styles.sectionLabel}>Sentence practice</Text>
+            <View style={styles.practiceModeCard}>
+              <Text style={styles.toggleTitle}>Sentence practice mode</Text>
+              <Text style={styles.toggleDescription}>
+                Let Auto pick dictation or recall from each sentence&apos;s
+                schedule, or force one card shape for every sentence.
+              </Text>
+              <View style={styles.segmentRow}>
+                {SENTENCE_PRACTICE_MODE_OPTIONS.map(option => {
+                  const isSelected = option.value === practiceMode;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      accessibilityRole="radio"
+                      accessibilityLabel={option.label}
+                      accessibilityState={{checked: isSelected}}
+                      onPress={() => handlePracticeModeChange(option.value)}
+                      style={({pressed}) => [
+                        styles.segment,
+                        isSelected && styles.segmentSelected,
+                        pressed && styles.buttonDisabled,
+                      ]}
+                      testID={option.testID}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentText,
+                          isSelected && styles.segmentTextSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
           </View>
         ) : null}
 
