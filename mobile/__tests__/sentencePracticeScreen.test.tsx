@@ -10,6 +10,7 @@
  */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {Keyboard} from 'react-native';
 import {act, fireEvent, render, waitFor} from '@testing-library/react-native';
 
 import type {SqlDriver} from '../src/db/driver';
@@ -230,6 +231,7 @@ describe('SentencePracticeScreen — dictation card', () => {
     const {engine, spoken, stopMock} = makeDeferredEngine();
     const view = await renderPractice(topic.id, engine);
     const texts = () => spoken.map(item => item.text);
+    const dismissSpy = jest.spyOn(Keyboard, 'dismiss');
 
     await waitFor(() => {
       expect(texts()).toEqual(['First sentence']);
@@ -237,6 +239,7 @@ describe('SentencePracticeScreen — dictation card', () => {
 
     await fireEvent.press(view.getByTestId('sentence-practice-replay'));
     expect(texts()).toEqual(['First sentence', 'First sentence']);
+    expect(dismissSpy).toHaveBeenCalled();
 
     await answerAndCheck(view, 'First sentence');
     await fireEvent.press(view.getByTestId('sentence-grade-good'));
@@ -263,6 +266,7 @@ describe('SentencePracticeScreen — dictation card', () => {
 
     await view.unmount();
     spoken.forEach(item => item.release());
+    dismissSpy.mockRestore();
   });
 
   test('persists the schedule and a dictation review-log row', async () => {
@@ -271,6 +275,14 @@ describe('SentencePracticeScreen — dictation card', () => {
 
     await answerAndCheck(view, 'could i get a flat white please');
 
+    expect(view.getByTestId('sentence-dictation-answer')).toHaveTextContent(
+      'Could I get a flat white, please?',
+    );
+    expect(view.getByTestId('sentence-dictation-answer').props.selectable).toBe(
+      true,
+    );
+    expect(view.getByTestId('sentence-dictation-meaning').props.selectable).toBe(true);
+    expect(view.getByTestId('sentence-dictation-situation').props.selectable).toBe(true);
     expect(view.getByTestId('sentence-diff-summary')).toHaveTextContent(
       '7 correct',
     );
@@ -353,6 +365,7 @@ describe('SentencePracticeScreen — recall card', () => {
     expect(view.getByTestId('sentence-recall-situation')).toHaveTextContent(
       'Situation for It was nice meeting you.',
     );
+    expect(view.getByTestId('sentence-recall-situation').props.selectable).toBe(true);
     expect(view.queryByTestId('sentence-dictation-input')).toBeFalsy();
     expect(view.queryByTestId('sentence-grade-good')).toBeFalsy();
 
@@ -360,6 +373,7 @@ describe('SentencePracticeScreen — recall card', () => {
     expect(view.getByTestId('sentence-recall-meaning')).toHaveTextContent(
       'Meaning of It was nice meeting you.',
     );
+    expect(view.getByTestId('sentence-recall-meaning').props.selectable).toBe(true);
 
     await fireEvent.press(view.getByTestId('sentence-recall-reveal'));
     expect(view.getByTestId('sentence-recall-answer')).toHaveTextContent(
@@ -395,7 +409,7 @@ describe('SentencePracticeScreen — recall card', () => {
 });
 
 describe('SentencePracticeScreen — requeue and empty state', () => {
-  test('reappears once after Again and a second Again does not requeue it', async () => {
+  test('keeps an Again card in the session until it is graded Good', async () => {
     const {topic, ids} = await seedTopic(['First sentence', 'Second sentence']);
     const {engine, spoken} = makeEngine();
     const view = await renderPractice(topic.id, engine);
@@ -430,21 +444,30 @@ describe('SentencePracticeScreen — requeue and empty state', () => {
       ]);
     });
 
-    // The requeued card comes back once; grading it Again ends the session.
+    // A second Again keeps the same card in the session instead of ending it.
     await answerAndCheck(view, 'First sentence');
     await fireEvent.press(view.getByTestId('sentence-grade-again'));
+    await waitFor(() => {
+      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent(
+        '4 / 4',
+      );
+    });
+
+    // Only Good releases the card and finishes the session.
+    await answerAndCheck(view, 'First sentence');
+    await fireEvent.press(view.getByTestId('sentence-grade-good'));
 
     await view.findByTestId('sentence-practice-summary');
     expect(view.getByTestId('sentence-practice-reviewed')).toHaveTextContent(
-      '3 cards reviewed',
+      '4 cards reviewed',
     );
     expect(view.getByTestId('sentence-practice-grades')).toHaveTextContent(
-      'Again 2 · Good 1 · Easy 0',
+      'Again 2 · Good 2 · Easy 0',
     );
 
     const firstLog = await listReviewLogForSentence(db, ids[0]);
     const secondLog = await listReviewLogForSentence(db, ids[1]);
-    expect(firstLog.map(entry => entry.grade)).toEqual(['again', 'again']);
+    expect(firstLog.map(entry => entry.grade)).toEqual(['good', 'again', 'again']);
     expect(secondLog.map(entry => entry.grade)).toEqual(['good']);
   });
 

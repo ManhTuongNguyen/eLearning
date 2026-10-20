@@ -65,10 +65,12 @@ describe('sentence topics', () => {
     const topic = await createSentenceTopic(db, {
       title: '  Meeting someone new  ',
       description: '  first day in a new city  ',
+      generation_prompt: '  Use British spelling.  ',
     });
 
     expect(topic.title).toBe('Meeting someone new');
     expect(topic.description).toBe('first day in a new city');
+    expect(topic.generation_prompt).toBe('Use British spelling.');
     expect(topic.english_level).toBe('AUTO');
     expect(await getSentenceTopicById(db, topic.id)).toEqual(topic);
 

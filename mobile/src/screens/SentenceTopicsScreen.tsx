@@ -17,16 +17,12 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
 import {Icon} from '../components/Icon';
 import {getLocalDatabase} from '../db/database';
-import {
-  createSentenceTopic,
-  listSentenceTopics,
-} from '../db/sentenceRepository';
+import {listSentenceTopics} from '../db/sentenceRepository';
 import type {SentenceTopicSummary} from '../db/types';
 import {useApplicationMode} from '../mode/ModeContext';
 import type {SentenceTopicsScreenProps} from '../navigation/types';
@@ -59,52 +55,12 @@ export function createStyles(c: ThemeColors) {
       flex: 1,
     },
     newTopicButton: {
-      flexDirection: 'row',
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
       backgroundColor: c.primary,
-      borderRadius: 12,
-      paddingVertical: 12,
-    },
-    newTopicButtonText: {
-      color: c.onPrimary,
-      fontSize: 15,
-      fontWeight: '600',
-    },
-    newTopicForm: {
-      backgroundColor: c.surface,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 14,
-      padding: 16,
-      gap: 12,
-      marginBottom: 16,
-    },
-    input: {
-      backgroundColor: c.background,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      fontSize: 16,
-      color: c.textPrimary,
-    },
-    inputLabel: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: c.textMuted,
-    },
-    saveButton: {
-      alignSelf: 'flex-end',
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-    },
-    saveButtonText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: c.primary,
     },
     rowGroup: {
       backgroundColor: c.surface,
@@ -189,11 +145,6 @@ export function createStyles(c: ThemeColors) {
     badgeLabel: {
       fontSize: 12,
       fontWeight: '600',
-    },
-    actionRow: {
-      flexDirection: 'row',
-      gap: 12,
-      justifyContent: 'flex-end',
     },
     actionText: {
       color: c.primary,
@@ -309,54 +260,15 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
     };
   }, [navigation, serverlessMode, refresh]);
 
-  // --- The "new topic" inline form ---------------------------------------
-  const [showForm, setShowForm] = useState(false);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  const resetForm = useCallback(() => {
-    setShowForm(false);
-    setTitle('');
-    setDescription('');
-    setSaveError(null);
-  }, []);
-
-  const handleSave = useCallback(async () => {
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle || saving) {
-      return;
-    }
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const db = await getLocalDatabase();
-      const created = await createSentenceTopic(db, {
-        title: trimmedTitle,
-        description: description.trim(),
-      });
-      resetForm();
-      navigation.navigate('SentenceTopic', {topicId: created.id});
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
-    }
-  }, [title, description, saving, navigation, resetForm]);
-
-  const handleCancel = useCallback(() => {
-    if (saving) {
-      return;
-    }
-    resetForm();
-  }, [saving, resetForm]);
-
   // --- Render -------------------------------------------------------------
   const handleTopicPress = useCallback(
     (item: SentenceTopicSummary) => navigation.navigate('SentenceTopic', {topicId: item.id}),
     [navigation],
   );
+
+  const handleNewTopic = useCallback(() => {
+    navigation.navigate('SentenceTopicNew');
+  }, [navigation]);
 
   return (
     <View style={styles.container} testID="sentence-topics-screen">
@@ -366,7 +278,7 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
           accessibilityRole="button"
           accessibilityLabel="New topic"
           testID="sentence-topics-new"
-          onPress={() => setShowForm(true)}
+          onPress={handleNewTopic}
           style={({pressed}) => [styles.newTopicButton, pressed && styles.pressedFade]}
           disabled={!serverlessMode}
         >
@@ -395,50 +307,7 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
 
       {serverMode ? null : (
         <>
-          {showForm ? (
-            <View style={styles.newTopicForm} testID="sentence-new-topic-form">
-              <Text style={styles.inputLabel}>Topic</Text>
-              <TextInput
-                placeholder="e.g. Meeting someone new"
-                value={title}
-                onChangeText={setTitle}
-                style={styles.input}
-                testID="sentence-topic-title"
-                autoFocus
-              />
-              <Text style={styles.inputLabel}>Description (optional)</Text>
-              <TextInput
-                placeholder="A short real-life situation, or leave blank"
-                value={description}
-                onChangeText={setDescription}
-                style={styles.input}
-                testID="sentence-topic-description"
-                multiline
-              />
-              {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
-              <View style={styles.actionRow}>
-                <Pressable
-                  testID="sentence-topic-cancel"
-                  onPress={handleCancel}
-                  disabled={saving}
-                  style={styles.saveButton}
-                >
-                  <Text style={styles.saveButtonText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  testID="sentence-topic-save"
-                  onPress={handleSave}
-                  disabled={saving || !title.trim()}
-                  style={({pressed}) => [styles.saveButton, pressed && styles.pressedFade]}
-                >
-                  {saving ? <ActivityIndicator size="small" color={colors.primary} /> : null}
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-
-          {serverMode ? null : topics.length === 0 ? (
+          {topics.length === 0 ? (
             <View style={styles.centered} testID="sentence-empty">
               <Text style={styles.stateText}>
                 No topics yet. Tap the + above to create one.

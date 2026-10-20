@@ -209,12 +209,20 @@ describe('TTSSettingsScreen', () => {
     await waitForReady();
 
     expect(screen.getByTestId('tts-rate-value')).toHaveTextContent('1.80×');
-    fireEvent.press(screen.getByTestId('tts-reset'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('tts-reset'));
+    });
 
     await waitFor(() =>
       expect(screen.getByTestId('tts-rate-value')).toHaveTextContent('1.00×'),
     );
     expect(await loadSpeechPreferences()).toEqual(DEFAULT_SPEECH_PREFERENCES);
+    const toast = await screen.findByTestId('tts-reset-toast');
+    expect(toast).toBeOnTheScreen();
+    expect(screen.getByTestId('tts-reset-toast-text')).toHaveTextContent(
+      'Speech settings reset to defaults.',
+    );
+    expect(screen.getByTestId('tts-reset-toast-text').props.role).toBe('status');
   });
 
   it('renders the rate slider with the documented bounds', async () => {

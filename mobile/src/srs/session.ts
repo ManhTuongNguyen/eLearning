@@ -9,9 +9,10 @@
  *
  * The stateful half (`createPracticeSessionState` / `applyPracticeGrade`) is
  * still pure: the screen owns the clock, the storage and the React state, while
- * these functions decide what "next card" means. In particular, an `Again`
- * grade appends the card once at the end of the queue and a second `Again` for
- * the same sentence in the same session is never appended again.
+ * these functions decide what "next card" means. Following Anki's learning-step
+ * behaviour, every `Again` puts the card back at the end of the current queue —
+ * not just the first one. A sentence therefore keeps coming back within the
+ * same session until it is graded Good or Easy.
  */
 import type {ReviewGrade, SentenceRecord} from '../db/types';
 
@@ -57,12 +58,10 @@ export function buildPracticeSession(
     .map(entry => entry.sentence);
 }
 
-/** An in-progress session: the remaining cards plus the once-per-session set. */
+/** An in-progress session: the cards still to show, current card first. */
 export interface PracticeSessionState {
   /** Cards still to show, current card first. */
   readonly queue: readonly SentenceRecord[];
-  /** Sentences already appended once after an `Again` grade. */
-  readonly requeuedIds: ReadonlySet<number>;
 }
 
 /** Start a session from a topic's sentences at the given moment. */
@@ -73,16 +72,16 @@ export function createPracticeSessionState(
 ): PracticeSessionState {
   return {
     queue: buildPracticeSession(sentences, now, limit),
-    requeuedIds: new Set<number>(),
   };
 }
 
 /**
  * Consume the current card after a grade. `updatedCard` is the sentence with
  * the scheduler's new state applied, so a requeued card already carries its
- * `learning` status when it comes back. `Again` appends it once; every other
- * grade (or a repeated `Again` for an already-requeued sentence) simply drops
- * it from the queue.
+ * `learning` status when it comes back.
+ *
+ * Like Anki's learning steps, `Again` appends the card to the end of the
+ * current queue every time it is pressed; only Good or Easy removes it for good.
  */
 export function applyPracticeGrade(
   session: PracticeSessionState,
@@ -90,10 +89,8 @@ export function applyPracticeGrade(
   updatedCard: SentenceRecord,
 ): PracticeSessionState {
   const remaining = session.queue.slice(1);
-  if (grade !== 'again' || session.requeuedIds.has(updatedCard.id)) {
-    return {queue: remaining, requeuedIds: session.requeuedIds};
+  if (grade !== 'again') {
+    return {queue: remaining};
   }
-  const requeuedIds = new Set(session.requeuedIds);
-  requeuedIds.add(updatedCard.id);
-  return {queue: [...remaining, updatedCard], requeuedIds};
+  return {queue: [...remaining, updatedCard]};
 }

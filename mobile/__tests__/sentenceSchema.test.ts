@@ -1,11 +1,12 @@
 /**
  * Sentence schema tests (TASK-SENT-003).
  *
- * Migration v4 adds the sentence bank on top of the shipped serverless schema,
- * so these tests run against real SQL (sql.js) and prove the three properties
- * the rest of the feature depends on: a fresh install creates every object, an
- * existing v3 database upgrades without losing conversations, and topic
- * deletion cascades through sentences and the review log.
+ * Migration v4 adds the sentence bank on top of the shipped serverless schema
+ * and v5 adds advanced generation guidance, so these tests run against real SQL
+ * (sql.js) and prove the three properties the rest of the feature depends on: a
+ * fresh install creates every object, an existing v3 database upgrades without
+ * losing conversations, and topic deletion cascades through sentences and the
+ * review log.
  */
 import type {SqlDriver} from '../src/db/driver';
 import {MIGRATIONS, SCHEMA_VERSION, migrateDatabase} from '../src/db/migrations';
@@ -57,12 +58,12 @@ async function countRows(db: SqlDriver, table: string): Promise<number> {
 }
 
 describe('sentence schema (TASK-SENT-003)', () => {
-  test('a fresh database creates the sentence bank and records version 4', async () => {
+  test('a fresh database creates the sentence bank and records version 5', async () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
 
-    expect(SCHEMA_VERSION).toBe(4);
-    expect(await userVersion(db)).toBe(4);
+    expect(SCHEMA_VERSION).toBe(5);
+    expect(await userVersion(db)).toBe(5);
 
     const tables = await schemaNames(db, 'table');
     expect(tables).toEqual(
@@ -82,7 +83,7 @@ describe('sentence schema (TASK-SENT-003)', () => {
     await db.close();
   });
 
-  test('a version 3 database upgrades to 4 without losing conversations', async () => {
+  test('a version 3 database upgrades to the current schema without losing conversations', async () => {
     const db = await openSqlJsDriver();
     // Install only the migrations that existed before the sentence bank.
     await migrateDatabase(db, MIGRATIONS.slice(0, 3));
@@ -98,15 +99,20 @@ describe('sentence schema (TASK-SENT-003)', () => {
 
     await migrateDatabase(db);
 
-    expect(await userVersion(db)).toBe(4);
+    expect(await userVersion(db)).toBe(SCHEMA_VERSION);
     const sessions = await listSessions(db);
     expect(sessions.map(item => item.title)).toEqual(['Trip to Da Nang']);
     const messages = await listMessages(db, session.id);
     expect(messages.map(message => message.content)).toEqual(['I want to talk about my trip.']);
 
-    // The new tables are usable after the upgrade.
+    // The new tables and the v5 column are usable after the upgrade.
     const topicId = await insertTopic(db);
     expect(await insertSentence(db, topicId, 'Nice to meet you.', 'nice to meet you')).toBeGreaterThan(0);
+    const topicRow = await db.execute(
+      'SELECT generation_prompt FROM sentence_topics WHERE id = ?',
+      [topicId],
+    );
+    expect(topicRow.rows[0]?.generation_prompt).toBe('');
 
     await db.close();
   });

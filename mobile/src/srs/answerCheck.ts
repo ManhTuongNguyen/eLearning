@@ -12,16 +12,21 @@
  * - `normalizeSentenceText` (srs/normalize) is the *equality* key: it folds
  *   contractions, so "I do not know" and "I don't know" count as the same
  *   answer for grading.
- * - `tokenizeForComparison` is the *alignment* key: it lowercases and strips
- *   punctuation but keeps one token per spoken word, so the diff and the
- *   display stay faithful to what the learner actually typed.
+ * - The alignment key is contraction-aware: each word is expanded the same way
+ *   (`weather's` and `weather is` both compare as `weather is`) while still
+ *   pointing back at the surface token the learner typed or read. That keeps
+ *   equivalent answers from showing a false word-level correction.
  *
  * Grading is deliberately conservative: a clean answer or a single typo is
  * suggested as Good, everything else as Again. Easy is never suggested — it
  * stays an explicit learner choice.
  */
 import type {ReviewGrade} from '../db/types';
-import {normalizeSentenceText} from './normalize';
+import {
+  expandTokenForComparison,
+  normalizeSentenceText,
+} from './normalize';
+import type {FollowingWord} from './normalize';
 
 /** How one position of the answer relates to the sentence. */
 export type DiffKind = 'correct' | 'missing' | 'extra' | 'substituted';
@@ -43,6 +48,22 @@ export interface ComparableToken {
   normalized: string;
 }
 
+/**
+ * One spoken word after contraction expansion, still pointing at the surface
+ * token it came from. `weather's` produces two of these (weather + is) that
+ * both carry the same `tokenIndex`, which lets the renderer collapse the
+ * expansion back into one displayed token.
+ */
+interface ExpandedToken extends ComparableToken {
+  tokenIndex: number;
+}
+
+/** A diff segment with the surface-token indices used for coalescing. */
+interface IndexedDiffSegment extends DiffSegment {
+  expectedTokenIndex: number;
+  actualTokenIndex: number;
+}
+
 /** One token ready for rendering, plus the expected word when it differs. */
 export interface DisplayToken {
   kind: DiffKind;
@@ -54,18 +75,83 @@ export interface DisplayToken {
 
 const WORD_PATTERN = /[A-Za-z0-9]+(?:['\u2018\u2019][A-Za-z]+)*/g;
 
+/** A surface token plus whether punctuation followed it in the source text. */
+interface SurfaceToken extends ComparableToken {
+  followedByPunctuation: boolean;
+}
+
+/** Split a sentence into tokens while remembering clause punctuation. */
+function tokenizeSurfaceSentence(text: string): SurfaceToken[] {
+  const pattern = new RegExp(WORD_PATTERN.source, 'g');
+  const tokens: SurfaceToken[] = [];
+  let previousEnd = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    if (tokens.length > 0) {
+      const gap = text.slice(previousEnd, match.index);
+      tokens[tokens.length - 1].followedByPunctuation = /\S/.test(gap);
+    }
+    const raw = match[0];
+    tokens.push({
+      raw,
+      normalized: raw.toLowerCase().replace(/[\u2018\u2019]/g, "'"),
+      followedByPunctuation: false,
+    });
+    previousEnd = pattern.lastIndex;
+  }
+  return tokens;
+}
+
 /** Split a sentence into display words with their comparison form. */
 export function tokenizeSentence(text: string): ComparableToken[] {
-  const words = text.match(WORD_PATTERN) ?? [];
-  return words.map(raw => ({
+  return tokenizeSurfaceSentence(text).map(({raw, normalized}) => ({
     raw,
-    normalized: raw.toLowerCase().replace(/[\u2018\u2019]/g, "'"),
+    normalized,
   }));
 }
 
 /** The comparison tokens of a sentence, in order. */
 export function tokenizeForComparison(text: string): string[] {
   return tokenizeSentence(text).map(token => token.normalized);
+}
+
+/**
+ * Expand every surface token into the words used for comparison. Contractions
+ * become multiple words, but each expanded word keeps the index of the token it
+ * came from so the renderer can collapse it back to one displayed word.
+ */
+function expandTokens(tokens: readonly SurfaceToken[]): ExpandedToken[] {
+  const expanded: ExpandedToken[] = [];
+  tokens.forEach((token, tokenIndex) => {
+    const followingWords: FollowingWord[] = [];
+    for (
+      let offset = tokenIndex + 1;
+      offset < tokens.length && followingWords.length < 8;
+      offset += 1
+    ) {
+      followingWords.push({
+        word: tokens[offset].normalized,
+        precededByPunctuation: tokens[offset - 1].followedByPunctuation,
+      });
+    }
+    const expandedText = expandTokenForComparison(
+      token.normalized,
+      followingWords,
+    );
+    const expandedWords = expandedText.split(' ').filter(Boolean);
+    const words = expandedWords.length > 0 ? expandedWords : [token.normalized];
+    for (const word of words) {
+      expanded.push({raw: token.raw, normalized: word, tokenIndex});
+    }
+  });
+  return expanded;
+}
+
+/** Contraction-expanded comparison words for grading and typo detection. */
+function comparisonWords(text: string): string[] {
+  return expandTokens(tokenizeSurfaceSentence(text)).map(
+    token => token.normalized,
+  );
 }
 
 /** Levenshtein distance, used only to recognise a single-token typo. */
@@ -134,18 +220,22 @@ function alignTokens(expected: readonly string[], actual: readonly string[]): Al
  */
 function mergeSubstitutions(
   ops: readonly AlignmentOp[],
-  expectedTokens: readonly ComparableToken[],
-  actualTokens: readonly ComparableToken[],
-): DiffSegment[] {
-  const segments: DiffSegment[] = [];
+  expectedTokens: readonly ExpandedToken[],
+  actualTokens: readonly ExpandedToken[],
+): IndexedDiffSegment[] {
+  const segments: IndexedDiffSegment[] = [];
   let index = 0;
   while (index < ops.length) {
     const op = ops[index];
     if (op.type === 'match') {
+      const expected = expectedTokens[op.expectedIndex];
+      const actual = actualTokens[op.actualIndex];
       segments.push({
         kind: 'correct',
-        expected: expectedTokens[op.expectedIndex].raw,
-        actual: actualTokens[op.actualIndex].raw,
+        expected: expected.raw,
+        actual: actual.raw,
+        expectedTokenIndex: expected.tokenIndex,
+        actualTokenIndex: actual.tokenIndex,
       });
       index += 1;
       continue;
@@ -163,20 +253,99 @@ function mergeSubstitutions(
     }
     const paired = Math.min(missing.length, extra.length);
     for (let pair = 0; pair < paired; pair += 1) {
+      const expected = expectedTokens[missing[pair]];
+      const actual = actualTokens[extra[pair]];
       segments.push({
         kind: 'substituted',
-        expected: expectedTokens[missing[pair]].raw,
-        actual: actualTokens[extra[pair]].raw,
+        expected: expected.raw,
+        actual: actual.raw,
+        expectedTokenIndex: expected.tokenIndex,
+        actualTokenIndex: actual.tokenIndex,
       });
     }
     for (let rest = paired; rest < missing.length; rest += 1) {
-      segments.push({kind: 'missing', expected: expectedTokens[missing[rest]].raw, actual: null});
+      const expected = expectedTokens[missing[rest]];
+      segments.push({
+        kind: 'missing',
+        expected: expected.raw,
+        actual: null,
+        expectedTokenIndex: expected.tokenIndex,
+        actualTokenIndex: -1,
+      });
     }
     for (let rest = paired; rest < extra.length; rest += 1) {
-      segments.push({kind: 'extra', expected: null, actual: actualTokens[extra[rest]].raw});
+      const actual = actualTokens[extra[rest]];
+      segments.push({
+        kind: 'extra',
+        expected: null,
+        actual: actual.raw,
+        expectedTokenIndex: -1,
+        actualTokenIndex: actual.tokenIndex,
+      });
     }
   }
   return segments;
+}
+
+/**
+ * Collapse the words of an expanded contraction back into one visible token.
+ * Adjacent correct words merge only when they came from the same surface token
+ * on either side, so genuinely repeated words ("very very") stay separate.
+ */
+function coalesceCorrectSegments(segments: readonly IndexedDiffSegment[]): DiffSegment[] {
+  const result: DiffSegment[] = [];
+  let group: {
+    expected: string;
+    expectedTokenIndexes: Set<number>;
+    actualParts: Array<{index: number; text: string}>;
+  } | null = null;
+
+  const flush = () => {
+    if (!group) {
+      return;
+    }
+    result.push({
+      kind: 'correct',
+      expected: group.expected,
+      actual: group.actualParts.map(part => part.text).join(' '),
+    });
+    group = null;
+  };
+
+  for (const segment of segments) {
+    if (segment.kind !== 'correct') {
+      flush();
+      result.push({
+        kind: segment.kind,
+        expected: segment.expected,
+        actual: segment.actual,
+      });
+      continue;
+    }
+
+    const actualText = segment.actual ?? '';
+    const sharesSurfaceToken =
+      group !== null &&
+      (group.expectedTokenIndexes.has(segment.expectedTokenIndex) ||
+        group.actualParts.some(part => part.index === segment.actualTokenIndex));
+
+    if (group !== null && sharesSurfaceToken) {
+      group.expectedTokenIndexes.add(segment.expectedTokenIndex);
+      if (!group.actualParts.some(part => part.index === segment.actualTokenIndex)) {
+        group.actualParts.push({index: segment.actualTokenIndex, text: actualText});
+      }
+      continue;
+    }
+
+    flush();
+    group = {
+      expected: segment.expected ?? '',
+      expectedTokenIndexes: new Set([segment.expectedTokenIndex]),
+      actualParts: [{index: segment.actualTokenIndex, text: actualText}],
+    };
+  }
+  flush();
+  return result;
 }
 
 /**
@@ -185,13 +354,13 @@ function mergeSubstitutions(
  * added appear as `extra`.
  */
 export function diffTokens(expected: string, actual: string): DiffSegment[] {
-  const expectedTokens = tokenizeSentence(expected);
-  const actualTokens = tokenizeSentence(actual);
+  const expectedTokens = expandTokens(tokenizeSurfaceSentence(expected));
+  const actualTokens = expandTokens(tokenizeSurfaceSentence(actual));
   const ops = alignTokens(
     expectedTokens.map(token => token.normalized),
     actualTokens.map(token => token.normalized),
   );
-  return mergeSubstitutions(ops, expectedTokens, actualTokens);
+  return coalesceCorrectSegments(mergeSubstitutions(ops, expectedTokens, actualTokens));
 }
 
 /**
@@ -203,8 +372,8 @@ export function suggestGrade(expected: string, actual: string): ReviewGrade {
     return 'good';
   }
 
-  const expectedTokens = tokenizeForComparison(expected);
-  const actualTokens = tokenizeForComparison(actual);
+  const expectedTokens = comparisonWords(expected);
+  const actualTokens = comparisonWords(actual);
   if (expectedTokens.length !== actualTokens.length) {
     return 'again';
   }

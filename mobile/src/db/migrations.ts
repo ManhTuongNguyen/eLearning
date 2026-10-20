@@ -147,6 +147,18 @@ const MIGRATION_004: readonly string[] = [
 ];
 
 /**
+ * Version 5: optional learner guidance for sentence generation.
+ *
+ * The advanced "generation instructions" field on a topic is stored with the
+ * topic (not on each request) so generating later batches keeps the same
+ * guidance. It is plain user context; the prompt builder treats it as
+ * untrusted data.
+ */
+const MIGRATION_005: readonly string[] = [
+  `ALTER TABLE sentence_topics ADD COLUMN generation_prompt TEXT NOT NULL DEFAULT ''`,
+];
+
+/**
  * Ordered migration list; length is the current schema version. Append new
  * entries — never edit shipped ones.
  */
@@ -155,6 +167,7 @@ export const MIGRATIONS: readonly (readonly string[])[] = [
   MIGRATION_002,
   MIGRATION_003,
   MIGRATION_004,
+  MIGRATION_005,
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS.length;

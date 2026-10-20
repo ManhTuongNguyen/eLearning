@@ -62,6 +62,8 @@ export type MainStackParamList = {
   SpeakingHistory: undefined;
   /** Real-life sentences: topic list, topic editor, practice (TASK-SENT-008+). */
   SentenceTopics: undefined;
+  /** Separate form for creating a topic, pushed from the topics list. */
+  SentenceTopicNew: undefined;
   /** A topic's sentence bank (TASK-SENT-009). */
   SentenceTopic: {topicId: number};
   /** Spaced-repetition practice for one topic (TASK-SENT-012). */
@@ -113,6 +115,11 @@ export type SpeakingHistoryScreenProps = NativeStackScreenProps<
 export type SentenceTopicsScreenProps = NativeStackScreenProps<
   MainStackParamList,
   'SentenceTopics'
+>;
+
+export type SentenceTopicNewScreenProps = NativeStackScreenProps<
+  MainStackParamList,
+  'SentenceTopicNew'
 >;
 
 export type SentenceTopicScreenProps = NativeStackScreenProps<

@@ -47,11 +47,15 @@ function createStyles(c: ThemeColors) {
       justifyContent: 'flex-end',
     },
     container: {
-      flex: 1,
+      maxHeight: '90%',
       backgroundColor: c.surface,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
       overflow: 'hidden',
+    },
+    list: {
+      flexGrow: 0,
+      flexShrink: 1,
     },
     header: {
       flexDirection: 'row',
@@ -207,94 +211,97 @@ export function SentenceReviewModal({
       animationType="slide"
       onRequestClose={handleDiscard}
       testID="sentence-review-modal"
+      transparent
       visible
     >
-      <View style={styles.container} accessibilityViewIsModal>
-        <View style={styles.header}>
-          <Text style={styles.title} testID="sentence-review-title">
-            Review sentences
-          </Text>
-          <Text style={styles.candidateIndex} testID="sentence-review-count">
-            {keptCount} of {candidates.length} kept
-          </Text>
-        </View>
-
-        <ScrollView>
-          {candidates.map((candidate, index) => {
-            const kept = toggles[index] ?? true;
-            return (
-              <View
-                key={`candidate-${index}`}
-                style={styles.candidate}
-                testID={`sentence-candidate-${index}`}
-              >
-                <View style={styles.keepToggle}>
-                  <Pressable
-                    onPress={() => handleToggle(index)}
-                    testID={`sentence-toggle-${index}`}
-                    accessibilityRole="checkbox"
-                    accessibilityLabel={
-                      kept ? 'Remove from kept' : 'Keep sentence'
-                    }
-                    accessibilityState={{checked: kept}}
-                  >
-                    <Icon
-                      name="check"
-                      size={20}
-                      color={kept ? colors.primary : colors.textMuted}
-                      testID={`sentence-toggle-icon-${index}`}
-                    />
-                  </Pressable>
-                </View>
-                <View style={styles.candidateText}>
-                  <Text style={styles.candidateIndex}>{index + 1}</Text>
-                  <Text style={styles.sentence}>{candidate.sentence}</Text>
-                  {candidate.meaning ? (
-                    <Text style={styles.meaning}>{candidate.meaning}</Text>
-                  ) : null}
-                  {candidate.situation ? (
-                    <Text style={styles.situation}>{candidate.situation}</Text>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <Pressable
-            onPress={handleDiscard}
-            testID="sentence-discard-all"
-            style={styles.actionButton}
-          >
-            <Text style={[styles.actionText, {color: colors.textMuted}]}>
-              Discard all
+      <View style={styles.backdrop}>
+        <View style={styles.container} accessibilityViewIsModal>
+          <View style={styles.header}>
+            <Text style={styles.title} testID="sentence-review-title">
+              Review sentences
             </Text>
-          </Pressable>
-          <Pressable
-            onPress={handleKeepAll}
-            testID="sentence-keep-all"
-            style={styles.actionButton}
-          >
-            <Text style={styles.actionText}>Keep all</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{disabled: !hasSelection}}
-            onPress={handleKeepSelected}
-            testID="sentence-keep-selected"
-            disabled={!hasSelection}
-            style={styles.actionButton}
-          >
-            <Text
-              style={[
-                styles.actionText,
-                !hasSelection && {color: colors.textMuted},
-              ]}
+            <Text style={styles.candidateIndex} testID="sentence-review-count">
+              {keptCount} of {candidates.length} kept
+            </Text>
+          </View>
+
+          <ScrollView style={styles.list}>
+            {candidates.map((candidate, index) => {
+              const kept = toggles[index] ?? true;
+              return (
+                <View
+                  key={`candidate-${index}`}
+                  style={styles.candidate}
+                  testID={`sentence-candidate-${index}`}
+                >
+                  <View style={styles.keepToggle}>
+                    <Pressable
+                      onPress={() => handleToggle(index)}
+                      testID={`sentence-toggle-${index}`}
+                      accessibilityRole="checkbox"
+                      accessibilityLabel={
+                        kept ? 'Remove from kept' : 'Keep sentence'
+                      }
+                      accessibilityState={{checked: kept}}
+                    >
+                      <Icon
+                        name="check"
+                        size={20}
+                        color={kept ? colors.primary : colors.textMuted}
+                        testID={`sentence-toggle-icon-${index}`}
+                      />
+                    </Pressable>
+                  </View>
+                  <View style={styles.candidateText}>
+                    <Text style={styles.candidateIndex}>{index + 1}</Text>
+                    <Text style={styles.sentence}>{candidate.sentence}</Text>
+                    {candidate.meaning ? (
+                      <Text style={styles.meaning}>{candidate.meaning}</Text>
+                    ) : null}
+                    {candidate.situation ? (
+                      <Text style={styles.situation}>{candidate.situation}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+
+          <View style={styles.footer}>
+            <Pressable
+              onPress={handleDiscard}
+              testID="sentence-discard-all"
+              style={styles.actionButton}
             >
-              Keep selected
-            </Text>
-          </Pressable>
+              <Text style={[styles.actionText, {color: colors.textMuted}]}>
+                Discard all
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleKeepAll}
+              testID="sentence-keep-all"
+              style={styles.actionButton}
+            >
+              <Text style={styles.actionText}>Keep all</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{disabled: !hasSelection}}
+              onPress={handleKeepSelected}
+              testID="sentence-keep-selected"
+              disabled={!hasSelection}
+              style={styles.actionButton}
+            >
+              <Text
+                style={[
+                  styles.actionText,
+                  !hasSelection && {color: colors.textMuted},
+                ]}
+              >
+                Keep selected
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </Modal>

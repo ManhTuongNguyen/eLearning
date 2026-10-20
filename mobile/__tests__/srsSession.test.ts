@@ -3,8 +3,8 @@
  *
  * The pure session module decides which cards a learner sees and what an
  * `Again` grade does to the queue. These tests pin the due-only filter, the
- * order, the 20-card cap and the requeue-once rule without touching SQLite or
- * React.
+ * order, the 20-card cap and the Anki-style requeue-every-Again rule without
+ * touching SQLite or React.
  */
 import type {SentenceRecord} from '../src/db/types';
 import {
@@ -87,7 +87,7 @@ describe('buildPracticeSession', () => {
 });
 
 describe('applyPracticeGrade', () => {
-  test('requeues an Again card once at the end of the session', () => {
+  test('requeues an Again card at the end of the session', () => {
     const first = sentence(1);
     const second = sentence(2);
     const state = createPracticeSessionState([first, second], NOW);
@@ -99,23 +99,24 @@ describe('applyPracticeGrade', () => {
 
     expect(afterAgain.queue.map(card => card.id)).toEqual([2, 1]);
     expect(afterAgain.queue[1].status).toBe('learning');
-    expect(afterAgain.requeuedIds.has(1)).toBe(true);
   });
 
-  test('does not requeue the same sentence twice in one session', () => {
+  test('keeps requeueing the same sentence after every Again (Anki learning steps)', () => {
     const first = sentence(1);
     const state = createPracticeSessionState([first], NOW);
 
-    const afterFirstAgain = applyPracticeGrade(state, 'again', first);
-    // The requeued card is now at the head; grade it Again a second time.
+    const afterFirstAgain = applyPracticeGrade(state, 'again', {
+      ...first,
+      status: 'learning',
+    });
     const afterSecondAgain = applyPracticeGrade(
       afterFirstAgain,
       'again',
-      afterFirstAgain.queue[0],
+      {...afterFirstAgain.queue[0], status: 'learning'},
     );
 
-    expect(afterSecondAgain.queue).toEqual([]);
-    expect(afterSecondAgain.requeuedIds.has(1)).toBe(true);
+    expect(afterFirstAgain.queue.map(card => card.id)).toEqual([1]);
+    expect(afterSecondAgain.queue.map(card => card.id)).toEqual([1]);
   });
 
   test('drops a Good or Easy card without requeueing it', () => {
@@ -128,6 +129,5 @@ describe('applyPracticeGrade', () => {
 
     expect(afterGood.queue.map(card => card.id)).toEqual([2]);
     expect(afterEasy.queue).toEqual([]);
-    expect(afterEasy.requeuedIds.size).toBe(0);
   });
 });

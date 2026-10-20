@@ -8,14 +8,16 @@
  * their situation. A forced practice mode from Settings overrides that mix.
  *
  * Every grade goes through the pure scheduler and is persisted with its review
- * log row in one repository transaction. An `Again` card is appended once at
- * the end of the same session; grading it `Again` a second time does not append
- * it again. TTS follows the shared one-playback contract: one utterance at a
- * time, stopped when the card changes, the screen blurs or it unmounts.
+ * log row in one repository transaction. An `Again` card is appended to the end
+ * of the same session every time it is graded, so it keeps returning until the
+ * learner grades it Good or Easy (Anki's learning-step behaviour). TTS follows
+ * the shared one-playback contract: one utterance at a time, stopped when the
+ * card changes, the screen blurs or it unmounts.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -146,6 +148,37 @@ export function createStyles(c: ThemeColors) {
       lineHeight: 20,
       color: c.textSecondary,
       fontStyle: 'italic',
+    },
+    contextBlock: {
+      gap: 4,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    contextLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+      color: c.textMuted,
+    },
+    answerBlock: {
+      gap: 4,
+      paddingVertical: 9,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+      backgroundColor: c.accentSoft,
+    },
+    answerText: {
+      fontSize: 16,
+      fontWeight: '600',
+      lineHeight: 23,
+      color: c.textPrimary,
+    },
+    recallHint: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.textMuted,
     },
     replayButton: {
       flexDirection: 'row',
@@ -474,7 +507,6 @@ export function SentencePracticeScreen({
   const [allSentences, setAllSentences] = useState<SentenceRecord[]>([]);
   const [session, setSession] = useState<PracticeSessionState>({
     queue: [],
-    requeuedIds: new Set<number>(),
   });
   const [practiceMode, setPracticeMode] = useState<PracticeMode>('auto');
   const [loading, setLoading] = useState(true);
@@ -569,6 +601,7 @@ export function SentencePracticeScreen({
 
   const handleReplay = useCallback(() => {
     if (currentCard) {
+      Keyboard.dismiss();
       speak(currentCard.id, currentCard.text);
     }
   }, [currentCard, speak]);
@@ -577,6 +610,7 @@ export function SentencePracticeScreen({
     if (!currentCard) {
       return;
     }
+    Keyboard.dismiss();
     setDiff(diffTokens(currentCard.text, answer));
     setSuggested(suggestGrade(currentCard.text, answer));
   }, [currentCard, answer]);
@@ -743,7 +777,10 @@ export function SentencePracticeScreen({
           </View>
         </ScrollView>
       ) : currentCard && currentMode ? (
-        <ScrollView contentContainerStyle={styles.cardBody}>
+        <ScrollView
+          contentContainerStyle={styles.cardBody}
+          keyboardShouldPersistTaps="handled"
+        >
           <Text style={styles.progress} testID="sentence-practice-progress">
             {reviewedCount + 1} / {reviewedCount + session.queue.length}
           </Text>
@@ -781,6 +818,8 @@ export function SentencePracticeScreen({
                 testID="sentence-dictation-input"
                 autoCapitalize="none"
                 autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={handleCheck}
               />
 
               {diff === null ? (
@@ -816,6 +855,19 @@ export function SentencePracticeScreen({
                       </Text>
                     ))}
                   </View>
+                  <View
+                    style={styles.answerBlock}
+                    testID="sentence-dictation-answer-block"
+                  >
+                    <Text style={styles.contextLabel}>Correct sentence</Text>
+                    <Text
+                      style={styles.answerText}
+                      selectable
+                      testID="sentence-dictation-answer"
+                    >
+                      {currentCard.text}
+                    </Text>
+                  </View>
                   <Text style={styles.diffSummary} testID="sentence-diff-summary">
                     {diffSummary(diff)}
                   </Text>
@@ -827,13 +879,52 @@ export function SentencePracticeScreen({
                   </Text>
                 </>
               )}
+
+              {diff !== null &&
+              (currentCard.meaning || currentCard.situation) ? (
+                <View style={styles.contextBlock} testID="sentence-dictation-context">
+                  {currentCard.meaning ? (
+                    <>
+                      <Text style={styles.contextLabel}>Meaning</Text>
+                      <Text
+                        style={styles.meaningText}
+                        selectable
+                        testID="sentence-dictation-meaning"
+                      >
+                        {currentCard.meaning}
+                      </Text>
+                    </>
+                  ) : null}
+                  {currentCard.situation ? (
+                    <>
+                      <Text style={styles.contextLabel}>Situation</Text>
+                      <Text
+                        style={styles.situationText}
+                        selectable
+                        testID="sentence-dictation-situation"
+                      >
+                        {currentCard.situation}
+                      </Text>
+                    </>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
           ) : (
             <View style={styles.card} testID="sentence-recall-card">
               <Text style={styles.cardLabel}>Recall the sentence</Text>
-              <Text style={styles.situationText} testID="sentence-recall-situation">
+              <Text style={styles.contextLabel}>Situation</Text>
+              <Text
+                style={styles.situationText}
+                selectable
+                testID="sentence-recall-situation"
+              >
                 {currentCard.situation ||
                   'No situation was saved for this sentence.'}
+              </Text>
+              <Text style={styles.recallHint}>
+                Say the English sentence a native speaker would use in this
+                situation.
               </Text>
 
               <Pressable
@@ -847,7 +938,11 @@ export function SentencePracticeScreen({
                 </Text>
               </Pressable>
               {meaningVisible ? (
-                <Text style={styles.meaningText} testID="sentence-recall-meaning">
+                <Text
+                  style={styles.meaningText}
+                  selectable
+                  testID="sentence-recall-meaning"
+                >
                   {currentCard.meaning || 'No meaning was saved.'}
                 </Text>
               ) : null}

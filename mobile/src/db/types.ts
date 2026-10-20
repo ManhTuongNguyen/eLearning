@@ -114,6 +114,11 @@ export interface SentenceTopicRecord {
   id: number;
   title: string;
   description: string;
+  /**
+   * Optional advanced guidance for sentence generation. It is stored as
+   * untrusted learner context and never injected into the prompt as commands.
+   */
+  generation_prompt: string;
   english_level: EnglishLevel;
   created_at: string;
   updated_at: string;
@@ -157,6 +162,8 @@ export interface SentenceReviewLogRecord {
 export interface NewSentenceTopic {
   title: string;
   description?: string;
+  /** Optional advanced guidance used only for sentence generation. */
+  generation_prompt?: string;
   english_level?: EnglishLevel;
 }
 

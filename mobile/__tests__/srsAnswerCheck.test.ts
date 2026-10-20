@@ -110,16 +110,72 @@ describe('diffTokens', () => {
     expect(new Set(expectedSeen).size).toBe(expectedSeen.length);
   });
 
-  test('grades a contraction and its expansion as the same answer', () => {
-    // Grading uses the equality key, so the expansion counts as correct even
-    // though the word-level alignment still shows one differing token.
+  test('treats a contraction and its expansion as the same words', () => {
     expect(isExactAnswer("I don't know", 'I do not know')).toBe(true);
     expect(suggestGrade("I don't know", 'I do not know')).toBe('good');
     expect(diffTokens("I don't know", 'I do not know').map(segment => segment.kind)).toEqual([
       'correct',
-      'substituted',
-      'extra',
       'correct',
+      'correct',
+    ]);
+  });
+
+  test('does not flag the expanded words of a contraction as corrections', () => {
+    const expected = "The weather's perfect for hiking, right?";
+    const actual = 'The weather is perfect for hiking, right?';
+    const segments = diffTokens(expected, actual);
+
+    expect(isExactAnswer(expected, actual)).toBe(true);
+    expect(isExactAnswer(expected, 'The weather perfect for hiking, right?')).toBe(
+      false,
+    );
+    expect(segments.every(segment => segment.kind === 'correct')).toBe(true);
+    expect(summarizeDiff(segments)).toMatchObject({
+      correct: 6,
+      missing: 0,
+      extra: 0,
+      substituted: 0,
+    });
+    expect(diffDisplayTokens(segments).map(token => token.text)).toEqual([
+      'The',
+      'weather is',
+      'perfect',
+      'for',
+      'hiking',
+      'right',
+    ]);
+  });
+
+  test("does not treat a possessive 's as an expanded is", () => {
+    expect(isExactAnswer("John's pen", 'John is pen')).toBe(false);
+    expect(suggestGrade("John's pen", 'John is pen')).toBe('again');
+    expect(
+      diffTokens("John's pen", 'John is pen').every(
+        segment => segment.kind === 'correct',
+      ),
+    ).toBe(false);
+    expect(isExactAnswer("John's new pen", 'John is new pen')).toBe(false);
+  });
+
+  test("accepts a predicate adjective after a noun's contraction", () => {
+    expect(isExactAnswer("John's happy", 'John is happy')).toBe(true);
+    expect(
+      diffTokens("John's happy", 'John is happy').every(
+        segment => segment.kind === 'correct',
+      ),
+    ).toBe(true);
+  });
+
+  test('still counts genuinely repeated words separately', () => {
+    const segments = diffTokens('It is very very good', 'It is very very good');
+
+    expect(segments.filter(segment => segment.kind === 'correct')).toHaveLength(5);
+    expect(diffDisplayTokens(segments).map(token => token.text)).toEqual([
+      'It',
+      'is',
+      'very',
+      'very',
+      'good',
     ]);
   });
 });
@@ -134,6 +190,15 @@ describe('suggestGrade', () => {
   test('suggests Good for a single typo-sized word', () => {
     expect(suggestGrade(SENTENCE, 'nice to met you')).toBe('good');
     expect(suggestGrade('Can I get a coffee?', 'can i get a cofee')).toBe('good');
+  });
+
+  test('suggests Good for a typo beside an expanded contraction', () => {
+    expect(
+      suggestGrade(
+        "The weather's perfect for hiking, right?",
+        'The weather is perfect for hking, right?',
+      ),
+    ).toBe('good');
   });
 
   test('suggests Again when a word is missing or added', () => {

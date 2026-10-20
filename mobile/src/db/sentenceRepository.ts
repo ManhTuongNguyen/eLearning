@@ -24,7 +24,7 @@ import type {
 import {normalizeSentenceText} from '../srs/normalize';
 
 const TOPIC_COLUMNS =
-  'id, title, description, english_level, created_at, updated_at';
+  'id, title, description, generation_prompt, english_level, created_at, updated_at';
 const SENTENCE_COLUMNS =
   'id, topic_id, text, normalized_text, meaning, situation, status, reps, lapses, ' +
   'ease, interval_days, due_at, last_grade, last_reviewed_at, created_at, updated_at';
@@ -35,6 +35,7 @@ function mapTopicRow(row: SqlRow): SentenceTopicRecord {
     id: Number(row.id),
     title: String(row.title ?? ''),
     description: String(row.description ?? ''),
+    generation_prompt: String(row.generation_prompt ?? ''),
     english_level: String(row.english_level ?? 'AUTO') as SentenceTopicRecord['english_level'],
     created_at: String(row.created_at ?? ''),
     updated_at: String(row.updated_at ?? ''),
@@ -86,11 +87,13 @@ export async function createSentenceTopic(
     throw new Error('createSentenceTopic: a topic needs a title');
   }
   const description = input.description?.trim() ?? '';
+  const generationPrompt = input.generation_prompt?.trim() ?? '';
   const englishLevel = input.english_level ?? 'AUTO';
   const result = await db.execute(
-    `INSERT INTO sentence_topics (title, description, english_level, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?)`,
-    [title, description, englishLevel, timestamp, timestamp],
+    `INSERT INTO sentence_topics
+       (title, description, generation_prompt, english_level, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [title, description, generationPrompt, englishLevel, timestamp, timestamp],
   );
   const id = result.insertId;
   if (id === null || id === undefined) {
@@ -100,6 +103,7 @@ export async function createSentenceTopic(
     id,
     title,
     description,
+    generation_prompt: generationPrompt,
     english_level: englishLevel,
     created_at: timestamp,
     updated_at: timestamp,
@@ -115,7 +119,8 @@ export async function listSentenceTopics(
   now: string = nowIso(),
 ): Promise<SentenceTopicSummary[]> {
   const result = await db.execute(
-    `SELECT t.id, t.title, t.description, t.english_level, t.created_at, t.updated_at,
+    `SELECT t.id, t.title, t.description, t.generation_prompt, t.english_level,
+            t.created_at, t.updated_at,
             (SELECT COUNT(*) FROM sentences s WHERE s.topic_id = t.id) AS sentence_count,
             (SELECT COUNT(*) FROM sentences s
               WHERE s.topic_id = t.id AND s.status != 'suspended' AND s.due_at <= ?) AS due_count
@@ -142,11 +147,11 @@ export async function getSentenceTopicById(
   return row ? mapTopicRow(row) : null;
 }
 
-/** Update the title and/or description of a topic; omitted fields keep their value. */
+/** Update the title, description and/or generation prompt of a topic. */
 export async function updateSentenceTopic(
   db: SqlExecutor,
   id: number,
-  patch: {title?: string; description?: string},
+  patch: {title?: string; description?: string; generation_prompt?: string},
 ): Promise<SentenceTopicRecord | null> {
   const assignments: string[] = [];
   const params: (string | number)[] = [];
@@ -161,6 +166,10 @@ export async function updateSentenceTopic(
   if (patch.description !== undefined) {
     assignments.push('description = ?');
     params.push(patch.description.trim());
+  }
+  if (patch.generation_prompt !== undefined) {
+    assignments.push('generation_prompt = ?');
+    params.push(patch.generation_prompt.trim());
   }
   if (assignments.length === 0) {
     return getSentenceTopicById(db, id);

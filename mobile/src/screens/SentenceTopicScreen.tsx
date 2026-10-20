@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -49,8 +50,8 @@ import {SentenceReviewModal} from './SentenceReviewModal';
 /** Counts offered by the generation panel. */
 export const GENERATION_COUNTS = [1, 5, 10] as const;
 
-/** Description length above which the header collapses to two lines. */
-const LONG_DESCRIPTION_THRESHOLD = 120;
+/** Visible height of the scrollable description block. */
+export const DESCRIPTION_MAX_HEIGHT = 110;
 
 const PROVIDER_MISSING_MESSAGE =
   'Add your provider API key in Settings to generate sentences.';
@@ -83,23 +84,26 @@ function createStyles(c: ThemeColors) {
     },
     title: {
       flex: 1,
-      fontSize: 24,
+      fontSize: 20,
       fontWeight: '700',
       color: c.textPrimary,
+    },
+    descriptionBox: {
+      maxHeight: DESCRIPTION_MAX_HEIGHT,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      backgroundColor: c.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    descriptionScroll: {
+      maxHeight: DESCRIPTION_MAX_HEIGHT - 22,
     },
     description: {
       fontSize: 14,
       lineHeight: 20,
       color: c.textSecondary,
-    },
-    descriptionToggle: {
-      alignSelf: 'flex-start',
-      paddingVertical: 2,
-    },
-    descriptionToggleText: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: c.accent,
     },
     actions: {
       flexDirection: 'row',
@@ -451,7 +455,6 @@ export function SentenceTopicScreen({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateCount, setGenerateCount] = useState<number>(5);
   const [generating, setGenerating] = useState(false);
@@ -582,6 +585,7 @@ export function SentenceTopicScreen({
         {
           topicTitle: record.title,
           topicDescription: record.description,
+          generationPrompt: record.generation_prompt,
           count: generateCount,
           existingSentences: existing.map(sentence => sentence.text),
         },
@@ -637,9 +641,6 @@ export function SentenceTopicScreen({
     MIN_PRACTICE_SENTENCES - sentences.length,
   );
 
-  const descriptionIsLong =
-    (topic?.description.length ?? 0) > LONG_DESCRIPTION_THRESHOLD;
-
   const renderRow = useCallback(
     ({item, index}: {item: SentenceRecord; index: number}) => (
       <>
@@ -672,32 +673,23 @@ export function SentenceTopicScreen({
           >
             <Text style={styles.backLinkText}>‹ Topics</Text>
           </Pressable>
-          <Text style={styles.title} numberOfLines={2} testID="sentence-topic-title">
+          <Text style={styles.title} numberOfLines={1} testID="sentence-topic-title">
             {topic?.title ?? 'Topic'}
           </Text>
         </View>
         {topic?.description ? (
-          <>
-            <Text
-              style={styles.description}
-              numberOfLines={descriptionIsLong && !descriptionExpanded ? 2 : undefined}
-              testID="sentence-topic-description"
+          <View style={styles.descriptionBox}>
+            <ScrollView
+              style={styles.descriptionScroll}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              testID="sentence-topic-description-scroll"
             >
-              {topic.description}
-            </Text>
-            {descriptionIsLong ? (
-              <Pressable
-                accessibilityRole="button"
-                testID="sentence-description-toggle"
-                onPress={() => setDescriptionExpanded(value => !value)}
-                style={styles.descriptionToggle}
-              >
-                <Text style={styles.descriptionToggleText}>
-                  {descriptionExpanded ? 'Show less' : 'Show more'}
-                </Text>
-              </Pressable>
-            ) : null}
-          </>
+              <Text style={styles.description} testID="sentence-topic-description">
+                {topic.description}
+              </Text>
+            </ScrollView>
+          </View>
         ) : null}
       </View>
 

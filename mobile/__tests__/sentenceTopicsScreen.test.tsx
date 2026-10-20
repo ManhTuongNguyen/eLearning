@@ -172,49 +172,22 @@ describe('SentenceTopicsScreen — topic list', () => {
   });
 });
 
-describe('SentenceTopicsScreen — create topic', () => {
-  test('saving a topic navigates to its SentenceTopic screen', async () => {
+describe('SentenceTopicsScreen — new topic entry point', () => {
+  test('the add button opens the separate create-topic screen', async () => {
     const {view} = await renderInMode();
 
     await fireEvent.press(view.getByTestId('sentence-topics-new'));
-    await view.findByTestId('sentence-new-topic-form');
-    await fireEvent.changeText(view.getByTestId('sentence-topic-title'), 'Meeting someone new');
-    await fireEvent.changeText(
-      view.getByTestId('sentence-topic-description'),
-      'first day in a new city',
-    );
-    await fireEvent.press(view.getByTestId('sentence-topic-save'));
 
-    await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('SentenceTopic', {topicId: expect.any(Number)});
-    });
+    expect(navigate).toHaveBeenCalledWith('SentenceTopicNew');
   });
 
-  test('the save button is disabled while the title is blank', async () => {
+  test('the add button is a circle', async () => {
     const {view} = await renderInMode();
 
-    await fireEvent.press(view.getByTestId('sentence-topics-new'));
-    await view.findByTestId('sentence-new-topic-form');
-
-    expect(view.getByTestId('sentence-topic-save').props.accessibilityState?.disabled).toBe(true);
-
-    await fireEvent.changeText(view.getByTestId('sentence-topic-title'), '   ');
-    expect(view.getByTestId('sentence-topic-save').props.accessibilityState?.disabled).toBe(true);
-
-    await fireEvent.changeText(view.getByTestId('sentence-topic-title'), 'Greetings');
-    expect(view.getByTestId('sentence-topic-save').props.accessibilityState?.disabled).toBe(false);
-  });
-
-  test('cancel closes the form without persisting', async () => {
-    const {view} = await renderInMode();
-
-    await fireEvent.press(view.getByTestId('sentence-topics-new'));
-    await view.findByTestId('sentence-new-topic-form');
-    await fireEvent.changeText(view.getByTestId('sentence-topic-title'), 'A topic');
-    await fireEvent.press(view.getByTestId('sentence-topic-cancel'));
-
-    await waitFor(() => {
-      expect(view.queryByTestId('sentence-new-topic-form')).toBeFalsy();
+    expect(view.getByTestId('sentence-topics-new')).toHaveStyle({
+      width: 44,
+      height: 44,
+      borderRadius: 22,
     });
   });
 });

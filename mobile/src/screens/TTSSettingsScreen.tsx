@@ -42,6 +42,9 @@ import {useTheme} from '../theme/ThemeContext';
 /** Sentence spoken by the preview control. */
 export const PREVIEW_SENTENCE = 'Hello! This is how your assistant will sound.';
 
+/** How long the reset success toast stays visible. */
+export const RESET_TOAST_DURATION_MS = 2500;
+
 export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
@@ -214,6 +217,30 @@ export function createStyles(c: ThemeColors) {
       color: c.textMuted,
       lineHeight: 16,
     },
+    toast: {
+      position: 'absolute',
+      bottom: 24,
+      left: 24,
+      right: 24,
+      backgroundColor: c.surface,
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      shadowOffset: {width: 0, height: 2},
+      elevation: 6,
+    },
+    toastText: {
+      color: c.success,
+      fontSize: 14,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
     loadingRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -235,6 +262,17 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
     import('../tts/types').SpeechPreferences | null
   >(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [resetToastVisible, setResetToastVisible] = useState(false);
+
+  // The reset confirmation dismisses itself after a fixed delay, matching the
+  // transient success toast used by the other settings screens.
+  useEffect(() => {
+    if (!resetToastVisible) {
+      return;
+    }
+    const timer = setTimeout(() => setResetToastVisible(false), RESET_TOAST_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [resetToastVisible]);
 
   /**
    * Single mutation seam: every control flows through here so persistence
@@ -298,6 +336,7 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
     clearSpeechPreferences().then(() => {
       setPreferences(DEFAULT_SPEECH_PREFERENCES);
       applySpeechPreferences(DEFAULT_SPEECH_PREFERENCES);
+      setResetToastVisible(true);
     });
   }, []);
 
@@ -446,6 +485,14 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
           </Pressable>
         </View>
       </ScrollView>
+
+      {resetToastVisible ? (
+        <View pointerEvents="none" style={styles.toast} testID="tts-reset-toast">
+          <Text role="status" style={styles.toastText} testID="tts-reset-toast-text">
+            Speech settings reset to defaults.
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

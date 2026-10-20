@@ -25,6 +25,18 @@ describe('normalizeSentenceText', () => {
     expect(normalizeSentenceText("It's fine.")).toBe('it is fine');
     expect(normalizeSentenceText("We're leaving now")).toBe('we are leaving now');
     expect(normalizeSentenceText("Can't wait")).toBe('cannot wait');
+    expect(normalizeSentenceText("The weather's perfect")).toBe(
+      'the weather is perfect',
+    );
+  });
+
+  test("distinguishes a possessive 's from an is-contraction", () => {
+    expect(normalizeSentenceText("John's pen")).toBe('john s pen');
+    expect(normalizeSentenceText("John's new pen")).toBe('john s new pen');
+    expect(normalizeSentenceText("John's happy")).toBe('john is happy');
+    expect(normalizeSentenceText("John's a teacher")).toBe(
+      'john is a teacher',
+    );
   });
 
   test('keeps digits', () => {
@@ -47,6 +59,15 @@ describe('isDuplicateSentence', () => {
   test('detects punctuation and contraction variants of the same sentence', () => {
     expect(isDuplicateSentence('Nice to meet you!', 'nice to meet you.')).toBe(true);
     expect(isDuplicateSentence("I don't know", 'I do not know')).toBe(true);
+    expect(
+      isDuplicateSentence("The weather's perfect", 'The weather is perfect'),
+    ).toBe(true);
+  });
+
+  test("never confuses a possessive 's with is", () => {
+    expect(isDuplicateSentence("John's pen", 'John is pen')).toBe(false);
+    expect(isDuplicateSentence("John's new pen", 'John is new pen')).toBe(false);
+    expect(isDuplicateSentence("John's happy", 'John is happy')).toBe(true);
   });
 
   test('keeps genuinely different sentences apart', () => {
