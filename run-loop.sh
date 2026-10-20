@@ -19,7 +19,7 @@ while true; do
   echo "🔄 Starting Loop Cycle at: $(date) | Remaining Tasks: $REMAINING_TASKS"
   echo "=================================================================="
 
-  opencode run "$(cat prompts/PROMPT_LOOP_TASKS_SENTENCE_LIVE_V1.md)" --dangerously-skip-permissions 
+  opencode run --server http://localhost:4096 "$(cat prompts/PROMPT_LOOP_TASKS_SENTENCE_LIVE_V1.md)" --dangerously-skip-permissions 
 
   EXIT_CODE=$?
 
