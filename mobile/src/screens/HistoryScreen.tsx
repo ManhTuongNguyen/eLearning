@@ -38,7 +38,6 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -48,6 +47,12 @@ import {
 import type {Session} from '../api/sessions';
 import {deleteSession, listSessions, renameSession} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
+import {
+  Screen,
+  ScreenHeader,
+  ScreenList,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 import {LocalConversationRepository} from '../db/conversationRepository';
 import type {LocalSession} from '../db/types';
 import {useApplicationMode} from '../mode/ModeContext';
@@ -86,11 +91,10 @@ function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      // Same header spacing as the Chat screen; the other sides keep the
-      // previous screen gutter.
+      // Same header spacing as the Chat screen. Horizontal spacing lives on
+      // the shared header/list content so the scroll indicator binds to the
+      // right screen edge.
       paddingTop: 16,
-      paddingHorizontal: 24,
-      paddingBottom: 24,
     },
     header: {
       flexDirection: 'row',
@@ -114,6 +118,7 @@ function createStyles(c: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 10,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     stateText: {
       fontSize: 14,
@@ -124,6 +129,7 @@ function createStyles(c: ThemeColors) {
       color: c.errorText,
       fontSize: 13,
       marginBottom: 12,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     retryButton: {
       alignSelf: 'center',
@@ -438,13 +444,13 @@ export function HistoryScreen({navigation}: Props) {
   }, [deleting, deletingId, localRepository, mode]);
 
   return (
-    <View style={styles.container} testID="history-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="history-screen">
+      <ScreenHeader style={styles.header}>
         <Text style={styles.title}>History</Text>
         <Pressable onPress={() => navigation.goBack()} testID="history-back">
           <Text style={styles.backLink}>Close</Text>
         </Pressable>
-      </View>
+      </ScreenHeader>
 
       {error !== null ? (
         <Text role="alert" style={styles.error} testID="form-error">
@@ -476,7 +482,7 @@ export function HistoryScreen({navigation}: Props) {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <ScreenList
           data={sessions}
           keyExtractor={item => String(item.id)}
           extraData={[renamingId, draftTitle, savingRename, deletingId, deleting]}
@@ -525,6 +531,6 @@ export function HistoryScreen({navigation}: Props) {
           testID="history-list"
         />
       )}
-    </View>
+    </Screen>
   );
 }

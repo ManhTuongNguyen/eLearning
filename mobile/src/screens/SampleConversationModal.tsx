@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 
 import type {SampleTurn} from '../api/sessions';
+import {SCREEN_GUTTER} from '../components/ScreenLayout';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 import type {TextToSpeechEngine} from '../tts/textToSpeech';
@@ -40,7 +41,7 @@ function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 16,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingTop: 16,
       paddingBottom: 12,
       borderBottomWidth: 1,
@@ -61,7 +62,7 @@ function createStyles(c: ThemeColors) {
     note: {
       fontSize: 12,
       color: c.textMuted,
-      paddingHorizontal: 16,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingVertical: 8,
     },
     body: {
@@ -69,7 +70,7 @@ function createStyles(c: ThemeColors) {
     },
     turns: {
       paddingVertical: 12,
-      paddingHorizontal: 16,
+      paddingHorizontal: SCREEN_GUTTER,
       gap: 14,
     },
     row: {

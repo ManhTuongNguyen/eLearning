@@ -17,10 +17,11 @@
  * schedule. Server mode never shows the row or touches the local database.
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 
 import {Icon} from '../components/Icon';
 import type {IconName} from '../components/Icon';
+import {Screen, ScreenScrollView} from '../components/ScreenLayout';
 import {getLocalDatabase} from '../db/database';
 import {countDueSentences} from '../db/sentenceRepository';
 import {useApplicationMode} from '../mode/ModeContext';
@@ -51,11 +52,8 @@ function createStyles(c: ThemeColors) {
       flex: 1,
       backgroundColor: c.background,
       paddingTop: 16,
-      paddingHorizontal: 20,
-      paddingBottom: 16,
     },
     content: {
-      paddingBottom: 28,
       gap: 18,
     },
     heroCard: {
@@ -262,8 +260,8 @@ export function HomeScreen({navigation}: HomeScreenProps) {
   );
 
   return (
-    <View style={styles.container} testID="home-screen">
-      <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+    <Screen style={styles.container} testID="home-screen">
+      <ScreenScrollView bounces={false} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           <View style={styles.heroCard}>
             <Text style={styles.title}>Home</Text>
@@ -318,7 +316,7 @@ export function HomeScreen({navigation}: HomeScreenProps) {
             );
           })}
         </View>
-      </ScrollView>
-    </View>
+      </ScreenScrollView>
+    </Screen>
   );
 }

@@ -15,7 +15,6 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,6 +23,12 @@ import {
 } from 'react-native';
 
 import {Icon} from '../components/Icon';
+import {
+  Screen,
+  ScreenHeader,
+  ScreenList,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 import {getLocalDatabase} from '../db/database';
 import {
   deleteSentence,
@@ -62,8 +67,6 @@ function createStyles(c: ThemeColors) {
       flex: 1,
       backgroundColor: c.background,
       paddingTop: 16,
-      paddingHorizontal: 20,
-      paddingBottom: 16,
     },
     header: {
       marginBottom: 14,
@@ -286,6 +289,7 @@ function createStyles(c: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 10,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     stateText: {
       fontSize: 14,
@@ -304,9 +308,6 @@ function createStyles(c: ThemeColors) {
       textAlign: 'center',
       paddingVertical: 28,
       paddingHorizontal: 16,
-    },
-    listContent: {
-      paddingBottom: 24,
     },
     pressedFade: {
       opacity: 0.9,
@@ -661,8 +662,8 @@ export function SentenceTopicScreen({
   );
 
   return (
-    <View style={styles.container} testID="sentence-topic-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="sentence-topic-screen">
+      <ScreenHeader style={styles.header}>
         <View style={styles.headerTop}>
           <Pressable
             accessibilityRole="button"
@@ -691,7 +692,7 @@ export function SentenceTopicScreen({
             </ScrollView>
           </View>
         ) : null}
-      </View>
+      </ScreenHeader>
 
       {loading ? (
         <View style={styles.centered} testID="sentence-topic-loading">
@@ -707,11 +708,10 @@ export function SentenceTopicScreen({
           </Pressable>
         </View>
       ) : (
-        <FlatList
+        <ScreenList
           data={sentences}
           keyExtractor={item => String(item.id)}
           renderItem={renderRow}
-          contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             <>
               <View style={styles.actions}>
@@ -889,6 +889,6 @@ export function SentenceTopicScreen({
         }}
         onKeep={handleKeepCandidates}
       />
-    </View>
+    </Screen>
   );
 }

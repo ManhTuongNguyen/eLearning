@@ -19,7 +19,6 @@ import {
   ActivityIndicator,
   Keyboard,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -28,6 +27,12 @@ import {
 import type {TextStyle} from 'react-native';
 
 import {Icon} from '../components/Icon';
+import {
+  Screen,
+  ScreenHeader,
+  ScreenScrollView,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 import {getLocalDatabase} from '../db/database';
 import {
   getSentenceTopicById,
@@ -84,8 +89,6 @@ export function createStyles(c: ThemeColors) {
       flex: 1,
       backgroundColor: c.background,
       paddingTop: 16,
-      paddingHorizontal: 20,
-      paddingBottom: 16,
     },
     header: {
       flexDirection: 'row',
@@ -115,7 +118,6 @@ export function createStyles(c: ThemeColors) {
     },
     cardBody: {
       gap: 14,
-      paddingBottom: 24,
     },
     card: {
       backgroundColor: c.surface,
@@ -303,6 +305,7 @@ export function createStyles(c: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 12,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     stateTitle: {
       fontSize: 20,
@@ -686,8 +689,8 @@ export function SentencePracticeScreen({
     currentMode === 'dictation' ? diff !== null : revealed;
 
   return (
-    <View style={styles.container} testID="sentence-practice-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="sentence-practice-screen">
+      <ScreenHeader style={styles.header}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back to topic"
@@ -700,7 +703,7 @@ export function SentencePracticeScreen({
         <Text style={styles.title} numberOfLines={1} testID="sentence-practice-title">
           {topic ? topic.title : 'Practice'}
         </Text>
-      </View>
+      </ScreenHeader>
 
       {loading ? (
         <View style={styles.centered} testID="sentence-practice-loading">
@@ -729,55 +732,57 @@ export function SentencePracticeScreen({
           ) : null}
         </View>
       ) : sessionFinished ? (
-        <ScrollView contentContainerStyle={styles.summary} testID="sentence-practice-summary">
-          <Text style={styles.summaryTitle}>Session complete</Text>
-          <Text style={styles.summaryValue} testID="sentence-practice-reviewed">
-            {reviewedCount} card{reviewedCount === 1 ? '' : 's'} reviewed
-          </Text>
-          <Text style={styles.summaryValue} testID="sentence-practice-grades">
-            Again {gradeCounts.again} · Good {gradeCounts.good} · Easy{' '}
-            {gradeCounts.easy}
-          </Text>
-          {hasRemainingDue ? (
-            <Text style={styles.summaryValue} testID="sentence-practice-more-due">
-              More sentences are due now.
+        <ScreenScrollView testID="sentence-practice-summary">
+          <View style={styles.summary}>
+            <Text style={styles.summaryTitle}>Session complete</Text>
+            <Text style={styles.summaryValue} testID="sentence-practice-reviewed">
+              {reviewedCount} card{reviewedCount === 1 ? '' : 's'} reviewed
             </Text>
-          ) : (
-            <Text style={styles.summaryValue} testID="sentence-practice-nothing-due">
-              Nothing else is due right now.
+            <Text style={styles.summaryValue} testID="sentence-practice-grades">
+              Again {gradeCounts.again} · Good {gradeCounts.good} · Easy{' '}
+              {gradeCounts.easy}
             </Text>
-          )}
-          <View style={styles.summaryActions}>
             {hasRemainingDue ? (
+              <Text style={styles.summaryValue} testID="sentence-practice-more-due">
+                More sentences are due now.
+              </Text>
+            ) : (
+              <Text style={styles.summaryValue} testID="sentence-practice-nothing-due">
+                Nothing else is due right now.
+              </Text>
+            )}
+            <View style={styles.summaryActions}>
+              {hasRemainingDue ? (
+                <Pressable
+                  accessibilityRole="button"
+                  testID="sentence-practice-review-again"
+                  onPress={handleReviewAgain}
+                  style={({pressed}) => [
+                    styles.summaryAction,
+                    styles.primaryButton,
+                    pressed && styles.pressedFade,
+                  ]}
+                >
+                  <Text style={styles.primaryButtonText}>Review again</Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
-                testID="sentence-practice-review-again"
-                onPress={handleReviewAgain}
+                testID="sentence-practice-back-to-topic"
+                onPress={() => navigation.goBack()}
                 style={({pressed}) => [
                   styles.summaryAction,
-                  styles.primaryButton,
+                  styles.secondaryButton,
                   pressed && styles.pressedFade,
                 ]}
               >
-                <Text style={styles.primaryButtonText}>Review again</Text>
+                <Text style={styles.secondaryButtonText}>Back to topic</Text>
               </Pressable>
-            ) : null}
-            <Pressable
-              accessibilityRole="button"
-              testID="sentence-practice-back-to-topic"
-              onPress={() => navigation.goBack()}
-              style={({pressed}) => [
-                styles.summaryAction,
-                styles.secondaryButton,
-                pressed && styles.pressedFade,
-              ]}
-            >
-              <Text style={styles.secondaryButtonText}>Back to topic</Text>
-            </Pressable>
+            </View>
           </View>
-        </ScrollView>
+        </ScreenScrollView>
       ) : currentCard && currentMode ? (
-        <ScrollView
+        <ScreenScrollView
           contentContainerStyle={styles.cardBody}
           keyboardShouldPersistTaps="handled"
         >
@@ -1015,8 +1020,8 @@ export function SentencePracticeScreen({
           {saving ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : null}
-        </ScrollView>
+        </ScreenScrollView>
       ) : null}
-    </View>
+    </Screen>
   );
 }

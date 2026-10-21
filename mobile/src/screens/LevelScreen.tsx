@@ -17,7 +17,6 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -26,6 +25,12 @@ import {
 import {getProfile, LEVELS, updateProfile} from '../api/profile';
 import type {EnglishLevel, LevelOption} from '../api/profile';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
+import {
+  Screen,
+  ScreenContent,
+  ScreenHeader,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
 import {getLocalDatabase} from '../db/database';
 import {getLearningProfile, saveLearningProfile} from '../db/profileStore';
 import {useApplicationMode} from '../mode/ModeContext';
@@ -41,10 +46,11 @@ export function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingHorizontal: 24,
       // The app shell (App.tsx) pads the whole tree out of the system bars
       // on edge-to-edge devices (Android 15+); screens only add their own
-      // fixed header spacing on top of that.
+      // fixed header spacing on top of that. Horizontal padding lives on the
+      // shared ScreenHeader/ScreenScrollView so the scroll indicator stays
+      // anchored to the right screen edge.
       paddingTop: HEADER_TOP_SPACING,
     },
     header: {
@@ -86,7 +92,6 @@ export function createStyles(c: ThemeColors) {
       fontWeight: '600',
     },
     list: {
-      paddingBottom: 24,
       gap: 10,
     },
     row: {
@@ -275,8 +280,8 @@ export function LevelScreen({navigation}: LevelScreenProps) {
   );
 
   return (
-    <View style={styles.container} testID="level-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="level-screen">
+      <ScreenHeader style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
           onPress={() => navigation.goBack()}
@@ -286,20 +291,22 @@ export function LevelScreen({navigation}: LevelScreenProps) {
         </Pressable>
         <Text style={styles.title}>Your English level</Text>
         <View style={styles.headerSpacer} />
-      </View>
-      <Text style={styles.subtitle}>
-        This shapes topics, vocabulary and corrections. You can change it anytime.
-      </Text>
-
-      {loading ? <ActivityIndicator style={styles.loading} testID="level-loading" /> : null}
-      {error ? (
-        <Text role="alert" style={styles.error} testID="form-error">
-          {error}
+      </ScreenHeader>
+      <ScreenContent>
+        <Text style={styles.subtitle}>
+          This shapes topics, vocabulary and corrections. You can change it anytime.
         </Text>
-      ) : null}
-      {saved ? <Text style={styles.saved}>Saved.</Text> : null}
 
-      <ScrollView contentContainerStyle={styles.list}>
+        {loading ? <ActivityIndicator style={styles.loading} testID="level-loading" /> : null}
+        {error ? (
+          <Text role="alert" style={styles.error} testID="form-error">
+            {error}
+          </Text>
+        ) : null}
+        {saved ? <Text style={styles.saved}>Saved.</Text> : null}
+      </ScreenContent>
+
+      <ScreenScrollView contentContainerStyle={styles.list}>
         {LEVELS.map(option => {
           const isSelected = option.value === selected;
           const isSaving = option.value === saving;
@@ -332,7 +339,7 @@ export function LevelScreen({navigation}: LevelScreenProps) {
             </Pressable>
           );
         })}
-      </ScrollView>
-    </View>
+      </ScreenScrollView>
+    </Screen>
   );
 }

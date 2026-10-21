@@ -17,12 +17,18 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+
+import {
+  Screen,
+  ScreenHeader,
+  ScreenScrollView,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 
 import {
   applySpeechPreferences,
@@ -59,7 +65,7 @@ export function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 24,
+      paddingHorizontal: SCREEN_GUTTER,
       marginBottom: 4,
     },
     backText: {
@@ -78,7 +84,7 @@ export function createStyles(c: ThemeColors) {
     scroll: {
       paddingBottom: 32,
       gap: 12,
-      paddingHorizontal: 24,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     notice: {
       fontSize: 12,
@@ -366,8 +372,8 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
 
   if (!preferences) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
+      <Screen style={styles.container}>
+        <ScreenHeader style={styles.header}>
           <Pressable
             accessibilityLabel="Go back"
             hitSlop={8}
@@ -377,17 +383,17 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
           </Pressable>
           <Text style={styles.title}>Voice manager</Text>
           <View style={styles.headerSpacer} />
-        </View>
+        </ScreenHeader>
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" testID="voice-manager-loading" />
         </View>
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container} testID="voice-manager-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="voice-manager-screen">
+      <ScreenHeader style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
           hitSlop={8}
@@ -397,8 +403,8 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
         </Pressable>
         <Text style={styles.title}>Voice manager</Text>
         <View style={styles.headerSpacer} />
-      </View>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      </ScreenHeader>
+      <ScreenScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.notice}>
           English voices installed on this device. Tapping a voice makes it
           the active system voice immediately; Preview auditions it without
@@ -556,7 +562,7 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
             </View>
           </>
         ) : null}
-      </ScrollView>
-    </View>
+      </ScreenScrollView>
+    </Screen>
   );
 }

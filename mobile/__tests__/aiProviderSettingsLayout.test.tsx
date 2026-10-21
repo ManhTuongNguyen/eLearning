@@ -10,6 +10,7 @@ import type {AIProviderSettingsScreenProps} from '../src/navigation/types';
 import {AIProviderSettingsScreen} from '../src/screens/AIProviderSettingsScreen';
 import * as modelCatalog from '../src/serverless/modelCatalog';
 import * as serverlessSettings from '../src/serverless/settings';
+import {SCREEN_GUTTER} from '../src/components/ScreenLayout';
 import {createStyles} from '../src/screens/AIProviderSettingsScreen';
 import {lightColors} from '../src/theme/colors';
 import {ThemeProvider} from '../src/theme/ThemeContext';
@@ -117,7 +118,7 @@ describe('AIProviderSettingsScreen scrollbar anchoring (TASK-IMPROVEMENT-001)', 
   it('applies the screen gutter to the header and scroll content container', () => {
     const styles = createStyles(lightColors);
 
-    expect(styles.header.paddingHorizontal).toBe(24);
-    expect(styles.scroll.paddingHorizontal).toBe(24);
+    expect(styles.header.paddingHorizontal).toBe(SCREEN_GUTTER);
+    expect(styles.scroll.paddingHorizontal).toBe(SCREEN_GUTTER);
   });
 });

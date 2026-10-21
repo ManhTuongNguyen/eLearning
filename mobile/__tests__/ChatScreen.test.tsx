@@ -135,16 +135,28 @@ function sessionPageOf(results: Session[]): Paginated<Session> {
   return {count: results.length, next: null, previous: null, results};
 }
 
-async function renderChat(params?: MainStackParamList['Chat']) {
+async function renderChat(
+  params?: MainStackParamList['Chat'],
+  options: {startAtHome?: boolean; onChatRoute?: (key: string) => void} = {},
+) {
   const Stack = createNativeStackNavigator<MainStackParamList>();
+  const initialState = options.startAtHome
+    ? {index: 1, routes: [{name: 'Home' as const}, {name: 'Chat' as const, params}]}
+    : {index: 0, routes: [{name: 'Chat' as const, params}]};
 
   return render(
     <ModeProvider>
       <ThemeProvider>
         <AuthProvider>
-          <NavigationContainer initialState={{index: 0, routes: [{name: 'Chat', params}]}}>
+          <NavigationContainer initialState={initialState}>
             <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="Chat">
-              <Stack.Screen name="Chat" component={ChatScreen} />
+              <Stack.Screen name="Home">{() => <View testID="home-screen-stub" />}</Stack.Screen>
+              <Stack.Screen name="Chat">
+                {props => {
+                  options.onChatRoute?.(props.route.key);
+                  return <ChatScreen {...props} />;
+                }}
+              </Stack.Screen>
               <Stack.Screen name="NewConversation">
                 {() => <View testID="new-conversation-screen" />}
               </Stack.Screen>
@@ -714,6 +726,28 @@ describe('ChatScreen', () => {
     expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 9);
   });
 
+  it('adopts the most recent conversation in place without replacing the Chat route', async () => {
+    mockedSessions.listSessions.mockResolvedValue(
+      sessionPageOf([makeSession({id: 9})]),
+    );
+    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({id: 501})]));
+
+    // Chat is pushed on top of Home, exactly like the Home hub does. The
+    // restore must update this route's params instead of calling replace:
+    // replacing the screen while the push transition is still running
+    // interrupts the native animation and flashes the window background.
+    const chatRouteKeys = new Set<string>();
+    await renderChat(undefined, {
+      startAtHome: true,
+      onChatRoute: key => chatRouteKeys.add(key),
+    });
+
+    expect(await screen.findByTestId('composer-input')).toBeOnTheScreen();
+    expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 9);
+    // A replace would mount a second Chat route with a fresh key.
+    expect(chatRouteKeys.size).toBe(1);
+  });
+
   it('shows an error instead of a false empty state when the history lookup fails (TASK-AUDIT-008)', async () => {
     mockedSessions.listSessions
       .mockRejectedValueOnce(new ApiError(0, 'Network request failed.'))
@@ -786,6 +820,17 @@ describe('ChatScreen', () => {
     await fireEvent.press(screen.getByTestId('chat-open-new'));
 
     expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen();
+  });
+
+  it('returns to the existing Home screen from the header link instead of pushing a duplicate', async () => {
+    mockedSessions.listMessages.mockResolvedValue(emptyPage());
+    await renderChat({sessionId: 5}, {startAtHome: true});
+    await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
+
+    await fireEvent.press(screen.getByTestId('chat-open-home'));
+
+    expect(await screen.findByTestId('home-screen-stub')).toBeOnTheScreen();
+    expect(screen.queryByTestId('chat-screen')).toBeNull();
   });
 
   it('offers starting a new conversation from the no-session empty state', async () => {

@@ -14,7 +14,6 @@ import React, {useCallback, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,6 +21,12 @@ import {
 } from 'react-native';
 
 import {Icon} from '../components/Icon';
+import {
+  Screen,
+  ScreenHeader,
+  ScreenScrollView,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 import {getLocalDatabase} from '../db/database';
 import {createSentenceTopic} from '../db/sentenceRepository';
 import {useApplicationMode} from '../mode/ModeContext';
@@ -36,8 +41,6 @@ export function createStyles(c: ThemeColors) {
       flex: 1,
       backgroundColor: c.background,
       paddingTop: 16,
-      paddingHorizontal: 20,
-      paddingBottom: 16,
     },
     header: {
       flexDirection: 'row',
@@ -162,6 +165,7 @@ export function createStyles(c: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 10,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     stateText: {
       fontSize: 14,
@@ -213,8 +217,8 @@ export function SentenceTopicNewScreen({
   }, [title, description, advancedOpen, generationPrompt, saving, ready, navigation]);
 
   return (
-    <View style={styles.container} testID="sentence-new-topic-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="sentence-new-topic-screen">
+      <ScreenHeader style={styles.header}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back to topics"
@@ -228,7 +232,7 @@ export function SentenceTopicNewScreen({
         <Text style={styles.title} numberOfLines={1}>
           New topic
         </Text>
-      </View>
+      </ScreenHeader>
 
       {modeStatus !== 'ready' ? (
         <View style={styles.centered} testID="sentence-new-topic-loading">
@@ -242,7 +246,7 @@ export function SentenceTopicNewScreen({
           </Text>
         </View>
       ) : (
-        <ScrollView
+        <ScreenScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.form}
         >
@@ -353,8 +357,8 @@ export function SentenceTopicNewScreen({
               )}
             </Pressable>
           </View>
-        </ScrollView>
+        </ScreenScrollView>
       )}
-    </View>
+    </Screen>
   );
 }

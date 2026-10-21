@@ -52,6 +52,7 @@ meaning is a plain-English paraphrase, the situation is one short English line.
 Home
   └── Real-life sentences            (topic list; due-count badge on the Home row)
         ├── New topic              (title + optional description, e.g. "meeting someone new")
+        ├── Delete topic           (confirm modal; cascades sentences + review log)
         └── Topic screen           (sentence list; default empty)
               ├── Generate new sentence   (choose 1 / 5 / 10)
               │     └── Review modal      (keep all / keep selected / discard)
@@ -228,9 +229,23 @@ System instruction (essence):
 
 ```text
 You write everyday English sentences for a learner who wants to sound natural in real
-life. Respond with ONLY a JSON array. Each element has exactly:
+life. Write the way people really talk and text, not the way textbooks or exams teach:
+prefer common, current slang, idioms, informal wording and abbreviations/initialisms
+(ASAP, BTW, FYI, gonna, wanna, ...) wherever they fit, never niche, regional, dated or
+offensive terms, and never force slang in. Keep abbreviations in their normal written form.
+Respond with ONLY a JSON array. Each element has exactly:
   "sentence":  the English sentence (5-14 words, complete, natural contractions)
-  "meaning":   a simple English paraphrase, at most 10 words, never a translation
+  "meaning":   normally a simple English paraphrase, at most 10 words, never a
+               translation. If the sentence contains slang, an idiom or an
+               abbreviation, use up to 35 words to explain it: full form or
+               literal words, plain-English meaning, and how it is actually
+               said. Give a pronunciation only where the spoken form differs
+               from the written one: some initialisms are read as letters
+               (FYI is said "eff-why-eye"), a few as a word (ASAP is said
+               "ay-sap", not "A-S-A-P"), and many chat abbreviations are
+               spoken as the full words they stand for rather than read letter
+               by letter — give that full form instead of inventing a
+               letter-by-letter reading
   "situation": one short English line describing when a native speaker says it
 No markdown, no code fences, no commentary.
 ```
@@ -243,8 +258,9 @@ User instruction includes:
 - the existing sentences of that topic (up to 50, one per line) with an explicit
   instruction not to repeat or lightly reword any of them,
 - the quality bar: high-frequency real-life spoken English, no literary or textbook
-  register, no proper nouns that need outside context, no two candidates alike,
-  vary the sentence structures.
+  register, slang/idioms/abbreviations encouraged where natural, any slang explained
+  in full inside `meaning`, no proper nouns that need outside context, no two
+  candidates alike, vary the sentence structures.
 
 Parsing (`parseGeneratedSentences`):
 
@@ -557,6 +573,8 @@ Priority: `P1`
   - "New topic" action opening a small form (title required, description optional,
     gives a short example such as "meeting someone new in a new place"),
   - creating a topic navigates straight to the topic screen (empty sentence list),
+  - a delete action per topic that opens a themed in-app confirmation modal
+    before removing the topic,
   - empty state when no topic exists yet.
 - Serverless-only guard per section 2.7 (notice in server mode, no database reads, waits
   for the mode restore to settle).
@@ -565,6 +583,7 @@ Priority: `P1`
 
 - Creating a topic persists it and navigates to the new topic screen.
 - A blank title cannot be submitted.
+- Deleting a topic is confirmed first and cascades its sentences and review log.
 - Lists render counts from the repository, not from in-memory guesses, and refresh when
   the screen regains focus.
 - Server mode shows the notice and performs zero database reads (asserted in tests).

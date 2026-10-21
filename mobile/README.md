@@ -103,10 +103,13 @@ well.
   badge that disappears at zero.
 - A topic has a required title and an optional English description, for example
   "meeting someone new in a new city". Creating one opens its (empty) sentence
-  list.
+  list. Each topic row has a delete action that opens an in-app confirmation
+  modal and then removes the topic together with its sentences and review
+  history.
 - Every sentence stores the English `text`, an English-only `meaning` paraphrase
-  and a short real-life `situation`. There is no Vietnamese anywhere in this
-  feature.
+  and a short real-life `situation`. Generation leans on everyday spoken English,
+  including common slang and abbreviations, and spells out any slang in full in
+  the `meaning`. There is no Vietnamese anywhere in this feature.
 - The topic screen shows the sentence, its meaning and situation, a due/status
   hint, a speaker button for TTS and a delete action.
 - **Generate** offers 1 / 5 / 10 sentences (default 5) through the learner's own

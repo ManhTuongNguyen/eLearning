@@ -13,6 +13,8 @@ import {act, fireEvent, render, waitFor} from '@testing-library/react-native';
 import {
   createSentenceTopic,
   insertSentences,
+  listSentencesByTopic,
+  listSentenceTopics,
 } from '../src/db/sentenceRepository';
 import {openSqlJsDriver} from '../testing/sqlJsDriver';
 import type {SqlDriver} from '../src/db/driver';
@@ -169,6 +171,94 @@ describe('SentenceTopicsScreen — topic list', () => {
       expect(view.getByTestId('topic-1-done')).toBeTruthy();
       expect(view.getByText('all done')).toBeTruthy();
     });
+  });
+});
+
+describe('SentenceTopicsScreen — delete topic', () => {
+  test('opens the in-app modal, then deletes after confirmation', async () => {
+    const {view, db: localDb} = await renderInMode();
+    const topic = await createSentenceTopic(localDb, {
+      title: 'Coffee',
+      description: 'ordering',
+    });
+    await insertSentences(localDb, topic.id, [
+      {
+        text: 'Could I get a flat white, please?',
+        meaning: 'Ask for a coffee politely.',
+        situation: 'Ordering at a café.',
+      },
+    ]);
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId(`topic-delete-${topic.id}`));
+
+    // The themed dialog replaces the native Android alert.
+    expect(view.getByTestId('delete-topic-modal')).toBeTruthy();
+    expect(view.getByTestId('delete-topic-title')).toHaveTextContent(
+      'Delete topic?',
+    );
+    expect(view.getByText(/"Coffee" and its sentence and practice history/)).toBeTruthy();
+
+    // Nothing is removed until the learner confirms.
+    expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
+    expect(await listSentenceTopics(localDb)).toHaveLength(1);
+
+    await fireEvent.press(view.getByTestId('delete-topic-confirm'));
+
+    await waitFor(() => {
+      expect(view.queryByTestId('delete-topic-modal')).toBeFalsy();
+      expect(view.queryByTestId(`topic-${topic.id}`)).toBeFalsy();
+    });
+    expect(await listSentenceTopics(localDb)).toEqual([]);
+    expect(await listSentencesByTopic(localDb, topic.id)).toEqual([]);
+  });
+
+  test('keeps the modal open with an error when deletion fails', async () => {
+    const {view, db: localDb} = await renderInMode();
+    const topic = await createSentenceTopic(localDb, {title: 'Coffee'});
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId(`topic-delete-${topic.id}`));
+    database.getLocalDatabase.mockRejectedValueOnce(new Error('disk full'));
+    await fireEvent.press(view.getByTestId('delete-topic-confirm'));
+
+    await waitFor(() => {
+      expect(view.getByTestId('delete-topic-error')).toHaveTextContent(
+        'disk full',
+      );
+    });
+    expect(view.getByTestId('delete-topic-modal')).toBeTruthy();
+    expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
+    expect(await listSentenceTopics(localDb)).toHaveLength(1);
+  });
+
+  test('cancelling the modal keeps the topic', async () => {
+    const {view, db: localDb} = await renderInMode();
+    const topic = await createSentenceTopic(localDb, {title: 'Coffee'});
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId(`topic-delete-${topic.id}`));
+    expect(view.getByTestId('delete-topic-modal')).toBeTruthy();
+
+    await fireEvent.press(view.getByTestId('delete-topic-cancel'));
+
+    await waitFor(() => {
+      expect(view.queryByTestId('delete-topic-modal')).toBeFalsy();
+    });
+    expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
+    expect(await listSentenceTopics(localDb)).toHaveLength(1);
   });
 });
 

@@ -17,11 +17,16 @@
  * switcher (TASK-090) and — serverless only — local data clearing
  * (TASK-094) and the real-life sentence practice mode (TASK-SENT-013).
  *
- * The screen is pushed onto the main stack from Chat, so the header carries
- * the same ‹ Back affordance as the other pushed screens (TASK-AUDIT-006).
- * The back button pops the whole stack down to Chat (the stack root), so
- * leaving Settings — including after a provider-configuration save — always
- * returns to the chat screen.
+ * The screen is pushed onto the main stack from the Home hub or from the
+ * Chat header, so the header carries the same ‹ Back affordance as the other
+ * pushed screens (TASK-AUDIT-006). Back pops exactly this screen, so leaving
+ * Settings — including after a provider-configuration save — returns to the
+ * screen that opened it (Chat when reached from the conversation header).
+ *
+ * Opening Settings from Chat also opts into a top-drop transition
+ * (`slideFromTop`): the screen is presented as a transparent modal with no
+ * native animation and slides down over Chat, then retracts upwards on the
+ * way back (see `useSlideFromTop`). The Home hub keeps the shared push.
  *
  * TASK-IMPROVEMENT-005: returning from the serverless agent configuration
  * editor after a completed save hands over a one-shot `configSaved` route
@@ -38,8 +43,8 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -47,7 +52,14 @@ import {
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 
+import {
+  Screen,
+  ScreenHeader,
+  ScreenScrollView,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 import { useAuth } from '../auth/AuthContext';
+import { useSlideFromTop } from '../hooks/useSlideFromTop';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { ApplicationMode } from '../mode/types';
 import type { SettingsScreenProps } from '../navigation/types';
@@ -161,11 +173,14 @@ export function createStyles(c: ThemeColors) {
       flex: 1,
       backgroundColor: c.background,
     },
+    transitionRoot: {
+      flex: 1,
+    },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 24,
+      paddingHorizontal: SCREEN_GUTTER,
       // Same header spacing as the Chat screen so every screen lines up.
       paddingTop: 16,
       paddingBottom: 8,
@@ -181,7 +196,7 @@ export function createStyles(c: ThemeColors) {
     content: {
       alignItems: 'center',
       gap: 14,
-      padding: 24,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingTop: 12,
       paddingBottom: 40,
     },
@@ -572,6 +587,11 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
   } = useApplicationMode();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  // Chat enters Settings with `slideFromTop`, opting into the custom
+  // top-drop transition instead of the standard push from the right.
+  const slideFromTop = route.params?.slideFromTop === true;
+  const transitionOffset = useSlideFromTop(slideFromTop, navigation);
+
   /** Configuration state for the serverless AI provider card. */
   const [providerStatus, setProviderStatus] = useState<
     | 'loading'
@@ -874,397 +894,401 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
   const avatarInitial = isRenderableInitial(email) ? email[0] : '?';
 
   return (
-    <View style={styles.container} testID="settings-screen">
-      <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={() => navigation.popToTop()}
-          testID="settings-back"
-        >
-          <Text style={styles.backText}>‹ Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Settings</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-      <ScrollView contentContainerStyle={styles.content}>
-        {appMode === 'server' ? (
-          <View style={styles.accountRow} testID="settings-account-section">
-            <View style={styles.avatar}>
-              <Text style={styles.avatarInitial}>{avatarInitial}</Text>
-            </View>
-            <View style={styles.accountTexts}>
-              <Text style={styles.accountHint}>Signed in as</Text>
-              <Text
-                style={styles.accountEmail}
-                numberOfLines={1}
-                testID="settings-account-email"
-              >
-                {email || 'Unknown account'}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-
-        {appMode === 'serverless' ? (
+    <Animated.View
+      style={[styles.transitionRoot, {transform: [{translateY: transitionOffset}]}]}
+      testID="settings-transition">
+      <Screen style={styles.container} testID="settings-screen">
+        <ScreenHeader style={styles.header}>
           <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="AI provider settings"
-            onPress={() => navigation.navigate('AIProviderSettings')}
-            style={({ pressed }) => [
-              styles.aiProviderCard,
-              pressed && styles.rowPressed,
-            ]}
-            testID="settings-ai-provider-card"
+            accessibilityLabel="Go back"
+            hitSlop={8}
+            onPress={() => navigation.goBack()}
+            testID="settings-back"
           >
-            <View style={styles.aiProviderCardHeader}>
-              <Text
-                style={styles.aiProviderCardTitle}
-                testID="settings-ai-provider-title"
-              >
-                {providerStatus === 'loading'
-                  ? 'AI provider'
-                  : PROVIDER_DESCRIPTORS[providerStatus.provider].label}
-              </Text>
-              {providerStatus === 'loading' ? (
-                <ActivityIndicator
-                  size="small"
-                  testID="settings-ai-provider-loading"
-                />
-              ) : providerStatus.hasApiKey ? (
-                <View style={styles.badge} testID="settings-ai-provider-badge">
-                  <Text style={styles.badgeText}>Ready</Text>
-                </View>
-              ) : (
-                <View
-                  style={[styles.badge, styles.badgePending]}
-                  testID="settings-ai-provider-badge"
-                >
-                  <Text style={[styles.badgeText, styles.badgeTextPending]}>
-                    Not set up
-                  </Text>
-                </View>
-              )}
-            </View>
-            <StatusLine
-              label="API key"
-              value={
-                providerStatus === 'loading'
-                  ? '…'
-                  : providerStatus.hasApiKey
-                  ? 'Saved on this device'
-                  : 'Not configured'
-              }
-              testID="settings-ai-provider-key-status"
-            />
-            <StatusLine
-              label="Primary model"
-              value={
-                providerStatus === 'loading'
-                  ? '…'
-                  : providerStatus.primaryModel ?? 'Not selected'
-              }
-              testID="settings-ai-provider-primary-status"
-            />
-            <StatusLine
-              label="Fallback models"
-              value={
-                providerStatus === 'loading'
-                  ? '…'
-                  : providerStatus.fallbackCount > 0
-                  ? `${providerStatus.fallbackCount} selected`
-                  : 'None'
-              }
-              testID="settings-ai-provider-fallback-status"
-            />
+            <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
-        ) : null}
-
-        {learningRows.length > 0 ? (
-          <View style={styles.rowGroup}>
-            <Text style={styles.sectionLabel}>Learning</Text>
-            {learningRows.map(row => (
-              <Pressable
-                key={row.testID}
-                accessibilityRole="button"
-                accessibilityLabel={row.title}
-                onPress={row.onPress}
-                style={({ pressed }) => [
-                  styles.row,
-                  pressed && styles.rowPressed,
-                ]}
-                testID={row.testID}
-              >
-                <View style={styles.rowTexts}>
-                  <Text style={styles.rowTitle}>{row.title}</Text>
-                  <Text style={styles.rowDescription}>{row.description}</Text>
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Grammar auto-check: available in both modes because the check
-            rides the improvement pipeline each mode already uses. Off by
-            default — every sent message then costs one extra LLM request. */}
-        {grammarCheckEnabled !== null ? (
-          <View style={styles.rowGroup} testID="settings-grammar-section">
-            <Text style={styles.sectionLabel}>Grammar</Text>
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: grammarCheckEnabled }}
-              onPress={() => handleGrammarCheckToggle(!grammarCheckEnabled)}
-              style={styles.toggleRow}
-              testID="settings-grammar-toggle"
-            >
-              <View style={styles.toggleTexts}>
-                <Text style={styles.toggleTitle}>Grammar auto-check</Text>
-                <Text style={styles.toggleDescription}>
-                  Check every message you send and badge it when it has issues.
-                  Tap a badge to see the suggested improvement.
-                </Text>
-                <Text style={styles.toggleWarning}>
-                  Uses an extra AI request per message — consumes more tokens.
+          <Text style={styles.title}>Settings</Text>
+          <View style={styles.headerSpacer} />
+        </ScreenHeader>
+        <ScreenScrollView contentContainerStyle={styles.content}>
+          {appMode === 'server' ? (
+            <View style={styles.accountRow} testID="settings-account-section">
+              <View style={styles.avatar}>
+                <Text style={styles.avatarInitial}>{avatarInitial}</Text>
+              </View>
+              <View style={styles.accountTexts}>
+                <Text style={styles.accountHint}>Signed in as</Text>
+                <Text
+                  style={styles.accountEmail}
+                  numberOfLines={1}
+                  testID="settings-account-email"
+                >
+                  {email || 'Unknown account'}
                 </Text>
               </View>
-              <Switch
-                value={grammarCheckEnabled}
-                onValueChange={handleGrammarCheckToggle}
-                testID="settings-grammar-switch"
+            </View>
+          ) : null}
+
+          {appMode === 'serverless' ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="AI provider settings"
+              onPress={() => navigation.navigate('AIProviderSettings')}
+              style={({ pressed }) => [
+                styles.aiProviderCard,
+                pressed && styles.rowPressed,
+              ]}
+              testID="settings-ai-provider-card"
+            >
+              <View style={styles.aiProviderCardHeader}>
+                <Text
+                  style={styles.aiProviderCardTitle}
+                  testID="settings-ai-provider-title"
+                >
+                  {providerStatus === 'loading'
+                    ? 'AI provider'
+                    : PROVIDER_DESCRIPTORS[providerStatus.provider].label}
+                </Text>
+                {providerStatus === 'loading' ? (
+                  <ActivityIndicator
+                    size="small"
+                    testID="settings-ai-provider-loading"
+                  />
+                ) : providerStatus.hasApiKey ? (
+                  <View style={styles.badge} testID="settings-ai-provider-badge">
+                    <Text style={styles.badgeText}>Ready</Text>
+                  </View>
+                ) : (
+                  <View
+                    style={[styles.badge, styles.badgePending]}
+                    testID="settings-ai-provider-badge"
+                  >
+                    <Text style={[styles.badgeText, styles.badgeTextPending]}>
+                      Not set up
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <StatusLine
+                label="API key"
+                value={
+                  providerStatus === 'loading'
+                    ? '…'
+                    : providerStatus.hasApiKey
+                    ? 'Saved on this device'
+                    : 'Not configured'
+                }
+                testID="settings-ai-provider-key-status"
+              />
+              <StatusLine
+                label="Primary model"
+                value={
+                  providerStatus === 'loading'
+                    ? '…'
+                    : providerStatus.primaryModel ?? 'Not selected'
+                }
+                testID="settings-ai-provider-primary-status"
+              />
+              <StatusLine
+                label="Fallback models"
+                value={
+                  providerStatus === 'loading'
+                    ? '…'
+                    : providerStatus.fallbackCount > 0
+                    ? `${providerStatus.fallbackCount} selected`
+                    : 'None'
+                }
+                testID="settings-ai-provider-fallback-status"
               />
             </Pressable>
-          </View>
-        ) : null}
+          ) : null}
 
-        {/* Sentence practice mode (TASK-SENT-013): serverless-only because
-            real-life sentences are an on-device feature. The choice is read
-            by the practice screen when it builds the next session. */}
-        {appMode === 'serverless' && practiceMode !== null ? (
-          <View style={styles.rowGroup} testID="settings-practice-mode-section">
-            <Text style={styles.sectionLabel}>Sentence practice</Text>
-            <View style={styles.practiceModeCard}>
-              <Text style={styles.toggleTitle}>Sentence practice mode</Text>
-              <Text style={styles.toggleDescription}>
-                Let Auto pick dictation or recall from each sentence&apos;s
-                schedule, or force one card shape for every sentence.
-              </Text>
-              <View style={styles.segmentRow}>
-                {SENTENCE_PRACTICE_MODE_OPTIONS.map(option => {
-                  const isSelected = option.value === practiceMode;
-                  return (
-                    <Pressable
-                      key={option.value}
-                      accessibilityRole="radio"
-                      accessibilityLabel={option.label}
-                      accessibilityState={{checked: isSelected}}
-                      onPress={() => handlePracticeModeChange(option.value)}
-                      style={({pressed}) => [
-                        styles.segment,
-                        isSelected && styles.segmentSelected,
-                        pressed && styles.buttonDisabled,
-                      ]}
-                      testID={option.testID}
-                    >
-                      <Text
-                        style={[
-                          styles.segmentText,
-                          isSelected && styles.segmentTextSelected,
+          {learningRows.length > 0 ? (
+            <View style={styles.rowGroup}>
+              <Text style={styles.sectionLabel}>Learning</Text>
+              {learningRows.map(row => (
+                <Pressable
+                  key={row.testID}
+                  accessibilityRole="button"
+                  accessibilityLabel={row.title}
+                  onPress={row.onPress}
+                  style={({ pressed }) => [
+                    styles.row,
+                    pressed && styles.rowPressed,
+                  ]}
+                  testID={row.testID}
+                >
+                  <View style={styles.rowTexts}>
+                    <Text style={styles.rowTitle}>{row.title}</Text>
+                    <Text style={styles.rowDescription}>{row.description}</Text>
+                  </View>
+                  <Text style={styles.chevron}>›</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
+          {/* Grammar auto-check: available in both modes because the check
+              rides the improvement pipeline each mode already uses. Off by
+              default — every sent message then costs one extra LLM request. */}
+          {grammarCheckEnabled !== null ? (
+            <View style={styles.rowGroup} testID="settings-grammar-section">
+              <Text style={styles.sectionLabel}>Grammar</Text>
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityState={{ checked: grammarCheckEnabled }}
+                onPress={() => handleGrammarCheckToggle(!grammarCheckEnabled)}
+                style={styles.toggleRow}
+                testID="settings-grammar-toggle"
+              >
+                <View style={styles.toggleTexts}>
+                  <Text style={styles.toggleTitle}>Grammar auto-check</Text>
+                  <Text style={styles.toggleDescription}>
+                    Check every message you send and badge it when it has issues.
+                    Tap a badge to see the suggested improvement.
+                  </Text>
+                  <Text style={styles.toggleWarning}>
+                    Uses an extra AI request per message — consumes more tokens.
+                  </Text>
+                </View>
+                <Switch
+                  value={grammarCheckEnabled}
+                  onValueChange={handleGrammarCheckToggle}
+                  testID="settings-grammar-switch"
+                />
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* Sentence practice mode (TASK-SENT-013): serverless-only because
+              real-life sentences are an on-device feature. The choice is read
+              by the practice screen when it builds the next session. */}
+          {appMode === 'serverless' && practiceMode !== null ? (
+            <View style={styles.rowGroup} testID="settings-practice-mode-section">
+              <Text style={styles.sectionLabel}>Sentence practice</Text>
+              <View style={styles.practiceModeCard}>
+                <Text style={styles.toggleTitle}>Sentence practice mode</Text>
+                <Text style={styles.toggleDescription}>
+                  Let Auto pick dictation or recall from each sentence&apos;s
+                  schedule, or force one card shape for every sentence.
+                </Text>
+                <View style={styles.segmentRow}>
+                  {SENTENCE_PRACTICE_MODE_OPTIONS.map(option => {
+                    const isSelected = option.value === practiceMode;
+                    return (
+                      <Pressable
+                        key={option.value}
+                        accessibilityRole="radio"
+                        accessibilityLabel={option.label}
+                        accessibilityState={{checked: isSelected}}
+                        onPress={() => handlePracticeModeChange(option.value)}
+                        style={({pressed}) => [
+                          styles.segment,
+                          isSelected && styles.segmentSelected,
+                          pressed && styles.buttonDisabled,
                         ]}
+                        testID={option.testID}
                       >
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                        <Text
+                          style={[
+                            styles.segmentText,
+                            isSelected && styles.segmentTextSelected,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
             </View>
-          </View>
-        ) : null}
+          ) : null}
 
-        <View style={styles.rowGroup}>
-          <Text style={styles.sectionLabel}>Speech</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Text to speech settings"
-            onPress={() => navigation.navigate('TTSSettings')}
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            testID="settings-open-tts"
-          >
-            <View style={styles.rowTexts}>
-              <Text style={styles.rowTitle}>Text to speech</Text>
-              <Text style={styles.rowDescription}>
-                Voice, gender, speed, pitch and latency for read-aloud.
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-        </View>
-
-        {/* Speaking practice: the karaoke scroll speed lives here instead of
-            inside the practice flow, so the reading view stays uncluttered. */}
-        {scrollSpeed !== null ? (
-          <View style={styles.rowGroup} testID="settings-speaking-speed-section">
-            <Text style={styles.sectionLabel}>Speaking practice</Text>
-            <View style={styles.speedCard}>
-              <View style={styles.speedHeader}>
-                <Text style={styles.toggleTitle}>Reading scroll speed</Text>
-                <Text style={styles.speedValue} testID="settings-speaking-speed-value">
-                  {scrollSpeed} px/s
+          <View style={styles.rowGroup}>
+            <Text style={styles.sectionLabel}>Speech</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Text to speech settings"
+              onPress={() => navigation.navigate('TTSSettings')}
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              testID="settings-open-tts"
+            >
+              <View style={styles.rowTexts}>
+                <Text style={styles.rowTitle}>Text to speech</Text>
+                <Text style={styles.rowDescription}>
+                  Voice, gender, speed, pitch and latency for read-aloud.
                 </Text>
               </View>
-              <Text style={styles.toggleDescription}>
-                How fast the text scrolls while you read aloud during speaking
-                practice.
-              </Text>
-              <Slider
-                minimumValue={SPEED_MIN_PX_PER_S}
-                maximumValue={SPEED_MAX_PX_PER_S}
-                step={SPEED_STEP_PX_PER_S}
-                value={scrollSpeed}
-                onValueChange={handleScrollSpeedChange}
-                testID="settings-speaking-speed"
-              />
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+          </View>
+
+          {/* Speaking practice: the karaoke scroll speed lives here instead of
+              inside the practice flow, so the reading view stays uncluttered. */}
+          {scrollSpeed !== null ? (
+            <View style={styles.rowGroup} testID="settings-speaking-speed-section">
+              <Text style={styles.sectionLabel}>Speaking practice</Text>
+              <View style={styles.speedCard}>
+                <View style={styles.speedHeader}>
+                  <Text style={styles.toggleTitle}>Reading scroll speed</Text>
+                  <Text style={styles.speedValue} testID="settings-speaking-speed-value">
+                    {scrollSpeed} px/s
+                  </Text>
+                </View>
+                <Text style={styles.toggleDescription}>
+                  How fast the text scrolls while you read aloud during speaking
+                  practice.
+                </Text>
+                <Slider
+                  minimumValue={SPEED_MIN_PX_PER_S}
+                  maximumValue={SPEED_MAX_PX_PER_S}
+                  step={SPEED_STEP_PX_PER_S}
+                  value={scrollSpeed}
+                  onValueChange={handleScrollSpeedChange}
+                  testID="settings-speaking-speed"
+                />
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.rowGroup}>
+            <Text style={styles.sectionLabel}>Theme</Text>
+            <View style={styles.segmentRow}>
+              {THEME_OPTIONS.map(option => {
+                const isSelected = option.value === themeMode;
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    onPress={() => setThemeMode(option.value)}
+                    style={({ pressed }) => [
+                      styles.segment,
+                      isSelected && styles.segmentSelected,
+                      pressed && styles.buttonDisabled,
+                    ]}
+                    testID={option.testID}
+                  >
+                    <Text
+                      style={[
+                        styles.segmentText,
+                        isSelected && styles.segmentTextSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
-        ) : null}
 
-        <View style={styles.rowGroup}>
-          <Text style={styles.sectionLabel}>Theme</Text>
-          <View style={styles.segmentRow}>
-            {THEME_OPTIONS.map(option => {
-              const isSelected = option.value === themeMode;
+          {/* Application mode */}
+          <View style={styles.rowGroup} testID="settings-mode-section">
+            <Text style={styles.sectionLabel}>Application mode</Text>
+            {APPLICATION_MODE_OPTIONS.map(option => {
+              const isSelected = option.value === appMode;
               return (
                 <Pressable
                   key={option.value}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: isSelected }}
-                  onPress={() => setThemeMode(option.value)}
+                  onPress={() => setApplicationMode(option.value)}
                   style={({ pressed }) => [
-                    styles.segment,
-                    isSelected && styles.segmentSelected,
+                    styles.modeOption,
+                    isSelected && styles.modeOptionSelected,
                     pressed && styles.buttonDisabled,
                   ]}
                   testID={option.testID}
                 >
-                  <Text
+                  <View
                     style={[
-                      styles.segmentText,
-                      isSelected && styles.segmentTextSelected,
+                      styles.modeRadioOuter,
+                      isSelected && styles.modeRadioOuterSelected,
                     ]}
                   >
-                    {option.label}
-                  </Text>
+                    {isSelected ? <View style={styles.modeRadioInner} /> : null}
+                  </View>
+                  <View style={styles.modeTexts}>
+                    <Text
+                      style={[
+                        styles.modeLabel,
+                        isSelected && styles.modeLabelSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                    <Text style={styles.modeDescription}>
+                      {option.description}
+                    </Text>
+                  </View>
                 </Pressable>
               );
             })}
           </View>
-        </View>
 
-        {/* Application mode */}
-        <View style={styles.rowGroup} testID="settings-mode-section">
-          <Text style={styles.sectionLabel}>Application mode</Text>
-          {APPLICATION_MODE_OPTIONS.map(option => {
-            const isSelected = option.value === appMode;
-            return (
+          {/* Local data clearing (TASK-094): only meaningful in serverless mode,
+              where the on-device SQLite database actually holds user data. */}
+          {appMode === 'serverless' ? (
+            <View style={styles.rowGroup} testID="settings-clear-local-section">
+              <Text style={styles.sectionLabel}>Local data</Text>
               <Pressable
-                key={option.value}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: isSelected }}
-                onPress={() => setApplicationMode(option.value)}
-                style={({ pressed }) => [
-                  styles.modeOption,
-                  isSelected && styles.modeOptionSelected,
-                  pressed && styles.buttonDisabled,
+                accessibilityRole="button"
+                accessibilityLabel="Clear local data"
+                style={[
+                  styles.secondaryButton,
+                  clearing && styles.buttonDisabled,
                 ]}
-                testID={option.testID}
+                disabled={clearing}
+                onPress={confirmClearLocalData}
+                testID="settings-clear-local"
               >
-                <View
-                  style={[
-                    styles.modeRadioOuter,
-                    isSelected && styles.modeRadioOuterSelected,
-                  ]}
-                >
-                  {isSelected ? <View style={styles.modeRadioInner} /> : null}
-                </View>
-                <View style={styles.modeTexts}>
-                  <Text
-                    style={[
-                      styles.modeLabel,
-                      isSelected && styles.modeLabelSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                  <Text style={styles.modeDescription}>
-                    {option.description}
-                  </Text>
-                </View>
+                {clearing ? (
+                  <ActivityIndicator color={colors.textPrimary} />
+                ) : (
+                  <Text style={styles.secondaryButtonText}>Clear local data</Text>
+                )}
               </Pressable>
-            );
-          })}
-        </View>
+            </View>
+          ) : null}
 
-        {/* Local data clearing (TASK-094): only meaningful in serverless mode,
-            where the on-device SQLite database actually holds user data. */}
-        {appMode === 'serverless' ? (
-          <View style={styles.rowGroup} testID="settings-clear-local-section">
-            <Text style={styles.sectionLabel}>Local data</Text>
+          {/* Server logout: serverless mode has no server account to end
+              (TASK-AUDIT-003), so the control is hidden in that mode. */}
+          {appMode === 'server' ? (
             <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Clear local data"
-              style={[
-                styles.secondaryButton,
-                clearing && styles.buttonDisabled,
-              ]}
-              disabled={clearing}
-              onPress={confirmClearLocalData}
-              testID="settings-clear-local"
+              style={[styles.button, busy && styles.buttonDisabled]}
+              disabled={busy}
+              onPress={() => {
+                logout();
+              }}
+              testID="settings-logout"
             >
-              {clearing ? (
-                <ActivityIndicator color={colors.textPrimary} />
+              {busy ? (
+                <ActivityIndicator color={colors.onPrimary} />
               ) : (
-                <Text style={styles.secondaryButtonText}>Clear local data</Text>
+                <Text style={styles.buttonText}>Log out</Text>
               )}
             </Pressable>
+          ) : null}
+        </ScreenScrollView>
+
+        {savedToastVisible ? (
+          <View
+            pointerEvents="none"
+            style={styles.toast}
+            testID="settings-saved-toast"
+          >
+            <Text
+              role="status"
+              style={styles.toastText}
+              testID="settings-saved-toast-text"
+            >
+              Configuration saved successfully.
+            </Text>
           </View>
         ) : null}
-
-        {/* Server logout: serverless mode has no server account to end
-            (TASK-AUDIT-003), so the control is hidden in that mode. */}
-        {appMode === 'server' ? (
-          <Pressable
-            style={[styles.button, busy && styles.buttonDisabled]}
-            disabled={busy}
-            onPress={() => {
-              logout();
-            }}
-            testID="settings-logout"
-          >
-            {busy ? (
-              <ActivityIndicator color={colors.onPrimary} />
-            ) : (
-              <Text style={styles.buttonText}>Log out</Text>
-            )}
-          </Pressable>
-        ) : null}
-      </ScrollView>
-
-      {savedToastVisible ? (
-        <View
-          pointerEvents="none"
-          style={styles.toast}
-          testID="settings-saved-toast"
-        >
-          <Text
-            role="status"
-            style={styles.toastText}
-            testID="settings-saved-toast-text"
-          >
-            Configuration saved successfully.
-          </Text>
-        </View>
-      ) : null}
-    </View>
+      </Screen>
+    </Animated.View>
   );
 }

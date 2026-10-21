@@ -15,6 +15,7 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-na
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {useAuth} from '../src/auth/AuthContext';
+import {SCREEN_GUTTER} from '../src/components/ScreenLayout';
 import {
   loadGrammarCheckEnabled,
   saveGrammarCheckEnabled,
@@ -204,14 +205,20 @@ describe('controls present in every mode', () => {
 
       fireEvent.press(screen.getByTestId('settings-back'));
 
-      // Settings always pops the stack down to Chat (the stack root), so
-      // leaving it can never land on a screen stacked below — e.g. the AI
-      // provider editor after a completed save.
-      expect(props.navigation.popToTop).toHaveBeenCalledTimes(1);
-      expect(props.navigation.goBack).not.toHaveBeenCalled();
+      // Back pops exactly the Settings entry, so the screen that opened it
+      // regains focus (Chat when opened from the conversation header).
+      expect(props.navigation.goBack).toHaveBeenCalledTimes(1);
+      expect(props.navigation.popToTop).not.toHaveBeenCalled();
       expect(props.navigation.navigate).not.toHaveBeenCalled();
     },
   );
+
+  it('renders the top-drop transition wrapper when opened from Chat', async () => {
+    await renderSettings('server', {slideFromTop: true});
+
+    expect(screen.getByTestId('settings-transition')).toBeOnTheScreen();
+    expect(screen.getByTestId('settings-screen')).toBeOnTheScreen();
+  });
 
   it('hides the server logout control in serverless mode (TASK-AUDIT-003)', async () => {
     await renderSettings('serverless');
@@ -365,8 +372,8 @@ describe('SettingsScreen scrollbar anchoring (TASK-IMPROVEMENT-001)', () => {
   it('applies the screen gutter to the header and the scroll content container', () => {
     const styles = createStyles(lightColors);
 
-    expect(styles.header.paddingHorizontal).toBe(24);
-    expect(styles.content.padding).toBe(24);
+    expect(styles.header.paddingHorizontal).toBe(SCREEN_GUTTER);
+    expect(styles.content.paddingHorizontal).toBe(SCREEN_GUTTER);
     expect(styles.content.paddingBottom).toBe(40);
   });
 });

@@ -82,7 +82,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -93,6 +92,12 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import type {ChatMessage, Session} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
+import {
+  Screen,
+  ScreenHeader,
+  ScreenList,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 import {
   useMessageImprovement,
 } from '../hooks/useMessageImprovement';
@@ -145,7 +150,8 @@ function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 16,
+      // Gutter lives on the shared header row; the screen container stays
+      // full-bleed so the message list indicator binds to the right edge.
       paddingTop: 16,
       paddingBottom: 12,
       borderBottomWidth: 1,
@@ -170,7 +176,7 @@ function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
-      paddingHorizontal: 16,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingVertical: 8,
       borderBottomWidth: 1,
       borderBottomColor: c.border,
@@ -237,15 +243,15 @@ function createStyles(c: ThemeColors) {
       flex: 1,
     },
     listContent: {
-      paddingVertical: 16,
-      paddingHorizontal: 16,
+      paddingTop: 16,
       gap: 10,
     },
     composer: {
       flexDirection: 'row',
       alignItems: 'flex-end',
       gap: 10,
-      padding: 12,
+      paddingVertical: 12,
+      paddingHorizontal: SCREEN_GUTTER,
       borderTopWidth: 1,
       borderTopColor: c.border,
       backgroundColor: c.surface,
@@ -278,7 +284,7 @@ function createStyles(c: ThemeColors) {
       fontWeight: '600',
     },
     streamErrorBanner: {
-      paddingHorizontal: 16,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingVertical: 8,
       borderTopWidth: 1,
       borderTopColor: c.border,
@@ -289,7 +295,7 @@ function createStyles(c: ThemeColors) {
     },
     jumpLatest: {
       position: 'absolute',
-      right: 16,
+      right: SCREEN_GUTTER,
       bottom: 12,
       borderWidth: 1,
       borderColor: c.borderStrong,
@@ -304,7 +310,7 @@ function createStyles(c: ThemeColors) {
       fontWeight: '600',
     },
     exampleBar: {
-      paddingHorizontal: 16,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingVertical: 8,
       borderBottomWidth: 1,
       borderBottomColor: c.border,
@@ -316,7 +322,7 @@ function createStyles(c: ThemeColors) {
       color: c.accent,
     },
     suggestionsBar: {
-      paddingHorizontal: 16,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingVertical: 8,
       borderTopWidth: 1,
       borderTopColor: c.border,
@@ -365,8 +371,8 @@ function createStyles(c: ThemeColors) {
     toast: {
       position: 'absolute',
       bottom: 96,
-      left: 24,
-      right: 24,
+      left: SCREEN_GUTTER,
+      right: SCREEN_GUTTER,
       backgroundColor: c.surface,
       borderColor: c.border,
       borderWidth: 1,
@@ -589,11 +595,15 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
       // TASK-AUDIT-008: this route is also the post-login and post-restore
       // landing screen, so its state is derived from the authoritative
       // history instead of claiming "No conversation yet" unconditionally.
-      // The most recent conversation replaces the param-less route in place
-      // (replace, not push — the empty landing has no back story); only a
-      // confirmed-empty history renders the empty state, and a failed
-      // lookup surfaces the error with retry. A fixed delay would only
-      // mask races; the authoritative answer is the point.
+      // The most recent conversation is adopted by updating this route's
+      // params in place (TASK-AUDIT-008) — no `replace`, which would fire a
+      // second native transition while the screen is still sliding in. On
+      // Android that interrupted push detaches the outgoing screen and
+      // exposes the window background (the grey flash seen between Home and
+      // Chat); `setParams` re-runs the load effect without touching the
+      // native stack. Only a confirmed-empty history renders the empty
+      // state, and a failed lookup surfaces the error with retry. A fixed
+      // delay would only mask races; the authoritative answer is the point.
       const run = ++restoreRunRef.current;
       restoreInFlightRef.current = true;
       setLoading(true);
@@ -609,7 +619,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             return;
           }
           if (restoreFocusedRef.current) {
-            navigation.replace('Chat', {sessionId: mostRecent});
+            navigation.setParams({sessionId: mostRecent});
             return;
           }
           // The user navigated elsewhere before the lookup settled: the
@@ -871,15 +881,15 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   );
 
   return (
-    <View
+    <Screen
       style={[styles.container, {paddingBottom: keyboardPadding}]}
       onLayout={handleShellLayout}
       testID="chat-screen">
-      <View style={styles.header}>
+      <ScreenHeader style={styles.header}>
         <Text style={styles.headerTitle}>Chat</Text>
         <View style={styles.headerActions}>
           <Pressable
-            onPress={() => navigation.navigate('Home')}
+            onPress={() => navigation.popToTop()}
             testID="chat-open-home">
             <Text style={styles.headerLink}>Home</Text>
           </Pressable>
@@ -891,11 +901,13 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           <Pressable onPress={() => navigation.navigate('History')} testID="chat-open-history">
             <Text style={styles.headerLink}>History</Text>
           </Pressable>
-          <Pressable onPress={() => navigation.navigate('Settings')} testID="chat-open-settings">
+          <Pressable
+            onPress={() => navigation.navigate('Settings', {slideFromTop: true})}
+            testID="chat-open-settings">
             <Text style={styles.headerLink}>Settings</Text>
           </Pressable>
         </View>
-      </View>
+      </ScreenHeader>
 
       {loading ? (
         <View style={styles.centered}>
@@ -977,7 +989,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             </Pressable>
           ) : null}
           <View style={styles.listArea}>
-            <FlatList
+            <ScreenList
               ref={listRef}
               style={styles.list}
               contentContainerStyle={styles.listContent}
@@ -1138,6 +1150,6 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           ) : null}
         </>
       )}
-    </View>
+    </Screen>
   );
 }

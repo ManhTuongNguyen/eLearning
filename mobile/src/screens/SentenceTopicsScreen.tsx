@@ -6,6 +6,10 @@
  * a title; the description is optional and may be left blank or filled with a
  * real-life scenario such as "meeting someone new in a new city".
  *
+ * A topic row also carries a delete action. Deleting asks for confirmation and
+ * then removes the topic together with its sentences and review history (the
+ * schema's `ON DELETE CASCADE`).
+ *
  * The whole feature is serverless-only: until the persisted mode has been
  * restored the screen shows its spinner, and in server mode it replaces the
  * list with an explicit notice instead of touching the local database.
@@ -13,7 +17,6 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -21,13 +24,20 @@ import {
 } from 'react-native';
 
 import {Icon} from '../components/Icon';
+import {
+  Screen,
+  ScreenHeader,
+  ScreenList,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 import {getLocalDatabase} from '../db/database';
-import {listSentenceTopics} from '../db/sentenceRepository';
+import {deleteSentenceTopic, listSentenceTopics} from '../db/sentenceRepository';
 import type {SentenceTopicSummary} from '../db/types';
 import {useApplicationMode} from '../mode/ModeContext';
 import type {SentenceTopicsScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
+import {DeleteTopicModal} from './DeleteTopicModal';
 
 const MODE_NOTICE_TEXT =
   'Real-life sentences are saved on this device only. Switch to server mode to ' +
@@ -39,8 +49,6 @@ export function createStyles(c: ThemeColors) {
       flex: 1,
       backgroundColor: c.background,
       paddingTop: 16,
-      paddingHorizontal: 20,
-      paddingBottom: 16,
     },
     header: {
       flexDirection: 'row',
@@ -72,9 +80,22 @@ export function createStyles(c: ThemeColors) {
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 14,
       paddingVertical: 14,
-      paddingHorizontal: 16,
+      paddingLeft: 16,
+      paddingRight: 6,
+    },
+    rowMain: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    rowDeleteButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     rowDivider: {
       borderTopWidth: 1,
@@ -127,6 +148,7 @@ export function createStyles(c: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 10,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     stateText: {
       fontSize: 14,
@@ -139,7 +161,6 @@ export function createStyles(c: ThemeColors) {
       fontSize: 13,
     },
     listContent: {
-      paddingBottom: 24,
       gap: 12,
     },
     badgeLabel: {
@@ -161,11 +182,20 @@ export function createStyles(c: ThemeColors) {
 type TopicRowProps = {
   item: SentenceTopicSummary;
   onPress: (item: SentenceTopicSummary) => void;
+  onDelete: (item: SentenceTopicSummary) => void;
+  deleting: boolean;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 };
 
-function SentenceTopicRow({item, onPress, colors, styles}: TopicRowProps) {
+function SentenceTopicRow({
+  item,
+  onPress,
+  onDelete,
+  deleting,
+  colors,
+  styles,
+}: TopicRowProps) {
   const dueBadge = item.due_count > 0 ? (
     <View style={styles.badge} testID={`topic-${item.id}-due`}>
       <Text style={[styles.badgeLabel, {color: colors.onPrimary}]}>
@@ -179,33 +209,54 @@ function SentenceTopicRow({item, onPress, colors, styles}: TopicRowProps) {
   );
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${item.title} — ${item.sentence_count} sentences, ${item.due_count} due`}
-      testID={`topic-${item.id}`}
-      onPress={() => onPress(item)}
-      style={({pressed}) => [styles.row, pressed && styles.pressedFade]}
-    >
-      <View style={styles.rowIcon}>
-        <Icon name="sentences" color={colors.accent} />
-      </View>
-      <View style={styles.rowText}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
-          {item.title}
-        </Text>
-        {item.description ? (
-          <Text style={styles.rowDescription} numberOfLines={2}>
-            {item.description}
-          </Text>
-        ) : null}
-        <View style={styles.rowCounts}>
-          <Text style={styles.badgeGhost}>
-            {item.sentence_count} sentence{item.sentence_count === 1 ? '' : 's'}
-          </Text>
-          {dueBadge}
+    <View style={styles.row}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${item.title} — ${item.sentence_count} sentences, ${item.due_count} due`}
+        testID={`topic-${item.id}`}
+        onPress={() => onPress(item)}
+        style={({pressed}) => [styles.rowMain, pressed && styles.pressedFade]}
+      >
+        <View style={styles.rowIcon}>
+          <Icon name="sentences" color={colors.accent} />
         </View>
-      </View>
-    </Pressable>
+        <View style={styles.rowText}>
+          <Text style={styles.rowTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          {item.description ? (
+            <Text style={styles.rowDescription} numberOfLines={2}>
+              {item.description}
+            </Text>
+          ) : null}
+          <View style={styles.rowCounts}>
+            <Text style={styles.badgeGhost}>
+              {item.sentence_count} sentence{item.sentence_count === 1 ? '' : 's'}
+            </Text>
+            {dueBadge}
+          </View>
+        </View>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Delete topic ${item.title}`}
+        accessibilityState={{disabled: deleting, busy: deleting}}
+        testID={`topic-delete-${item.id}`}
+        onPress={() => onDelete(item)}
+        disabled={deleting}
+        style={({pressed}) => [
+          styles.rowDeleteButton,
+          pressed && styles.pressedFade,
+        ]}
+      >
+        {deleting ? (
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        ) : (
+          <Icon name="trash" size={18} color={colors.danger} />
+        )}
+      </Pressable>
+    </View>
   );
 }
 
@@ -218,6 +269,9 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SentenceTopicSummary | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const serverMode = modeStatus === 'ready' && mode === 'server';
   const serverlessMode = modeStatus === 'ready' && mode === 'serverless';
@@ -270,9 +324,56 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
     navigation.navigate('SentenceTopicNew');
   }, [navigation]);
 
+  /**
+   * Open the themed confirmation dialog. Nothing is written until the learner
+   * presses the destructive button inside it.
+   */
+  const handleDeleteTopic = useCallback(
+    (item: SentenceTopicSummary) => {
+      if (deletingId !== null) {
+        return;
+      }
+      setDeleteError(null);
+      setDeleteTarget(item);
+    },
+    [deletingId],
+  );
+
+  const cancelDeleteTopic = useCallback(() => {
+    if (deletingId !== null) {
+      return;
+    }
+    setDeleteTarget(null);
+    setDeleteError(null);
+  }, [deletingId]);
+
+  /**
+   * Delete the confirmed topic. The schema cascades its sentences and review
+   * log, so a single DELETE clears all related data. Failures keep the dialog
+   * open with the message; the row is removed only after the write succeeds.
+   */
+  const confirmDeleteTopic = useCallback(async () => {
+    if (deletingId !== null || deleteTarget === null) {
+      return;
+    }
+    const target = deleteTarget;
+    setDeletingId(target.id);
+    setDeleteError(null);
+    try {
+      const db = await getLocalDatabase();
+      await deleteSentenceTopic(db, target.id);
+      setTopics(previous => previous.filter(topic => topic.id !== target.id));
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeletingId(null);
+    }
+  }, [deletingId, deleteTarget]);
+
   return (
-    <View style={styles.container} testID="sentence-topics-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="sentence-topics-screen">
+      <ScreenHeader style={styles.header}>
         <Text style={styles.title}>Real-life sentences</Text>
         <Pressable
           accessibilityRole="button"
@@ -284,7 +385,7 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
         >
           <Icon name="plus" color={colors.onPrimary} />
         </Pressable>
-      </View>
+      </ScreenHeader>
 
       {serverMode ? (
         <View style={styles.centered} testID="sentence-mode-notice">
@@ -314,7 +415,7 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
               </Text>
             </View>
           ) : (
-            <FlatList
+            <ScreenList
               data={topics}
               keyExtractor={item => String(item.id)}
               renderItem={({item, index}) => (
@@ -323,6 +424,8 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
                   <SentenceTopicRow
                     item={item}
                     onPress={handleTopicPress}
+                    onDelete={handleDeleteTopic}
+                    deleting={deletingId === item.id}
                     colors={colors}
                     styles={styles}
                   />
@@ -335,7 +438,20 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
           )}
         </>
       )}
-    </View>
+
+      <DeleteTopicModal
+        visible={deleteTarget !== null}
+        topicTitle={deleteTarget?.title ?? ''}
+        sentenceCount={deleteTarget?.sentence_count ?? 0}
+        deleting={deletingId !== null}
+        error={deleteError}
+        onCancel={cancelDeleteTopic}
+        onConfirm={() => {
+          // confirmDeleteTopic handles its own errors, so it never rejects.
+          confirmDeleteTopic();
+        }}
+      />
+    </Screen>
   );
 }
 

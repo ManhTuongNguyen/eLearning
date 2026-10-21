@@ -13,12 +13,18 @@ import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
+
+import {
+  Screen,
+  ScreenHeader,
+  ScreenScrollView,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 
 import {applySpeechPreferences, getSpeechEngineSnapshot} from '../tts/androidSpeech';
 import {
@@ -58,7 +64,7 @@ export function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 24,
+      paddingHorizontal: SCREEN_GUTTER,
       marginBottom: 4,
     },
     backText: {
@@ -77,7 +83,7 @@ export function createStyles(c: ThemeColors) {
     scroll: {
       paddingBottom: 32,
       gap: 20,
-      paddingHorizontal: 24,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     sectionLabel: {
       fontSize: 13,
@@ -342,8 +348,8 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
 
   if (!preferences) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
+      <Screen style={styles.container}>
+        <ScreenHeader style={styles.header}>
           <Pressable
             accessibilityLabel="Go back"
             hitSlop={8}
@@ -353,17 +359,17 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
           </Pressable>
           <Text style={styles.title}>Speech</Text>
           <View style={styles.headerSpacer} />
-        </View>
+        </ScreenHeader>
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" testID="tts-settings-loading" />
         </View>
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container} testID="tts-settings-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="tts-settings-screen">
+      <ScreenHeader style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
           hitSlop={8}
@@ -373,8 +379,8 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
         </Pressable>
         <Text style={styles.title}>Speech</Text>
         <View style={styles.headerSpacer} />
-      </View>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      </ScreenHeader>
+      <ScreenScrollView contentContainerStyle={styles.scroll}>
         {/* Engine status */}
         <View style={styles.engineGroup}>
           <Text style={styles.sectionLabel}>Speech engine</Text>
@@ -484,7 +490,7 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
             <Text style={styles.resetButtonText}>Reset to defaults</Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </ScreenScrollView>
 
       {resetToastVisible ? (
         <View pointerEvents="none" style={styles.toast} testID="tts-reset-toast">
@@ -493,6 +499,6 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
           </Text>
         </View>
       ) : null}
-    </View>
+    </Screen>
   );
 }

@@ -204,6 +204,28 @@ describe('buildSentenceGenerationUserPrompt', () => {
     expect(prompt).toContain('Write 1 everyday English sentence');
     expect(prompt).not.toContain('sentences');
   });
+
+  test('asks for real spoken English, slang/abbreviations and a detailed explanation', () => {
+    const prompt = buildSentenceGenerationUserPrompt('B2', {
+      topicTitle: 'Office chat',
+      topicDescription: 'Messaging a coworker',
+      count: 2,
+      existingSentences: [],
+    });
+
+    expect(prompt).toContain('common slang and abbreviations');
+    expect(prompt).toContain('instead of textbook wording');
+    expect(prompt).toContain('explain it fully in "meaning"');
+    expect(prompt).toContain('said "ay-sap"');
+    expect(prompt).toContain('said "eff-why-eye"');
+    expect(prompt).toContain('not letter by letter');
+
+    expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('not the way textbooks or exams teach');
+    expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('up to 35 words');
+    expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('avoid niche, regional, dated or offensive');
+    expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('said "eff-why-eye"');
+    expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('read letter by letter');
+  });
 });
 
 describe('generateSentences', () => {

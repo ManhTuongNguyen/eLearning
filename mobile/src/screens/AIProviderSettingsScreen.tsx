@@ -43,7 +43,6 @@ import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -51,6 +50,12 @@ import {
 } from 'react-native';
 
 import {toErrorMessage} from '../auth/AuthContext';
+import {
+  Screen,
+  ScreenHeader,
+  ScreenScrollView,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 import {SecretInput} from '../components/SecretInput';
 import {getLocalDatabase} from '../db/database';
 import {useApplicationMode} from '../mode/ModeContext';
@@ -93,13 +98,13 @@ export function createStyles(c: ThemeColors) {
     scroll: {
       paddingBottom: 32,
       gap: 16,
-      paddingHorizontal: 24,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 24,
+      paddingHorizontal: SCREEN_GUTTER,
       marginBottom: 4,
     },
     backText: {
@@ -118,7 +123,7 @@ export function createStyles(c: ThemeColors) {
     modeNotice: {
       // Outside the ScrollView, so it carries the screen gutter itself now
       // that the container no longer applies horizontal padding.
-      marginHorizontal: 24,
+      marginHorizontal: SCREEN_GUTTER,
       borderWidth: 1,
       borderColor: c.border,
       borderRadius: 12,
@@ -787,8 +792,8 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
   // above this return, so the conditional keeps the rules-of-hooks contract.
   if (modeStatus === 'ready' && mode !== 'serverless') {
     return (
-      <View style={styles.container} testID="ai-provider-settings-screen">
-        <View style={styles.header}>
+      <Screen style={styles.container} testID="ai-provider-settings-screen">
+        <ScreenHeader style={styles.header}>
           <Pressable
             accessibilityLabel="Go back"
             hitSlop={8}
@@ -798,7 +803,7 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
           </Pressable>
           <Text style={styles.title}>AI provider</Text>
           <View style={styles.headerSpacer} />
-        </View>
+        </ScreenHeader>
         <View style={styles.modeNotice} testID="ai-provider-mode-notice">
           <Text style={styles.modeNoticeText}>
             Direct AI connections are a serverless feature. Switch the
@@ -806,13 +811,13 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
             and models on this device.
           </Text>
         </View>
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container} testID="ai-provider-settings-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="ai-provider-settings-screen">
+      <ScreenHeader style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
           hitSlop={8}
@@ -822,9 +827,9 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
         </Pressable>
         <Text style={styles.title}>{descriptor.label}</Text>
         <View style={styles.headerSpacer} />
-      </View>
+      </ScreenHeader>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScreenScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.sectionLabel}>Provider</Text>
         <View style={styles.providerRow}>
           {SUPPORTED_PROVIDER_IDS.map(id => {
@@ -1121,7 +1126,7 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
             <Text style={styles.saveButtonText}>Save configuration</Text>
           )}
         </Pressable>
-      </ScrollView>
+      </ScreenScrollView>
 
       {modelTooltip ? (
         <Pressable
@@ -1139,6 +1144,6 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
           </View>
         </Pressable>
       ) : null}
-    </View>
+    </Screen>
   );
 }

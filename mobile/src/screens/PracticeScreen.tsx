@@ -23,12 +23,17 @@ import React, {
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import {
+  Screen,
+  ScreenContent,
+  ScreenHeader,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
 import {
   createPracticeQuestion,
   PRACTICE_RECENT_ANSWER_LIMIT,
@@ -63,7 +68,8 @@ export function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingHorizontal: 24,
+      // Horizontal padding lives on the shared header/content/scroll
+      // containers so the scroll indicator binds to the right screen edge.
       // Same 16px header spacing as the other pushed screens.
       paddingTop: 16,
     },
@@ -495,8 +501,8 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
   }
 
   return (
-    <View style={styles.container} testID="practice-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="practice-screen">
+      <ScreenHeader style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
           hitSlop={8}
@@ -506,47 +512,49 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
         </Pressable>
         <Text style={styles.title}>Listening practice</Text>
         <View style={styles.headerSpacer} />
-      </View>
+      </ScreenHeader>
 
-      <View style={styles.scoreRow}>
-        <View style={styles.scoreCard} testID="practice-correct-card">
-          <Text style={styles.scoreValue} testID="practice-correct-count">
-            {correctCount}
-          </Text>
-          <Text style={styles.scoreLabel}>Correct</Text>
+      <ScreenContent>
+        <View style={styles.scoreRow}>
+          <View style={styles.scoreCard} testID="practice-correct-card">
+            <Text style={styles.scoreValue} testID="practice-correct-count">
+              {correctCount}
+            </Text>
+            <Text style={styles.scoreLabel}>Correct</Text>
+          </View>
+          <View style={styles.scoreCard} testID="practice-attempted-card">
+            <Text style={styles.scoreValue} testID="practice-attempted-count">
+              {attemptedCount}
+            </Text>
+            <Text style={styles.scoreLabel}>Answered</Text>
+          </View>
+          <View style={styles.scoreCard} testID="practice-accuracy-card">
+            <Text style={styles.scoreValue} testID="practice-accuracy">
+              {accuracy === null ? '–' : `${accuracy}%`}
+            </Text>
+            <Text style={styles.scoreLabel}>Accuracy</Text>
+          </View>
         </View>
-        <View style={styles.scoreCard} testID="practice-attempted-card">
-          <Text style={styles.scoreValue} testID="practice-attempted-count">
-            {attemptedCount}
-          </Text>
-          <Text style={styles.scoreLabel}>Answered</Text>
-        </View>
-        <View style={styles.scoreCard} testID="practice-accuracy-card">
-          <Text style={styles.scoreValue} testID="practice-accuracy">
-            {accuracy === null ? '–' : `${accuracy}%`}
-          </Text>
-          <Text style={styles.scoreLabel}>Accuracy</Text>
-        </View>
-      </View>
 
-      <View style={styles.segmentRow}>
-        {MODE_OPTIONS.map(option => {
-          const isSelected = option.value === mode;
-          return (
-            <Pressable
-              key={option.value}
-              accessibilityRole="radio"
-              accessibilityState={{checked: isSelected}}
-              onPress={() => setMode(option.value)}
-              style={[styles.segment, isSelected && styles.segmentSelected]}
-              testID={option.testID}>
-              <Text style={styles.segmentText}>{option.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+        <View style={styles.segmentRow}>
+          {MODE_OPTIONS.map(option => {
+            const isSelected = option.value === mode;
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityRole="radio"
+                accessibilityState={{checked: isSelected}}
+                onPress={() => setMode(option.value)}
+                style={[styles.segment, isSelected && styles.segmentSelected]}
+                testID={option.testID}>
+                <Text style={styles.segmentText}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScreenContent>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScreenScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.questionCard}>
           <Pressable
             accessibilityRole="button"
@@ -656,7 +664,7 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
           testID="practice-end">
           <Text style={styles.endButtonText}>End practice</Text>
         </Pressable>
-      </ScrollView>
-    </View>
+      </ScreenScrollView>
+    </Screen>
   );
 }

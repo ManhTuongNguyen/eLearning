@@ -12,8 +12,14 @@
  * backend traffic.
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
+import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native';
 
+import {
+  Screen,
+  ScreenHeader,
+  ScreenList,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 import {getLocalDatabase} from '../db/database';
 import {listSpeakingPracticeRecords, deleteSpeakingPracticeRecord} from '../db/speakingPracticeRepository';
 import type {LocalPracticeHistoryRecord} from '../db/types';
@@ -174,7 +180,6 @@ function createRowStyles(c: ThemeColors) {
       borderColor: c.border,
       borderRadius: 12,
       padding: 12,
-      marginHorizontal: 16,
       marginVertical: 6,
     },
     topRow: {
@@ -267,8 +272,6 @@ function createStyles(c: ThemeColors) {
       flex: 1,
       backgroundColor: c.background,
       paddingTop: 16,
-      paddingHorizontal: 16,
-      paddingBottom: 24,
     },
     header: {
       flexDirection: 'row',
@@ -291,7 +294,7 @@ function createStyles(c: ThemeColors) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 32,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     emptyText: {
       fontSize: 14,
@@ -302,6 +305,7 @@ function createStyles(c: ThemeColors) {
       color: c.errorText,
       fontSize: 13,
       marginBottom: 12,
+      paddingHorizontal: SCREEN_GUTTER,
     },
   });
 }
@@ -377,28 +381,28 @@ export function SpeakingHistoryScreen({navigation}: SpeakingHistoryScreenProps) 
 
   if (loading) {
     return (
-      <View style={styles.container} testID="speaking-history-screen">
-        <View style={styles.header}>
+      <Screen style={styles.container} testID="speaking-history-screen">
+        <ScreenHeader style={styles.header}>
           <Text style={styles.title}>Speaking history</Text>
           <Pressable onPress={() => navigation.goBack()} testID="speaking-history-back">
             <Text style={styles.backLink}>Close</Text>
           </Pressable>
-        </View>
+        </ScreenHeader>
         <View style={styles.empty}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container} testID="speaking-history-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="speaking-history-screen">
+      <ScreenHeader style={styles.header}>
         <Text style={styles.title}>Speaking history</Text>
         <Pressable onPress={() => navigation.goBack()} testID="speaking-history-back">
           <Text style={styles.backLink}>Close</Text>
         </Pressable>
-      </View>
+      </ScreenHeader>
 
       {error !== null ? (
         <Text role="alert" style={styles.error} testID="speaking-history-error">
@@ -413,7 +417,7 @@ export function SpeakingHistoryScreen({navigation}: SpeakingHistoryScreenProps) 
           </Text>
         </View>
       ) : (
-        <FlatList
+        <ScreenList
           data={records}
           keyExtractor={item => String(item.id)}
           renderItem={({item}) => (
@@ -429,6 +433,6 @@ export function SpeakingHistoryScreen({navigation}: SpeakingHistoryScreenProps) 
           testID="speaking-history-list"
         />
       )}
-    </View>
+    </Screen>
   );
 }

@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 
 import {Icon} from '../components/Icon';
+import {SCREEN_GUTTER} from '../components/ScreenLayout';
 import type {SentenceCandidate} from '../serverless/sentenceGeneration';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
@@ -61,7 +62,7 @@ function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 16,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingVertical: 14,
       borderBottomWidth: 1,
       borderBottomColor: c.border,
@@ -77,7 +78,7 @@ function createStyles(c: ThemeColors) {
       alignItems: 'center',
       gap: 12,
       justifyContent: 'flex-end',
-      paddingHorizontal: 16,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingVertical: 14,
       borderTopWidth: 1,
       borderTopColor: c.border,
@@ -99,7 +100,7 @@ function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       gap: 10,
       paddingVertical: 12,
-      paddingHorizontal: 16,
+      paddingHorizontal: SCREEN_GUTTER,
       borderBottomWidth: 1,
       borderBottomColor: c.border,
       alignItems: 'flex-start',

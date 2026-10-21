@@ -23,7 +23,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -39,6 +38,12 @@ import type {VocabularyScreenProps} from '../navigation/types';
 import type {ThemeColors} from '../theme/colors';
 import {useTheme} from '../theme/ThemeContext';
 import {shareAnkiCsv} from '../utils/ankiShare';
+import {
+  Screen,
+  ScreenHeader,
+  ScreenList,
+  SCREEN_GUTTER,
+} from '../components/ScreenLayout';
 
 type Props = VocabularyScreenProps;
 
@@ -50,11 +55,10 @@ function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      // Same header spacing as the Chat screen; the other sides keep the
-      // previous screen gutter.
+      // Same header spacing as the Chat screen. Horizontal spacing lives on
+      // the shared header/list content so the scroll indicator binds to the
+      // right screen edge.
       paddingTop: 16,
-      paddingHorizontal: 24,
-      paddingBottom: 24,
     },
     header: {
       flexDirection: 'row',
@@ -96,12 +100,13 @@ function createStyles(c: ThemeColors) {
       color: c.errorText,
       fontSize: 13,
       marginBottom: 12,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     toast: {
       position: 'absolute',
       bottom: 24,
-      left: 24,
-      right: 24,
+      left: SCREEN_GUTTER,
+      right: SCREEN_GUTTER,
       backgroundColor: c.surface,
       borderColor: c.border,
       borderWidth: 1,
@@ -126,6 +131,7 @@ function createStyles(c: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 10,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     stateText: {
       fontSize: 14,
@@ -136,6 +142,7 @@ function createStyles(c: ThemeColors) {
       color: c.errorText,
       fontSize: 13,
       marginBottom: 12,
+      paddingHorizontal: SCREEN_GUTTER,
     },
     retryButton: {
       alignSelf: 'center',
@@ -400,8 +407,8 @@ export function VocabularyScreen({navigation}: Props) {
   const serverlessNotice = modeStatus === 'ready' && !serverVocabulary;
 
   return (
-    <View style={styles.container} testID="vocabulary-screen">
-      <View style={styles.header}>
+    <Screen style={styles.container} testID="vocabulary-screen">
+      <ScreenHeader style={styles.header}>
         <Text style={styles.title}>Vocabulary</Text>
         <View style={styles.headerActions}>
           {serverVocabulary ? (
@@ -427,7 +434,7 @@ export function VocabularyScreen({navigation}: Props) {
             <Text style={styles.backLink}>Close</Text>
           </Pressable>
         </View>
-      </View>
+      </ScreenHeader>
 
       {serverVocabulary && exportError !== null ? (
         <Text role="alert" style={styles.exportError} testID="vocabulary-export-error">
@@ -472,7 +479,7 @@ export function VocabularyScreen({navigation}: Props) {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <ScreenList
           data={items}
           keyExtractor={item => String(item.id)}
           renderItem={({item}) => (
@@ -530,6 +537,6 @@ export function VocabularyScreen({navigation}: Props) {
           </Text>
         </View>
       ) : null}
-    </View>
+    </Screen>
   );
 }

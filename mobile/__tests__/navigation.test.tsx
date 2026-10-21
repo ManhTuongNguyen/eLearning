@@ -67,6 +67,8 @@ async function renderRoot() {
   const stackRouteNames = (): string[] =>
     ref.current?.getRootState()?.routes.map(route => route.name) ?? [];
 
+  const stackRoutes = () => ref.current?.getRootState()?.routes ?? [];
+
   await render(
     <ModeProvider>
       <ThemeProvider>
@@ -79,7 +81,7 @@ async function renderRoot() {
     </ModeProvider>,
   );
 
-  return {focusedRouteName, stackRouteNames};
+  return {focusedRouteName, stackRouteNames, stackRoutes};
 }
 
 async function renderAuthenticated(tokens?: AuthTokens) {
@@ -192,20 +194,24 @@ describe('main stack navigation', () => {
   });
 
   it('returns from Settings to Chat through the header back affordance without duplicating stack entries (TASK-AUDIT-006)', async () => {
-    const {focusedRouteName, stackRouteNames} = await openChatAndTrack();
+    const {focusedRouteName, stackRouteNames, stackRoutes} = await openChatAndTrack();
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
     expect(focusedRouteName()).toBe('Settings');    // Exactly one Settings entry sits on top of Chat below the hub.
     expect(stackRouteNames()).toEqual(['Home', 'Chat', 'Settings']);
+    // The Chat entry opts into the top-drop transition; other entry points
+    // to Settings keep the shared push (see navigationAnimations.test.ts).
+    expect(stackRoutes()[2]?.params).toEqual({slideFromTop: true});
 
     await fireEvent.press(screen.getByTestId('settings-back'));
 
-    await waitFor(() => expect(focusedRouteName()).toBe('Home'));
-    expect(screen.queryByTestId('chat-screen')).toBeNull();
+    // Back pops just Settings, returning to the screen that opened it
+    // rather than unwinding the whole stack to the Home hub.
+    await waitFor(() => expect(focusedRouteName()).toBe('Chat'));
+    expect(screen.getByTestId('chat-screen')).toBeOnTheScreen();
     expect(screen.queryByTestId('settings-screen')).toBeNull();
-    // goBack popped the Settings entry, returning to the hub.
-    expect(stackRouteNames()).toEqual(['Home']);
+    expect(stackRouteNames()).toEqual(['Home', 'Chat']);
   });
 
   it('reaches Settings and returns to it after editing the learning level', async () => {

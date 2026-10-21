@@ -36,6 +36,7 @@ import {
 
 import {createSession} from '../api/sessions';
 import {toErrorMessage, useAuth} from '../auth/AuthContext';
+import {SCREEN_GUTTER} from '../components/ScreenLayout';
 import {getLocalDatabase} from '../db/database';
 import {useApplicationMode} from '../mode/ModeContext';
 import {createProviderClient} from '../serverless/providerRegistry';
@@ -53,7 +54,7 @@ function createStyles(c: ThemeColors) {
       // Same header spacing as the Chat screen; the other sides keep the
       // previous screen gutter.
       paddingTop: 16,
-      paddingHorizontal: 24,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingBottom: 24,
     },
     header: {

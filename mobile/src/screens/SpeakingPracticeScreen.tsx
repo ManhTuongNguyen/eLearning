@@ -55,6 +55,7 @@ import {
   paragraphCharRanges,
   type ParagraphSpan,
 } from '../practice/karaokeScroll';
+import {SCREEN_GUTTER} from '../components/ScreenLayout';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { setKeepScreenAwake } from '../tts/keepAwake';
 import { copyText } from '../utils/clipboard';
@@ -203,7 +204,7 @@ function createStyles(c: ThemeColors) {
       flex: 1,
       backgroundColor: c.background,
       paddingTop: 16,
-      paddingHorizontal: 24,
+      paddingHorizontal: SCREEN_GUTTER,
       paddingBottom: 24,
     },
     header: {
