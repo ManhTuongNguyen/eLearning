@@ -15,16 +15,16 @@
  * username `openrouter-api-key`) so existing installs keep working.
  */
 import * as Keychain from 'react-native-keychain';
-import type {ProviderId} from './types';
+import type { ProviderId } from './types';
 
 const SERVERLESS_KEYCHAIN_SERVICE = 'com.elearningmobile.serverless';
 const SERVERLESS_KEYCHAIN_USERNAME = 'openrouter-api-key';
 
 /** Keychain namespace for one provider's key. */
-function keychainNamespace(provider: ProviderId): {service: string; username: string} {
+function keychainNamespace(provider: ProviderId): { service: string; username: string } {
   if (provider === 'openrouter') {
     // Historic namespace — never renamed, or stored keys become unreadable.
-    return {service: SERVERLESS_KEYCHAIN_SERVICE, username: SERVERLESS_KEYCHAIN_USERNAME};
+    return { service: SERVERLESS_KEYCHAIN_SERVICE, username: SERVERLESS_KEYCHAIN_USERNAME };
   }
   return {
     service: `${SERVERLESS_KEYCHAIN_SERVICE}.${provider}`,
@@ -45,8 +45,8 @@ export async function saveServerlessApiKey(
   if (!trimmed) {
     throw new Error('Provider API key must not be empty.');
   }
-  const {service, username} = keychainNamespace(provider);
-  await Keychain.setGenericPassword(username, trimmed, {service});
+  const { service, username } = keychainNamespace(provider);
+  await Keychain.setGenericPassword(username, trimmed, { service });
 }
 
 /**
@@ -58,8 +58,8 @@ export async function saveServerlessApiKey(
 export async function loadServerlessApiKey(
   provider: ProviderId = 'openrouter',
 ): Promise<string | null> {
-  const {service} = keychainNamespace(provider);
-  const credentials = await Keychain.getGenericPassword({service});
+  const { service } = keychainNamespace(provider);
+  const credentials = await Keychain.getGenericPassword({ service });
   if (!credentials) {
     return null;
   }
@@ -72,13 +72,11 @@ export async function loadServerlessApiKey(
  * Clearing an absent key is a no-op rather than an error.
  */
 export async function clearServerlessApiKey(provider: ProviderId = 'openrouter'): Promise<void> {
-  const {service} = keychainNamespace(provider);
-  await Keychain.resetGenericPassword({service});
+  const { service } = keychainNamespace(provider);
+  await Keychain.resetGenericPassword({ service });
 }
 
 /** True when an API key is currently stored for the provider. */
-export async function hasServerlessApiKey(
-  provider: ProviderId = 'openrouter',
-): Promise<boolean> {
+export async function hasServerlessApiKey(provider: ProviderId = 'openrouter'): Promise<boolean> {
   return (await loadServerlessApiKey(provider)) !== null;
 }

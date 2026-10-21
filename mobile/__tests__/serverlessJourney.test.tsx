@@ -26,34 +26,25 @@
  * a key change (authJourney pattern): identical unmount/remount semantics
  * to relaunching, with the same persisted device stores.
  */
-import React from 'react';
-import {Alert} from 'react-native';
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react-native';
+
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import type React from 'react';
+import { Alert } from 'react-native';
 import * as Keychain from 'react-native-keychain';
 
 import App from '../App';
 import * as authApi from '../src/api/auth';
 import * as profileApi from '../src/api/profile';
 import * as sessionsApi from '../src/api/sessions';
-import {getLocalDatabase, resetLocalDatabase} from '../src/db/database';
-import type {SqlDriver, SqlParam} from '../src/db/driver';
+import { getLocalDatabase, resetLocalDatabase } from '../src/db/database';
+import type { SqlDriver, SqlParam } from '../src/db/driver';
 import * as nativeDriver from '../src/db/nativeDriver';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {
-  getRuntimeApplicationMode,
-  setRuntimeApplicationMode,
-} from '../src/mode/runtime';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { getRuntimeApplicationMode, setRuntimeApplicationMode } from '../src/mode/runtime';
 import * as openrouterClient from '../src/serverless/openrouterClient';
-import {saveServerlessConfig} from '../src/serverless/settings';
-import {getSpeechEngine} from '../src/tts/textToSpeech';
-import {FakeOpenRouterClient} from '../testing/fakeOpenRouter';
+import { saveServerlessConfig } from '../src/serverless/settings';
+import { getSpeechEngine } from '../src/tts/textToSpeech';
+import { FakeOpenRouterClient } from '../testing/fakeOpenRouter';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -68,7 +59,7 @@ jest.mock('../src/api/profile', () => ({
  * per test via the __resetLocalDriver handle, exactly like a fresh install.
  */
 jest.mock('../src/db/nativeDriver', () => {
-  const {openSqlJsDriver} = require('../testing/sqlJsDriver');
+  const { openSqlJsDriver } = require('../testing/sqlJsDriver');
   let mockDbPromise: Promise<unknown> | null = null;
   return {
     LOCAL_DB_NAME: 'elearning-serverless.db',
@@ -90,7 +81,7 @@ jest.mock('../src/db/nativeDriver', () => {
  */
 jest.mock('../src/serverless/openrouterClient', () => {
   const actual = jest.requireActual('../src/serverless/openrouterClient');
-  const {FakeOpenRouterClient: FakeClientCtor} = require('../testing/fakeOpenRouter');
+  const { FakeOpenRouterClient: FakeClientCtor } = require('../testing/fakeOpenRouter');
   let mockFake = new FakeClientCtor();
   return {
     ...actual,
@@ -115,22 +106,21 @@ const mockedClientModule = openrouterClient as typeof openrouterClient & {
   __setFake: (next: FakeOpenRouterClient) => void;
 };
 
-const TOKENS = {access: 'access-1', refresh: 'refresh-1'};
-const USER = {id: 1, username: 'alice', email: 'alice@example.com'};
+const TOKENS = { access: 'access-1', refresh: 'refresh-1' };
+const USER = { id: 1, username: 'alice', email: 'alice@example.com' };
 const AUTH_SERVICE = 'com.elearningmobile.auth';
 const SERVERLESS_SERVICE = 'com.elearningmobile.serverless';
 const API_KEY = 'sk-or-v1-journey-key';
 const TOPIC = {
   title: 'Travel plans',
-  description:
-    'Talk about a dream trip: where to go, what to pack and who to take along.',
+  description: 'Talk about a dream trip: where to go, what to pack and who to take along.',
 };
 const SAMPLE_TURNS = {
   turns: [
-    {role: 'assistant', content: 'Hi! Have you ever planned a big trip?'},
-    {role: 'user', content: 'Yes, I visited Japan last spring.'},
-    {role: 'assistant', content: 'That sounds wonderful! What did you enjoy most?'},
-    {role: 'user', content: 'The food and the temples were amazing.'},
+    { role: 'assistant', content: 'Hi! Have you ever planned a big trip?' },
+    { role: 'user', content: 'Yes, I visited Japan last spring.' },
+    { role: 'assistant', content: 'That sounds wonderful! What did you enjoy most?' },
+    { role: 'user', content: 'The food and the temples were amazing.' },
   ],
 };
 /**
@@ -184,7 +174,7 @@ function pressTop(testId: string): Promise<void> {
 }
 
 function checkedOf(testId: string): boolean | undefined {
-  const props = top(testId).props as {accessibilityState?: {checked?: boolean}};
+  const props = top(testId).props as { accessibilityState?: { checked?: boolean } };
   return props.accessibilityState?.checked;
 }
 
@@ -252,12 +242,10 @@ function enqueueTopicAndSample(fake: FakeOpenRouterClient): void {
 async function startConversationWithReply(fake: FakeOpenRouterClient): Promise<void> {
   enqueueTopicAndSample(fake);
   await pressTop('chat-open-new');
-  await waitFor(() =>
-    expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen(),
-  );
+  await waitFor(() => expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen());
   await pressTop('new-conversation-start');
   await waitFor(() => expect(screen.getByTestId('chat-topic-title')).toBeOnTheScreen());
-  fake.enqueueStream({type: 'success', deltas: [ASSISTANT_TEXT]});
+  fake.enqueueStream({ type: 'success', deltas: [ASSISTANT_TEXT] });
   await fireEvent.changeText(top('composer-input'), USER_TEXT);
   await waitFor(() => expect(top('composer-input').props.value).toBe(USER_TEXT));
   await pressTop('chat-send');
@@ -275,7 +263,7 @@ beforeEach(async () => {
   await saveApplicationMode('server');
   setRuntimeApplicationMode('server');
   jest.clearAllMocks();
-  mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
+  mockedProfile.getProfile.mockResolvedValue({ level: 'AUTO' });
   // The server-mode phase of these journeys boots into the no-session
   // landing route, whose authoritative history check (TASK-AUDIT-008) goes
   // through the substituted sessions module — never the real transport.
@@ -288,11 +276,9 @@ beforeEach(async () => {
   lastAlertButtons = [];
   jest
     .spyOn(Alert, 'alert')
-    .mockImplementation(
-      (_title: string, _message?: string, buttons?: CapturedAlertButton[]) => {
-        lastAlertButtons = buttons ?? [];
-      },
-    );
+    .mockImplementation((_title: string, _message?: string, buttons?: CapturedAlertButton[]) => {
+      lastAlertButtons = buttons ?? [];
+    });
   fetchSpy = jest.spyOn(globalThis, 'fetch');
   // No XHR may ever be constructed: the serverless SSE gate throws before
   // the transport layer, so any backend streaming attempt is observable.
@@ -336,9 +322,7 @@ describe('TASK-117 serverless journey', () => {
     );
     await fireEvent.changeText(screen.getByTestId('ai-provider-api-key-input'), API_KEY);
     await pressTop('ai-provider-models-refresh');
-    await waitFor(() =>
-      expect(screen.getByTestId('ai-provider-model-count')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ai-provider-model-count')).toBeOnTheScreen());
     await pressTop('ai-provider-model-primary-vendor/model-a');
     await waitFor(() => expect(checkedOf('ai-provider-model-primary-vendor/model-a')).toBe(true));
     await pressTop('ai-provider-model-fallback-vendor/model-b');
@@ -349,20 +333,12 @@ describe('TASK-117 serverless journey', () => {
     // toast while refreshing to the persisted configuration. The editor
     // instance stays mounted below, so resolve the topmost screens.
     await waitFor(() => expect(top('settings-screen')).toBeOnTheScreen());
-    expect(top('settings-saved-toast')).toHaveTextContent(
-      'Configuration saved successfully.',
-    );
+    expect(top('settings-saved-toast')).toHaveTextContent('Configuration saved successfully.');
     await waitFor(() =>
-      expect(
-        top('settings-ai-provider-key-status'),
-      ).toHaveTextContent('Saved on this device'),
+      expect(top('settings-ai-provider-key-status')).toHaveTextContent('Saved on this device'),
     );
-    expect(top('settings-ai-provider-primary-status')).toHaveTextContent(
-      'vendor/model-a',
-    );
-    expect(top('settings-ai-provider-fallback-status')).toHaveTextContent(
-      '1 selected',
-    );
+    expect(top('settings-ai-provider-primary-status')).toHaveTextContent('vendor/model-a');
+    expect(top('settings-ai-provider-fallback-status')).toHaveTextContent('1 selected');
 
     // ---- Relaunch: the persisted serverless mode is restored. ----------
     await view.rerender(launch(launchCount++));
@@ -373,9 +349,7 @@ describe('TASK-117 serverless journey', () => {
 
     // ---- Generate a topic ("Let AI choose") and open the chat. ---------
     await pressTop('chat-open-new');
-    await waitFor(() =>
-      expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen());
     enqueueTopicAndSample(fake);
     await pressTop('new-conversation-start');
     await waitFor(() => expect(screen.getByTestId('chat-topic-title')).toBeOnTheScreen());
@@ -410,21 +384,17 @@ describe('TASK-117 serverless journey', () => {
     const chatRequest = fake.streamRequests[0];
     expect(chatRequest.messages[chatRequest.messages.length - 1].content).toBe(USER_TEXT);
     // Both rows are already persisted locally, terminal statuses included.
-    const rows = await sqlRows(
-      'SELECT role, status, content FROM messages ORDER BY sequence ASC',
-    );
+    const rows = await sqlRows('SELECT role, status, content FROM messages ORDER BY sequence ASC');
     expect(rows).toEqual([
-      {role: 'user', status: 'complete', content: USER_TEXT},
-      {role: 'assistant', status: 'complete', content: ASSISTANT_TEXT},
+      { role: 'user', status: 'complete', content: USER_TEXT },
+      { role: 'assistant', status: 'complete', content: ASSISTANT_TEXT },
     ]);
 
     // ---- History: the local conversation is listed and reopens. --------
     await pressTop('chat-open-history');
     await waitFor(() => expect(top('history-screen')).toBeOnTheScreen());
     await waitFor(() => expect(screen.getByTestId('history-item-1')).toBeOnTheScreen());
-    expect(
-      within(screen.getByTestId('history-item-1')).getByText(TOPIC.title),
-    ).toBeOnTheScreen();
+    expect(within(screen.getByTestId('history-item-1')).getByText(TOPIC.title)).toBeOnTheScreen();
     await pressTop('history-item-1');
     await waitFor(() =>
       expect(within(top('chat-screen')).getByText(ASSISTANT_TEXT)).toBeOnTheScreen(),
@@ -542,9 +512,9 @@ describe('TASK-117 serverless journey', () => {
 
     await confirmClearLocalData();
     await waitFor(() =>
-      expect(
-        screen.getByTestId('settings-ai-provider-key-status'),
-      ).toHaveTextContent('Not configured'),
+      expect(screen.getByTestId('settings-ai-provider-key-status')).toHaveTextContent(
+        'Not configured',
+      ),
     );
 
     // Every serverless table is empty after the clear.
@@ -564,13 +534,13 @@ describe('TASK-117 serverless journey', () => {
     });
 
     // The secure API key was removed along with the data.
-    expect(await Keychain.getGenericPassword({service: SERVERLESS_SERVICE})).toBe(false);
+    expect(await Keychain.getGenericPassword({ service: SERVERLESS_SERVICE })).toBe(false);
 
     // Auth credentials survive untouched even though serverless mode never
     // read them (no authentication request was made during the session).
-    const auth = await Keychain.getGenericPassword({service: AUTH_SERVICE});
+    const auth = await Keychain.getGenericPassword({ service: AUTH_SERVICE });
     expect(auth).toBeTruthy();
-    expect(JSON.parse((auth as {password: string}).password)).toEqual(TOKENS);
+    expect(JSON.parse((auth as { password: string }).password)).toEqual(TOKENS);
     expect(mockedAuth.getMe).not.toHaveBeenCalled();
     expect(getRuntimeApplicationMode()).toBe('serverless');
 

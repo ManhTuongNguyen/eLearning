@@ -13,47 +13,30 @@
  * seam (the same one chat playback uses), so the native Android engine
  * swaps in behind it without this screen knowing.
  */
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {
-  Screen,
-  ScreenContent,
-  ScreenHeader,
-  ScreenScrollView,
-} from '../components/ScreenLayout';
+import { Screen, ScreenContent, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import type { PracticeScreenProps } from '../navigation/types';
 import {
   createPracticeQuestion,
   PRACTICE_RECENT_ANSWER_LIMIT,
   type PracticeMode,
   type PracticeQuestion,
 } from '../practice/questionBank';
-import type {PracticeScreenProps} from '../navigation/types';
-import {getSpeechEngine} from '../tts/textToSpeech';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { getSpeechEngine } from '../tts/textToSpeech';
 
 const MODE_OPTIONS: Array<{
   value: PracticeMode;
   label: string;
   testID: string;
 }> = [
-  {value: 'numbers', label: 'Numbers', testID: 'practice-mode-numbers'},
-  {value: 'letters', label: 'Letters', testID: 'practice-mode-letters'},
-  {value: 'phones', label: 'Phones', testID: 'practice-mode-phones'},
-  {value: 'mixed', label: 'Mixed', testID: 'practice-mode-mixed'},
+  { value: 'numbers', label: 'Numbers', testID: 'practice-mode-numbers' },
+  { value: 'letters', label: 'Letters', testID: 'practice-mode-letters' },
+  { value: 'phones', label: 'Phones', testID: 'practice-mode-phones' },
+  { value: 'mixed', label: 'Mixed', testID: 'practice-mode-mixed' },
 ];
 
 const QUESTION_PROMPT: Record<PracticeMode, string> = {
@@ -302,8 +285,8 @@ function feedbackText(correct: boolean): string {
   return correct ? 'Correct!' : 'Not quite — see the highlighted option.';
 }
 
-export function PracticeScreen({navigation}: PracticeScreenProps) {
-  const {colors} = useTheme();
+export function PracticeScreen({ navigation }: PracticeScreenProps) {
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [mode, setMode] = useState<PracticeMode>('numbers');
@@ -359,9 +342,7 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
         .catch(() => {
           if (isAlive()) {
             setSpeaking(false);
-            setSpeechError(
-              'Speech is not available right now. Check your TTS settings.',
-            );
+            setSpeechError('Speech is not available right now. Check your TTS settings.');
           }
         });
     },
@@ -379,19 +360,12 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
     if (current !== null) {
       // Record the question in the exclusion window whether it was answered
       // or skipped — nothing should come right back either way.
-      recentAnswersRef.current = [
-        ...recentAnswersRef.current,
-        current.answer,
-      ].slice(-PRACTICE_RECENT_ANSWER_LIMIT);
+      recentAnswersRef.current = [...recentAnswersRef.current, current.answer].slice(
+        -PRACTICE_RECENT_ANSWER_LIMIT,
+      );
       setRecentAnswers(recentAnswersRef.current);
     }
-    setQuestion(
-      createPracticeQuestion(
-        modeRef.current,
-        Math.random,
-        recentAnswersRef.current,
-      ),
-    );
+    setQuestion(createPracticeQuestion(modeRef.current, Math.random, recentAnswersRef.current));
     setSelected(null);
     setAnswered(false);
     setSpeechError(null);
@@ -399,6 +373,7 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
 
   // Fresh question per mode switch; a stale question from the old mode
   // would confuse the answer options the user is about to see.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mode is an intentional round-reset trigger
   useEffect(() => {
     advance();
   }, [advance, mode]);
@@ -457,13 +432,9 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
     [],
   );
 
-  const accuracy =
-    attemptedCount === 0
-      ? null
-      : Math.round((correctCount / attemptedCount) * 100);
+  const accuracy = attemptedCount === 0 ? null : Math.round((correctCount / attemptedCount) * 100);
 
-  const isCorrect =
-    question !== null && selected !== null && selected === question.answer;
+  const isCorrect = question !== null && selected !== null && selected === question.answer;
 
   if (ended) {
     return (
@@ -492,9 +463,7 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
             testID="practice-restart">
             <Text style={styles.restartIcon}>↻</Text>
           </Pressable>
-          <Text style={styles.replayHint}>
-            Practice again anytime — every round is different.
-          </Text>
+          <Text style={styles.replayHint}>Practice again anytime — every round is different.</Text>
         </View>
       </View>
     );
@@ -543,7 +512,7 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
               <Pressable
                 key={option.value}
                 accessibilityRole="radio"
-                accessibilityState={{checked: isSelected}}
+                accessibilityState={{ checked: isSelected }}
                 onPress={() => setMode(option.value)}
                 style={[styles.segment, isSelected && styles.segmentSelected]}
                 testID={option.testID}>
@@ -558,10 +527,8 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
         <View style={styles.questionCard}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={
-              speaking ? 'Speaking' : 'Play the number or letter'
-            }
-            accessibilityState={{busy: speaking}}
+            accessibilityLabel={speaking ? 'Speaking' : 'Play the number or letter'}
+            accessibilityState={{ busy: speaking }}
             onPress={() => {
               if (question) {
                 speakQuestion(question);
@@ -585,27 +552,18 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
           <View style={styles.resultArea}>
             {answered && question ? (
               <>
-                <Text
-                  numberOfLines={1}
-                  style={styles.reveal}
-                  testID="practice-reveal">
+                <Text numberOfLines={1} style={styles.reveal} testID="practice-reveal">
                   {`It was ${question.answer} — "${question.spoken}"`}
                 </Text>
                 <Text
                   numberOfLines={2}
-                  style={[
-                    styles.reveal,
-                    {color: isCorrect ? colors.success : colors.danger},
-                  ]}
+                  style={[styles.reveal, { color: isCorrect ? colors.success : colors.danger }]}
                   testID="practice-feedback">
                   {feedbackText(isCorrect)}
                 </Text>
               </>
             ) : speechError ? (
-              <Text
-                role="alert"
-                style={styles.reveal}
-                testID="practice-speech-error">
+              <Text role="alert" style={styles.reveal} testID="practice-speech-error">
                 {speechError}
               </Text>
             ) : (
@@ -624,7 +582,7 @@ export function PracticeScreen({navigation}: PracticeScreenProps) {
               <Pressable
                 key={option}
                 accessibilityRole="radio"
-                accessibilityState={{checked: isSelected}}
+                accessibilityState={{ checked: isSelected }}
                 disabled={answered}
                 onPress={() => handleSelect(option)}
                 style={[

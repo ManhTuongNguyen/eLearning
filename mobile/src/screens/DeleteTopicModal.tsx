@@ -6,19 +6,12 @@
  * dismissing itself. The dialog is a centred card over a dimmed backdrop; the
  * destructive action is disabled while the delete is in flight.
  */
-import React, {useMemo} from 'react';
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useMemo } from 'react';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {SCREEN_GUTTER} from '../components/ScreenLayout';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import { SCREEN_GUTTER } from '../components/ScreenLayout';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 export interface DeleteTopicModalProps {
   /** Whether the dialog is presented. */
@@ -110,9 +103,7 @@ function createStyles(c: ThemeColors) {
 }
 
 /** Describe exactly what the cascade removes, avoiding "0 sentences". */
-export function describeDeletedTopic(
-  sentenceCount: number,
-): string {
+export function describeDeletedTopic(sentenceCount: number): string {
   if (sentenceCount === 0) {
     return 'its practice history';
   }
@@ -131,7 +122,7 @@ export function DeleteTopicModal({
   onCancel,
   onConfirm,
 }: DeleteTopicModalProps) {
-  const {colors} = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   if (!visible) {
@@ -144,8 +135,7 @@ export function DeleteTopicModal({
       onRequestClose={onCancel}
       testID="delete-topic-modal"
       transparent
-      visible
-    >
+      visible>
       <View style={styles.backdrop}>
         <View style={styles.card} accessibilityViewIsModal>
           <Text style={styles.title} testID="delete-topic-title">
@@ -157,11 +147,7 @@ export function DeleteTopicModal({
           </Text>
 
           {error ? (
-            <Text
-              role="alert"
-              style={styles.error}
-              testID="delete-topic-error"
-            >
+            <Text role="alert" style={styles.error} testID="delete-topic-error">
               {error}
             </Text>
           ) : null}
@@ -169,32 +155,30 @@ export function DeleteTopicModal({
           <View style={styles.footer}>
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{disabled: deleting}}
+              accessibilityState={{ disabled: deleting }}
               testID="delete-topic-cancel"
               onPress={onCancel}
               disabled={deleting}
-              style={({pressed}) => [
+              style={({ pressed }) => [
                 styles.button,
                 styles.cancelButton,
                 deleting && styles.disabled,
                 pressed && styles.disabled,
-              ]}
-            >
+              ]}>
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{disabled: deleting, busy: deleting}}
+              accessibilityState={{ disabled: deleting, busy: deleting }}
               testID="delete-topic-confirm"
               onPress={onConfirm}
               disabled={deleting}
-              style={({pressed}) => [
+              style={({ pressed }) => [
                 styles.button,
                 styles.deleteButton,
                 deleting && styles.disabled,
                 pressed && styles.disabled,
-              ]}
-            >
+              ]}>
               {deleting ? (
                 <ActivityIndicator size="small" color={colors.onPrimary} />
               ) : (

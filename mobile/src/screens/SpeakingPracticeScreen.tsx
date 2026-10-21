@@ -22,13 +22,7 @@
  * continue a stopped utterance); End/finish never saves a new history
  * record — the session was opened from one.
  */
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -42,36 +36,35 @@ import {
   TextInput,
   View,
 } from 'react-native';
-
-import {
-  generateSpeakingPracticeText,
-  splitPracticeParagraphs,
-} from '../serverless/speakingPractice';
+import { toErrorMessage } from '../auth/AuthContext';
+import { SCREEN_GUTTER } from '../components/ScreenLayout';
+import { getLocalDatabase } from '../db/database';
+import { getLearningProfile } from '../db/profileStore';
+import { createSpeakingPracticeRecord } from '../db/speakingPracticeRepository';
+import type { SpeakingPracticeScreenProps } from '../navigation/types';
 import {
   countWords,
   formatElapsed,
   offsetForCharProgress,
   offsetForSpokenChar,
-  paragraphCharRanges,
   type ParagraphSpan,
+  paragraphCharRanges,
 } from '../practice/karaokeScroll';
-import {SCREEN_GUTTER} from '../components/ScreenLayout';
-import { getSpeechEngine } from '../tts/textToSpeech';
-import { setKeepScreenAwake } from '../tts/keepAwake';
-import { copyText } from '../utils/clipboard';
+import {
+  loadSpeakingScrollSpeed,
+  SPEED_DEFAULT_PX_PER_S,
+} from '../preferences/speakingScrollSpeed';
 import { createProviderClient } from '../serverless/providerRegistry';
 import { loadServerlessConfig } from '../serverless/settings';
-import { getLocalDatabase } from '../db/database';
-import { getLearningProfile } from '../db/profileStore';
-import { createSpeakingPracticeRecord } from '../db/speakingPracticeRepository';
 import {
-  SPEED_DEFAULT_PX_PER_S,
-  loadSpeakingScrollSpeed,
-} from '../preferences/speakingScrollSpeed';
-import { toErrorMessage } from '../auth/AuthContext';
-import type { SpeakingPracticeScreenProps } from '../navigation/types';
+  generateSpeakingPracticeText,
+  splitPracticeParagraphs,
+} from '../serverless/speakingPractice';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
+import { setKeepScreenAwake } from '../tts/keepAwake';
+import { getSpeechEngine } from '../tts/textToSpeech';
+import { copyText } from '../utils/clipboard';
 
 /** Session-length chips in minutes (the AI sizes the text to these). */
 const MINUTES_OPTIONS = [1, 2, 3, 5, 10] as const;
@@ -127,8 +120,7 @@ function ClipboardIcon({ color }: { color: string }) {
     <View
       style={clipboardStyles.container}
       accessibilityElementsHidden
-      importantForAccessibility="no"
-    >
+      importantForAccessibility="no">
       <View style={[clipboardStyles.board, { borderColor: color }]} />
       <View style={[clipboardStyles.clip, { backgroundColor: color }]} />
     </View>
@@ -174,23 +166,23 @@ const KaraokeText = React.memo(function KaraokeText({
   return (
     <View
       testID="speaking-text-block"
-      onLayout={event => onContentLayout(event.nativeEvent.layout.height)}
-    >
+      onLayout={event => onContentLayout(event.nativeEvent.layout.height)}>
       {Array.from({ length: LEAD_IN_BLANK_LINES }, (_, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: blank lead-in lines are positional
         <Text key={`lead-in-${index}`} style={styles.paragraph}>
           {' '}
         </Text>
       ))}
       {paragraphs.map((paragraph, index) => (
         <Text
+          // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs map to layout offsets by position
           key={index}
           selectable
           style={styles.paragraph}
           onLayout={event => {
             const { y, height } = event.nativeEvent.layout;
             onParagraphLayout(index, y, height);
-          }}
-        >
+          }}>
           {paragraph}
         </Text>
       ))}
@@ -402,10 +394,7 @@ function createStyles(c: ThemeColors) {
   });
 }
 
-export function SpeakingPracticeScreen({
-  navigation,
-  route,
-}: SpeakingPracticeScreenProps) {
+export function SpeakingPracticeScreen({ navigation, route }: SpeakingPracticeScreenProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -423,8 +412,7 @@ export function SpeakingPracticeScreen({
   const [phase, setPhase] = useState<Phase>(resumeText ? 'practicing' : 'form');
   const [material, setMaterial] = useState(resumeMaterial);
   const [minutes, setMinutes] = useState(
-    resumeMinutes !== undefined &&
-      (MINUTES_OPTIONS as readonly number[]).includes(resumeMinutes)
+    resumeMinutes !== undefined && (MINUTES_OPTIONS as readonly number[]).includes(resumeMinutes)
       ? resumeMinutes
       : 3,
   );
@@ -488,12 +476,7 @@ export function SpeakingPracticeScreen({
    */
   const maxScrollOffset = useCallback(
     () =>
-      Math.max(
-        0,
-        contentHeightRef.current +
-          2 * TEXT_AREA_PADDING_V -
-          viewportHeightRef.current,
-      ),
+      Math.max(0, contentHeightRef.current + 2 * TEXT_AREA_PADDING_V - viewportHeightRef.current),
     [],
   );
 
@@ -506,9 +489,7 @@ export function SpeakingPracticeScreen({
     () => paragraphCharRanges(fullText, paragraphs),
     [fullText, paragraphs],
   );
-  const paragraphLayoutsRef = useRef<
-    Array<{ y: number; height: number } | null>
-  >([]);
+  const paragraphLayoutsRef = useRef<Array<{ y: number; height: number } | null>>([]);
 
   /**
    * Target scroll offset for the currently spoken character: layout-based
@@ -520,8 +501,7 @@ export function SpeakingPracticeScreen({
       const maxOffset = maxScrollOffset();
       const layouts = paragraphLayoutsRef.current;
       const complete =
-        paragraphRanges.length > 0 &&
-        paragraphRanges.every((_, index) => layouts[index] != null);
+        paragraphRanges.length > 0 && paragraphRanges.every((_, index) => layouts[index] != null);
       if (complete) {
         const spans: ParagraphSpan[] = paragraphRanges.map((range, index) => ({
           ...range,
@@ -649,6 +629,7 @@ export function SpeakingPracticeScreen({
 
   // New paragraphs (regenerated text) invalidate every measured box; the
   // next layout pass refills the cache.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: paragraphs is an intentional layout-cache reset trigger
   useEffect(() => {
     paragraphLayoutsRef.current = [];
   }, [paragraphs]);
@@ -760,10 +741,7 @@ export function SpeakingPracticeScreen({
                 ? LISTEN_FIRST_GLIDE_MS
                 : now - lastProgressAtRef.current;
             lastProgressAtRef.current = now;
-            const target = Math.min(
-              Math.max(computeTargetOffset(absolute), 0),
-              maxScrollOffset(),
-            );
+            const target = Math.min(Math.max(computeTargetOffset(absolute), 0), maxScrollOffset());
             targetOffsetRef.current = target;
             glideScrollTo(
               target,
@@ -854,6 +832,7 @@ export function SpeakingPracticeScreen({
     });
   }, [currentScrollOffset, glideScrollTo, maxScrollOffset]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: speed restarts the glide when the reader speed changes
   useEffect(() => {
     if (listenMode || phase !== 'practicing' || paused) {
       return;
@@ -865,11 +844,7 @@ export function SpeakingPracticeScreen({
   /** Re-aim the read glide when a layout measurement changes the scroll range. */
   const refreshReadScrollRef = useRef<() => void>(() => {});
   refreshReadScrollRef.current = () => {
-    if (
-      !listenMode &&
-      phaseRef.current === 'practicing' &&
-      !pausedRef.current
-    ) {
+    if (!listenMode && phaseRef.current === 'practicing' && !pausedRef.current) {
       startReadScroll();
     }
   };
@@ -942,18 +917,15 @@ export function SpeakingPracticeScreen({
     try {
       const config = await loadServerlessConfig();
       if (!config) {
-        throw new Error(
-          'Add your provider API key in Settings to generate practice text.',
-        );
+        throw new Error('Add your provider API key in Settings to generate practice text.');
       }
       const client = createProviderClient(config);
       const db = await getLocalDatabase();
-      const { text, paragraphs: displayParagraphs } =
-        await generateSpeakingPracticeText(
-          db,
-          request => client.complete(request),
-          { material: material.trim(), minutes },
-        );
+      const { text, paragraphs: displayParagraphs } = await generateSpeakingPracticeText(
+        db,
+        request => client.complete(request),
+        { material: material.trim(), minutes },
+      );
       const profile = await getLearningProfile(db);
       try {
         await createSpeakingPracticeRecord(db, {
@@ -1001,15 +973,9 @@ export function SpeakingPracticeScreen({
     [startPlayback, jumpScrollTo],
   );
 
-  const handlePracticeSpeakingAgain = useCallback(
-    () => startSameText(false),
-    [startSameText],
-  );
+  const handlePracticeSpeakingAgain = useCallback(() => startSameText(false), [startSameText]);
 
-  const handleListeningAgain = useCallback(
-    () => startSameText(true),
-    [startSameText],
-  );
+  const handleListeningAgain = useCallback(() => startSameText(true), [startSameText]);
 
   const handlePracticeNewText = useCallback(() => {
     setListenMode(false);
@@ -1028,8 +994,7 @@ export function SpeakingPracticeScreen({
             accessibilityLabel="Go back"
             hitSlop={8}
             onPress={() => navigation.goBack()}
-            testID="speaking-back"
-          >
+            testID="speaking-back">
             <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
           <Text style={styles.title}>
@@ -1042,25 +1007,20 @@ export function SpeakingPracticeScreen({
             {listenMode ? 'Listening complete' : 'Practice complete'}
           </Text>
           <Text style={styles.summaryDetail} testID="speaking-summary-detail">
-            {formatElapsed(elapsedMs)} of {listenMode ? 'listening' : 'reading'}{' '}
-            · {words} words
+            {formatElapsed(elapsedMs)} of {listenMode ? 'listening' : 'reading'} · {words} words
           </Text>
           <Pressable
             accessibilityRole="button"
             onPress={handlePracticeSpeakingAgain}
             style={styles.primaryButton}
-            testID="speaking-practice-again"
-          >
-            <Text style={styles.primaryButtonText}>
-              Practice speaking again
-            </Text>
+            testID="speaking-practice-again">
+            <Text style={styles.primaryButtonText}>Practice speaking again</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={handleListeningAgain}
             style={styles.secondaryButton}
-            testID="speaking-listen-again"
-          >
+            testID="speaking-listen-again">
             <Text style={styles.secondaryButtonText}>Listening again</Text>
           </Pressable>
           <Pressable
@@ -1068,8 +1028,7 @@ export function SpeakingPracticeScreen({
             accessibilityLabel="Generate a new practice text"
             onPress={handlePracticeNewText}
             style={styles.secondaryButton}
-            testID="speaking-practice-new"
-          >
+            testID="speaking-practice-new">
             <Text style={styles.secondaryButtonText}>Practice new text</Text>
           </Pressable>
         </View>
@@ -1085,8 +1044,7 @@ export function SpeakingPracticeScreen({
             accessibilityLabel="Go back"
             hitSlop={8}
             onPress={() => navigation.goBack()}
-            testID="speaking-back"
-          >
+            testID="speaking-back">
             <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
           <Text style={styles.title}>
@@ -1102,24 +1060,18 @@ export function SpeakingPracticeScreen({
           <View style={styles.controlsRow}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={
-                paused ? 'Resume scrolling' : 'Pause scrolling'
-              }
+              accessibilityLabel={paused ? 'Resume scrolling' : 'Pause scrolling'}
               onPress={togglePause}
               style={styles.controlButton}
-              testID="speaking-pause"
-            >
-              <Text style={styles.controlButtonText}>
-                {paused ? 'Resume' : 'Pause'}
-              </Text>
+              testID="speaking-pause">
+              <Text style={styles.controlButtonText}>{paused ? 'Resume' : 'Pause'}</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Restart from the beginning"
               onPress={rewind}
               style={styles.controlButton}
-              testID="speaking-restart"
-            >
+              testID="speaking-restart">
               <Text style={styles.controlButtonText}>Restart</Text>
             </Pressable>
             <Pressable
@@ -1127,8 +1079,7 @@ export function SpeakingPracticeScreen({
               accessibilityLabel="End practice"
               onPress={async () => await finish()}
               style={styles.controlButton}
-              testID="speaking-end"
-            >
+              testID="speaking-end">
               <Text style={styles.controlButtonText}>End</Text>
             </Pressable>
           </View>
@@ -1142,8 +1093,7 @@ export function SpeakingPracticeScreen({
             viewportHeightRef.current = event.nativeEvent.layout.height;
             updateCenterShift();
             refreshReadScrollRef.current();
-          }}
-        >
+          }}>
           {paused ? (
             <Pressable
               accessibilityRole="button"
@@ -1151,17 +1101,11 @@ export function SpeakingPracticeScreen({
               hitSlop={8}
               onPress={() => copyText(fullText)}
               style={styles.copyButton}
-              testID="speaking-copy"
-            >
+              testID="speaking-copy">
               <ClipboardIcon color={colors.accent} />
             </Pressable>
           ) : null}
-          <Animated.View
-            style={[
-              styles.textArea,
-              { transform: [{ translateY: layerTranslate }] },
-            ]}
-          >
+          <Animated.View style={[styles.textArea, { transform: [{ translateY: layerTranslate }] }]}>
             <KaraokeText
               paragraphs={paragraphs}
               styles={styles}
@@ -1178,15 +1122,13 @@ export function SpeakingPracticeScreen({
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'android' ? undefined : 'padding'}
-      testID="speaking-practice-screen"
-    >
+      testID="speaking-practice-screen">
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
           hitSlop={8}
           onPress={() => navigation.goBack()}
-          testID="speaking-back"
-        >
+          testID="speaking-back">
           <Text style={styles.backText}>‹ Back</Text>
         </Pressable>
         <Text style={styles.title}>Speaking practice</Text>
@@ -1194,15 +1136,13 @@ export function SpeakingPracticeScreen({
       </View>
 
       <Text style={styles.subtitle}>
-        Read aloud while the text scrolls at your speed. Type a topic, a list of
-        questions, or your own text, and pick how long you want to speak.
+        Read aloud while the text scrolls at your speed. Type a topic, a list of questions, or your
+        own text, and pick how long you want to speak.
       </Text>
 
       <TextInput
         style={styles.input}
-        placeholder={
-          'Tap here to start typing\ne.g. My weekend plans\nor paste your own text'
-        }
+        placeholder={'Tap here to start typing\ne.g. My weekend plans\nor paste your own text'}
         placeholderTextColor={colors.textMuted}
         multiline
         value={material}
@@ -1221,12 +1161,8 @@ export function SpeakingPracticeScreen({
               accessibilityRole="radio"
               accessibilityState={{ checked: isSelected }}
               onPress={() => setMinutes(option)}
-              style={[
-                styles.minutesChip,
-                isSelected && styles.minutesChipSelected,
-              ]}
-              testID={`speaking-minutes-${option}`}
-            >
+              style={[styles.minutesChip, isSelected && styles.minutesChipSelected]}
+              testID={`speaking-minutes-${option}`}>
               <Text style={styles.minutesText}>{`${option} min`}</Text>
             </Pressable>
           );
@@ -1239,8 +1175,7 @@ export function SpeakingPracticeScreen({
         onPress={handleGenerate}
         disabled={generating}
         style={[styles.primaryButton, generating && styles.buttonDisabled]}
-        testID="speaking-generate"
-      >
+        testID="speaking-generate">
         <Text style={styles.primaryButtonText}>Generate text</Text>
       </Pressable>
 

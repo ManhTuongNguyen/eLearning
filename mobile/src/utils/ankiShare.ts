@@ -12,7 +12,7 @@
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import Share from 'react-native-share';
 
-import {VOCABULARY_EXPORT_FILENAME} from '../api/vocabulary';
+import { VOCABULARY_EXPORT_FILENAME } from '../api/vocabulary';
 
 /** Write the CSV to cache storage and open the system share/save sheet. */
 export async function shareAnkiCsv(csv: string): Promise<void> {

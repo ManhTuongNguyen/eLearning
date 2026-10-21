@@ -14,7 +14,7 @@
  * not just the first one. A sentence therefore keeps coming back within the
  * same session until it is graded Good or Easy.
  */
-import type {ReviewGrade, SentenceRecord} from '../db/types';
+import type { ReviewGrade, SentenceRecord } from '../db/types';
 
 /** Sentences a topic must hold before practice unlocks. */
 export const MIN_PRACTICE_SENTENCES = 5;
@@ -43,17 +43,14 @@ export function buildPracticeSession(
 ): SentenceRecord[] {
   const nowMs = now.getTime();
   return sentences
-    .map(sentence => ({sentence, dueMs: Date.parse(sentence.due_at)}))
+    .map(sentence => ({ sentence, dueMs: Date.parse(sentence.due_at) }))
     .filter(
       entry =>
         entry.sentence.status !== 'suspended' &&
         Number.isFinite(entry.dueMs) &&
         entry.dueMs <= nowMs,
     )
-    .sort(
-      (first, second) =>
-        first.dueMs - second.dueMs || first.sentence.id - second.sentence.id,
-    )
+    .sort((first, second) => first.dueMs - second.dueMs || first.sentence.id - second.sentence.id)
     .slice(0, Math.max(0, limit))
     .map(entry => entry.sentence);
 }
@@ -90,7 +87,7 @@ export function applyPracticeGrade(
 ): PracticeSessionState {
   const remaining = session.queue.slice(1);
   if (grade !== 'again') {
-    return {queue: remaining};
+    return { queue: remaining };
   }
-  return {queue: [...remaining, updatedCard]};
+  return { queue: [...remaining, updatedCard] };
 }

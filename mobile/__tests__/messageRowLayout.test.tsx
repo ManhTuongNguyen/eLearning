@@ -1,10 +1,9 @@
-import React from 'react';
-import {render, screen} from '@testing-library/react-native';
-import type {TestInstance} from 'test-renderer';
+import { render, screen } from '@testing-library/react-native';
+import type { TestInstance } from 'test-renderer';
 
-import type {ChatMessage} from '../src/api/sessions';
-import {MessageRow, createRowStyles} from '../src/screens/MessageRow';
-import {lightColors} from '../src/theme/colors';
+import type { ChatMessage } from '../src/api/sessions';
+import { createRowStyles, MessageRow } from '../src/screens/MessageRow';
+import { lightColors } from '../src/theme/colors';
 
 const styles = createRowStyles(lightColors);
 
@@ -22,10 +21,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   const entries = Array.isArray(style) ? style : [style];
-  return Object.assign(
-    {},
-    ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})),
-  );
+  return Object.assign({}, ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})));
 }
 
 function parentOf(element: TestInstance): TestInstance {
@@ -60,10 +56,10 @@ describe('MessageRow layout (TASK-AUDIT-009)', () => {
     const bubble = await renderRow();
 
     const wrapperStyle = flattenStyle(parentOf(bubble).props.style);
-    expect(wrapperStyle).toMatchObject({maxWidth: '85%', flexShrink: 1});
+    expect(wrapperStyle).toMatchObject({ maxWidth: '85%', flexShrink: 1 });
 
     const rowStyle = flattenStyle(parentOf(parentOf(bubble)).props.style);
-    expect(rowStyle).toMatchObject({flexDirection: 'row'});
+    expect(rowStyle).toMatchObject({ flexDirection: 'row' });
 
     const bubbleStyle = flattenStyle(bubble.props.style);
     expect(bubbleStyle).not.toHaveProperty('maxWidth');
@@ -75,7 +71,7 @@ describe('MessageRow layout (TASK-AUDIT-009)', () => {
   });
 
   it('aligns user messages toward the right edge', async () => {
-    const bubble = await renderRow({role: 'user'});
+    const bubble = await renderRow({ role: 'user' });
 
     const rowStyle = flattenStyle(parentOf(parentOf(bubble)).props.style);
     expect(rowStyle).toMatchObject({
@@ -84,7 +80,7 @@ describe('MessageRow layout (TASK-AUDIT-009)', () => {
     });
 
     const wrapperStyle = flattenStyle(parentOf(bubble).props.style);
-    expect(wrapperStyle).toMatchObject({maxWidth: '85%'});
+    expect(wrapperStyle).toMatchObject({ maxWidth: '85%' });
 
     expect(flattenStyle(bubble.props.style)).toMatchObject({
       backgroundColor: lightColors.primary,
@@ -92,7 +88,7 @@ describe('MessageRow layout (TASK-AUDIT-009)', () => {
   });
 
   it('keeps assistant messages aligned toward the left', async () => {
-    const bubble = await renderRow({role: 'assistant'});
+    const bubble = await renderRow({ role: 'assistant' });
 
     const rowStyle = flattenStyle(parentOf(parentOf(bubble)).props.style);
     expect(rowStyle.flexDirection).toBe('row');
@@ -104,25 +100,27 @@ describe('MessageRow layout (TASK-AUDIT-009)', () => {
   });
 
   it('leaves text wrapping enabled for short and long messages', async () => {
-    await renderRow({content: 'Hello!'});
+    await renderRow({ content: 'Hello!' });
 
     const text = screen.getByText('Hello!');
     expect(text.props.numberOfLines).toBeUndefined();
 
     const textStyle = flattenStyle(text.props.style);
-    expect(textStyle).toMatchObject({fontSize: 15, lineHeight: 21});
+    expect(textStyle).toMatchObject({ fontSize: 15, lineHeight: 21 });
     expect(textStyle).not.toHaveProperty('width');
     expect(textStyle).not.toHaveProperty('maxWidth');
   });
 
   it('renders long message content inside the capped wrapper', async () => {
     const longContent =
-      'This is a substantially longer message that must wrap across several lines while the bubble keeps a bounded width and never overflows the screen edges. '.repeat(3);
-    const bubble = await renderRow({content: longContent});
+      'This is a substantially longer message that must wrap across several lines while the bubble keeps a bounded width and never overflows the screen edges. '.repeat(
+        3,
+      );
+    const bubble = await renderRow({ content: longContent });
 
     expect(screen.getByText(longContent)).toBeOnTheScreen();
 
     const wrapperStyle = flattenStyle(parentOf(bubble).props.style);
-    expect(wrapperStyle).toMatchObject({maxWidth: '85%', flexShrink: 1});
+    expect(wrapperStyle).toMatchObject({ maxWidth: '85%', flexShrink: 1 });
   });
 });

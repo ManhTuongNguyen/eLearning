@@ -9,30 +9,21 @@
  * configuration; reset restores the previous app behavior (system default
  * voice).
  */
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+
 import Slider from '@react-native-community/slider';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {
-  Screen,
-  ScreenHeader,
-  ScreenScrollView,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
-
-import {applySpeechPreferences, getSpeechEngineSnapshot} from '../tts/androidSpeech';
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import type { TTSSettingsScreenProps } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { applySpeechPreferences, getSpeechEngineSnapshot } from '../tts/androidSpeech';
 import {
   clearSpeechPreferences,
   loadSpeechPreferences,
   saveSpeechPreferences,
 } from '../tts/speechSettings';
-import type {ThemeColors} from '../theme/colors';
 import {
   DEFAULT_SPEECH_PREFERENCES,
   SPEECH_PITCH_MAX,
@@ -42,8 +33,6 @@ import {
   SPEECH_RATE_MIN,
   SPEECH_RATE_STEP,
 } from '../tts/types';
-import type {TTSSettingsScreenProps} from '../navigation/types';
-import {useTheme} from '../theme/ThemeContext';
 
 /** Sentence spoken by the preview control. */
 export const PREVIEW_SENTENCE = 'Hello! This is how your assistant will sound.';
@@ -238,7 +227,7 @@ export function createStyles(c: ThemeColors) {
       shadowColor: '#000',
       shadowOpacity: 0.15,
       shadowRadius: 8,
-      shadowOffset: {width: 0, height: 2},
+      shadowOffset: { width: 0, height: 2 },
       elevation: 6,
     },
     toastText: {
@@ -260,13 +249,13 @@ export function createStyles(c: ThemeColors) {
   });
 }
 
-export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
-  const {colors} = useTheme();
+export function TTSSettingsScreen({ navigation }: TTSSettingsScreenProps) {
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [preferences, setPreferences] = useState<
-    import('../tts/types').SpeechPreferences | null
-  >(null);
+  const [preferences, setPreferences] = useState<import('../tts/types').SpeechPreferences | null>(
+    null,
+  );
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [resetToastVisible, setResetToastVisible] = useState(false);
 
@@ -290,7 +279,7 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
         if (!prev) {
           return prev;
         }
-        const updated = {...prev, ...patch};
+        const updated = { ...prev, ...patch };
         saveSpeechPreferences(updated);
         applySpeechPreferences(updated);
         return updated;
@@ -385,9 +374,7 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
         <View style={styles.engineGroup}>
           <Text style={styles.sectionLabel}>Speech engine</Text>
           <View style={[styles.engineCard, styles.engineCardSelected]}>
-            <Text style={[styles.engineLabel, styles.engineDescription]}>
-              System voice
-            </Text>
+            <Text style={[styles.engineLabel, styles.engineDescription]}>System voice</Text>
             <Text style={styles.engineDescription}>
               Instant, built into the device. Always available.
             </Text>
@@ -396,7 +383,7 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
             accessibilityRole="button"
             accessibilityLabel="Manage voices"
             onPress={() => navigation.navigate('VoiceManager')}
-            style={({pressed}) => [styles.manageVoicesRow, pressed && styles.rowPressed]}
+            style={({ pressed }) => [styles.manageVoicesRow, pressed && styles.rowPressed]}
             testID="tts-manage-voices">
             <View style={styles.rowTexts}>
               <Text style={styles.rowTitle}>Voice manager</Text>
@@ -432,9 +419,7 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
               maximumValue={SPEECH_RATE_MAX}
               step={SPEECH_RATE_STEP}
               value={preferences.rate}
-              onValueChange={value =>
-                updatePreferences({rate: Math.round(value * 100) / 100})
-              }
+              onValueChange={value => updatePreferences({ rate: Math.round(value * 100) / 100 })}
               testID="tts-rate-slider"
             />
           </View>
@@ -450,9 +435,7 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
               maximumValue={SPEECH_PITCH_MAX}
               step={SPEECH_PITCH_STEP}
               value={preferences.pitch}
-              onValueChange={value =>
-                updatePreferences({pitch: Math.round(value * 100) / 100})
-              }
+              onValueChange={value => updatePreferences({ pitch: Math.round(value * 100) / 100 })}
               testID="tts-pitch-slider"
             />
           </View>
@@ -468,15 +451,13 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
             accessibilityLabel="Preview speech"
             onPress={preview}
             disabled={previewPlaying}
-            style={({pressed}) => [
+            style={({ pressed }) => [
               styles.previewButton,
               previewPlaying && styles.previewButtonDisabled,
               pressed && styles.rowPressed,
             ]}
             testID="tts-preview">
-            {previewPlaying ? (
-              <ActivityIndicator size="small" color={colors.onPrimary} />
-            ) : null}
+            {previewPlaying ? <ActivityIndicator size="small" color={colors.onPrimary} /> : null}
             <Text style={styles.previewButtonText}>
               {previewPlaying ? 'Speaking…' : 'Preview voice'}
             </Text>
@@ -485,7 +466,7 @@ export function TTSSettingsScreen({navigation}: TTSSettingsScreenProps) {
             accessibilityRole="button"
             accessibilityLabel="Reset speech settings"
             onPress={resetPreferences}
-            style={({pressed}) => [styles.resetButton, pressed && styles.rowPressed]}
+            style={({ pressed }) => [styles.resetButton, pressed && styles.rowPressed]}
             testID="tts-reset">
             <Text style={styles.resetButtonText}>Reset to defaults</Text>
           </Pressable>

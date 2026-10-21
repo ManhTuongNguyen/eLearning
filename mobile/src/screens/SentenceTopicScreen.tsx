@@ -12,45 +12,30 @@
  * `useSpeechPlayback` contract: one playback at a time, silenced on blur and
  * unmount.
  */
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import {Icon} from '../components/Icon';
-import {
-  Screen,
-  ScreenHeader,
-  ScreenList,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
-import {getLocalDatabase} from '../db/database';
+import { Icon } from '../components/Icon';
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { getLocalDatabase } from '../db/database';
 import {
   deleteSentence,
   getSentenceTopicById,
   insertSentences,
   listSentencesByTopic,
 } from '../db/sentenceRepository';
-import type {SentenceRecord, SentenceTopicRecord} from '../db/types';
-import type {SentenceTopicScreenProps} from '../navigation/types';
-import {
-  generateTopicSentences,
-  type SentenceCandidate,
-} from '../serverless/sentenceGeneration';
-import {createProviderClient} from '../serverless/providerRegistry';
-import {loadServerlessConfig} from '../serverless/settings';
-import {canPractice, MIN_PRACTICE_SENTENCES} from '../srs/session';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
-import type {TextToSpeechEngine} from '../tts/textToSpeech';
-import {getSpeechEngine} from '../tts/textToSpeech';
-import {useSpeechPlayback} from '../tts/useSpeechPlayback';
-import {SentenceReviewModal} from './SentenceReviewModal';
+import type { SentenceRecord, SentenceTopicRecord } from '../db/types';
+import type { SentenceTopicScreenProps } from '../navigation/types';
+import { createProviderClient } from '../serverless/providerRegistry';
+import { generateTopicSentences, type SentenceCandidate } from '../serverless/sentenceGeneration';
+import { loadServerlessConfig } from '../serverless/settings';
+import { canPractice, MIN_PRACTICE_SENTENCES } from '../srs/session';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { TextToSpeechEngine } from '../tts/textToSpeech';
+import { getSpeechEngine } from '../tts/textToSpeech';
+import { useSpeechPlayback } from '../tts/useSpeechPlayback';
+import { SentenceReviewModal } from './SentenceReviewModal';
 
 /** Counts offered by the generation panel. */
 export const GENERATION_COUNTS = [1, 5, 10] as const;
@@ -58,8 +43,7 @@ export const GENERATION_COUNTS = [1, 5, 10] as const;
 /** Visible height of the scrollable description block. */
 export const DESCRIPTION_MAX_HEIGHT = 110;
 
-const PROVIDER_MISSING_MESSAGE =
-  'Add your provider API key in Settings to generate sentences.';
+const PROVIDER_MISSING_MESSAGE = 'Add your provider API key in Settings to generate sentences.';
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -408,23 +392,17 @@ function SentenceRow({
           }
           testID={`sentence-speak-${sentence.id}`}
           onPress={() => onSpeak(sentence)}
-          style={[styles.rowIconButton, speaking && styles.rowIconButtonActive]}
-        >
-          <Icon
-            name="speaker"
-            size={18}
-            color={speaking ? colors.primary : colors.textSecondary}
-          />
+          style={[styles.rowIconButton, speaking && styles.rowIconButtonActive]}>
+          <Icon name="speaker" size={18} color={speaking ? colors.primary : colors.textSecondary} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Delete sentence ${sentence.text}`}
-          accessibilityState={{disabled: deleting}}
+          accessibilityState={{ disabled: deleting }}
           testID={`sentence-delete-${sentence.id}`}
           onPress={() => onDelete(sentence)}
           disabled={deleting}
-          style={styles.rowIconButton}
-        >
+          style={styles.rowIconButton}>
           {deleting ? (
             <ActivityIndicator size="small" color={colors.textMuted} />
           ) : (
@@ -446,7 +424,7 @@ export function SentenceTopicScreen({
   route,
   speech = getSpeechEngine(),
 }: SentenceTopicScreenInternalProps) {
-  const {colors} = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const topicId = route.params.topicId;
 
@@ -469,7 +447,7 @@ export function SentenceTopicScreen({
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const {speakingId, speak, stop} = useSpeechPlayback(speech);
+  const { speakingId, speak, stop } = useSpeechPlayback(speech);
   const nowMs = Date.now();
 
   const loadTopic = useCallback(
@@ -498,6 +476,7 @@ export function SentenceTopicScreen({
     [topicId],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is an intentional reload trigger
   useEffect(() => {
     loadTopic(true);
   }, [loadTopic, reloadKey]);
@@ -580,17 +559,13 @@ export function SentenceTopicScreen({
         throw new Error('This topic no longer exists.');
       }
       const existing = await listSentencesByTopic(db, topicId);
-      const generated = await generateTopicSentences(
-        db,
-        request => client.complete(request),
-        {
-          topicTitle: record.title,
-          topicDescription: record.description,
-          generationPrompt: record.generation_prompt,
-          count: generateCount,
-          existingSentences: existing.map(sentence => sentence.text),
-        },
-      );
+      const generated = await generateTopicSentences(db, request => client.complete(request), {
+        topicTitle: record.title,
+        topicDescription: record.description,
+        generationPrompt: record.generation_prompt,
+        count: generateCount,
+        existingSentences: existing.map(sentence => sentence.text),
+      });
       setCandidates(generated);
       setGenerateOpen(false);
       setReviewVisible(true);
@@ -633,17 +608,14 @@ export function SentenceTopicScreen({
   );
 
   const handlePractice = useCallback(() => {
-    navigation.navigate('SentencePractice', {topicId});
+    navigation.navigate('SentencePractice', { topicId });
   }, [navigation, topicId]);
 
   const practiceUnlocked = canPractice(sentences.length);
-  const remainingToPractice = Math.max(
-    0,
-    MIN_PRACTICE_SENTENCES - sentences.length,
-  );
+  const remainingToPractice = Math.max(0, MIN_PRACTICE_SENTENCES - sentences.length);
 
   const renderRow = useCallback(
-    ({item, index}: {item: SentenceRecord; index: number}) => (
+    ({ item, index }: { item: SentenceRecord; index: number }) => (
       <>
         {index > 0 ? <View style={styles.rowDivider} /> : null}
         <SentenceRow
@@ -670,8 +642,7 @@ export function SentenceTopicScreen({
             accessibilityLabel="Back to topics"
             testID="sentence-topic-back"
             onPress={() => navigation.goBack()}
-            style={styles.backLinkButton}
-          >
+            style={styles.backLinkButton}>
             <Text style={styles.backLinkText}>‹ Topics</Text>
           </Pressable>
           <Text style={styles.title} numberOfLines={1} testID="sentence-topic-title">
@@ -684,8 +655,7 @@ export function SentenceTopicScreen({
               style={styles.descriptionScroll}
               nestedScrollEnabled
               showsVerticalScrollIndicator
-              testID="sentence-topic-description-scroll"
-            >
+              testID="sentence-topic-description-scroll">
               <Text style={styles.description} testID="sentence-topic-description">
                 {topic.description}
               </Text>
@@ -725,12 +695,11 @@ export function SentenceTopicScreen({
                     setProviderMissing(false);
                   }}
                   disabled={generating}
-                  style={({pressed}) => [
+                  style={({ pressed }) => [
                     styles.actionButton,
                     styles.generateButton,
                     pressed && styles.pressedFade,
-                  ]}
-                >
+                  ]}>
                   <Icon name="generate" size={18} color={colors.onPrimary} />
                   <Text style={styles.generateButtonText}>Generate</Text>
                 </Pressable>
@@ -741,17 +710,16 @@ export function SentenceTopicScreen({
                       ? 'Practice this topic'
                       : `Practice locked. ${remainingToPractice} more sentences needed.`
                   }
-                  accessibilityState={{disabled: !practiceUnlocked}}
+                  accessibilityState={{ disabled: !practiceUnlocked }}
                   testID="sentence-practice"
                   onPress={handlePractice}
                   disabled={!practiceUnlocked}
-                  style={({pressed}) => [
+                  style={({ pressed }) => [
                     styles.actionButton,
                     styles.practiceButton,
                     !practiceUnlocked && styles.disabled,
                     pressed && styles.pressedFade,
-                  ]}
-                >
+                  ]}>
                   <Icon name="play" size={18} color={colors.textPrimary} />
                   <Text style={styles.practiceButtonText}>Practice</Text>
                 </Pressable>
@@ -774,23 +742,12 @@ export function SentenceTopicScreen({
                         <Pressable
                           key={count}
                           accessibilityRole="button"
-                          accessibilityState={{selected}}
-                          accessibilityLabel={`Generate ${count} sentence${
-                            count === 1 ? '' : 's'
-                          }`}
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`Generate ${count} sentence${count === 1 ? '' : 's'}`}
                           testID={`sentence-generate-count-${count}`}
                           onPress={() => setGenerateCount(count)}
-                          style={[
-                            styles.countOption,
-                            selected && styles.countOptionSelected,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.countText,
-                              selected && styles.countTextSelected,
-                            ]}
-                          >
+                          style={[styles.countOption, selected && styles.countOptionSelected]}>
+                          <Text style={[styles.countText, selected && styles.countTextSelected]}>
                             {count}
                           </Text>
                         </Pressable>
@@ -802,16 +759,14 @@ export function SentenceTopicScreen({
                       testID="sentence-generate-cancel"
                       onPress={() => setGenerateOpen(false)}
                       disabled={generating}
-                      style={styles.panelButton}
-                    >
+                      style={styles.panelButton}>
                       <Text style={styles.panelButtonText}>Cancel</Text>
                     </Pressable>
                     <Pressable
                       testID="sentence-generate-run"
                       onPress={handleGenerate}
                       disabled={generating}
-                      style={styles.panelButton}
-                    >
+                      style={styles.panelButton}>
                       {generating ? (
                         <ActivityIndicator size="small" color={colors.primary} />
                       ) : (
@@ -831,11 +786,7 @@ export function SentenceTopicScreen({
 
               {generateError ? (
                 <View>
-                  <Text
-                    role="alert"
-                    style={styles.error}
-                    testID="sentence-generate-error"
-                  >
+                  <Text role="alert" style={styles.error} testID="sentence-generate-error">
                     {generateError}
                   </Text>
                   <View style={styles.panelActions}>
@@ -843,16 +794,14 @@ export function SentenceTopicScreen({
                       <Pressable
                         testID="sentence-generate-settings"
                         onPress={() => navigation.navigate('AIProviderSettings')}
-                        style={styles.panelButton}
-                      >
+                        style={styles.panelButton}>
                         <Text style={styles.panelButtonText}>Open AI settings</Text>
                       </Pressable>
                     ) : (
                       <Pressable
                         testID="sentence-generate-retry"
                         onPress={handleGenerate}
-                        style={styles.panelButton}
-                      >
+                        style={styles.panelButton}>
                         <Text style={styles.panelButtonText}>Try again</Text>
                       </Pressable>
                     )}

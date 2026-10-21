@@ -6,15 +6,10 @@
  * history entries: create, read all, read one, delete one. No backend API calls.
  */
 
-import type {SqlDriver} from './driver';
-
-
-
-
-
-import {nowIso} from './driver';
-import type {EnglishLevel} from '../api/profile';
-import type {LocalPracticeHistoryRecord} from './types';
+import type { EnglishLevel } from '../api/profile';
+import type { SqlDriver } from './driver';
+import { nowIso } from './driver';
+import type { LocalPracticeHistoryRecord } from './types';
 
 export interface CreateSpeakingPracticeRecordParams {
   userId: number;
@@ -80,7 +75,7 @@ export async function getSpeakingPracticeRecordById(
      WHERE id = ?`,
     [id],
   );
-  return (result.rows[0] ?? null) as unknown as (LocalPracticeHistoryRecord | null);
+  return (result.rows[0] ?? null) as unknown as LocalPracticeHistoryRecord | null;
 }
 
 export async function listSpeakingPracticeRecords(
@@ -97,9 +92,6 @@ export async function listSpeakingPracticeRecords(
   return result.rows as unknown as LocalPracticeHistoryRecord[];
 }
 
-export async function deleteSpeakingPracticeRecord(
-  db: SqlDriver,
-  id: number,
-): Promise<void> {
+export async function deleteSpeakingPracticeRecord(db: SqlDriver, id: number): Promise<void> {
   await db.execute(`DELETE FROM speaking_practice_history WHERE id = ?`, [id]);
 }

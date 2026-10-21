@@ -1,19 +1,16 @@
-import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {render, screen, waitFor} from '@testing-library/react-native';
-
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
-import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
-import type {AIProviderSettingsScreenProps} from '../src/navigation/types';
-import {AIProviderSettingsScreen} from '../src/screens/AIProviderSettingsScreen';
+import { render, screen, waitFor } from '@testing-library/react-native';
+import { SCREEN_GUTTER } from '../src/components/ScreenLayout';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
+import { DEFAULT_APPLICATION_MODE } from '../src/mode/types';
+import type { AIProviderSettingsScreenProps } from '../src/navigation/types';
+import { AIProviderSettingsScreen, createStyles } from '../src/screens/AIProviderSettingsScreen';
 import * as modelCatalog from '../src/serverless/modelCatalog';
 import * as serverlessSettings from '../src/serverless/settings';
-import {SCREEN_GUTTER} from '../src/components/ScreenLayout';
-import {createStyles} from '../src/screens/AIProviderSettingsScreen';
-import {lightColors} from '../src/theme/colors';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { lightColors } from '../src/theme/colors';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/db/database');
 jest.mock('../src/serverless/settings');
@@ -29,16 +26,13 @@ const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   const entries = Array.isArray(style) ? style : [style];
-  return Object.assign(
-    {},
-    ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})),
-  );
+  return Object.assign({}, ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})));
 }
 
 async function renderScreen() {
   const props = {
-    navigation: {navigate: jest.fn(), goBack: jest.fn()},
-    route: {key: 'ai-provider-settings-test', name: 'AIProviderSettings', params: undefined},
+    navigation: { navigate: jest.fn(), goBack: jest.fn() },
+    route: { key: 'ai-provider-settings-test', name: 'AIProviderSettings', params: undefined },
   } as unknown as AIProviderSettingsScreenProps;
 
   // The layout test targets the editor body, which only exists in
@@ -95,9 +89,7 @@ describe('AIProviderSettingsScreen layout (TASK-AUDIT-012)', () => {
 
     const container = screen.getByTestId('ai-provider-settings-screen');
     expect(flattenStyle(container.props.style).paddingTop).toBe(16);
-    await waitFor(() =>
-      expect(screen.getByTestId('ai-provider-save')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ai-provider-save')).toBeOnTheScreen());
   });
 });
 

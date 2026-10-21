@@ -27,13 +27,13 @@ export function stepOffset(
   if (maxOffset <= 0) {
     // The text fits the viewport without scrolling; there is nothing to
     // read past, so the practice can only end through the End control.
-    return {offset: Math.min(offset, Math.max(0, maxOffset)), done: false};
+    return { offset: Math.min(offset, Math.max(0, maxOffset)), done: false };
   }
   const next = Math.min(
     Math.max(0, offset) + (Math.max(0, speedPxPerSecond) * Math.max(0, dtMs)) / 1000,
     maxOffset,
   );
-  return {offset: next, done: next >= maxOffset};
+  return { offset: next, done: next >= maxOffset };
 }
 
 /** Milliseconds needed to scroll `maxOffset` at the given speed (min 1 tick). */
@@ -102,7 +102,7 @@ export function paragraphCharRanges(
     const foundAt = fullText.indexOf(paragraph, cursor);
     const charStart = foundAt >= 0 ? foundAt : cursor;
     const charEnd = charStart + paragraph.length;
-    ranges.push({charStart, charEnd});
+    ranges.push({ charStart, charEnd });
     cursor = charEnd;
   }
   return ranges;

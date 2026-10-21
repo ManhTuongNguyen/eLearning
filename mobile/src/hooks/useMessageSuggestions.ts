@@ -9,22 +9,22 @@
  * draft. Stale responses (session switched or a newer request started) are
  * dropped instead of overwriting newer state.
  */
-import {useCallback, useEffect, useRef, useState} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type {ChatMessage, MessageSuggestions, Session} from '../api/sessions';
-import {getMessageSuggestions} from '../api/sessions';
-import type {AuthedRequester} from '../auth/authedRequest';
-import {toErrorMessage} from '../auth/AuthContext';
-import {getLocalDatabase} from '../db/database';
-import {getLearningProfile} from '../db/profileStore';
-import type {LocalMessage} from '../db/types';
-import type {ApplicationMode} from '../mode/types';
-import {createProviderClient} from '../serverless/providerRegistry';
-import {loadServerlessConfig} from '../serverless/settings';
-import {generateSuggestions} from '../serverless/suggestions';
+import type { ChatMessage, MessageSuggestions, Session } from '../api/sessions';
+import { getMessageSuggestions } from '../api/sessions';
+import { toErrorMessage } from '../auth/AuthContext';
+import type { AuthedRequester } from '../auth/authedRequest';
+import { getLocalDatabase } from '../db/database';
+import { getLearningProfile } from '../db/profileStore';
+import type { LocalMessage } from '../db/types';
+import type { ApplicationMode } from '../mode/types';
+import { createProviderClient } from '../serverless/providerRegistry';
+import { loadServerlessConfig } from '../serverless/settings';
+import { generateSuggestions } from '../serverless/suggestions';
 
 /** The suggestion set currently displayed, tied to its source message. */
-export type DisplayedSuggestions = MessageSuggestions & {messageId: number};
+export type DisplayedSuggestions = MessageSuggestions & { messageId: number };
 
 export interface UseMessageSuggestionsOptions {
   sessionId: number | undefined;
@@ -37,7 +37,7 @@ export interface UseMessageSuggestionsOptions {
 }
 
 export function useMessageSuggestions(options: UseMessageSuggestionsOptions) {
-  const {sessionId, mode, authedRequest, messages, session} = options;
+  const { sessionId, mode, authedRequest, messages, session } = options;
 
   const [suggestions, setSuggestions] = useState<DisplayedSuggestions | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -128,35 +128,22 @@ export function useMessageSuggestions(options: UseMessageSuggestionsOptions) {
             ) {
               return;
             }
-            setSuggestions({messageId, replies: [...result.replies]});
+            setSuggestions({ messageId, replies: [...result.replies] });
           } else {
             // Server mode (TASK-061): ask the backend to generate
             // suggestions through the central authed requester
             // (TASK-AUDIT-005).
-            if (
-              sessionIdRef.current !== sid ||
-              suggestionsRequestRef.current !== requestId
-            ) {
+            if (sessionIdRef.current !== sid || suggestionsRequestRef.current !== requestId) {
               return;
             }
-            const result = await getMessageSuggestions(
-              authedRequestRef.current,
-              sid,
-              messageId,
-            );
-            if (
-              sessionIdRef.current !== sid ||
-              suggestionsRequestRef.current !== requestId
-            ) {
+            const result = await getMessageSuggestions(authedRequestRef.current, sid, messageId);
+            if (sessionIdRef.current !== sid || suggestionsRequestRef.current !== requestId) {
               return;
             }
-            setSuggestions({...result, messageId});
+            setSuggestions({ ...result, messageId });
           }
         } catch (err) {
-          if (
-            sessionIdRef.current === sid &&
-            suggestionsRequestRef.current === requestId
-          ) {
+          if (sessionIdRef.current === sid && suggestionsRequestRef.current === requestId) {
             setSuggestionsError(toErrorMessage(err));
           }
         } finally {

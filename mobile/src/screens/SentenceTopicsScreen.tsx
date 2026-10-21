@@ -14,30 +14,19 @@
  * restored the screen shows its spinner, and in server mode it replaces the
  * list with an explicit notice instead of touching the local database.
  */
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {Icon} from '../components/Icon';
-import {
-  Screen,
-  ScreenHeader,
-  ScreenList,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
-import {getLocalDatabase} from '../db/database';
-import {deleteSentenceTopic, listSentenceTopics} from '../db/sentenceRepository';
-import type {SentenceTopicSummary} from '../db/types';
-import {useApplicationMode} from '../mode/ModeContext';
-import type {SentenceTopicsScreenProps} from '../navigation/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
-import {DeleteTopicModal} from './DeleteTopicModal';
+import { Icon } from '../components/Icon';
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { getLocalDatabase } from '../db/database';
+import { deleteSentenceTopic, listSentenceTopics } from '../db/sentenceRepository';
+import type { SentenceTopicSummary } from '../db/types';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { SentenceTopicsScreenProps } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { DeleteTopicModal } from './DeleteTopicModal';
 
 const MODE_NOTICE_TEXT =
   'Real-life sentences are saved on this device only. Switch to server mode to ' +
@@ -178,7 +167,6 @@ export function createStyles(c: ThemeColors) {
   });
 }
 
-
 type TopicRowProps = {
   item: SentenceTopicSummary;
   onPress: (item: SentenceTopicSummary) => void;
@@ -188,25 +176,17 @@ type TopicRowProps = {
   styles: ReturnType<typeof createStyles>;
 };
 
-function SentenceTopicRow({
-  item,
-  onPress,
-  onDelete,
-  deleting,
-  colors,
-  styles,
-}: TopicRowProps) {
-  const dueBadge = item.due_count > 0 ? (
-    <View style={styles.badge} testID={`topic-${item.id}-due`}>
-      <Text style={[styles.badgeLabel, {color: colors.onPrimary}]}>
-        {item.due_count} due
-      </Text>
-    </View>
-  ) : (
-    <View style={styles.badgeGhost} testID={`topic-${item.id}-done`}>
-      <Text style={[styles.badgeLabel, {color: colors.textMuted}]}>all done</Text>
-    </View>
-  );
+function SentenceTopicRow({ item, onPress, onDelete, deleting, colors, styles }: TopicRowProps) {
+  const dueBadge =
+    item.due_count > 0 ? (
+      <View style={styles.badge} testID={`topic-${item.id}-due`}>
+        <Text style={[styles.badgeLabel, { color: colors.onPrimary }]}>{item.due_count} due</Text>
+      </View>
+    ) : (
+      <View style={styles.badgeGhost} testID={`topic-${item.id}-done`}>
+        <Text style={[styles.badgeLabel, { color: colors.textMuted }]}>all done</Text>
+      </View>
+    );
 
   return (
     <View style={styles.row}>
@@ -215,8 +195,7 @@ function SentenceTopicRow({
         accessibilityLabel={`${item.title} — ${item.sentence_count} sentences, ${item.due_count} due`}
         testID={`topic-${item.id}`}
         onPress={() => onPress(item)}
-        style={({pressed}) => [styles.rowMain, pressed && styles.pressedFade]}
-      >
+        style={({ pressed }) => [styles.rowMain, pressed && styles.pressedFade]}>
         <View style={styles.rowIcon}>
           <Icon name="sentences" color={colors.accent} />
         </View>
@@ -241,15 +220,11 @@ function SentenceTopicRow({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Delete topic ${item.title}`}
-        accessibilityState={{disabled: deleting, busy: deleting}}
+        accessibilityState={{ disabled: deleting, busy: deleting }}
         testID={`topic-delete-${item.id}`}
         onPress={() => onDelete(item)}
         disabled={deleting}
-        style={({pressed}) => [
-          styles.rowDeleteButton,
-          pressed && styles.pressedFade,
-        ]}
-      >
+        style={({ pressed }) => [styles.rowDeleteButton, pressed && styles.pressedFade]}>
         {deleting ? (
           <ActivityIndicator size="small" color={colors.textMuted} />
         ) : (
@@ -260,9 +235,9 @@ function SentenceTopicRow({
   );
 }
 
-export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
-  const {status: modeStatus, mode} = useApplicationMode();
-  const {colors} = useTheme();
+export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) {
+  const { status: modeStatus, mode } = useApplicationMode();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [topics, setTopics] = useState<SentenceTopicSummary[]>([]);
@@ -297,6 +272,7 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
     setReloadKey(key => key + 1);
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is an intentional reload trigger
   useEffect(() => {
     loadTopics();
   }, [loadTopics, reloadKey]);
@@ -316,7 +292,7 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
 
   // --- Render -------------------------------------------------------------
   const handleTopicPress = useCallback(
-    (item: SentenceTopicSummary) => navigation.navigate('SentenceTopic', {topicId: item.id}),
+    (item: SentenceTopicSummary) => navigation.navigate('SentenceTopic', { topicId: item.id }),
     [navigation],
   );
 
@@ -380,9 +356,8 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
           accessibilityLabel="New topic"
           testID="sentence-topics-new"
           onPress={handleNewTopic}
-          style={({pressed}) => [styles.newTopicButton, pressed && styles.pressedFade]}
-          disabled={!serverlessMode}
-        >
+          style={({ pressed }) => [styles.newTopicButton, pressed && styles.pressedFade]}
+          disabled={!serverlessMode}>
           <Icon name="plus" color={colors.onPrimary} />
         </Pressable>
       </ScreenHeader>
@@ -406,37 +381,31 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
         </View>
       ) : null}
 
-      {serverMode ? null : (
-        <>
-          {topics.length === 0 ? (
-            <View style={styles.centered} testID="sentence-empty">
-              <Text style={styles.stateText}>
-                No topics yet. Tap the + above to create one.
-              </Text>
-            </View>
-          ) : (
-            <ScreenList
-              data={topics}
-              keyExtractor={item => String(item.id)}
-              renderItem={({item, index}) => (
-                <>
-                  {index > 0 ? <View style={styles.rowDivider} /> : null}
-                  <SentenceTopicRow
-                    item={item}
-                    onPress={handleTopicPress}
-                    onDelete={handleDeleteTopic}
-                    deleting={deletingId === item.id}
-                    colors={colors}
-                    styles={styles}
-                  />
-                </>
-              )}
-              contentContainerStyle={styles.listContent}
-              onRefresh={() => setReloadKey(key => key + 1)}
-              refreshing={loading}
-            />
+      {serverMode ? null : topics.length === 0 ? (
+        <View style={styles.centered} testID="sentence-empty">
+          <Text style={styles.stateText}>No topics yet. Tap the + above to create one.</Text>
+        </View>
+      ) : (
+        <ScreenList
+          data={topics}
+          keyExtractor={item => String(item.id)}
+          renderItem={({ item, index }) => (
+            <>
+              {index > 0 ? <View style={styles.rowDivider} /> : null}
+              <SentenceTopicRow
+                item={item}
+                onPress={handleTopicPress}
+                onDelete={handleDeleteTopic}
+                deleting={deletingId === item.id}
+                colors={colors}
+                styles={styles}
+              />
+            </>
           )}
-        </>
+          contentContainerStyle={styles.listContent}
+          onRefresh={() => setReloadKey(key => key + 1)}
+          refreshing={loading}
+        />
       )}
 
       <DeleteTopicModal
@@ -454,4 +423,3 @@ export function SentenceTopicsScreen({navigation}: SentenceTopicsScreenProps) {
     </Screen>
   );
 }
-

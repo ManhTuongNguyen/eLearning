@@ -9,11 +9,11 @@
  */
 import {
   createOpenAICompatibleClient,
-  requestModelCatalog,
   DEFAULT_TIMEOUT_MS,
   type OpenAICompatibleProviderSpec,
+  requestModelCatalog,
 } from './openAICompatibleClient';
-import type {LLMClient, LLMClientConfig, ModelInfo} from './types';
+import type { LLMClient, LLMClientConfig, ModelInfo } from './types';
 
 export const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
@@ -38,7 +38,7 @@ export function createOpenAIClient(config: LLMClientConfig): LLMClient {
  * (it is sent only toward api.openai.com and never logged).
  */
 export async function listOpenAIModels(
-  options: {baseUrl?: string; timeoutMs?: number; apiKey?: string} = {},
+  options: { baseUrl?: string; timeoutMs?: number; apiKey?: string } = {},
 ): Promise<ModelInfo[]> {
   const baseUrl = (options.baseUrl ?? DEFAULT_OPENAI_BASE_URL).trim().replace(/\/+$/, '');
   if (!baseUrl) {

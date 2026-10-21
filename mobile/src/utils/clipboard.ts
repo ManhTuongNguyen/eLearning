@@ -4,7 +4,7 @@
  * directly, so tests can mock one tiny module and a future native
  * implementation can swap in without touching UI code.
  */
-import {Clipboard} from 'react-native';
+import { Clipboard } from 'react-native';
 
 export function copyText(text: string): void {
   Clipboard.setString(text);

@@ -10,21 +10,14 @@
  * either against existing sentences of the topic or within the kept set —
  * are skipped silently.
  */
-import React, {useCallback, useMemo, useState} from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import {Icon} from '../components/Icon';
-import {SCREEN_GUTTER} from '../components/ScreenLayout';
-import type {SentenceCandidate} from '../serverless/sentenceGeneration';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import { Icon } from '../components/Icon';
+import { SCREEN_GUTTER } from '../components/ScreenLayout';
+import type { SentenceCandidate } from '../serverless/sentenceGeneration';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 export interface SentenceReviewModalProps {
   /** Whether the modal is presented. */
@@ -161,14 +154,11 @@ export function SentenceReviewModal({
   onClose,
   onKeep,
 }: SentenceReviewModalProps) {
-  const {colors} = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   // Track which candidates are kept; default all to true.
-  const initialToggles = useMemo(
-    () => candidates.map(() => true),
-    [candidates],
-  );
+  const initialToggles = useMemo(() => candidates.map(() => true), [candidates]);
   const [toggles, setToggles] = useState<boolean[]>(initialToggles);
 
   // When the candidate set changes (e.g. re-opened), reset the toggles.
@@ -182,9 +172,7 @@ export function SentenceReviewModal({
   const hasSelection = keptCount > 0;
 
   const handleToggle = useCallback((index: number) => {
-    setToggles(prev =>
-      prev.map((value, i) => (i === index ? !value : value)),
-    );
+    setToggles(prev => prev.map((value, i) => (i === index ? !value : value)));
   }, []);
 
   const handleKeepSelected = useCallback(async () => {
@@ -213,8 +201,7 @@ export function SentenceReviewModal({
       onRequestClose={handleDiscard}
       testID="sentence-review-modal"
       transparent
-      visible
-    >
+      visible>
       <View style={styles.backdrop}>
         <View style={styles.container} accessibilityViewIsModal>
           <View style={styles.header}>
@@ -231,20 +218,17 @@ export function SentenceReviewModal({
               const kept = toggles[index] ?? true;
               return (
                 <View
+                  // biome-ignore lint/suspicious/noArrayIndexKey: candidates map to toggle state by position
                   key={`candidate-${index}`}
                   style={styles.candidate}
-                  testID={`sentence-candidate-${index}`}
-                >
+                  testID={`sentence-candidate-${index}`}>
                   <View style={styles.keepToggle}>
                     <Pressable
                       onPress={() => handleToggle(index)}
                       testID={`sentence-toggle-${index}`}
                       accessibilityRole="checkbox"
-                      accessibilityLabel={
-                        kept ? 'Remove from kept' : 'Keep sentence'
-                      }
-                      accessibilityState={{checked: kept}}
-                    >
+                      accessibilityLabel={kept ? 'Remove from kept' : 'Keep sentence'}
+                      accessibilityState={{ checked: kept }}>
                       <Icon
                         name="check"
                         size={20}
@@ -272,33 +256,23 @@ export function SentenceReviewModal({
             <Pressable
               onPress={handleDiscard}
               testID="sentence-discard-all"
-              style={styles.actionButton}
-            >
-              <Text style={[styles.actionText, {color: colors.textMuted}]}>
-                Discard all
-              </Text>
+              style={styles.actionButton}>
+              <Text style={[styles.actionText, { color: colors.textMuted }]}>Discard all</Text>
             </Pressable>
             <Pressable
               onPress={handleKeepAll}
               testID="sentence-keep-all"
-              style={styles.actionButton}
-            >
+              style={styles.actionButton}>
               <Text style={styles.actionText}>Keep all</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{disabled: !hasSelection}}
+              accessibilityState={{ disabled: !hasSelection }}
               onPress={handleKeepSelected}
               testID="sentence-keep-selected"
               disabled={!hasSelection}
-              style={styles.actionButton}
-            >
-              <Text
-                style={[
-                  styles.actionText,
-                  !hasSelection && {color: colors.textMuted},
-                ]}
-              >
+              style={styles.actionButton}>
+              <Text style={[styles.actionText, !hasSelection && { color: colors.textMuted }]}>
                 Keep selected
               </Text>
             </Pressable>

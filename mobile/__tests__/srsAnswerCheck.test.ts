@@ -21,15 +21,15 @@ const SENTENCE = 'Nice to meet you.';
 describe('tokenization', () => {
   test('keeps one display token per spoken word and strips punctuation', () => {
     expect(tokenizeSentence(SENTENCE)).toEqual([
-      {raw: 'Nice', normalized: 'nice'},
-      {raw: 'to', normalized: 'to'},
-      {raw: 'meet', normalized: 'meet'},
-      {raw: 'you', normalized: 'you'},
+      { raw: 'Nice', normalized: 'nice' },
+      { raw: 'to', normalized: 'to' },
+      { raw: 'meet', normalized: 'meet' },
+      { raw: 'you', normalized: 'you' },
     ]);
   });
 
   test('keeps contractions as a single token and unifies curly apostrophes', () => {
-    expect(tokenizeForComparison("I don\u2019t know")).toEqual(['i', "don't", 'know']);
+    expect(tokenizeForComparison('I don\u2019t know')).toEqual(['i', "don't", 'know']);
   });
 
   test('ignores surrounding whitespace and punctuation runs', () => {
@@ -66,7 +66,7 @@ describe('diffTokens', () => {
     const segments = diffTokens(SENTENCE, 'nice to you');
     const summary = summarizeDiff(segments);
 
-    expect(summary).toMatchObject({correct: 3, missing: 1, extra: 0, substituted: 0});
+    expect(summary).toMatchObject({ correct: 3, missing: 1, extra: 0, substituted: 0 });
     expect(segments.find(segment => segment.kind === 'missing')?.expected).toBe('meet');
   });
 
@@ -74,7 +74,7 @@ describe('diffTokens', () => {
     const segments = diffTokens(SENTENCE, 'nice to meet you all');
     const summary = summarizeDiff(segments);
 
-    expect(summary).toMatchObject({correct: 4, missing: 0, extra: 1, substituted: 0});
+    expect(summary).toMatchObject({ correct: 4, missing: 0, extra: 1, substituted: 0 });
     expect(segments.find(segment => segment.kind === 'extra')?.actual).toBe('all');
   });
 
@@ -82,7 +82,7 @@ describe('diffTokens', () => {
     const segments = diffTokens(SENTENCE, 'nice to see you');
     const summary = summarizeDiff(segments);
 
-    expect(summary).toMatchObject({correct: 3, missing: 0, extra: 0, substituted: 1});
+    expect(summary).toMatchObject({ correct: 3, missing: 0, extra: 0, substituted: 1 });
     expect(segments.find(segment => segment.kind === 'substituted')).toMatchObject({
       expected: 'meet',
       actual: 'see',
@@ -126,9 +126,7 @@ describe('diffTokens', () => {
     const segments = diffTokens(expected, actual);
 
     expect(isExactAnswer(expected, actual)).toBe(true);
-    expect(isExactAnswer(expected, 'The weather perfect for hiking, right?')).toBe(
-      false,
-    );
+    expect(isExactAnswer(expected, 'The weather perfect for hiking, right?')).toBe(false);
     expect(segments.every(segment => segment.kind === 'correct')).toBe(true);
     expect(summarizeDiff(segments)).toMatchObject({
       correct: 6,
@@ -150,9 +148,7 @@ describe('diffTokens', () => {
     expect(isExactAnswer("John's pen", 'John is pen')).toBe(false);
     expect(suggestGrade("John's pen", 'John is pen')).toBe('again');
     expect(
-      diffTokens("John's pen", 'John is pen').every(
-        segment => segment.kind === 'correct',
-      ),
+      diffTokens("John's pen", 'John is pen').every(segment => segment.kind === 'correct'),
     ).toBe(false);
     expect(isExactAnswer("John's new pen", 'John is new pen')).toBe(false);
   });
@@ -160,9 +156,7 @@ describe('diffTokens', () => {
   test("accepts a predicate adjective after a noun's contraction", () => {
     expect(isExactAnswer("John's happy", 'John is happy')).toBe(true);
     expect(
-      diffTokens("John's happy", 'John is happy').every(
-        segment => segment.kind === 'correct',
-      ),
+      diffTokens("John's happy", 'John is happy').every(segment => segment.kind === 'correct'),
     ).toBe(true);
   });
 
@@ -237,11 +231,11 @@ describe('diffDisplayTokens', () => {
     const tokens = diffDisplayTokens(diffTokens(SENTENCE, 'nice to see you all'));
 
     expect(tokens).toEqual([
-      {kind: 'correct', text: 'nice'},
-      {kind: 'correct', text: 'to'},
-      {kind: 'substituted', text: 'see', expected: 'meet'},
-      {kind: 'correct', text: 'you'},
-      {kind: 'extra', text: 'all'},
+      { kind: 'correct', text: 'nice' },
+      { kind: 'correct', text: 'to' },
+      { kind: 'substituted', text: 'see', expected: 'meet' },
+      { kind: 'correct', text: 'you' },
+      { kind: 'extra', text: 'all' },
     ]);
     // No markup ever leaks into the rendered text.
     for (const token of tokens) {
@@ -252,6 +246,6 @@ describe('diffDisplayTokens', () => {
   test('shows the missing word as text', () => {
     const tokens = diffDisplayTokens(diffTokens(SENTENCE, 'nice to you'));
 
-    expect(tokens).toContainEqual({kind: 'missing', text: 'meet'});
+    expect(tokens).toContainEqual({ kind: 'missing', text: 'meet' });
   });
 });

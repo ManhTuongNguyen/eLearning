@@ -15,25 +15,14 @@
  * refreshed whenever the settings layer applies a change, so the chat screen
  * needs no awareness of the configuration at all.
  */
-import {NativeModules} from 'react-native';
+import { NativeModules } from 'react-native';
 
-import {addSpeechProgressListener} from './speechProgress';
-import {loadSpeechPreferences} from './speechSettings';
-import type {
-  SpeechEngineInfo,
-  SpeechPreferences,
-  SpeechVoiceInfo,
-} from './types';
-import {
-  DEFAULT_SPEECH_PREFERENCES,
-  engineInfoFromNative,
-  voiceInfoFromNative,
-} from './types';
-import {getSpeechEngine, setSpeechEngine} from './textToSpeech';
-import type {
-  SpeechProgressCallback,
-  TextToSpeechEngine,
-} from './textToSpeech';
+import { addSpeechProgressListener } from './speechProgress';
+import { loadSpeechPreferences } from './speechSettings';
+import type { SpeechProgressCallback, TextToSpeechEngine } from './textToSpeech';
+import { getSpeechEngine, setSpeechEngine } from './textToSpeech';
+import type { SpeechEngineInfo, SpeechPreferences, SpeechVoiceInfo } from './types';
+import { DEFAULT_SPEECH_PREFERENCES, engineInfoFromNative, voiceInfoFromNative } from './types';
 
 /** Raw voice/engine rows arrive from the bridge as plain records. */
 type NativeRecord = Record<string, unknown>;
@@ -45,7 +34,7 @@ interface NativeSpeechModule {
   /** Speaks with per-utterance voice/rate/pitch options. */
   speakWith(
     text: string,
-    options: {voiceId: string | null; rate: number; pitch: number} | null,
+    options: { voiceId: string | null; rate: number; pitch: number } | null,
   ): Promise<void>;
   /** Halts playback immediately; safe when nothing is playing. */
   stop(): void;
@@ -61,11 +50,7 @@ interface NativeSpeechModule {
 
 function resolveNativeSpeech(): NativeSpeechModule | null {
   const candidate = NativeModules.Speech as NativeSpeechModule | null | undefined;
-  if (
-    candidate &&
-    typeof candidate.speak === 'function' &&
-    typeof candidate.stop === 'function'
-  ) {
+  if (candidate && typeof candidate.speak === 'function' && typeof candidate.stop === 'function') {
     return candidate;
   }
   return null;
@@ -143,9 +128,7 @@ export function androidSpeechEngine(): TextToSpeechEngine {
       // subscription is torn down as soon as this utterance settles, and
       // the native side only emits for the in-flight utterance, so a
       // superseded playback can never feed stale ranges to the callback.
-      const unsubscribe = onProgress
-        ? addSpeechProgressListener(onProgress)
-        : null;
+      const unsubscribe = onProgress ? addSpeechProgressListener(onProgress) : null;
       try {
         await native.speakWith(text, nativeOptions(activePreferences));
       } finally {
@@ -185,10 +168,7 @@ export function getSpeechEngineSnapshot(): TextToSpeechEngine {
  * the persisted selection. SpeakWith overrides the voice id for this single
  * utterance; the next regular speak re-applies the stored preferences.
  */
-export async function previewSystemVoice(
-  voiceId: string,
-  text: string,
-): Promise<void> {
+export async function previewSystemVoice(voiceId: string, text: string): Promise<void> {
   const native = resolveNativeSpeech();
   if (!native) {
     throw new Error('Android speech module is not available');

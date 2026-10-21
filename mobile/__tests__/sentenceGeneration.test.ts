@@ -6,18 +6,18 @@
  * key, and malformed entries — and assert the parser keeps, drops or rejects
  * each one without ever touching a network.
  */
-import type {EnglishLevel} from '../src/api/profile';
-import {saveLearningProfile} from '../src/db/profileStore';
-import {createSentenceTopic} from '../src/db/sentenceRepository';
-import {migrateDatabase} from '../src/db/migrations';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import type { EnglishLevel } from '../src/api/profile';
+import { migrateDatabase } from '../src/db/migrations';
+import { saveLearningProfile } from '../src/db/profileStore';
+import { createSentenceTopic } from '../src/db/sentenceRepository';
 import {
-  SENTENCE_GENERATION_SYSTEM_PROMPT,
   buildSentenceGenerationUserPrompt,
   generateSentences,
   generateTopicSentences,
   parseGeneratedSentences,
+  SENTENCE_GENERATION_SYSTEM_PROMPT,
 } from '../src/serverless/sentenceGeneration';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 const VALID = JSON.stringify({
   sentences: [
@@ -63,7 +63,7 @@ describe('parseGeneratedSentences', () => {
 
   test('defaults a missing situation to an empty string', () => {
     const noSituation = JSON.stringify({
-      sentences: [{sentence: 'See you tomorrow.', meaning: 'Saying goodbye.'}],
+      sentences: [{ sentence: 'See you tomorrow.', meaning: 'Saying goodbye.' }],
     });
     const parsed = parseGeneratedSentences(noSituation);
     expect(parsed[0].situation).toBe('');
@@ -72,12 +72,12 @@ describe('parseGeneratedSentences', () => {
   test('drops entries with an empty sentence or meaning', () => {
     const malformed = JSON.stringify({
       sentences: [
-        {sentence: '', meaning: 'empty sentence'},
-        {sentence: 'valid', meaning: ''},
-        {sentence: '  ', meaning: 'blank only'},
-        {meaning: 'no sentence field'},
-        {sentence: 'Good morning.', meaning: 'A greeting.'},
-        {sentence: 'See you tomorrow.', meaning: 'Saying goodbye.'},
+        { sentence: '', meaning: 'empty sentence' },
+        { sentence: 'valid', meaning: '' },
+        { sentence: '  ', meaning: 'blank only' },
+        { meaning: 'no sentence field' },
+        { sentence: 'Good morning.', meaning: 'A greeting.' },
+        { sentence: 'See you tomorrow.', meaning: 'Saying goodbye.' },
       ],
     });
     const parsed = parseGeneratedSentences(malformed);
@@ -91,12 +91,12 @@ describe('parseGeneratedSentences', () => {
   test('drops duplicates against the existing set and within the batch', () => {
     const batch = JSON.stringify({
       sentences: [
-        {sentence: 'Nice to meet you.', meaning: 'A greeting.'},
-        {sentence: 'NICE TO MEET YOU!', meaning: 'Same greeting.'},
-        {sentence: "I don't know.", meaning: 'Unknown.'},
-        {sentence: 'Where are you from?', meaning: 'Asking origin.'},
-        {sentence: 'Can I get a coffee?', meaning: 'Ordering.'},
-        {sentence: 'See you tomorrow.', meaning: 'Goodbye.'},
+        { sentence: 'Nice to meet you.', meaning: 'A greeting.' },
+        { sentence: 'NICE TO MEET YOU!', meaning: 'Same greeting.' },
+        { sentence: "I don't know.", meaning: 'Unknown.' },
+        { sentence: 'Where are you from?', meaning: 'Asking origin.' },
+        { sentence: 'Can I get a coffee?', meaning: 'Ordering.' },
+        { sentence: 'See you tomorrow.', meaning: 'Goodbye.' },
       ],
     });
 
@@ -111,8 +111,8 @@ describe('parseGeneratedSentences', () => {
 
   test('parses a bare array of candidate objects', () => {
     const bare = JSON.stringify([
-      {sentence: 'Nice to meet you.', meaning: 'A greeting.'},
-      {sentence: 'See you tomorrow.', meaning: 'Goodbye.'},
+      { sentence: 'Nice to meet you.', meaning: 'A greeting.' },
+      { sentence: 'See you tomorrow.', meaning: 'Goodbye.' },
     ]);
     expect(parseGeneratedSentences(bare)).toHaveLength(2);
   });
@@ -123,9 +123,7 @@ describe('parseGeneratedSentences error handling', () => {
     expect(() => parseGeneratedSentences('not json at all')).toThrow(/no usable sentences/);
     expect(() => parseGeneratedSentences('[]')).toThrow(/no usable sentences/);
     expect(() =>
-      parseGeneratedSentences(
-        JSON.stringify({sentences: [{sentence: '', meaning: ''}]}),
-      ),
+      parseGeneratedSentences(JSON.stringify({ sentences: [{ sentence: '', meaning: '' }] })),
     ).toThrow(/no usable sentences/);
   });
 });
@@ -222,7 +220,9 @@ describe('buildSentenceGenerationUserPrompt', () => {
 
     expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('not the way textbooks or exams teach');
     expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('up to 35 words');
-    expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('avoid niche, regional, dated or offensive');
+    expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain(
+      'avoid niche, regional, dated or offensive',
+    );
     expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('said "eff-why-eye"');
     expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('read letter by letter');
   });
@@ -252,8 +252,8 @@ describe('generateSentences', () => {
     expect(complete).toHaveBeenCalledTimes(1);
     const request = complete.mock.calls[0][0] as Parameters<typeof complete>[0];
     expect(request.messages).toEqual([
-      {role: 'system', content: SENTENCE_GENERATION_SYSTEM_PROMPT},
-      expect.objectContaining({role: 'user'}),
+      { role: 'system', content: SENTENCE_GENERATION_SYSTEM_PROMPT },
+      expect.objectContaining({ role: 'user' }),
     ]);
     expect(candidates).toHaveLength(2);
   });
@@ -262,8 +262,8 @@ describe('generateSentences', () => {
     complete.mockResolvedValue({
       text: JSON.stringify({
         sentences: [
-          {sentence: 'Nice to meet you.', meaning: 'A greeting.'},
-          {sentence: 'Can I get a coffee?', meaning: 'Ordering.'},
+          { sentence: 'Nice to meet you.', meaning: 'A greeting.' },
+          { sentence: 'Can I get a coffee?', meaning: 'Ordering.' },
         ],
       }),
       model: 'mock-model',
@@ -302,11 +302,11 @@ describe('generateTopicSentences', () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
     await saveLearningProfile(db, 'C1' as EnglishLevel);
-    const topic = await createSentenceTopic(db, {title: 'On the train'});
+    const topic = await createSentenceTopic(db, { title: 'On the train' });
 
     const complete = jest.fn().mockResolvedValue({
       text: JSON.stringify({
-        sentences: [{sentence: 'Is this seat taken?', meaning: 'Asking about a seat.'}],
+        sentences: [{ sentence: 'Is this seat taken?', meaning: 'Asking about a seat.' }],
       }),
       model: 'mock-model',
       requestId: null,

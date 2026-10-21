@@ -13,30 +13,18 @@
  * other pushed screens while devices that draw under the status bar
  * (edge-to-edge Android) still clear it.
  */
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-
-import {getProfile, LEVELS, updateProfile} from '../api/profile';
-import type {EnglishLevel, LevelOption} from '../api/profile';
-import {toErrorMessage, useAuth} from '../auth/AuthContext';
-import {
-  Screen,
-  ScreenContent,
-  ScreenHeader,
-  ScreenScrollView,
-} from '../components/ScreenLayout';
-import {getLocalDatabase} from '../db/database';
-import {getLearningProfile, saveLearningProfile} from '../db/profileStore';
-import {useApplicationMode} from '../mode/ModeContext';
-import type {LevelScreenProps} from '../navigation/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { EnglishLevel, LevelOption } from '../api/profile';
+import { getProfile, LEVELS, updateProfile } from '../api/profile';
+import { toErrorMessage, useAuth } from '../auth/AuthContext';
+import { Screen, ScreenContent, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import { getLocalDatabase } from '../db/database';
+import { getLearningProfile, saveLearningProfile } from '../db/profileStore';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { LevelScreenProps } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 /** Spacing between the safe-area top inset and the header row (px). */
 const HEADER_TOP_SPACING = 16;
@@ -143,14 +131,11 @@ export function createStyles(c: ThemeColors) {
   });
 }
 
-export function LevelScreen({navigation}: LevelScreenProps) {
-  const {authedRequest} = useAuth();
-  const {status: modeStatus, mode} = useApplicationMode();
-  const {colors} = useTheme();
-  const styles = useMemo(
-    () => createStyles(colors),
-    [colors],
-  );
+export function LevelScreen({ navigation }: LevelScreenProps) {
+  const { authedRequest } = useAuth();
+  const { status: modeStatus, mode } = useApplicationMode();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [selected, setSelected] = useState<EnglishLevel | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<EnglishLevel | null>(null);
@@ -168,6 +153,7 @@ export function LevelScreen({navigation}: LevelScreenProps) {
 
   // Reset the transient confirmations whenever the data source flips so a
   // mode switch cannot show a stale "Saved." from the other backend.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mode is an intentional reset trigger
   useEffect(() => {
     setSaved(false);
     setError(null);
@@ -314,12 +300,12 @@ export function LevelScreen({navigation}: LevelScreenProps) {
             <Pressable
               key={option.value}
               accessibilityRole="radio"
-              accessibilityState={{checked: isSelected}}
+              accessibilityState={{ checked: isSelected }}
               disabled={loading || saving !== null}
               onPress={() => {
                 handleSelect(option);
               }}
-              style={({pressed}) => [
+              style={({ pressed }) => [
                 styles.row,
                 isSelected && styles.rowSelected,
                 pressed && styles.rowPressed,

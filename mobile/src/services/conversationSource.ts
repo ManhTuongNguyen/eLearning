@@ -10,16 +10,16 @@
  * details and the server/serverless reads are not duplicated per screen.
  */
 
-import type {AuthedRequester} from '../auth/authedRequest';
-import type {ChatMessage, Paginated, Session} from '../api/sessions';
-import {getSession, listMessages, listSessions} from '../api/sessions';
-import {getLocalDatabase} from '../db/database';
-import {listMessages as listLocalMessages} from '../db/messageStore';
+import type { ChatMessage, Paginated, Session } from '../api/sessions';
+import { getSession, listMessages, listSessions } from '../api/sessions';
+import type { AuthedRequester } from '../auth/authedRequest';
+import { getLocalDatabase } from '../db/database';
+import { listMessages as listLocalMessages } from '../db/messageStore';
 import {
   getSession as getLocalSession,
   listSessions as listLocalSessions,
 } from '../db/sessionStore';
-import type {ApplicationMode} from '../mode/types';
+import type { ApplicationMode } from '../mode/types';
 
 /** Chronological order for conversation rows. */
 export function bySequence(a: ChatMessage, b: ChatMessage): number {
@@ -75,13 +75,13 @@ export async function loadConversation(
       listLocalMessages(db, sessionId),
       getLocalSession(db, sessionId).catch(() => null),
     ]);
-    return {messages: [...rows].sort(bySequence), session: localSession};
+    return { messages: [...rows].sort(bySequence), session: localSession };
   }
   const [page, detail] = await Promise.all([
     listMessages(request, sessionId),
     getSession(request, sessionId).catch(() => null),
   ]);
-  return {messages: [...page.results].sort(bySequence), session: detail};
+  return { messages: [...page.results].sort(bySequence), session: detail };
 }
 
 /**

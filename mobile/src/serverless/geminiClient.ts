@@ -15,17 +15,18 @@
  * the first event, and exactly one terminal event is delivered per stream.
  */
 import {
-  LLMError,
   LLMAvailabilityError,
+  LLMError,
   LLMRequestError,
   LLMResponseError,
   LLMTimeoutError,
   normalizeHttpFailure,
 } from './errors';
+import { buildModelChain, DEFAULT_TIMEOUT_MS, extractErrorMessage } from './openAICompatibleClient';
 import {
-  failedEvent,
   type CompletionRequest,
   type CompletionResult,
+  failedEvent,
   type LLMClient,
   type LLMClientConfig,
   type ModelInfo,
@@ -33,7 +34,6 @@ import {
   type StreamCompletionOptions,
   type StreamHandle,
 } from './types';
-import {DEFAULT_TIMEOUT_MS, buildModelChain, extractErrorMessage} from './openAICompatibleClient';
 
 export const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -41,7 +41,7 @@ const MODEL_NAME_PREFIX = 'models/';
 
 /** Build the Gemini request body from the normalized completion request. */
 export function buildGeminiPayload(request: CompletionRequest): Record<string, unknown> {
-  const contents: Array<{role: string; parts: Array<{text: string}>}> = [];
+  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
   const systemParts: string[] = [];
   for (const message of request.messages) {
     if (message.role === 'system') {
@@ -50,15 +50,15 @@ export function buildGeminiPayload(request: CompletionRequest): Record<string, u
     }
     contents.push({
       role: message.role === 'assistant' ? 'model' : 'user',
-      parts: [{text: message.content}],
+      parts: [{ text: message.content }],
     });
   }
-  const payload: Record<string, unknown> = {contents};
+  const payload: Record<string, unknown> = { contents };
   if (systemParts.length > 0) {
-    payload.systemInstruction = {parts: [{text: systemParts.join('\n\n')}]};
+    payload.systemInstruction = { parts: [{ text: systemParts.join('\n\n') }] };
   }
   if (request.temperature !== null && request.temperature !== undefined) {
-    payload.generationConfig = {temperature: request.temperature};
+    payload.generationConfig = { temperature: request.temperature };
   }
   return payload;
 }
@@ -161,7 +161,9 @@ export function createGeminiClient(config: LLMClientConfig): LLMClient {
     const pieces = parts
       .filter(
         (part): part is Record<string, unknown> =>
-          typeof part === 'object' && part !== null && typeof (part as Record<string, unknown>).text === 'string',
+          typeof part === 'object' &&
+          part !== null &&
+          typeof (part as Record<string, unknown>).text === 'string',
       )
       .map(part => (part as Record<string, unknown>).text as string);
     return pieces.length > 0 ? pieces.join('') : null;
@@ -183,12 +185,7 @@ export function createGeminiClient(config: LLMClientConfig): LLMClient {
       });
       const bodyText = await response.text();
       if (!response.ok) {
-        throw normalizeHttpFailure(
-          response.status,
-          extractErrorMessage(bodyText),
-          model,
-          'Gemini',
-        );
+        throw normalizeHttpFailure(response.status, extractErrorMessage(bodyText), model, 'Gemini');
       }
       let body: unknown;
       try {
@@ -220,9 +217,7 @@ export function createGeminiClient(config: LLMClientConfig): LLMClient {
         model: typeof modelVersion === 'string' ? modelVersion : model,
         finishReason,
         requestId:
-          typeof responseId === 'string'
-            ? responseId
-            : response.headers.get('x-request-id'),
+          typeof responseId === 'string' ? responseId : response.headers.get('x-request-id'),
       };
     } catch (error) {
       if (error instanceof LLMError) {
@@ -266,7 +261,7 @@ export function createGeminiClient(config: LLMClientConfig): LLMClient {
    * failures before the first event advance to the next model.
    */
   function streamCompletion(options: StreamCompletionOptions): StreamHandle {
-    const {request, onEvent} = options;
+    const { request, onEvent } = options;
     const chain = chainFor(request);
     const failures: [string, string][] = [];
 
@@ -402,14 +397,14 @@ export function createGeminiClient(config: LLMClientConfig): LLMClient {
       }
       if (!started) {
         started = true;
-        emit({type: 'start', model: effectiveModel});
+        emit({ type: 'start', model: effectiveModel });
       }
 
       const piece = firstText(record);
       if (piece) {
         pieces.push(piece);
         deltaCount += 1;
-        emit({type: 'delta', text: piece});
+        emit({ type: 'delta', text: piece });
       }
     }
 
@@ -520,10 +515,9 @@ export function createGeminiClient(config: LLMClientConfig): LLMClient {
   }
 
   /** Retrieve the Gemini model catalog; discovery requires the user's key. */
-  const listModels = (): Promise<ModelInfo[]> =>
-    listGeminiModels({baseUrl, timeoutMs, apiKey});
+  const listModels = (): Promise<ModelInfo[]> => listGeminiModels({ baseUrl, timeoutMs, apiKey });
 
-  return {complete, streamCompletion, listModels};
+  return { complete, streamCompletion, listModels };
 }
 
 /**

@@ -8,11 +8,11 @@
  * losing conversations, and topic deletion cascades through sentences and the
  * review log.
  */
-import type {SqlDriver} from '../src/db/driver';
-import {MIGRATIONS, SCHEMA_VERSION, migrateDatabase} from '../src/db/migrations';
-import {insertMessage, listMessages} from '../src/db/messageStore';
-import {insertSession, listSessions} from '../src/db/sessionStore';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import type { SqlDriver } from '../src/db/driver';
+import { insertMessage, listMessages } from '../src/db/messageStore';
+import { MIGRATIONS, migrateDatabase, SCHEMA_VERSION } from '../src/db/migrations';
+import { insertSession, listSessions } from '../src/db/sessionStore';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 const NOW = '2026-10-19T09:00:00.000Z';
 
@@ -89,7 +89,7 @@ describe('sentence schema (TASK-SENT-003)', () => {
     await migrateDatabase(db, MIGRATIONS.slice(0, 3));
     expect(await userVersion(db)).toBe(3);
 
-    const session = await insertSession(db, {title: 'Trip to Da Nang', topic: 'travel'});
+    const session = await insertSession(db, { title: 'Trip to Da Nang', topic: 'travel' });
     await insertMessage(db, {
       session_id: session.id,
       role: 'user',
@@ -107,7 +107,9 @@ describe('sentence schema (TASK-SENT-003)', () => {
 
     // The new tables and the v5 column are usable after the upgrade.
     const topicId = await insertTopic(db);
-    expect(await insertSentence(db, topicId, 'Nice to meet you.', 'nice to meet you')).toBeGreaterThan(0);
+    expect(
+      await insertSentence(db, topicId, 'Nice to meet you.', 'nice to meet you'),
+    ).toBeGreaterThan(0);
     const topicRow = await db.execute(
       'SELECT generation_prompt FROM sentence_topics WHERE id = ?',
       [topicId],

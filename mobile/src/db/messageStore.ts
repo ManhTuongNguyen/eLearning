@@ -10,14 +10,15 @@
  * v2): once stored, the check is never regenerated and badges survive app
  * restarts.
  */
-import type {SqlDriver, SqlExecutor} from './driver';
-import {nowIso} from './driver';
+import type { SqlDriver, SqlExecutor } from './driver';
+import { nowIso } from './driver';
 import type {
   ImprovementSeverity,
   LocalMessage,
   LocalMessageRole,
   LocalMessageStatus,
 } from './types';
+
 const MESSAGE_COLUMNS =
   'id, session_id, role, status, content, sequence, created_at, improvement_content, improvement_explanation, improvement_severity';
 
@@ -92,9 +93,7 @@ export async function appendMessage(
     [input.session_id, input.role, status, input.content, sequence, timestamp],
   );
 
-  const stored = await executor.execute(`${messageQuery()} WHERE id = ?`, [
-    insertResult.insertId,
-  ]);
+  const stored = await executor.execute(`${messageQuery()} WHERE id = ?`, [insertResult.insertId]);
   if (!stored.rows[0]) {
     throw new Error('appendMessage: inserted row could not be read back');
   }
@@ -102,23 +101,16 @@ export async function appendMessage(
 }
 
 /** Read one message by id; resolves null when it does not exist. */
-export async function getMessage(
-  db: SqlExecutor,
-  messageId: number,
-): Promise<LocalMessage | null> {
+export async function getMessage(db: SqlExecutor, messageId: number): Promise<LocalMessage | null> {
   const result = await db.execute(`${messageQuery()} WHERE id = ?`, [messageId]);
   return result.rows[0] ? mapMessage(result.rows[0]) : null;
 }
 
 /** Messages of one session in deterministic chronological order. */
-export async function listMessages(
-  db: SqlExecutor,
-  sessionId: number,
-): Promise<LocalMessage[]> {
-  const result = await db.execute(
-    `${messageQuery()} WHERE session_id = ? ORDER BY sequence ASC`,
-    [sessionId],
-  );
+export async function listMessages(db: SqlExecutor, sessionId: number): Promise<LocalMessage[]> {
+  const result = await db.execute(`${messageQuery()} WHERE session_id = ? ORDER BY sequence ASC`, [
+    sessionId,
+  ]);
   return result.rows.map(mapMessage);
 }
 
@@ -134,10 +126,7 @@ export async function updateMessageStatus(
   content?: string,
 ): Promise<void> {
   if (content === undefined) {
-    await db.execute('UPDATE messages SET status = ? WHERE id = ?', [
-      status,
-      messageId,
-    ]);
+    await db.execute('UPDATE messages SET status = ? WHERE id = ?', [status, messageId]);
     return;
   }
   await db.execute('UPDATE messages SET status = ?, content = ? WHERE id = ?', [

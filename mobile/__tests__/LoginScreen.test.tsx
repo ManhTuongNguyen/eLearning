@@ -1,19 +1,17 @@
-import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
-
-import {AuthProvider} from '../src/auth/AuthContext';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as authApi from '../src/api/auth';
-import {ApiError} from '../src/api/client';
+import { ApiError } from '../src/api/client';
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {getRuntimeApplicationMode, setRuntimeApplicationMode} from '../src/mode/runtime';
-import type {AuthStackParamList} from '../src/navigation/types';
-import {LoginScreen} from '../src/screens/LoginScreen';
-import {RegisterScreen} from '../src/screens/RegisterScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { getRuntimeApplicationMode, setRuntimeApplicationMode } from '../src/mode/runtime';
+import type { AuthStackParamList } from '../src/navigation/types';
+import { LoginScreen } from '../src/screens/LoginScreen';
+import { RegisterScreen } from '../src/screens/RegisterScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/auth/secureStorage');
@@ -31,7 +29,7 @@ function renderScreen() {
       <ThemeProvider>
         <AuthProvider>
           <NavigationContainer>
-            <Stack.Navigator screenOptions={{headerShown: false}}>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
               <Stack.Screen name="Login" component={LoginScreen} />
               <Stack.Screen name="Register" component={RegisterScreen} />
             </Stack.Navigator>
@@ -65,9 +63,7 @@ describe('LoginScreen', () => {
 
   it('keeps the submit button disabled until both fields have values', async () => {
     renderScreen();
-    await waitFor(() =>
-      expect(screen.getByTestId('login-identifier')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());
 
     const submit = () => screen.getByTestId('login-submit');
 

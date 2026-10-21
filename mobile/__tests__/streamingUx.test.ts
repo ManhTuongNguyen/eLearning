@@ -17,7 +17,7 @@ interface BufferHarness {
 
 function makeBuffer(intervalMs = STREAM_FLUSH_INTERVAL_MS): BufferHarness {
   const flushed: string[] = [];
-  return {buffer: new DeltaBuffer(text => flushed.push(text), intervalMs), flushed};
+  return { buffer: new DeltaBuffer(text => flushed.push(text), intervalMs), flushed };
 }
 
 describe('isNearBottom', () => {
@@ -26,15 +26,13 @@ describe('isNearBottom', () => {
   const bottomOffset = contentHeight - viewportHeight; // 2000
 
   it('treats content shorter than the viewport as at-bottom', () => {
-    expect(
-      isNearBottom({offsetY: 0, contentHeight: 300, viewportHeight: 400}, 120),
-    ).toBe(true);
+    expect(isNearBottom({ offsetY: 0, contentHeight: 300, viewportHeight: 400 }, 120)).toBe(true);
   });
 
   it('is true resting exactly on the last pixel', () => {
     expect(
       isNearBottom(
-        {offsetY: bottomOffset, contentHeight, viewportHeight},
+        { offsetY: bottomOffset, contentHeight, viewportHeight },
         STICK_TO_BOTTOM_THRESHOLD_PX,
       ),
     ).toBe(true);
@@ -43,7 +41,11 @@ describe('isNearBottom', () => {
   it('stays true within the threshold window above the bottom', () => {
     expect(
       isNearBottom(
-        {offsetY: bottomOffset - (STICK_TO_BOTTOM_THRESHOLD_PX - 1), contentHeight, viewportHeight},
+        {
+          offsetY: bottomOffset - (STICK_TO_BOTTOM_THRESHOLD_PX - 1),
+          contentHeight,
+          viewportHeight,
+        },
         STICK_TO_BOTTOM_THRESHOLD_PX,
       ),
     ).toBe(true);
@@ -52,7 +54,7 @@ describe('isNearBottom', () => {
   it('is inclusive at exactly the threshold distance', () => {
     expect(
       isNearBottom(
-        {offsetY: bottomOffset - STICK_TO_BOTTOM_THRESHOLD_PX, contentHeight, viewportHeight},
+        { offsetY: bottomOffset - STICK_TO_BOTTOM_THRESHOLD_PX, contentHeight, viewportHeight },
         STICK_TO_BOTTOM_THRESHOLD_PX,
       ),
     ).toBe(true);
@@ -61,16 +63,18 @@ describe('isNearBottom', () => {
   it('breaks loose just beyond the threshold distance', () => {
     expect(
       isNearBottom(
-        {offsetY: bottomOffset - (STICK_TO_BOTTOM_THRESHOLD_PX + 1), contentHeight, viewportHeight},
+        {
+          offsetY: bottomOffset - (STICK_TO_BOTTOM_THRESHOLD_PX + 1),
+          contentHeight,
+          viewportHeight,
+        },
         STICK_TO_BOTTOM_THRESHOLD_PX,
       ),
     ).toBe(false);
   });
 
   it('is false far above the bottom regardless of threshold size', () => {
-    expect(
-      isNearBottom({offsetY: 100, contentHeight, viewportHeight}, 120),
-    ).toBe(false);
+    expect(isNearBottom({ offsetY: 100, contentHeight, viewportHeight }, 120)).toBe(false);
   });
 });
 
@@ -84,7 +88,7 @@ describe('DeltaBuffer', () => {
   });
 
   it('delivers one concatenated chunk per tick despite a burst of pushes', () => {
-    const {buffer, flushed} = makeBuffer();
+    const { buffer, flushed } = makeBuffer();
 
     buffer.push('Hel');
     buffer.push('lo ');
@@ -102,7 +106,7 @@ describe('DeltaBuffer', () => {
   });
 
   it('does not schedule extra timers while a tick is already pending', () => {
-    const {buffer, flushed} = makeBuffer();
+    const { buffer, flushed } = makeBuffer();
 
     buffer.push('a');
     buffer.push('b');
@@ -115,7 +119,7 @@ describe('DeltaBuffer', () => {
   });
 
   it('flushNow applies immediately and cancels the pending tick', () => {
-    const {buffer, flushed} = makeBuffer();
+    const { buffer, flushed } = makeBuffer();
 
     buffer.push('now-text');
     buffer.flushNow();
@@ -130,7 +134,7 @@ describe('DeltaBuffer', () => {
   });
 
   it('flushNow with nothing buffered never calls back', () => {
-    const {buffer, flushed} = makeBuffer();
+    const { buffer, flushed } = makeBuffer();
 
     buffer.flushNow();
 
@@ -138,7 +142,7 @@ describe('DeltaBuffer', () => {
   });
 
   it('discard drops buffered text and cancels the tick without flushing', () => {
-    const {buffer, flushed} = makeBuffer();
+    const { buffer, flushed } = makeBuffer();
 
     buffer.push('doomed');
     buffer.discard();
@@ -152,7 +156,7 @@ describe('DeltaBuffer', () => {
   });
 
   it('ignores empty-string pushes without scheduling anything', () => {
-    const {buffer, flushed} = makeBuffer();
+    const { buffer, flushed } = makeBuffer();
 
     buffer.push('');
 
@@ -162,7 +166,7 @@ describe('DeltaBuffer', () => {
   });
 
   it('keeps working across consecutive cycles in order', () => {
-    const {buffer, flushed} = makeBuffer();
+    const { buffer, flushed } = makeBuffer();
 
     buffer.push('one');
     jest.advanceTimersByTime(STREAM_FLUSH_INTERVAL_MS);

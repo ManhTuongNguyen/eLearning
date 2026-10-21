@@ -5,12 +5,11 @@
  * messages are already folded into the content so compaction never
  * re-summarizes the same range.
  */
-import type {SqlExecutor} from './driver';
-import {nowIso} from './driver';
-import type {LocalSummary} from './types';
+import type { SqlExecutor } from './driver';
+import { nowIso } from './driver';
+import type { LocalSummary } from './types';
 
-const SUMMARY_COLUMNS =
-  'id, session_id, content, message_boundary, created_at, updated_at';
+const SUMMARY_COLUMNS = 'id, session_id, content, message_boundary, created_at, updated_at';
 
 function mapSummary(row: Record<string, unknown>): LocalSummary {
   return {
@@ -60,13 +59,9 @@ export async function saveSummary(
 }
 
 /** Read the summary of a session; resolves null when none was saved yet. */
-export async function getSummary(
-  db: SqlExecutor,
-  sessionId: number,
-): Promise<LocalSummary | null> {
-  const result = await db.execute(
-    `SELECT ${SUMMARY_COLUMNS} FROM summaries WHERE session_id = ?`,
-    [sessionId],
-  );
+export async function getSummary(db: SqlExecutor, sessionId: number): Promise<LocalSummary | null> {
+  const result = await db.execute(`SELECT ${SUMMARY_COLUMNS} FROM summaries WHERE session_id = ?`, [
+    sessionId,
+  ]);
   return result.rows[0] ? mapSummary(result.rows[0]) : null;
 }

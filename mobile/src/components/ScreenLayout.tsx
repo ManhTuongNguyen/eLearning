@@ -16,17 +16,12 @@
  * Every screen uses the same tokens, so margins line up across the app
  * instead of drifting between 16/20/24px per screen.
  */
-import React, {useMemo} from 'react';
-import {FlatList, ScrollView, StyleSheet, View} from 'react-native';
-import type {
-  FlatListProps,
-  ScrollViewProps,
-  StyleProp,
-  ViewProps,
-  ViewStyle,
-} from 'react-native';
+import type React from 'react';
+import { useMemo } from 'react';
+import type { FlatListProps, ScrollViewProps, StyleProp, ViewProps, ViewStyle } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
 
-import {useTheme} from '../theme/ThemeContext';
+import { useTheme } from '../theme/ThemeContext';
 
 /** Shared horizontal screen gutter (px). */
 export const SCREEN_GUTTER = 16;
@@ -63,17 +58,12 @@ interface ScreenProps extends ViewProps {
  * Full-bleed screen container. Never applies horizontal padding: the
  * scrollable inside must reach the right screen edge.
  */
-export function Screen({children, style, ...rest}: ScreenProps) {
-  const {colors} = useTheme();
-  const themeStyle = useMemo(
-    () => ({backgroundColor: colors.background}),
-    [colors],
-  );
+export function Screen({ children, style, ...rest }: ScreenProps) {
+  const { colors } = useTheme();
+  const themeStyle = useMemo(() => ({ backgroundColor: colors.background }), [colors]);
 
   return (
-    <View
-      {...rest}
-      style={StyleSheet.flatten([screenLayoutStyles.screen, themeStyle, style])}>
+    <View {...rest} style={StyleSheet.flatten([screenLayoutStyles.screen, themeStyle, style])}>
       {children}
     </View>
   );
@@ -86,7 +76,7 @@ interface ScreenSectionProps {
 }
 
 /** Header row outside the scrollable, aligned to the shared gutter. */
-export function ScreenHeader({children, style, testID}: ScreenSectionProps) {
+export function ScreenHeader({ children, style, testID }: ScreenSectionProps) {
   return (
     <View style={[screenLayoutStyles.header, style]} testID={testID}>
       {children}
@@ -98,7 +88,7 @@ export function ScreenHeader({children, style, testID}: ScreenSectionProps) {
  * Non-scrolling body content (status rows, notices, toolbars) aligned to the
  * shared gutter. Use this instead of padding the screen container.
  */
-export function ScreenContent({children, style, testID}: ScreenSectionProps) {
+export function ScreenContent({ children, style, testID }: ScreenSectionProps) {
   return (
     <View style={[screenLayoutStyles.content, style]} testID={testID}>
       {children}
@@ -133,11 +123,7 @@ type ScreenListProps<ItemT> = FlatListProps<ItemT> & {
 };
 
 /** FlatList counterpart of {@link ScreenScrollView}. */
-export function ScreenList<ItemT>({
-  contentContainerStyle,
-  ref,
-  ...rest
-}: ScreenListProps<ItemT>) {
+export function ScreenList<ItemT>({ contentContainerStyle, ref, ...rest }: ScreenListProps<ItemT>) {
   return (
     <FlatList
       {...rest}

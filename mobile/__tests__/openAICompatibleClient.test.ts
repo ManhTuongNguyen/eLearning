@@ -10,23 +10,24 @@
  * semantics, and the keyless vs authorized model-catalog contract. All
  * external HTTP calls are mocked.
  */
-import type {ServerlessStreamEvent} from '../src/serverless/types';
+
+import {
+  LLMAuthenticationError,
+  LLMAvailabilityError,
+  LLMBadRequestError,
+  type LLMError,
+  LLMResponseError,
+  LLMTimeoutError,
+  normalizeHttpFailure,
+} from '../src/serverless/errors';
+import { createOpenAIClient } from '../src/serverless/openAIClient';
 import {
   buildModelChain,
   createOpenAICompatibleClient,
   extractErrorMessage,
   requestModelCatalog,
 } from '../src/serverless/openAICompatibleClient';
-import {createOpenAIClient} from '../src/serverless/openAIClient';
-import {
-  LLMAuthenticationError,
-  LLMAvailabilityError,
-  LLMBadRequestError,
-  LLMError,
-  LLMResponseError,
-  LLMTimeoutError,
-  normalizeHttpFailure,
-} from '../src/serverless/errors';
+import type { ServerlessStreamEvent } from '../src/serverless/types';
 
 type Listener = (() => void) | null;
 
@@ -40,7 +41,7 @@ function jsonResponse(
     ok: status >= 200 && status < 300,
     status,
     text: async () => text,
-    headers: {get: (name: string) => headers[name.toLowerCase()] ?? null},
+    headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
   } as unknown as Response;
 }
 
@@ -48,7 +49,7 @@ function completionBody(model: string, content = 'Hello there.'): unknown {
   return {
     id: 'chatcmpl-1',
     model,
-    choices: [{message: {role: 'assistant', content}, finish_reason: 'stop'}],
+    choices: [{ message: { role: 'assistant', content }, finish_reason: 'stop' }],
   };
 }
 
@@ -133,19 +134,19 @@ function makeClient(fallbacks?: string[], timeoutMs?: number) {
 
 function beginStream(
   client: ReturnType<typeof makeClient>,
-  request?: {messages: {role: 'user'; content: string}[]},
+  request?: { messages: { role: 'user'; content: string }[] },
 ): {
   events: ServerlessStreamEvent[];
-  handle: {abort(): void};
+  handle: { abort(): void };
   xhr: () => FakeXHR;
 } {
   const state = {
     events: [] as ServerlessStreamEvent[],
-    handle: null as unknown as {abort(): void},
+    handle: null as unknown as { abort(): void },
     xhr: () => FakeXHR.sent[FakeXHR.sent.length - 1],
   };
   state.handle = client.streamCompletion({
-    request: request ?? {messages: [{role: 'user', content: 'Hi'}]},
+    request: request ?? { messages: [{ role: 'user', content: 'Hi' }] },
     onEvent: event => state.events.push(event),
   });
   return state;
@@ -153,23 +154,23 @@ function beginStream(
 
 describe('configuration validation', () => {
   test('missing key, model, base URL or timeout throws synchronously', () => {
-    expect(() => createOpenAIClient({apiKey: '  ', primaryModel: 'gpt-4o-mini'})).toThrow(
+    expect(() => createOpenAIClient({ apiKey: '  ', primaryModel: 'gpt-4o-mini' })).toThrow(
       /OpenAI API key is required/,
     );
-    expect(() => createOpenAIClient({apiKey: 'sk', primaryModel: ''})).toThrow(
+    expect(() => createOpenAIClient({ apiKey: 'sk', primaryModel: '' })).toThrow(
       /primary OpenAI model is required/,
     );
     expect(() =>
       createOpenAICompatibleClient(
-        {apiKey: 'sk', primaryModel: 'm', baseUrl: '   '},
-        {id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1'},
+        { apiKey: 'sk', primaryModel: 'm', baseUrl: '   ' },
+        { id: 'openai', label: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1' },
       ),
     ).toThrow(/base URL must be a non-empty string/);
+    expect(() => createOpenAIClient({ apiKey: 'sk', primaryModel: 'm', timeoutMs: 0 })).toThrow(
+      /timeout must be greater than zero/,
+    );
     expect(() =>
-      createOpenAIClient({apiKey: 'sk', primaryModel: 'm', timeoutMs: 0}),
-    ).toThrow(/timeout must be greater than zero/);
-    expect(() =>
-      createOpenAIClient({apiKey: 'sk', primaryModel: 'm', timeoutMs: Number.POSITIVE_INFINITY}),
+      createOpenAIClient({ apiKey: 'sk', primaryModel: 'm', timeoutMs: Number.POSITIVE_INFINITY }),
     ).toThrow(/timeout must be greater than zero/);
   });
 });
@@ -183,8 +184,8 @@ describe('buildModelChain', () => {
 
 describe('extractErrorMessage', () => {
   test('prefers nested error.message, then message, then raw snippet', () => {
-    expect(extractErrorMessage(JSON.stringify({error: {message: 'Bad key'}}))).toBe('Bad key');
-    expect(extractErrorMessage(JSON.stringify({message: 'Plain message'}))).toBe('Plain message');
+    expect(extractErrorMessage(JSON.stringify({ error: { message: 'Bad key' } }))).toBe('Bad key');
+    expect(extractErrorMessage(JSON.stringify({ message: 'Plain message' }))).toBe('Plain message');
     expect(extractErrorMessage('raw text body')).toBe('raw text body');
     expect(extractErrorMessage('')).toBe('empty error body');
   });
@@ -197,12 +198,14 @@ describe('extractErrorMessage', () => {
 
 describe('complete', () => {
   test('POSTs the normalized chat payload with Bearer auth and maps the result', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(200, completionBody('gpt-4o-mini')));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(200, completionBody('gpt-4o-mini')));
     try {
       const result = await makeClient().complete({
         messages: [
-          {role: 'system', content: 'You are helpful.'},
-          {role: 'user', content: 'Hi'},
+          { role: 'system', content: 'You are helpful.' },
+          { role: 'user', content: 'Hi' },
         ],
         temperature: 0.4,
       });
@@ -217,8 +220,8 @@ describe('complete', () => {
       expect(JSON.parse(String(init?.body))).toEqual({
         model: 'gpt-4o-mini',
         messages: [
-          {role: 'system', content: 'You are helpful.'},
-          {role: 'user', content: 'Hi'},
+          { role: 'system', content: 'You are helpful.' },
+          { role: 'user', content: 'Hi' },
         ],
         stream: false,
         temperature: 0.4,
@@ -237,12 +240,11 @@ describe('complete', () => {
   test('advances to the fallback model only on retryable failures', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(async () => jsonResponse(429, {error: {message: 'slow down'}}))
+      .mockImplementationOnce(async () => jsonResponse(429, { error: { message: 'slow down' } }))
       .mockImplementationOnce(async () => jsonResponse(200, completionBody('gpt-4o', 'Fallback!')));
-      ;
     try {
       const client = makeClient(['gpt-4o']);
-      const result = await client.complete({messages: [{role: 'user', content: 'Hi'}]});
+      const result = await client.complete({ messages: [{ role: 'user', content: 'Hi' }] });
 
       expect(result.model).toBe('gpt-4o');
       expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -253,11 +255,15 @@ describe('complete', () => {
   });
 
   test('stops immediately on non-retryable failures', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(401, {error: {message: 'bad key'}}));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(401, { error: { message: 'bad key' } }));
     try {
-      const error = (await makeClient(['gpt-4o']).complete({
-        messages: [{role: 'user', content: 'Hi'}],
-      }).catch(caught => caught)) as LLMError;
+      const error = (await makeClient(['gpt-4o'])
+        .complete({
+          messages: [{ role: 'user', content: 'Hi' }],
+        })
+        .catch(caught => caught)) as LLMError;
 
       expect(error).toBeInstanceOf(LLMAuthenticationError);
       expect(error.message).toBe('bad key');
@@ -269,11 +275,15 @@ describe('complete', () => {
   });
 
   test('aggregates a fully exhausted chain into one availability error', async () => {
-    jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(503, {error: {message: 'down'}}));
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(503, { error: { message: 'down' } }));
     try {
-      const error = (await makeClient(['gpt-4o']).complete({
-        messages: [{role: 'user', content: 'Hi'}],
-      }).catch(caught => caught)) as LLMError;
+      const error = (await makeClient(['gpt-4o'])
+        .complete({
+          messages: [{ role: 'user', content: 'Hi' }],
+        })
+        .catch(caught => caught)) as LLMError;
 
       expect(error).toBeInstanceOf(LLMAvailabilityError);
       expect(error.message).toContain('all 2 configured model(s) failed');
@@ -294,27 +304,23 @@ describe('complete', () => {
     expect(normalizeHttpFailure(403, 'nope', null, 'OpenAI')).toBeInstanceOf(
       LLMAuthenticationError,
     );
-    expect(normalizeHttpFailure(400, 'nope', null, 'OpenAI')).toBeInstanceOf(
-      LLMBadRequestError,
-    );
-    expect(normalizeHttpFailure(422, 'nope', null, 'OpenAI')).toBeInstanceOf(
-      LLMBadRequestError,
-    );
+    expect(normalizeHttpFailure(400, 'nope', null, 'OpenAI')).toBeInstanceOf(LLMBadRequestError);
+    expect(normalizeHttpFailure(422, 'nope', null, 'OpenAI')).toBeInstanceOf(LLMBadRequestError);
     expect(normalizeHttpFailure(408, 'nope', null, 'OpenAI')).toBeInstanceOf(LLMTimeoutError);
-    expect(normalizeHttpFailure(429, 'nope', null, 'OpenAI')).toBeInstanceOf(
-      LLMAvailabilityError,
-    );
-    expect(normalizeHttpFailure(500, 'nope', null, 'OpenAI')).toBeInstanceOf(
-      LLMAvailabilityError,
-    );
+    expect(normalizeHttpFailure(429, 'nope', null, 'OpenAI')).toBeInstanceOf(LLMAvailabilityError);
+    expect(normalizeHttpFailure(500, 'nope', null, 'OpenAI')).toBeInstanceOf(LLMAvailabilityError);
     expect(normalizeHttpFailure(418, 'nope', null, 'OpenAI')).toBeInstanceOf(LLMResponseError);
     // A non-retryable status surfaces directly from complete() with the
     // failing model attached.
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(401, {message: 'nope'}));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(401, { message: 'nope' }));
     try {
-      const error = (await makeClient(['gpt-4o']).complete({
-        messages: [{role: 'user', content: 'Hi'}],
-      }).catch(caught => caught)) as LLMError;
+      const error = (await makeClient(['gpt-4o'])
+        .complete({
+          messages: [{ role: 'user', content: 'Hi' }],
+        })
+        .catch(caught => caught)) as LLMError;
       expect(error).toBeInstanceOf(LLMAuthenticationError);
       expect(error.model).toBe('gpt-4o-mini');
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -328,9 +334,11 @@ describe('complete', () => {
       throw new TypeError('Network request failed');
     });
     try {
-      const error = (await makeClient(undefined, 25).complete({
-        messages: [{role: 'user', content: 'Hi'}],
-      }).catch(caught => caught)) as LLMError;
+      const error = (await makeClient(undefined, 25)
+        .complete({
+          messages: [{ role: 'user', content: 'Hi' }],
+        })
+        .catch(caught => caught)) as LLMError;
       // Every attempt failed, so the retryable transport error surfaces
       // through the chain-exhaustion aggregate (retryable, per-attempt
       // messages preserved).
@@ -345,10 +353,12 @@ describe('complete', () => {
   });
 
   test('an explicit model pin replaces the whole chain', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(200, completionBody('pinned-model')));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(200, completionBody('pinned-model')));
     try {
       await makeClient(['gpt-4o']).complete({
-        messages: [{role: 'user', content: 'Hi'}],
+        messages: [{ role: 'user', content: 'Hi' }],
         model: 'pinned-model',
       });
       expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).model).toBe('pinned-model');
@@ -367,17 +377,17 @@ describe('streamCompletion', () => {
     const xhr = stream.xhr();
     xhr.emit(': keep-alive\n\n');
     xhr.emit(
-      `data: ${JSON.stringify({model: 'gpt-4o-mini', choices: [{delta: {content: 'Hello'}}]})}\n\n`,
+      `data: ${JSON.stringify({ model: 'gpt-4o-mini', choices: [{ delta: { content: 'Hello' } }] })}\n\n`,
     );
-    xhr.emit(`data: ${JSON.stringify({choices: [{delta: {content: ' world'}}]})}\n\n`);
+    xhr.emit(`data: ${JSON.stringify({ choices: [{ delta: { content: ' world' } }] })}\n\n`);
     xhr.emit('data: [DONE]\n\n');
     xhr.respond();
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'gpt-4o-mini'},
-      {type: 'delta', text: 'Hello'},
-      {type: 'delta', text: ' world'},
-      {type: 'completed', text: 'Hello world', model: 'gpt-4o-mini', deltaCount: 2},
+      { type: 'start', model: 'gpt-4o-mini' },
+      { type: 'delta', text: 'Hello' },
+      { type: 'delta', text: ' world' },
+      { type: 'completed', text: 'Hello world', model: 'gpt-4o-mini', deltaCount: 2 },
     ]);
     expect(stream.xhr().headers.Authorization).toBe('Bearer sk-openai-user-key');
     expect(stream.xhr().headers.Accept).toBe('text/event-stream');
@@ -394,15 +404,15 @@ describe('streamCompletion', () => {
     const fallbackXhr = stream.xhr();
     expect(fallbackXhr).not.toBe(FakeXHR.sent[0]);
     fallbackXhr.emit(
-      `data: ${JSON.stringify({model: 'gpt-4o', choices: [{delta: {content: 'Ok'}}]})}\n\n`,
+      `data: ${JSON.stringify({ model: 'gpt-4o', choices: [{ delta: { content: 'Ok' } }] })}\n\n`,
     );
     fallbackXhr.emit('data: [DONE]\n\n');
     fallbackXhr.respond();
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'gpt-4o'},
-      {type: 'delta', text: 'Ok'},
-      {type: 'completed', text: 'Ok', model: 'gpt-4o', deltaCount: 1},
+      { type: 'start', model: 'gpt-4o' },
+      { type: 'delta', text: 'Ok' },
+      { type: 'completed', text: 'Ok', model: 'gpt-4o', deltaCount: 1 },
     ]);
   });
 
@@ -411,14 +421,14 @@ describe('streamCompletion', () => {
     const stream = beginStream(client);
 
     const xhr = stream.xhr();
-    xhr.emit(`data: ${JSON.stringify({choices: [{delta: {content: 'Par'}}]})}\n\n`);
-    xhr.emit(`data: ${JSON.stringify({error: {code: 503, message: 'dropped'}})}\n\n`);
+    xhr.emit(`data: ${JSON.stringify({ choices: [{ delta: { content: 'Par' } }] })}\n\n`);
+    xhr.emit(`data: ${JSON.stringify({ error: { code: 503, message: 'dropped' } })}\n\n`);
     xhr.respond();
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'gpt-4o-mini'},
-      {type: 'delta', text: 'Par'},
-      {type: 'failed', message: 'dropped', retryable: true, text: 'Par'},
+      { type: 'start', model: 'gpt-4o-mini' },
+      { type: 'delta', text: 'Par' },
+      { type: 'failed', message: 'dropped', retryable: true, text: 'Par' },
     ]);
     expect(FakeXHR.sent).toHaveLength(1);
   });
@@ -430,7 +440,7 @@ describe('streamCompletion', () => {
     const xhr = stream.xhr();
     // The error body arrives before the response closes; non-SSE text is
     // ignored by the frame parser and picked up by the status handler.
-    xhr.emit(`${JSON.stringify({error: {message: 'bad key'}})}\n\n`);
+    xhr.emit(`${JSON.stringify({ error: { message: 'bad key' } })}\n\n`);
     xhr.respond(401);
 
     expect(stream.events).toEqual([
@@ -464,9 +474,9 @@ describe('streamCompletion', () => {
     const stream = beginStream(client);
 
     const xhr = stream.xhr();
-    xhr.emit(`data: ${JSON.stringify({choices: [{delta: {content: 'Hi'}}]})}\n\n`);
+    xhr.emit(`data: ${JSON.stringify({ choices: [{ delta: { content: 'Hi' } }] })}\n\n`);
     stream.handle.abort();
-    xhr.emit(`data: ${JSON.stringify({choices: [{delta: {content: 'again'}}]})}\n\n`);
+    xhr.emit(`data: ${JSON.stringify({ choices: [{ delta: { content: 'again' } }] })}\n\n`);
     xhr.respond();
 
     expect(stream.events.filter(event => event.type === 'delta')).toHaveLength(1);
@@ -484,7 +494,8 @@ describe('streamCompletion', () => {
     expect(stream.events).toEqual([
       {
         type: 'failed',
-        message: 'all 2 configured model(s) failed: gpt-4o-mini: Network request failed. Check your connection and try again.; gpt-4o: request exceeded timeout of 60000ms',
+        message:
+          'all 2 configured model(s) failed: gpt-4o-mini: Network request failed. Check your connection and try again.; gpt-4o: request exceeded timeout of 60000ms',
         retryable: true,
         text: '',
       },
@@ -494,7 +505,9 @@ describe('streamCompletion', () => {
 
 describe('model catalog', () => {
   test('requestModelCatalog stays fully keyless when no key is supplied', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(200, {data: [{id: 'a-model'}]}));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(200, { data: [{ id: 'a-model' }] }));
     try {
       const models = await requestModelCatalog('https://provider.example/v1', 5000);
       const [, init] = fetchMock.mock.calls[0];
@@ -506,23 +519,27 @@ describe('model catalog', () => {
   });
 
   test('requestModelCatalog sends Authorization only when a key is supplied', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(200, {data: []}));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(200, { data: [] }));
     try {
       await requestModelCatalog('https://api.openai.com/v1', 5000, 'sk-openai-user-key');
       const [, init] = fetchMock.mock.calls[0];
-      expect(init?.headers).toEqual({Authorization: 'Bearer sk-openai-user-key'});
+      expect(init?.headers).toEqual({ Authorization: 'Bearer sk-openai-user-key' });
     } finally {
       (globalThis.fetch as unknown as jest.SpyInstance).mockRestore();
     }
   });
 
   test('listModels respects the spec: OpenAI discovery requires the user key', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(200, {data: [{id: 'gpt-4o'}]}));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(200, { data: [{ id: 'gpt-4o' }] }));
     try {
       const models = await makeClient().listModels();
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toBe('https://api.openai.com/v1/models');
-      expect(init?.headers).toEqual({Authorization: 'Bearer sk-openai-user-key'});
+      expect(init?.headers).toEqual({ Authorization: 'Bearer sk-openai-user-key' });
       expect(models.map(model => model.id)).toEqual(['gpt-4o']);
     } finally {
       (globalThis.fetch as unknown as jest.SpyInstance).mockRestore();

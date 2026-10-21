@@ -1,23 +1,22 @@
-import React from 'react';
-import {NavigationContainer, createNavigationContainerRef} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {render, screen, waitFor} from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createNavigationContainerRef, NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { render, screen, waitFor } from '@testing-library/react-native';
 
 import * as authApi from '../src/api/auth';
 import * as profileApi from '../src/api/profile';
-import {AuthProvider} from '../src/auth/AuthContext';
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import {getLocalDatabase} from '../src/db/database';
+import { getLocalDatabase } from '../src/db/database';
 import * as profileStore from '../src/db/profileStore';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
-import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
-import type {MainStackParamList} from '../src/navigation/types';
-import {createStyles, LevelScreen} from '../src/screens/LevelScreen';
-import {lightColors} from '../src/theme/colors';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
+import { DEFAULT_APPLICATION_MODE } from '../src/mode/types';
+import type { MainStackParamList } from '../src/navigation/types';
+import { createStyles, LevelScreen } from '../src/screens/LevelScreen';
+import { lightColors } from '../src/theme/colors';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/profile', () => ({
@@ -40,10 +39,7 @@ const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   const entries = Array.isArray(style) ? style : [style];
-  return Object.assign(
-    {},
-    ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})),
-  );
+  return Object.assign({}, ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})));
 }
 
 async function renderScreen() {
@@ -58,9 +54,9 @@ async function renderScreen() {
             ref={ref}
             initialState={{
               index: 1,
-              routes: [{name: 'Chat'}, {name: 'Level'}],
+              routes: [{ name: 'Chat' }, { name: 'Level' }],
             }}>
-            <Stack.Navigator screenOptions={{headerShown: false}}>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
               <Stack.Screen name="Chat">{() => null}</Stack.Screen>
               <Stack.Screen name="Level" component={LevelScreen} />
             </Stack.Navigator>
@@ -80,12 +76,12 @@ async function enterServerlessMode() {
 beforeEach(() => {
   asyncStorage.__resetAsyncStorageStore();
   jest.clearAllMocks();
-  mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-  mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
-  mockedProfile.getProfile.mockResolvedValue({level: 'B1'});
-  mockedGetLocalProfile.mockResolvedValue({level: 'B1', updated_at: ''});
+  mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+  mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
+  mockedProfile.getProfile.mockResolvedValue({ level: 'B1' });
+  mockedGetLocalProfile.mockResolvedValue({ level: 'B1', updated_at: '' });
   mockedGetDb.mockResolvedValue({
-    execute: jest.fn(async () => ({rows: [], rowsAffected: 0, insertId: null})),
+    execute: jest.fn(async () => ({ rows: [], rowsAffected: 0, insertId: null })),
   } as never);
 });
 
@@ -121,9 +117,7 @@ describe('LevelScreen layout (TASK-AUDIT-011)', () => {
 
       const container = screen.getByTestId('level-screen');
       expect(flattenStyle(container.props.style).paddingTop).toBe(16);
-      await waitFor(() =>
-        expect(screen.getByTestId('level-B1')).toBeOnTheScreen(),
-      );
+      await waitFor(() => expect(screen.getByTestId('level-B1')).toBeOnTheScreen());
     },
   );
 });

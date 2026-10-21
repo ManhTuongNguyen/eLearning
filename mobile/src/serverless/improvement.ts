@@ -33,10 +33,10 @@
  *    the stored chat message.
  */
 
-import type {EnglishLevel} from '../api/profile';
-import type {ImprovementSeverity} from '../api/sessions';
-import type {OpenRouterClient} from './types';
-import {OpenRouterResponseError} from './errors';
+import type { EnglishLevel } from '../api/profile';
+import type { ImprovementSeverity } from '../api/sessions';
+import { OpenRouterResponseError } from './errors';
+import type { OpenRouterClient } from './types';
 
 const SYSTEM_PROMPT =
   'You improve English messages written by a learner in an English-learning ' +
@@ -52,7 +52,7 @@ const SYSTEM_PROMPT =
   'opinion or question, and use richer vocabulary and grammar pitched ' +
   'slightly above their level (roughly one CEFR sub-level up, e.g. an A2 ' +
   'learner receives about B1) so the improvement is a small, reachable ' +
-  'stretch rather than a leap. When the learner\'s level is unknown, keep ' +
+  "stretch rather than a leap. When the learner's level is unknown, keep " +
   'the message at its own level: only correct it. If the message is ' +
   'already correct, still return it as "improved" (extended when the level ' +
   'is known, unchanged otherwise), say so briefly and use severity "none". ' +
@@ -111,12 +111,10 @@ export async function generateImprovement(
   client: OpenRouterClient,
   input: ImprovementInput,
 ): Promise<Improvement> {
-  const {level, originalMessage} = input;
+  const { level, originalMessage } = input;
 
   if (!LEVELS.includes(level)) {
-    throw new Error(
-      `Unknown learning level "${level}"; expected one of: ${LEVELS.join(', ')}.`,
-    );
+    throw new Error(`Unknown learning level "${level}"; expected one of: ${LEVELS.join(', ')}.`);
   }
 
   const message = originalMessage.trim();
@@ -126,14 +124,14 @@ export async function generateImprovement(
 
   const request = {
     messages: [
-      {role: 'system' as const, content: SYSTEM_PROMPT},
-      {role: 'user' as const, content: buildUserPrompt(level, message)},
+      { role: 'system' as const, content: SYSTEM_PROMPT },
+      { role: 'user' as const, content: buildUserPrompt(level, message) },
     ],
   };
 
   const response = await client.complete(request);
-  const {improved, explanation, severity} = parseCorrection(response.text);
-  return {original: message, improved, explanation, severity};
+  const { improved, explanation, severity } = parseCorrection(response.text);
+  return { original: message, improved, explanation, severity };
 }
 
 function buildUserPrompt(level: EnglishLevel, message: string): string {
@@ -184,33 +182,30 @@ function parseCorrection(text: string): {
   const payload = extractJsonObject(text);
 
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
-    throw new OpenRouterResponseError(
-      'Improvement response was not a JSON object.',
-      null,
-    );
+    throw new OpenRouterResponseError('Improvement response was not a JSON object.', null);
   }
 
   const record = payload as Record<string, unknown>;
-  const fields: Partial<{improved: string; explanation: string}> = {};
-  for (const fieldName of ['improved', 'explanation'] as const) {
-    const value = record[fieldName];
-    if (typeof value !== 'string' || !value.trim()) {
-      throw new OpenRouterResponseError(
-        `Improvement response is missing a non-empty '${fieldName}' string.`,
-        null,
-      );
-    }
-    fields[fieldName] = value.trim();
+  const improved = record.improved;
+  const explanation = record.explanation;
+  if (typeof improved !== 'string' || !improved.trim()) {
+    throw new OpenRouterResponseError(
+      "Improvement response is missing a non-empty 'improved' string.",
+      null,
+    );
+  }
+  if (typeof explanation !== 'string' || !explanation.trim()) {
+    throw new OpenRouterResponseError(
+      "Improvement response is missing a non-empty 'explanation' string.",
+      null,
+    );
   }
 
   const rawSeverity = record.severity;
   // Case-insensitive: models routinely answer "None"/"Minor"/"Critical";
   // only genuinely unknown values stay contract violations.
   const severity = typeof rawSeverity === 'string' ? rawSeverity.trim().toLowerCase() : rawSeverity;
-  if (
-    typeof severity !== 'string' ||
-    !SEVERITY_VALUES.includes(severity as ImprovementSeverity)
-  ) {
+  if (typeof severity !== 'string' || !SEVERITY_VALUES.includes(severity as ImprovementSeverity)) {
     throw new OpenRouterResponseError(
       `Improvement response is missing a valid 'severity' (${SEVERITY_VALUES.join('|')}).`,
       null,
@@ -218,8 +213,8 @@ function parseCorrection(text: string): {
   }
 
   return {
-    improved: fields.improved!,
-    explanation: fields.explanation!,
+    improved: improved.trim(),
+    explanation: explanation.trim(),
     severity: severity as ImprovementSeverity,
   };
 }

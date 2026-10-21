@@ -13,25 +13,24 @@
  * generator itself (including the no-repeat guarantee) is covered by
  * practiceQuestionBank.test.ts against the real implementation.
  */
-import React from 'react';
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 
-import type {PracticeScreenProps} from '../src/navigation/types';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+
+import type { PracticeScreenProps } from '../src/navigation/types';
 import {
   createPracticeQuestion,
   type PracticeMode,
   type PracticeQuestion,
 } from '../src/practice/questionBank';
-import {PracticeScreen} from '../src/screens/PracticeScreen';
-import {setSpeechEngine, stubSpeechEngine} from '../src/tts/textToSpeech';
-import type {TextToSpeechEngine} from '../src/tts/textToSpeech';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { PracticeScreen } from '../src/screens/PracticeScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+import type { TextToSpeechEngine } from '../src/tts/textToSpeech';
+import { setSpeechEngine, stubSpeechEngine } from '../src/tts/textToSpeech';
 
 // React 19 concurrent root: mark this environment as act-enabled so
 // render/fireEvent flush scheduled state updates synchronously — the same
 // guarantee the other screen suites get from their explicit act() calls.
-(globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 jest.mock('../src/practice/questionBank', () => ({
   ...jest.requireActual('../src/practice/questionBank'),
@@ -45,10 +44,7 @@ const fakeEngine = {
   stop: jest.fn(),
 };
 
-function numberQuestion(
-  answer: string,
-  distractors: [string, string, string],
-): PracticeQuestion {
+function numberQuestion(answer: string, distractors: [string, string, string]): PracticeQuestion {
   return {
     kind: 'number',
     answer,
@@ -64,7 +60,7 @@ function practiceProps(): PracticeScreenProps {
       navigate: jest.fn(),
       addListener: jest.fn(() => jest.fn()),
     },
-    route: {key: 'practice-test', name: 'Practice', params: undefined},
+    route: { key: 'practice-test', name: 'Practice', params: undefined },
   } as unknown as PracticeScreenProps;
 }
 
@@ -77,14 +73,12 @@ async function renderPractice() {
       <PracticeScreen {...props} />
     </ThemeProvider>,
   );
-  return {props, instance};
+  return { props, instance };
 }
 
 /** Waits until the current round shows its four answer options. */
 async function waitForOptions() {
-  await waitFor(() =>
-    expect(screen.getAllByTestId(/^practice-option-/)).toHaveLength(4),
-  );
+  await waitFor(() => expect(screen.getAllByTestId(/^practice-option-/)).toHaveLength(4));
 }
 
 beforeEach(() => {
@@ -93,9 +87,7 @@ beforeEach(() => {
   fakeEngine.stop.mockClear();
   setSpeechEngine(fakeEngine as unknown as TextToSpeechEngine);
   // Deterministic default: a year question in the screen's classic shape.
-  mockedCreate.mockReturnValue(
-    numberQuestion('1997', ['9719', '1998', '1897']),
-  );
+  mockedCreate.mockReturnValue(numberQuestion('1997', ['9719', '1998', '1897']));
 });
 
 afterEach(() => {
@@ -138,50 +130,30 @@ describe('PracticeScreen', () => {
     expect(screen.getByTestId('practice-feedback')).toHaveTextContent(
       /^Not quite — see the highlighted option\.$/,
     );
-    expect(screen.getByTestId('practice-reveal')).toHaveTextContent(
-      'It was 1997 — "spoken-1997"',
-    );
-    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent(
-      '1',
-    );
-    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent(
-      '0',
-    );
+    expect(screen.getByTestId('practice-reveal')).toHaveTextContent('It was 1997 — "spoken-1997"');
+    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent('0');
     expect(screen.getByTestId('practice-accuracy')).toHaveTextContent('0%');
 
     // The answered round is locked: further presses change nothing.
     await act(async () => {
       fireEvent.press(screen.getByTestId('practice-option-1997'));
     });
-    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent(
-      '1',
-    );
-    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent(
-      '0',
-    );
+    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent('0');
 
     // Next round: a correct pick moves the live score.
-    mockedCreate.mockReturnValueOnce(
-      numberQuestion('42', ['24', '43', '32']),
-    );
+    mockedCreate.mockReturnValueOnce(numberQuestion('42', ['24', '43', '32']));
     await act(async () => {
       fireEvent.press(screen.getByTestId('practice-next'));
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('practice-option-42')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('practice-option-42')).toBeOnTheScreen());
     await act(async () => {
       fireEvent.press(screen.getByTestId('practice-option-42'));
     });
-    expect(screen.getByTestId('practice-feedback')).toHaveTextContent(
-      'Correct!',
-    );
-    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent(
-      '2',
-    );
-    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent(
-      '1',
-    );
+    expect(screen.getByTestId('practice-feedback')).toHaveTextContent('Correct!');
+    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent('1');
     expect(screen.getByTestId('practice-accuracy')).toHaveTextContent('50%');
   });
 
@@ -192,12 +164,14 @@ describe('PracticeScreen', () => {
       numberQuestion('2005', ['2015', '2004', '2050']),
       numberQuestion('42', ['24', '43', '32']),
     ];
-    mockedCreate.mockImplementation(
-      ((_mode: PracticeMode, _random: () => number, recent: readonly string[]) => {
-        seenRecent.push([...recent]);
-        return queue.shift() as PracticeQuestion;
-      }) as typeof createPracticeQuestion,
-    );
+    mockedCreate.mockImplementation(((
+      _mode: PracticeMode,
+      _random: () => number,
+      recent: readonly string[],
+    ) => {
+      seenRecent.push([...recent]);
+      return queue.shift() as PracticeQuestion;
+    }) as typeof createPracticeQuestion);
 
     await renderPractice();
     await waitForOptions();
@@ -223,33 +197,23 @@ describe('PracticeScreen', () => {
     await act(async () => {
       fireEvent.press(screen.getByTestId('practice-option-9719'));
     });
-    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent(
-      '1',
-    );
+    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent('1');
 
-    mockedCreate.mockReturnValueOnce(
-      numberQuestion('42', ['24', '43', '32']),
-    );
+    mockedCreate.mockReturnValueOnce(numberQuestion('42', ['24', '43', '32']));
     await act(async () => {
       fireEvent.press(screen.getByTestId('practice-mode-letters'));
     });
 
-    await waitFor(() =>
-      expect(screen.getByTestId('practice-option-42')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('practice-option-42')).toBeOnTheScreen());
     // Fresh round: no reveal, nothing selected — but the score stays.
     expect(screen.queryByTestId('practice-reveal')).toBeNull();
     expect(screen.queryByTestId('practice-feedback')).toBeNull();
-    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent(
-      '1',
-    );
+    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent('1');
   });
 
   it('lists the Phones mode before Mixed, which comes last', async () => {
     await renderPractice();
-    const order = screen
-      .getAllByTestId(/^practice-mode-/)
-      .map(node => node.props.testID);
+    const order = screen.getAllByTestId(/^practice-mode-/).map(node => node.props.testID);
     expect(order).toEqual([
       'practice-mode-numbers',
       'practice-mode-letters',
@@ -266,21 +230,14 @@ describe('PracticeScreen', () => {
       kind: 'phone',
       answer: '07942 153 860',
       spoken: 'oh seven nine four two, one five three, eight six oh',
-      options: [
-        '07942 153 860',
-        '07942 503 860',
-        '07942 153 869',
-        '07942 153 806',
-      ],
+      options: ['07942 153 860', '07942 503 860', '07942 153 869', '07942 153 806'],
     });
     await act(async () => {
       fireEvent.press(screen.getByTestId('practice-mode-phones'));
     });
 
     await waitFor(() =>
-      expect(
-        screen.getByTestId('practice-option-07942 153 860'),
-      ).toBeOnTheScreen(),
+      expect(screen.getByTestId('practice-option-07942 153 860')).toBeOnTheScreen(),
     );
     expect(mockedCreate).toHaveBeenLastCalledWith(
       'phones',
@@ -305,21 +262,15 @@ describe('PracticeScreen', () => {
       fireEvent.press(screen.getByTestId('practice-end'));
     });
     expect(screen.getByTestId('practice-summary')).toBeOnTheScreen();
-    expect(screen.getByTestId('practice-summary-score')).toHaveTextContent(
-      /^0 of 1 correct · 0%$/,
-    );
+    expect(screen.getByTestId('practice-summary-score')).toHaveTextContent(/^0 of 1 correct · 0%$/);
 
     await act(async () => {
       fireEvent.press(screen.getByTestId('practice-restart'));
     });
     await waitForOptions();
     expect(screen.queryByTestId('practice-summary')).toBeNull();
-    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent(
-      '0',
-    );
-    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent(
-      '0',
-    );
+    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent('0');
+    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent('0');
   });
 
   it('surfaces speech failures inline without crashing', async () => {
@@ -332,9 +283,7 @@ describe('PracticeScreen', () => {
 
     await renderPractice();
 
-    await waitFor(() =>
-      expect(screen.queryByTestId('practice-speech-error')).not.toBeNull(),
-    );
+    await waitFor(() => expect(screen.queryByTestId('practice-speech-error')).not.toBeNull());
     // The round is still fully playable — options stay interactive.
     expect(screen.getAllByTestId(/^practice-option-/)).toHaveLength(4);
     await act(async () => {

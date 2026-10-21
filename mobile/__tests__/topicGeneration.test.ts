@@ -8,23 +8,24 @@
  * section degrades to a blank example while the topic stands, and malformed
  * or failed completions leave no session behind.
  */
-import {openLocalDatabase} from '../src/db/database';
-import type {SqlDriver} from '../src/db/driver';
-import {LocalConversationRepository} from '../src/db/conversationRepository';
-import {saveLearningProfile} from '../src/db/profileStore';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
-import {FakeOpenRouterClient} from '../testing/fakeOpenRouter';
-import {OpenRouterAvailabilityError, OpenRouterResponseError} from '../src/serverless/errors';
+
+import { LocalConversationRepository } from '../src/db/conversationRepository';
+import { openLocalDatabase } from '../src/db/database';
+import type { SqlDriver } from '../src/db/driver';
+import { saveLearningProfile } from '../src/db/profileStore';
+import { OpenRouterAvailabilityError, OpenRouterResponseError } from '../src/serverless/errors';
 import {
-  MIN_SAMPLE_TURNS,
-  TOPIC_AND_SAMPLE_SYSTEM_PROMPT,
   buildTopicAndSampleUserPrompt,
   createServerlessSession,
   generateTopicWithSample,
+  MIN_SAMPLE_TURNS,
   parseTopicWithSample,
   splitHintQuestions,
   stripListMarker,
+  TOPIC_AND_SAMPLE_SYSTEM_PROMPT,
 } from '../src/serverless/topicGeneration';
+import { FakeOpenRouterClient } from '../testing/fakeOpenRouter';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 const TOPIC = {
   title: 'Ordering Coffee Abroad',
@@ -32,16 +33,16 @@ const TOPIC = {
 };
 
 const VALID_SAMPLE_TURNS = [
-  {role: 'assistant', content: 'Good morning! What can I get you today?'},
-  {role: 'user', content: 'I would like a latte, please.'},
-  {role: 'assistant', content: 'Sure! Would you like it with oat milk?'},
-  {role: 'user', content: 'Yes, that would be great.'},
+  { role: 'assistant', content: 'Good morning! What can I get you today?' },
+  { role: 'user', content: 'I would like a latte, please.' },
+  { role: 'assistant', content: 'Sure! Would you like it with oat milk?' },
+  { role: 'user', content: 'Yes, that would be great.' },
 ];
 
 /** One combined payload: topic and example dialogue in the same object. */
 const VALID_COMBINED_JSON = JSON.stringify({
   topic: TOPIC,
-  sample_conversation: {turns: VALID_SAMPLE_TURNS},
+  sample_conversation: { turns: VALID_SAMPLE_TURNS },
 });
 
 describe('serverless topic + sample generation (TASK-085/093)', () => {
@@ -67,7 +68,7 @@ describe('serverless topic + sample generation (TASK-085/093)', () => {
       requestId: null,
     });
 
-    const {session, sampleTurns} = await createServerlessSession(
+    const { session, sampleTurns } = await createServerlessSession(
       db,
       request => fake.complete(request),
       'Traveling',
@@ -88,7 +89,7 @@ describe('serverless topic + sample generation (TASK-085/093)', () => {
       content: TOPIC_AND_SAMPLE_SYSTEM_PROMPT,
     });
     expect(request.messages[1].role).toBe('user');
-    expect(request.messages[1].content).toContain('The learner\'s English level is A1 (CEFR)');
+    expect(request.messages[1].content).toContain("The learner's English level is A1 (CEFR)");
     expect(request.messages[1].content).toContain('Topic idea from the learner: "Traveling".');
 
     const stored = await repository.readSession(session.id);
@@ -103,7 +104,7 @@ describe('serverless topic + sample generation (TASK-085/093)', () => {
       requestId: null,
     });
 
-    const {session} = await createServerlessSession(db, request => fake.complete(request), '');
+    const { session } = await createServerlessSession(db, request => fake.complete(request), '');
 
     expect(session.topic_hint).toBe('');
     expect(session.topic).not.toBe('');
@@ -120,7 +121,7 @@ describe('serverless topic + sample generation (TASK-085/093)', () => {
       requestId: null,
     });
 
-    const {session} = await createServerlessSession(db, request => fake.complete(request));
+    const { session } = await createServerlessSession(db, request => fake.complete(request));
 
     expect(session.learning_level).toBe('B2');
     const [userTurn] = fake.completeRequests[0].messages.slice(1);
@@ -137,7 +138,11 @@ describe('serverless topic + sample generation (TASK-085/093)', () => {
       requestId: null,
     });
 
-    const {session} = await createServerlessSession(db, request => fake.complete(request), 'Jobs');
+    const { session } = await createServerlessSession(
+      db,
+      request => fake.complete(request),
+      'Jobs',
+    );
 
     expect(session.learning_level).toBe('AUTO');
     const [userTurn] = fake.completeRequests[0].messages.slice(1);
@@ -148,25 +153,34 @@ describe('serverless topic + sample generation (TASK-085/093)', () => {
     const badSamplePayloads = [
       undefined, // sample_conversation missing entirely
       'not an object',
-      {turns: 'not a list'},
-      {turns: []},
-      {turns: [{role: 'assistant', content: 'only one turn'}]},
-      {turns: [{role: 'system', content: 'wrong role'}, {role: 'user', content: 'x'}]},
-      {turns: [{role: 'assistant'}, {role: 'user', content: 'x'}]},
-      {turns: [{role: 'assistant', content: 'a'}, {role: 'user', content: ' '}]},
+      { turns: 'not a list' },
+      { turns: [] },
+      { turns: [{ role: 'assistant', content: 'only one turn' }] },
+      {
+        turns: [
+          { role: 'system', content: 'wrong role' },
+          { role: 'user', content: 'x' },
+        ],
+      },
+      { turns: [{ role: 'assistant' }, { role: 'user', content: 'x' }] },
+      {
+        turns: [
+          { role: 'assistant', content: 'a' },
+          { role: 'user', content: ' ' },
+        ],
+      },
     ];
     for (const sample of badSamplePayloads) {
       fake.clearScripts();
       fake.enqueueComplete({
-        text: JSON.stringify({topic: TOPIC, sample_conversation: sample}),
+        text: JSON.stringify({ topic: TOPIC, sample_conversation: sample }),
         model: 'vendor/model-a',
         finishReason: 'stop',
         requestId: null,
       });
 
-      const {session, sampleTurns} = await createServerlessSession(
-        db,
-        request => fake.complete(request),
+      const { session, sampleTurns } = await createServerlessSession(db, request =>
+        fake.complete(request),
       );
 
       expect(session.title).toBe(TOPIC.title);
@@ -178,24 +192,24 @@ describe('serverless topic + sample generation (TASK-085/093)', () => {
 
   test('a malformed topic still aborts creation and persists nothing', async () => {
     fake.enqueueComplete({
-      text: JSON.stringify({sample_conversation: {turns: VALID_SAMPLE_TURNS}}),
+      text: JSON.stringify({ sample_conversation: { turns: VALID_SAMPLE_TURNS } }),
       model: 'vendor/model-a',
       finishReason: 'stop',
       requestId: null,
     });
 
-    await expect(createServerlessSession(db, request => fake.complete(request))).rejects.toBeInstanceOf(
-      OpenRouterResponseError,
-    );
+    await expect(
+      createServerlessSession(db, request => fake.complete(request)),
+    ).rejects.toBeInstanceOf(OpenRouterResponseError);
     expect(await repository.listSessions()).toHaveLength(0);
   });
 
   test('provider failures propagate and leave no session behind', async () => {
     fake.enqueueComplete(new OpenRouterAvailabilityError('model overloaded'));
 
-    await expect(createServerlessSession(db, request => fake.complete(request), 'Sports')).rejects.toBeInstanceOf(
-      OpenRouterAvailabilityError,
-    );
+    await expect(
+      createServerlessSession(db, request => fake.complete(request), 'Sports'),
+    ).rejects.toBeInstanceOf(OpenRouterAvailabilityError);
     expect(await repository.listSessions()).toHaveLength(0);
   });
 
@@ -226,7 +240,7 @@ describe('serverless topic + sample generation (TASK-085/093)', () => {
       requestId: null,
     });
 
-    const {session} = await createServerlessSession(
+    const { session } = await createServerlessSession(
       db,
       request => fake.complete(request),
       'Traveling\n- Where did you go last summer?',
@@ -245,7 +259,7 @@ describe('parseTopicWithSample', () => {
       requestId: null,
     });
 
-    const {topic, sampleTurns} = await generateTopicWithSample(
+    const { topic, sampleTurns } = await generateTopicWithSample(
       request => fake.complete(request),
       'A2',
       'Food',
@@ -271,9 +285,9 @@ describe('parseTopicWithSample', () => {
     });
     expect(
       parseTopicWithSample(
-        `Here you go!\n${JSON.stringify({...JSON.parse(VALID_COMBINED_JSON), notes: 'extra'})}\nEnjoy.`,
+        `Here you go!\n${JSON.stringify({ ...JSON.parse(VALID_COMBINED_JSON), notes: 'extra' })}\nEnjoy.`,
       ),
-    ).toEqual({topic: TOPIC, sampleTurns: VALID_SAMPLE_TURNS});
+    ).toEqual({ topic: TOPIC, sampleTurns: VALID_SAMPLE_TURNS });
   });
 
   test('padded turn content is stripped', () => {
@@ -281,15 +295,15 @@ describe('parseTopicWithSample', () => {
       topic: TOPIC,
       sample_conversation: {
         turns: [
-          {role: 'assistant', content: '  Padded tutor line \n'},
-          {role: 'user', content: '\t Padded learner line '},
+          { role: 'assistant', content: '  Padded tutor line \n' },
+          { role: 'user', content: '\t Padded learner line ' },
         ],
       },
     });
 
     expect(parseTopicWithSample(payload).sampleTurns).toEqual([
-      {role: 'assistant', content: 'Padded tutor line'},
-      {role: 'user', content: 'Padded learner line'},
+      { role: 'assistant', content: 'Padded tutor line' },
+      { role: 'user', content: 'Padded learner line' },
     ]);
   });
 

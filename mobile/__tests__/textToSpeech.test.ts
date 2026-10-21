@@ -13,7 +13,7 @@ import {
   type TextToSpeechEngine,
 } from '../src/tts/textToSpeech';
 
-function makeRecordingEngine(): {engine: TextToSpeechEngine; spoken: string[]} {
+function makeRecordingEngine(): { engine: TextToSpeechEngine; spoken: string[] } {
   const spoken: string[] = [];
   return {
     engine: {
@@ -52,7 +52,7 @@ describe('textToSpeech abstraction', () => {
   });
 
   it('keeps consumers on the seam while the installed engine speaks', async () => {
-    const {engine, spoken} = makeRecordingEngine();
+    const { engine, spoken } = makeRecordingEngine();
     setSpeechEngine(engine);
 
     const current = getSpeechEngine();

@@ -8,8 +8,11 @@
  * (TASK-AUDIT-004: no Authorization header is ever sent) and
  * authenticated discovery for Gemini/OpenAI. All HTTP calls are mocked.
  */
-import {DEFAULT_GEMINI_BASE_URL} from '../src/serverless/geminiClient';
-import {DEFAULT_OPENAI_BASE_URL} from '../src/serverless/openAIClient';
+
+import { LLMAuthenticationError, type LLMError } from '../src/serverless/errors';
+import { DEFAULT_GEMINI_BASE_URL } from '../src/serverless/geminiClient';
+import { DEFAULT_OPENAI_BASE_URL } from '../src/serverless/openAIClient';
+import { DEFAULT_BASE_URL } from '../src/serverless/openrouterClient';
 import {
   createProviderClient,
   listProviderModels,
@@ -17,9 +20,7 @@ import {
   resolveProviderId,
   SUPPORTED_PROVIDER_IDS,
 } from '../src/serverless/providerRegistry';
-import {DEFAULT_BASE_URL} from '../src/serverless/openrouterClient';
-import {LLMError, LLMAuthenticationError} from '../src/serverless/errors';
-import type {LLMClientConfig, ModelInfo} from '../src/serverless/types';
+import type { LLMClientConfig, ModelInfo } from '../src/serverless/types';
 
 function jsonResponse(status: number, body: unknown): Response {
   const text = typeof body === 'string' ? body : JSON.stringify(body);
@@ -27,16 +28,16 @@ function jsonResponse(status: number, body: unknown): Response {
     ok: status >= 200 && status < 300,
     status,
     text: async () => text,
-    headers: {get: () => null},
+    headers: { get: () => null },
   } as unknown as Response;
 }
 
 function catalogBody(): unknown {
   return {
     data: [
-      {id: 'vendor/model-a', name: 'Alpha Model'},
+      { id: 'vendor/model-a', name: 'Alpha Model' },
       'not-an-object',
-      {id: 'vendor/model-b'},
+      { id: 'vendor/model-b' },
     ],
   };
 }
@@ -54,7 +55,7 @@ function geminiCatalogBody(): unknown {
 }
 
 function config(provider: LLMClientConfig['provider'], apiKey = 'user-key'): LLMClientConfig {
-  return {provider, apiKey, primaryModel: 'vendor/primary'};
+  return { provider, apiKey, primaryModel: 'vendor/primary' };
 }
 
 const realFetch = globalThis.fetch;
@@ -123,7 +124,7 @@ describe('createProviderClient dispatch', () => {
   });
 
   test('clients without an explicit provider default to openrouter', () => {
-    const client = createProviderClient({apiKey: 'user-key', primaryModel: 'vendor/primary'});
+    const client = createProviderClient({ apiKey: 'user-key', primaryModel: 'vendor/primary' });
     expect(typeof client.complete).toBe('function');
   });
 
@@ -131,21 +132,19 @@ describe('createProviderClient dispatch', () => {
     expect(() => createProviderClient(config('openrouter', '   '))).toThrow(
       /OpenRouter API key is required/,
     );
-    expect(() => createProviderClient(config('gemini', ''))).toThrow(
-      /Gemini API key is required/,
-    );
-    expect(() => createProviderClient(config('openai', ''))).toThrow(
-      /OpenAI API key is required/,
-    );
+    expect(() => createProviderClient(config('gemini', ''))).toThrow(/Gemini API key is required/);
+    expect(() => createProviderClient(config('openai', ''))).toThrow(/OpenAI API key is required/);
     expect(() =>
-      createProviderClient({provider: 'gemini', apiKey: 'k', primaryModel: '  '}),
+      createProviderClient({ provider: 'gemini', apiKey: 'k', primaryModel: '  ' }),
     ).toThrow(/primary Gemini model is required/);
   });
 });
 
 describe('listProviderModels dispatch', () => {
   test('OpenRouter hits the public catalog with no headers at all', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, catalogBody()));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse(200, catalogBody()));
 
     const models = await listProviderModels('openrouter');
 
@@ -157,32 +156,40 @@ describe('listProviderModels dispatch', () => {
   });
 
   test('OpenAI discovery is authenticated with the supplied key', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, catalogBody()));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse(200, catalogBody()));
 
-    await listProviderModels('openai', {apiKey: 'sk-openai-key'});
+    await listProviderModels('openai', { apiKey: 'sk-openai-key' });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://api.openai.com/v1/models');
-    expect(init?.headers).toEqual({Authorization: 'Bearer sk-openai-key'});
+    expect(init?.headers).toEqual({ Authorization: 'Bearer sk-openai-key' });
   });
 
   test('Gemini discovery hits the Google endpoint with the key header', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, geminiCatalogBody()));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse(200, geminiCatalogBody()));
 
-    const models = await listProviderModels('gemini', {apiKey: 'AIza-key'});
+    const models = await listProviderModels('gemini', { apiKey: 'AIza-key' });
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${DEFAULT_GEMINI_BASE_URL}/models`);
-    expect(init?.headers).toEqual({'x-goog-api-key': 'AIza-key'});
+    expect(init?.headers).toEqual({ 'x-goog-api-key': 'AIza-key' });
     expect(models).toEqual([
-      expect.objectContaining({id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash'}),
+      expect.objectContaining({ id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' }),
     ]);
   });
 
   test('HTTP failures are normalized into the shared error hierarchy', async () => {
-    jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(401, {error: {message: 'bad key'}}));
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse(401, { error: { message: 'bad key' } }));
 
-    const error = (await listProviderModels('openai', {apiKey: 'sk'}).catch(caught => caught)) as LLMError;
+    const error = (await listProviderModels('openai', { apiKey: 'sk' }).catch(
+      caught => caught,
+    )) as LLMError;
 
     expect(error).toBeInstanceOf(LLMAuthenticationError);
     expect(error.message).toBe('bad key');
@@ -193,7 +200,7 @@ describe('listProviderModels dispatch', () => {
     await expect(listProviderModels('gemini')).rejects.toThrow(
       /Gemini API key is required for model discovery/,
     );
-    await expect(listProviderModels('openai', {apiKey: '  '})).rejects.toThrow(
+    await expect(listProviderModels('openai', { apiKey: '  ' })).rejects.toThrow(
       /OpenAI API key is required|key/,
     );
     expect(globalThis.fetch).toBeDefined();

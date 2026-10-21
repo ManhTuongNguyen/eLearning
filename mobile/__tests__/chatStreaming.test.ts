@@ -7,22 +7,23 @@
  * retryable without corrupting the conversation, retries re-arm the failed
  * row in place, and abandoned turns leave nothing but a pending slot.
  */
-import {openLocalDatabase} from '../src/db/database';
-import {LocalConversationRepository} from '../src/db/conversationRepository';
-import type {SqlDriver, SqlExecutor} from '../src/db/driver';
-import type {LocalSession} from '../src/db/types';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
-import {FakeOpenRouterClient} from '../testing/fakeOpenRouter';
+
+import { LocalConversationRepository } from '../src/db/conversationRepository';
+import { openLocalDatabase } from '../src/db/database';
+import type { SqlDriver, SqlExecutor } from '../src/db/driver';
+import type { LocalSession } from '../src/db/types';
 import {
+  type PreparedTurn,
   retryServerlessTurn,
   ServerlessTurnError,
-  streamServerlessTurn,
-  type PreparedTurn,
   type ServerlessTurnOptions,
   type StreamFn,
+  streamServerlessTurn,
   type TurnRequestBuilder,
 } from '../src/serverless/chatStreaming';
-import type {ServerlessStreamEvent, CompletionRequest} from '../src/serverless/types';
+import type { CompletionRequest, ServerlessStreamEvent } from '../src/serverless/types';
+import { FakeOpenRouterClient } from '../testing/fakeOpenRouter';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 /** Let the async terminal-event persistence (and delivery) run to completion. */
 async function settle(): Promise<void> {
@@ -43,7 +44,7 @@ describe('serverless chat streaming (TASK-086)', () => {
   const buildRequest: TurnRequestBuilder = turn => {
     builtTurns.push(turn);
     const request: CompletionRequest = {
-      messages: [{role: 'user', content: turn.userMessage.content}],
+      messages: [{ role: 'user', content: turn.userMessage.content }],
     };
     builtRequests.push(request);
     return request;
@@ -61,7 +62,7 @@ describe('serverless chat streaming (TASK-086)', () => {
   function turnOptions(
     text: string,
     overrides: OptionOverrides = {},
-  ): ServerlessTurnOptions & {text: string} {
+  ): ServerlessTurnOptions & { text: string } {
     return {
       openDb: async () => db,
       stream: streamFn,
@@ -78,7 +79,7 @@ describe('serverless chat streaming (TASK-086)', () => {
   function retryOptions(
     messageId: number,
     overrides: OptionOverrides = {},
-  ): ServerlessTurnOptions & {messageId: number} {
+  ): ServerlessTurnOptions & { messageId: number } {
     return {
       openDb: async () => db,
       stream: streamFn,
@@ -100,7 +101,7 @@ describe('serverless chat streaming (TASK-086)', () => {
     });
     sessionId = session.id;
     if (withHistory) {
-      await repository.addMessage({session_id: session.id, role: 'user', content: 'Warm-up'});
+      await repository.addMessage({ session_id: session.id, role: 'user', content: 'Warm-up' });
     }
     await db.execute('UPDATE sessions SET updated_at = ?', ['2000-01-01T00:00:00.000Z']);
     return session;
@@ -122,7 +123,7 @@ describe('serverless chat streaming (TASK-086)', () => {
 
   test('a sent message is stored locally, streams locally and persists on completion', async () => {
     await seedSession();
-    fake.enqueueStream({type: 'success', model: 'vendor/model-a', deltas: ['Hello', ' there']});
+    fake.enqueueStream({ type: 'success', model: 'vendor/model-a', deltas: ['Hello', ' there'] });
 
     const handle = await streamServerlessTurn(turnOptions('Hi tutor'));
     expect(typeof handle.abort).toBe('function');
@@ -138,14 +139,14 @@ describe('serverless chat streaming (TASK-086)', () => {
     expect(messages[2].content).toBe('Hello there');
 
     expect(events.map(e => e.type)).toEqual(['start', 'delta', 'delta', 'completed']);
-    expect(events[3]).toMatchObject({text: 'Hello there', model: 'vendor/model-a'});
+    expect(events[3]).toMatchObject({ text: 'Hello there', model: 'vendor/model-a' });
 
     // The builder saw both persisted rows; the request carries the prompt.
     expect(builtTurns).toHaveLength(1);
     const [turn] = builtTurns;
     expect(turn.userMessage.content).toBe('Hi tutor');
     expect(turn.assistantMessage.id).toBe(messages[2].id);
-    expect(builtRequests[0].messages).toEqual([{role: 'user', content: 'Hi tutor'}]);
+    expect(builtRequests[0].messages).toEqual([{ role: 'user', content: 'Hi tutor' }]);
 
     // Conversation activity refreshes the history recency stamp.
     const stored = await repository.readSession(sessionId);
@@ -157,9 +158,9 @@ describe('serverless chat streaming (TASK-086)', () => {
     for (const bad of ['', '   ']) {
       builtTurns = [];
       builtRequests = [];
-      await expect(
-        streamServerlessTurn(turnOptions(bad)),
-      ).rejects.toBeInstanceOf(ServerlessTurnError);
+      await expect(streamServerlessTurn(turnOptions(bad))).rejects.toBeInstanceOf(
+        ServerlessTurnError,
+      );
       expect(builtTurns).toHaveLength(0);
     }
     expect(await repository.listMessages(sessionId)).toHaveLength(0);
@@ -168,7 +169,7 @@ describe('serverless chat streaming (TASK-086)', () => {
   test('an unknown session rejects without writing rows', async () => {
     sessionId = 424242;
     await expect(
-      streamServerlessTurn(turnOptions('Hello?', {sessionId: 424242})),
+      streamServerlessTurn(turnOptions('Hello?', { sessionId: 424242 })),
     ).rejects.toBeInstanceOf(ServerlessTurnError);
     expect(builtTurns).toHaveLength(0);
     expect(await repository.listSessions()).toHaveLength(0);
@@ -197,7 +198,7 @@ describe('serverless chat streaming (TASK-086)', () => {
     expect(messages[2].content).toBe('');
 
     expect(events.map(e => e.type)).toEqual(['start', 'failed']);
-    expect(events[1]).toMatchObject({message: 'model overloaded', retryable: true, text: 'Par'});
+    expect(events[1]).toMatchObject({ message: 'model overloaded', retryable: true, text: 'Par' });
   });
 
   test('retry re-arms the failed row in place without duplicating the prompt', async () => {
@@ -210,15 +211,16 @@ describe('serverless chat streaming (TASK-086)', () => {
     await streamServerlessTurn(turnOptions('Try again please'));
     await settle();
 
-    const failedRow = (await repository.listMessages(sessionId)).find(
-      m => m.role === 'assistant',
-    );
-    expect(failedRow?.status).toBe('failed');
+    const failedRow = (await repository.listMessages(sessionId)).find(m => m.role === 'assistant');
+    if (!failedRow) {
+      throw new Error('Expected a failed assistant row');
+    }
+    expect(failedRow.status).toBe('failed');
 
     builtTurns = [];
     events = [];
-    fake.enqueueStream({type: 'success', model: 'vendor/model-b', deltas: ['Fixed!']});
-    await retryServerlessTurn(retryOptions(failedRow!.id));
+    fake.enqueueStream({ type: 'success', model: 'vendor/model-b', deltas: ['Fixed!'] });
+    await retryServerlessTurn(retryOptions(failedRow.id));
     await settle();
 
     const messages = await repository.listMessages(sessionId);
@@ -226,7 +228,7 @@ describe('serverless chat streaming (TASK-086)', () => {
     expect(messages.map(m => [m.id, m.role, m.status, m.sequence])).toEqual([
       [messages[0].id, 'user', 'complete', 1],
       [messages[1].id, 'user', 'complete', 2],
-      [failedRow!.id, 'assistant', 'complete', 3],
+      [failedRow.id, 'assistant', 'complete', 3],
     ]);
     expect(messages[2].content).toBe('Fixed!');
     expect(events.map(e => e.type)).toEqual(['start', 'delta', 'completed']);
@@ -234,7 +236,7 @@ describe('serverless chat streaming (TASK-086)', () => {
     // Retry rebuilds the request from the ORIGINAL user message verbatim.
     expect(builtTurns).toHaveLength(1);
     expect(builtTurns[0].userMessage.content).toBe('Try again please');
-    expect(builtTurns[0].assistantMessage.id).toBe(failedRow!.id);
+    expect(builtTurns[0].assistantMessage.id).toBe(failedRow.id);
   });
 
   test('retry refuses targets that are not failed assistant rows', async () => {
@@ -253,9 +255,9 @@ describe('serverless chat streaming (TASK-086)', () => {
     for (const messageId of [userRow.id, okAssistant.id, 987654]) {
       builtTurns = [];
       builtRequests = [];
-      await expect(
-        retryServerlessTurn(retryOptions(messageId)),
-      ).rejects.toBeInstanceOf(ServerlessTurnError);
+      await expect(retryServerlessTurn(retryOptions(messageId))).rejects.toBeInstanceOf(
+        ServerlessTurnError,
+      );
       expect(builtTurns).toHaveLength(0);
     }
     // Nothing changed.
@@ -269,8 +271,8 @@ describe('serverless chat streaming (TASK-086)', () => {
     fake.enqueueStream({
       type: 'raw',
       events: [
-        {type: 'start', model: 'vendor/model-a'},
-        {type: 'delta', text: 'half a thought'},
+        { type: 'start', model: 'vendor/model-a' },
+        { type: 'delta', text: 'half a thought' },
       ],
     });
 
@@ -288,14 +290,14 @@ describe('serverless chat streaming (TASK-086)', () => {
 
   test('abort after the outcome arrived still persists it but never delivers callbacks', async () => {
     await seedSession(false);
-    fake.enqueueStream({type: 'success', deltas: ['Too late']});
+    fake.enqueueStream({ type: 'success', deltas: ['Too late'] });
     const handle = await streamServerlessTurn(turnOptions('Racing'));
     handle.abort();
     await settle();
 
     // Persistence is not rolled back by a late abort...
     const messages = await repository.listMessages(sessionId);
-    expect(messages[1]).toMatchObject({status: 'complete', content: 'Too late'});
+    expect(messages[1]).toMatchObject({ status: 'complete', content: 'Too late' });
     // ...but the consumer observed no terminal delivery after abort().
     expect(events.map(e => e.type)).toEqual(['start', 'delta']);
   });
@@ -306,7 +308,7 @@ describe('serverless chat streaming (TASK-086)', () => {
       throw new Error('no context available');
     };
     await expect(
-      streamServerlessTurn(turnOptions('Vanishing', {buildRequest: explodingBuilder})),
+      streamServerlessTurn(turnOptions('Vanishing', { buildRequest: explodingBuilder })),
     ).rejects.toThrow('no context available');
 
     expect(await repository.listMessages(sessionId)).toHaveLength(0);
@@ -326,11 +328,15 @@ describe('serverless chat streaming (TASK-086)', () => {
           throw new Error('disk full');
         },
       };
-      return {...broken, transaction: db.transaction.bind(db), close: db.close.bind(db)} as SqlDriver;
+      return {
+        ...broken,
+        transaction: db.transaction.bind(db),
+        close: db.close.bind(db),
+      } as SqlDriver;
     };
 
-    fake.enqueueStream({type: 'success', deltas: ['Unsavable']});
-    await streamServerlessTurn(turnOptions('Save me', {openDb: brokenAfterPrepare}));
+    fake.enqueueStream({ type: 'success', deltas: ['Unsavable'] });
+    await streamServerlessTurn(turnOptions('Save me', { openDb: brokenAfterPrepare }));
     await settle();
 
     expect(events.map(e => e.type)).toEqual(['start', 'delta', 'failed']);

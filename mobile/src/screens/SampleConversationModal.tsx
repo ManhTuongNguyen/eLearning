@@ -12,24 +12,17 @@
  * onRequestClose), and hides itself entirely when closed so nothing leaks
  * into the conversation tree underneath.
  */
-import React, {useCallback, useEffect, useMemo} from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import type {SampleTurn} from '../api/sessions';
-import {SCREEN_GUTTER} from '../components/ScreenLayout';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
-import type {TextToSpeechEngine} from '../tts/textToSpeech';
-import {getSpeechEngine} from '../tts/textToSpeech';
-import {useSpeechPlayback} from '../tts/useSpeechPlayback';
-import {createCodeStyle, MarkdownText} from './MarkdownText';
+import type { SampleTurn } from '../api/sessions';
+import { SCREEN_GUTTER } from '../components/ScreenLayout';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { TextToSpeechEngine } from '../tts/textToSpeech';
+import { getSpeechEngine } from '../tts/textToSpeech';
+import { useSpeechPlayback } from '../tts/useSpeechPlayback';
+import { createCodeStyle, MarkdownText } from './MarkdownText';
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -146,12 +139,12 @@ export function SampleConversationModal({
   onClose,
   speech = getSpeechEngine(),
 }: SampleConversationModalProps) {
-  const {colors} = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   // Shared playback state machine (TASK-078): single playback, overlap
   // prevention, stale-settlement guard and failure-safe clearing — exactly
   // the semantics chat messages get.
-  const {speakingId, speak, stop} = useSpeechPlayback(speech);
+  const { speakingId, speak, stop } = useSpeechPlayback(speech);
 
   // Closing the overlay halts playback immediately; a fresh open starts
   // clean. Unmount cleanup is handled inside the hook.
@@ -204,6 +197,7 @@ export function SampleConversationModal({
             const speaking = speakingId === index;
             return (
               <View
+                // biome-ignore lint/suspicious/noArrayIndexKey: sample turns are static and positional
                 key={`sample-turn-${index}`}
                 style={[styles.row, isUser && styles.rowUser]}
                 testID={`sample-turn-${index}`}>
@@ -216,19 +210,13 @@ export function SampleConversationModal({
                     testID={`sample-tts-${index}`}
                     accessibilityRole="button"
                     accessibilityLabel={
-                      speaking
-                        ? `Stop example line ${index + 1}`
-                        : `Play example line ${index + 1}`
+                      speaking ? `Stop example line ${index + 1}` : `Play example line ${index + 1}`
                     }
-                    accessibilityState={{busy: speaking}}>
+                    accessibilityState={{ busy: speaking }}>
                     <Text style={styles.ttsText}>{speaking ? '⏹ Stop' : '▶ Play'}</Text>
                   </Pressable>
                 </View>
-                <View
-                  style={[
-                    styles.bubble,
-                    isUser ? styles.bubbleUser : styles.bubbleAssistant,
-                  ]}>
+                <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
                   {isUser ? (
                     <Text style={[styles.content, styles.contentUser]}>{turn.content}</Text>
                   ) : (

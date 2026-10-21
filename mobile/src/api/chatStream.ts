@@ -26,16 +26,22 @@
  * aborts the underlying request; leaving a chat screen must call it so no
  * turn outlives its UI.
  */
-import {assertServerApiAllowed} from '../mode/runtime';
-import {API_BASE_URL} from '../config';
-import {ApiError, backendRequestHeaders, DEFAULT_REQUEST_TIMEOUT_MS, normalizeApiError} from './client';
+
+import { API_BASE_URL } from '../config';
+import { assertServerApiAllowed } from '../mode/runtime';
+import {
+  ApiError,
+  backendRequestHeaders,
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  normalizeApiError,
+} from './client';
 
 /** Normalized application events carried by the SSE frames. */
 export type ChatStreamEvent =
-  | {type: 'start'; model: string}
-  | {type: 'delta'; text: string}
-  | {type: 'completed'; text: string; model: string; deltaCount: number}
-  | {type: 'error'; message: string; retryable: boolean};
+  | { type: 'start'; model: string }
+  | { type: 'delta'; text: string }
+  | { type: 'completed'; text: string; model: string; deltaCount: number }
+  | { type: 'error'; message: string; retryable: boolean };
 
 /** One decoded SSE frame: an event name plus its raw data payload. */
 export interface SseFrame {
@@ -63,7 +69,7 @@ export function parseSseFrame(raw: string): SseFrame | null {
   if (!event && !data) {
     return null;
   }
-  return {event: event || 'message', data};
+  return { event: event || 'message', data };
 }
 
 /** Map one frame onto the typed event union; unknown events return null. */
@@ -75,17 +81,15 @@ export function decodeChatStreamFrame(frame: SseFrame): ChatStreamEvent | null {
     payload = null;
   }
   const record =
-    typeof payload === 'object' && payload !== null
-      ? (payload as Record<string, unknown>)
-      : {};
+    typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
 
   switch (frame.event) {
     case 'start':
-      return typeof record.model === 'string' ? {type: 'start', model: record.model} : null;
+      return typeof record.model === 'string' ? { type: 'start', model: record.model } : null;
     case 'delta':
-      return typeof record.text === 'string' ? {type: 'delta', text: record.text} : null;
+      return typeof record.text === 'string' ? { type: 'delta', text: record.text } : null;
     case 'completed': {
-      const {text, model, delta_count: deltaCount} = record;
+      const { text, model, delta_count: deltaCount } = record;
       if (typeof text !== 'string' || typeof model !== 'string') {
         return null;
       }
@@ -99,8 +103,7 @@ export function decodeChatStreamFrame(frame: SseFrame): ChatStreamEvent | null {
     case 'error':
       return {
         type: 'error',
-        message:
-          typeof record.error === 'string' ? record.error : 'The AI response failed.',
+        message: typeof record.error === 'string' ? record.error : 'The AI response failed.',
         retryable: record.retryable === true,
       };
     default:
@@ -136,8 +139,7 @@ export interface ChatStreamHandle {
   abort(): void;
 }
 
-const NETWORK_ERROR_MESSAGE =
-  'Network request failed. Check your connection and try again.';
+const NETWORK_ERROR_MESSAGE = 'Network request failed. Check your connection and try again.';
 const TIMEOUT_ERROR_MESSAGE = 'The request timed out. Please try again.';
 
 function toApiError(status: number, bodyText: string): ApiError {
@@ -303,7 +305,7 @@ function consumeSseStream(options: ConsumeStreamOptions): ChatStreamHandle {
 export function streamChatTurn(options: StreamChatTurnOptions): ChatStreamHandle {
   return consumeSseStream({
     url: `${API_BASE_URL}/api/v1/sessions/${options.sessionId}/messages/stream/`,
-    body: JSON.stringify({text: options.text}),
+    body: JSON.stringify({ text: options.text }),
     token: options.token,
     onEvent: options.onEvent,
     onError: options.onError,

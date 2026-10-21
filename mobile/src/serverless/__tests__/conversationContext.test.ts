@@ -11,14 +11,15 @@
  *   skips the provider when there is nothing to summarize and ignores
  *   unknown sessions
  */
-import {openLocalDatabase} from '../../../src/db/database';
-import type {SqlDriver} from '../../../src/db/driver';
-import {LocalConversationRepository} from '../../../src/db/conversationRepository';
-import {updateMessageStatus} from '../../../src/db/messageStore';
-import {getSummary} from '../../../src/db/summaryStore';
-import {openSqlJsDriver} from '../../../testing/sqlJsDriver';
-import {FakeOpenRouterClient} from '../../../testing/fakeOpenRouter';
-import {buildServerlessContext, updateSummaryIfNeeded} from '../conversationContext';
+
+import { LocalConversationRepository } from '../../../src/db/conversationRepository';
+import { openLocalDatabase } from '../../../src/db/database';
+import type { SqlDriver } from '../../../src/db/driver';
+import { updateMessageStatus } from '../../../src/db/messageStore';
+import { getSummary } from '../../../src/db/summaryStore';
+import { FakeOpenRouterClient } from '../../../testing/fakeOpenRouter';
+import { openSqlJsDriver } from '../../../testing/sqlJsDriver';
+import { buildServerlessContext, updateSummaryIfNeeded } from '../conversationContext';
 
 let mockDb: SqlDriver;
 
@@ -89,12 +90,12 @@ describe('serverless conversation context (TASK-111)', () => {
         status: 'pending',
       });
 
-      const request = await buildServerlessContext({session, userMessage, assistantMessage});
+      const request = await buildServerlessContext({ session, userMessage, assistantMessage });
 
       expect(request.messages).toHaveLength(22);
       const [system, ...rest] = request.messages;
       expect(system.role).toBe('system');
-      expect(system.content).toContain('The learner\'s English level is B1 (CEFR)');
+      expect(system.content).toContain("The learner's English level is B1 (CEFR)");
       expect(system.content).toContain('Conversation topic: "Traveling".');
       expect(system.content).toContain(
         'Topic scenario: Traveling: airports, flights and hotel check-ins',
@@ -103,18 +104,22 @@ describe('serverless conversation context (TASK-111)', () => {
       expect(system.content).toContain('Learner greeted and asked about flights.');
 
       // History is the last 20 PRIOR messages in chronological order.
-      expect(rest[0]).toEqual({role: 'assistant', content: 'message-6'});
-      expect(rest[19]).toEqual({role: 'user', content: 'message-25'});
+      expect(rest[0]).toEqual({ role: 'assistant', content: 'message-6' });
+      expect(rest[19]).toEqual({ role: 'user', content: 'message-25' });
       // The current user message appears exactly once, last; the pending
       // assistant slot never leaks into the request.
-      expect(rest[20]).toEqual({role: 'user', content: 'What about trains?'});
+      expect(rest[20]).toEqual({ role: 'user', content: 'What about trains?' });
       expect(rest.slice(0, 20).filter(turn => turn.content === 'What about trains?')).toEqual([]);
-      expect(request.messages.filter(turn => turn.role === 'assistant').map(turn => turn.content))
-        .not.toContain('');
+      expect(
+        request.messages.filter(turn => turn.role === 'assistant').map(turn => turn.content),
+      ).not.toContain('');
     });
 
     test('omits the summary section while no summary is stored', async () => {
-      const session = await repository.createSession({topic: 'Small talk: weather', learning_level: 'A1'});
+      const session = await repository.createSession({
+        topic: 'Small talk: weather',
+        learning_level: 'A1',
+      });
       const prior = await repository.addMessage({
         session_id: session.id,
         role: 'assistant',
@@ -129,7 +134,13 @@ describe('serverless conversation context (TASK-111)', () => {
       const request = await buildServerlessContext({
         session,
         userMessage,
-        assistantMessage: {...prior, id: prior.id + 1, role: 'assistant', status: 'pending', content: ''},
+        assistantMessage: {
+          ...prior,
+          id: prior.id + 1,
+          role: 'assistant',
+          status: 'pending',
+          content: '',
+        },
       });
 
       expect(request.messages[0].role).toBe('system');
@@ -141,7 +152,10 @@ describe('serverless conversation context (TASK-111)', () => {
     });
 
     test('falls back to the full topic string when it has no title prefix', async () => {
-      const session = await repository.createSession({topic: 'Just chatting', learning_level: 'A2'});
+      const session = await repository.createSession({
+        topic: 'Just chatting',
+        learning_level: 'A2',
+      });
       const userMessage = await repository.addMessage({
         session_id: session.id,
         role: 'user',
@@ -151,7 +165,13 @@ describe('serverless conversation context (TASK-111)', () => {
       const request = await buildServerlessContext({
         session,
         userMessage,
-        assistantMessage: {...userMessage, id: userMessage.id + 1, role: 'assistant', status: 'pending', content: ''},
+        assistantMessage: {
+          ...userMessage,
+          id: userMessage.id + 1,
+          role: 'assistant',
+          status: 'pending',
+          content: '',
+        },
       });
 
       expect(request.messages[0].content).toContain('Conversation topic: "Just chatting".');
@@ -173,7 +193,13 @@ describe('serverless conversation context (TASK-111)', () => {
       const firstRequest = await buildServerlessContext({
         session,
         userMessage: firstUser,
-        assistantMessage: {...firstUser, id: firstUser.id + 1, role: 'assistant', status: 'pending', content: ''},
+        assistantMessage: {
+          ...firstUser,
+          id: firstUser.id + 1,
+          role: 'assistant',
+          status: 'pending',
+          content: '',
+        },
       });
 
       expect(firstRequest.messages[0].content).toContain('Questions the learner wants to cover');
@@ -188,7 +214,13 @@ describe('serverless conversation context (TASK-111)', () => {
       const secondRequest = await buildServerlessContext({
         session,
         userMessage: secondUser,
-        assistantMessage: {...secondUser, id: secondUser.id + 1, role: 'assistant', status: 'pending', content: ''},
+        assistantMessage: {
+          ...secondUser,
+          id: secondUser.id + 1,
+          role: 'assistant',
+          status: 'pending',
+          content: '',
+        },
       });
 
       // The hint should persist so the tutor keeps the learner's questions in view.
@@ -210,7 +242,13 @@ describe('serverless conversation context (TASK-111)', () => {
       const request = await buildServerlessContext({
         session,
         userMessage,
-        assistantMessage: {...userMessage, id: userMessage.id + 1, role: 'assistant', status: 'pending', content: ''},
+        assistantMessage: {
+          ...userMessage,
+          id: userMessage.id + 1,
+          role: 'assistant',
+          status: 'pending',
+          content: '',
+        },
       });
 
       expect(request.messages[0].content).not.toContain('Questions the learner wants to cover');
@@ -231,7 +269,13 @@ describe('serverless conversation context (TASK-111)', () => {
       const request = await buildServerlessContext({
         session,
         userMessage,
-        assistantMessage: {...userMessage, id: userMessage.id + 1, role: 'assistant', status: 'pending', content: ''},
+        assistantMessage: {
+          ...userMessage,
+          id: userMessage.id + 1,
+          role: 'assistant',
+          status: 'pending',
+          content: '',
+        },
       });
 
       expect(request.messages[0].content).not.toContain('Questions the learner wants to cover');

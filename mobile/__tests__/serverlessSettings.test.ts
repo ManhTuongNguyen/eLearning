@@ -16,10 +16,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 
-import {openLocalDatabase} from '../src/db/database';
-import type {SqlDriver} from '../src/db/driver';
-import {insertSession, listSessions} from '../src/db/sessionStore';
-import {getSetting, setSetting} from '../src/db/settingsStore';
+import { openLocalDatabase } from '../src/db/database';
+import type { SqlDriver } from '../src/db/driver';
+import { insertSession, listSessions } from '../src/db/sessionStore';
+import { getSetting, setSetting } from '../src/db/settingsStore';
 import {
   clearServerlessApiKey,
   loadServerlessApiKey,
@@ -36,7 +36,7 @@ import {
   primaryModelSettingKey,
   saveServerlessConfig,
 } from '../src/serverless/settings';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 let mockDb: SqlDriver;
 
@@ -95,7 +95,11 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     test('assembles provider, key, primary model and trimmed fallback models', async () => {
       await saveServerlessApiKey(SECRET);
       await setSetting(mockDb, 'serverless_primary_model', 'vendor/model-a');
-      await setSetting(mockDb, 'serverless_fallback_models', ' vendor/model-b ,, vendor/model-c , ');
+      await setSetting(
+        mockDb,
+        'serverless_fallback_models',
+        ' vendor/model-b ,, vendor/model-c , ',
+      );
 
       await expect(loadServerlessConfig()).resolves.toEqual({
         provider: 'openrouter',
@@ -205,9 +209,7 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
       // The OpenRouter namespace keeps the historic (unsuffixed) keys.
       expect(await getSetting(mockDb, 'serverless_primary_model')).toBe('vendor/model-a');
       // The Gemini namespace uses suffixed keys and its own keychain entry.
-      expect(await getSetting(mockDb, 'serverless_primary_model_gemini')).toBe(
-        'gemini-2.0-flash',
-      );
+      expect(await getSetting(mockDb, 'serverless_primary_model_gemini')).toBe('gemini-2.0-flash');
       await expect(loadServerlessApiKey('openrouter')).resolves.toBe(SECRET);
       await expect(loadServerlessApiKey('gemini')).resolves.toBe(GEMINI_SECRET);
       // The persisted active provider follows the most recent save.
@@ -294,9 +296,7 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
       expect(primaryModelSettingKey('openrouter')).toBe('serverless_primary_model');
       expect(fallbackModelsSettingKey('openrouter')).toBe('serverless_fallback_models');
       expect(primaryModelSettingKey('gemini')).toBe('serverless_primary_model_gemini');
-      expect(fallbackModelsSettingKey('gemini')).toBe(
-        'serverless_fallback_models_gemini',
-      );
+      expect(fallbackModelsSettingKey('gemini')).toBe('serverless_fallback_models_gemini');
     });
   });
 
@@ -344,7 +344,7 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
     test('tracks the configuration lifecycle', async () => {
       await expect(isServerlessConfigured()).resolves.toBe(false);
 
-      await saveServerlessConfig({apiKey: SECRET, primaryModel: 'vendor/model-a'});
+      await saveServerlessConfig({ apiKey: SECRET, primaryModel: 'vendor/model-a' });
       await expect(isServerlessConfigured()).resolves.toBe(true);
 
       await clearServerlessConfig();
@@ -371,7 +371,7 @@ describe('serverless provider settings (TASK-111, TASK-AUDIT-013)', () => {
         apiKey: GEMINI_SECRET,
         primaryModel: 'gemini-2.0-flash',
       });
-      await insertSession(mockDb, {title: 'Local chat'});
+      await insertSession(mockDb, { title: 'Local chat' });
 
       await clearAllServerlessData();
 

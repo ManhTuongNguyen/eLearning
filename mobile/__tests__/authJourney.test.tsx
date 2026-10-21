@@ -12,16 +12,16 @@
  * on a single RNTL render instance: identical unmount/remount semantics to
  * relaunching the app, with the same persisted device stores.
  */
-import React from 'react';
-import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type React from 'react';
+import * as Keychain from 'react-native-keychain';
 import App from '../App';
 import * as authApi from '../src/api/auth';
-import type {Session} from '../src/api/sessions';
-import * as sessionsApi from '../src/api/sessions';
 import * as profileApi from '../src/api/profile';
-import * as Keychain from 'react-native-keychain';
-import {saveApplicationMode} from '../src/mode/modeStorage';
+import type { Session } from '../src/api/sessions';
+import * as sessionsApi from '../src/api/sessions';
+import { saveApplicationMode } from '../src/mode/modeStorage';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -38,8 +38,8 @@ const mockedKeychain = Keychain as jest.Mocked<typeof Keychain> & {
   __resetKeychainStore: () => void;
 };
 
-const TOKENS = {access: 'access-1', refresh: 'refresh-1'};
-const USER = {id: 1, username: 'alice', email: 'alice@example.com'};
+const TOKENS = { access: 'access-1', refresh: 'refresh-1' };
+const USER = { id: 1, username: 'alice', email: 'alice@example.com' };
 const KEYCHAIN_SERVICE = 'com.elearningmobile.auth';
 
 function launch(index: number): React.ReactElement {
@@ -48,17 +48,17 @@ function launch(index: number): React.ReactElement {
   return <App key={`launch-${index}`} />;
 }
 
-async function storedTokens(): Promise<{access: string; refresh: string} | null> {
+async function storedTokens(): Promise<{ access: string; refresh: string } | null> {
   const credentials = await mockedKeychain.getGenericPassword({
     service: KEYCHAIN_SERVICE,
   });
   if (!credentials) {
     return null;
   }
-  return JSON.parse(credentials.password) as {access: string; refresh: string};
+  return JSON.parse(credentials.password) as { access: string; refresh: string };
 }
 
-async function seedKeychain(tokens: {access: string; refresh: string}) {
+async function seedKeychain(tokens: { access: string; refresh: string }) {
   await Keychain.setGenericPassword('elearning-auth', JSON.stringify(tokens), {
     service: KEYCHAIN_SERVICE,
   });
@@ -93,7 +93,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 }
 
 function sessionPage(results: Session[]): sessionsApi.Paginated<Session> {
-  return {count: results.length, next: null, previous: null, results};
+  return { count: results.length, next: null, previous: null, results };
 }
 
 beforeEach(async () => {
@@ -102,7 +102,7 @@ beforeEach(async () => {
   // Server-flow journeys: pin the persisted mode because fresh installs
   // now default to serverless.
   await saveApplicationMode('server');
-  mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
+  mockedProfile.getProfile.mockResolvedValue({ level: 'AUTO' });
   // The no-session landing route checks the authoritative history before it
   // may claim the empty state (TASK-AUDIT-008); default to an empty one.
   mockedSessions.listSessions.mockResolvedValue(sessionPage([]));
@@ -111,7 +111,7 @@ beforeEach(async () => {
 describe('TASK-109 registration journey', () => {
   it('registers through the UI, auto-logs-in, and lands in the main app', async () => {
     mockedAuth.register.mockResolvedValue(USER);
-    mockedAuth.login.mockResolvedValue({...TOKENS, user: USER});
+    mockedAuth.login.mockResolvedValue({ ...TOKENS, user: USER });
     await render(launch(0));
 
     await fillRegistrationForm();
@@ -132,7 +132,7 @@ describe('TASK-109 registration journey', () => {
 
 describe('TASK-109 login journey', () => {
   it('logs in through the UI and persists the tokens in secure storage', async () => {
-    mockedAuth.login.mockResolvedValue({...TOKENS, user: USER});
+    mockedAuth.login.mockResolvedValue({ ...TOKENS, user: USER });
     await render(launch(0));
 
     await fillLoginForm('alice@example.com', 'secret');
@@ -145,9 +145,9 @@ describe('TASK-109 login journey', () => {
   });
 
   it('opens the most recent existing conversation after login (TASK-AUDIT-008)', async () => {
-    mockedAuth.login.mockResolvedValue({...TOKENS, user: USER});
+    mockedAuth.login.mockResolvedValue({ ...TOKENS, user: USER });
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 9}), makeSession({id: 7})]),
+      sessionPage([makeSession({ id: 9 }), makeSession({ id: 7 })]),
     );
     mockedSessions.listMessages.mockResolvedValue({
       count: 0,
@@ -155,7 +155,7 @@ describe('TASK-109 login journey', () => {
       previous: null,
       results: [],
     });
-    mockedSessions.getSession.mockResolvedValue(makeSession({id: 9}));
+    mockedSessions.getSession.mockResolvedValue(makeSession({ id: 9 }));
     await render(launch(0));
 
     await fillLoginForm('alice@example.com', 'secret');
@@ -173,7 +173,7 @@ describe('TASK-109 login journey', () => {
 
 describe('TASK-109 token restoration journey', () => {
   it('restores the session from secure storage after an application restart', async () => {
-    mockedAuth.login.mockResolvedValue({...TOKENS, user: USER});
+    mockedAuth.login.mockResolvedValue({ ...TOKENS, user: USER });
     const view = await render(launch(0));
 
     await fillLoginForm('alice', 'secret');
@@ -199,10 +199,8 @@ describe('TASK-109 token restoration journey', () => {
 describe('TASK-109 expired token handling', () => {
   it('recovers from an expired access token at startup via refresh', async () => {
     await seedKeychain(TOKENS);
-    mockedAuth.getMe
-      .mockRejectedValueOnce(new Error('401'))
-      .mockResolvedValueOnce(USER);
-    mockedAuth.refreshAccessToken.mockResolvedValue({access: 'access-2'});
+    mockedAuth.getMe.mockRejectedValueOnce(new Error('401')).mockResolvedValueOnce(USER);
+    mockedAuth.refreshAccessToken.mockResolvedValue({ access: 'access-2' });
     await render(launch(0));
 
     await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
@@ -211,7 +209,7 @@ describe('TASK-109 expired token handling', () => {
     expect(mockedAuth.refreshAccessToken).toHaveBeenCalledWith('refresh-1');
     expect(mockedAuth.getMe).toHaveBeenLastCalledWith('access-2');
     // The rotated access token was persisted for the next launch.
-    expect(await storedTokens()).toEqual({access: 'access-2', refresh: 'refresh-1'});
+    expect(await storedTokens()).toEqual({ access: 'access-2', refresh: 'refresh-1' });
   });
 
   it('returns to the login screen and wipes credentials when refresh is expired too', async () => {

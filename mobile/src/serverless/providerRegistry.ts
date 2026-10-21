@@ -65,18 +65,11 @@ export const PROVIDER_DESCRIPTORS: Record<ProviderId, ProviderDescriptor> = {
 };
 
 /** Provider ids exposed by the settings UI, in display order. */
-export const SUPPORTED_PROVIDER_IDS: readonly ProviderId[] = [
-  'openrouter',
-  'gemini',
-  'openai',
-];
+export const SUPPORTED_PROVIDER_IDS: readonly ProviderId[] = ['openrouter', 'gemini', 'openai'];
 
 /** True when `value` is one of the supported provider ids. */
 export function isProviderId(value: unknown): value is ProviderId {
-  return (
-    typeof value === 'string' &&
-    Object.prototype.hasOwnProperty.call(PROVIDER_DESCRIPTORS, value)
-  );
+  return typeof value === 'string' && Object.hasOwn(PROVIDER_DESCRIPTORS, value);
 }
 
 /**

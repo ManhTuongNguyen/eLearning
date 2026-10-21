@@ -11,17 +11,15 @@
  * Chat header (`slideFromTop`) swaps the native push for the custom top-drop
  * transition, while every other entry keeps the shared push.
  */
-import {
-  settingsScreenOptions,
-  stackScreenOptions,
-} from '../src/navigation/stackScreenOptions';
-import type {MainStackParamList} from '../src/navigation/types';
-import type {RouteProp} from '@react-navigation/native';
+
+import type { RouteProp } from '@react-navigation/native';
+import { settingsScreenOptions, stackScreenOptions } from '../src/navigation/stackScreenOptions';
+import type { MainStackParamList } from '../src/navigation/types';
 
 function settingsRoute(
   params?: MainStackParamList['Settings'],
 ): RouteProp<MainStackParamList, 'Settings'> {
-  return {key: 'settings-test', name: 'Settings', params};
+  return { key: 'settings-test', name: 'Settings', params };
 }
 
 describe('navigation transitions', () => {
@@ -34,9 +32,7 @@ describe('navigation transitions', () => {
   });
 
   it('presents Settings as a non-animated transparent modal when opened from Chat', () => {
-    expect(
-      settingsScreenOptions({route: settingsRoute({slideFromTop: true})}),
-    ).toEqual({
+    expect(settingsScreenOptions({ route: settingsRoute({ slideFromTop: true }) })).toEqual({
       animation: 'none',
       presentation: 'transparentModal',
       gestureEnabled: false,
@@ -44,9 +40,7 @@ describe('navigation transitions', () => {
   });
 
   it('keeps the shared push animation for every other Settings entry', () => {
-    expect(settingsScreenOptions({route: settingsRoute()})).toEqual({});
-    expect(
-      settingsScreenOptions({route: settingsRoute({configSaved: true})}),
-    ).toEqual({});
+    expect(settingsScreenOptions({ route: settingsRoute() })).toEqual({});
+    expect(settingsScreenOptions({ route: settingsRoute({ configSaved: true }) })).toEqual({});
   });
 });

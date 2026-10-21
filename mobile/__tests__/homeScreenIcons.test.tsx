@@ -6,17 +6,16 @@
  * row keeps a two-column layout (fixed-width icon, flexible text) so long
  * descriptions wrap instead of being squeezed.
  */
-import React from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {fireEvent, render, waitFor} from '@testing-library/react-native';
 
-import {saveThemeMode} from '../src/preferences/theme';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {HomeScreen} from '../src/screens/HomeScreen';
-import type {HomeScreenProps} from '../src/navigation/types';
-import {darkColors, lightColors} from '../src/theme/colors';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import type { HomeScreenProps } from '../src/navigation/types';
+import { saveThemeMode } from '../src/preferences/theme';
+import { HomeScreen } from '../src/screens/HomeScreen';
+import { darkColors, lightColors } from '../src/theme/colors';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
   __resetAsyncStorageStore: () => void;
@@ -30,10 +29,20 @@ interface JsonNode {
 
 /** Rows under test: icon name, row testID, expected navigation target. */
 const ROWS = [
-  {icon: 'chat', testID: 'home-open-chat', route: 'Chat', title: 'Conversations'},
-  {icon: 'history', testID: 'home-open-history', route: 'History', title: 'History'},
-  {icon: 'listening', testID: 'home-open-listening', route: 'Practice', title: 'Listening practice'},
-  {icon: 'speaking', testID: 'home-open-speaking', route: 'SpeakingPractice', title: 'Speaking practice'},
+  { icon: 'chat', testID: 'home-open-chat', route: 'Chat', title: 'Conversations' },
+  { icon: 'history', testID: 'home-open-history', route: 'History', title: 'History' },
+  {
+    icon: 'listening',
+    testID: 'home-open-listening',
+    route: 'Practice',
+    title: 'Listening practice',
+  },
+  {
+    icon: 'speaking',
+    testID: 'home-open-speaking',
+    route: 'SpeakingPractice',
+    title: 'Speaking practice',
+  },
   {
     icon: 'speakingHistory',
     testID: 'home-open-speaking-history',
@@ -46,14 +55,14 @@ const ROWS = [
     route: 'SentenceTopics',
     title: 'Real-life sentences',
   },
-  {icon: 'settings', testID: 'home-open-settings', route: 'Settings', title: 'Settings'},
+  { icon: 'settings', testID: 'home-open-settings', route: 'Settings', title: 'Settings' },
 ] as const;
 
 function homeProps(): HomeScreenProps {
   const navigate = jest.fn();
   return {
-    navigation: {navigate},
-    route: {key: 'home-test', name: 'Home'},
+    navigation: { navigate },
+    route: { key: 'home-test', name: 'Home' },
   } as unknown as HomeScreenProps;
 }
 
@@ -100,7 +109,7 @@ async function renderHome(props: HomeScreenProps = homeProps()) {
   await waitFor(() => {
     expect(view.getByTestId('home-open-sentences')).toBeTruthy();
   });
-  return {view, props};
+  return { view, props };
 }
 
 beforeEach(() => {
@@ -109,15 +118,15 @@ beforeEach(() => {
 
 describe('Home hub icons', () => {
   it('renders a leading icon on every row', async () => {
-    const {view} = await renderHome();
+    const { view } = await renderHome();
 
     for (const row of ROWS) {
-      expect(view.getByTestId(`icon-${row.icon}`, {includeHiddenElements: true})).toBeTruthy();
+      expect(view.getByTestId(`icon-${row.icon}`, { includeHiddenElements: true })).toBeTruthy();
     }
   });
 
   it('keeps the row title and description next to the icon', async () => {
-    const {view} = await renderHome();
+    const { view } = await renderHome();
 
     for (const row of ROWS) {
       expect(view.getByText(row.title)).toBeTruthy();
@@ -127,8 +136,8 @@ describe('Home hub icons', () => {
   });
 
   it('still pushes the same route from every row', async () => {
-    const {view, props} = await renderHome();
-    const navigate = (props.navigation as unknown as {navigate: jest.Mock}).navigate;
+    const { view, props } = await renderHome();
+    const navigate = (props.navigation as unknown as { navigate: jest.Mock }).navigate;
 
     for (const row of ROWS) {
       await fireEvent.press(view.getByTestId(row.testID));
@@ -137,7 +146,7 @@ describe('Home hub icons', () => {
   });
 
   it('lays each row out as a fixed icon column beside a flexible text column', async () => {
-    const {view} = await renderHome();
+    const { view } = await renderHome();
     const json = view.toJSON() as unknown as JsonNode;
 
     const row = findNode(json, node => node.props?.testID === 'home-open-chat');
@@ -162,14 +171,14 @@ describe('Home hub icons', () => {
 
   it('colors icons from the active theme, including dark mode', async () => {
     const light = await renderHome();
-    const lightIcon = light.view.getByTestId('icon-chat', {includeHiddenElements: true});
+    const lightIcon = light.view.getByTestId('icon-chat', { includeHiddenElements: true });
     expect(lightIcon.props.stroke).toBe(lightColors.accent);
     await light.view.unmount();
 
     await saveThemeMode('dark');
     const dark = await renderHome();
     await waitFor(() => {
-      const darkIcon = dark.view.getByTestId('icon-chat', {includeHiddenElements: true});
+      const darkIcon = dark.view.getByTestId('icon-chat', { includeHiddenElements: true });
       expect(darkIcon.props.stroke).toBe(darkColors.accent);
     });
   });

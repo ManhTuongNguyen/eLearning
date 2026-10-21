@@ -6,9 +6,8 @@
  * deterministically to the default (server) mode instead of failing startup.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import {DEFAULT_APPLICATION_MODE, parseApplicationMode} from './types';
-import type {ApplicationMode} from './types';
+import type { ApplicationMode } from './types';
+import { DEFAULT_APPLICATION_MODE, parseApplicationMode } from './types';
 
 const MODE_STORAGE_KEY = 'app.applicationMode';
 

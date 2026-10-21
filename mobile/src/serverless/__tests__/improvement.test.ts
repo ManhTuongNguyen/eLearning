@@ -2,10 +2,10 @@
  * Tests for serverless message improvement (SPEC TASK-089).
  */
 
-import {generateImprovement} from '../improvement';
-import type {EnglishLevel} from '../../../src/api/profile';
-import type {CompletionResult, OpenRouterClient} from '../types';
-import {OpenRouterAvailabilityError, OpenRouterResponseError} from '../errors';
+import type { EnglishLevel } from '../../../src/api/profile';
+import { OpenRouterAvailabilityError, OpenRouterResponseError } from '../errors';
+import { generateImprovement } from '../improvement';
+import type { CompletionResult, OpenRouterClient } from '../types';
 
 describe('generateImprovement', () => {
   const VALID_JSON = JSON.stringify({
@@ -130,8 +130,7 @@ describe('generateImprovement', () => {
       originalMessage: 'I go to store yesterday.',
     });
 
-    const userPrompt = (client.complete as jest.Mock).mock.calls[0][0]
-      .messages[1].content;
+    const userPrompt = (client.complete as jest.Mock).mock.calls[0][0].messages[1].content;
     expect(userPrompt).toContain('Extend the message as well');
     expect(userPrompt).toContain('guides the learner to say more');
     // A2 learners are stretched toward B1: slightly above, not a leap.
@@ -149,9 +148,8 @@ describe('generateImprovement', () => {
     ];
     for (const [level, target] of ladder) {
       const client = mockClient(VALID_JSON);
-      await generateImprovement(client, {level, originalMessage: 'Hello!'});
-      const userPrompt = (client.complete as jest.Mock).mock.calls[0][0]
-        .messages[1].content;
+      await generateImprovement(client, { level, originalMessage: 'Hello!' });
+      const userPrompt = (client.complete as jest.Mock).mock.calls[0][0].messages[1].content;
       expect(userPrompt).toContain(`around ${target} rather than ${level}`);
     }
   });
@@ -159,10 +157,9 @@ describe('generateImprovement', () => {
   it('caps the extension target at C2', async () => {
     const client = mockClient(VALID_JSON);
 
-    await generateImprovement(client, {level: 'C2', originalMessage: 'Hello!'});
+    await generateImprovement(client, { level: 'C2', originalMessage: 'Hello!' });
 
-    const userPrompt = (client.complete as jest.Mock).mock.calls[0][0]
-      .messages[1].content;
+    const userPrompt = (client.complete as jest.Mock).mock.calls[0][0].messages[1].content;
     expect(userPrompt).toContain('top of the CEFR scale (C2)');
     expect(userPrompt).toContain('extend the message');
     expect(userPrompt).not.toContain('rather than C2');
@@ -176,8 +173,7 @@ describe('generateImprovement', () => {
       originalMessage: 'Hello!',
     });
 
-    const userPrompt = (client.complete as jest.Mock).mock.calls[0][0]
-      .messages[1].content;
+    const userPrompt = (client.complete as jest.Mock).mock.calls[0][0].messages[1].content;
     expect(userPrompt).toContain('level is unknown');
     // AUTO keeps the historic behaviour: corrections only, no extension.
     expect(userPrompt).toContain('Correct the message only');
@@ -202,7 +198,7 @@ describe('generateImprovement', () => {
     const client = mockClient(VALID_JSON);
 
     await expect(
-      generateImprovement(client, {level: 'A1', originalMessage: '   '}),
+      generateImprovement(client, { level: 'A1', originalMessage: '   ' }),
     ).rejects.toThrow('originalMessage must be a non-empty string.');
     expect(client.complete).not.toHaveBeenCalled();
   });
@@ -221,15 +217,13 @@ describe('generateImprovement', () => {
 
   it('normalizes provider failures by rethrowing them untouched', async () => {
     const client: OpenRouterClient = {
-      complete: jest
-        .fn()
-        .mockRejectedValue(new OpenRouterAvailabilityError('overloaded')),
+      complete: jest.fn().mockRejectedValue(new OpenRouterAvailabilityError('overloaded')),
       streamCompletion: jest.fn(),
       listModels: jest.fn(),
     };
 
     await expect(
-      generateImprovement(client, {level: 'A1', originalMessage: 'Hi!'}),
+      generateImprovement(client, { level: 'A1', originalMessage: 'Hi!' }),
     ).rejects.toBeInstanceOf(OpenRouterAvailabilityError);
   });
 
@@ -240,30 +234,30 @@ describe('generateImprovement', () => {
     ['a missing explanation field', '{"improved": "Fixed.", "severity": "none"}'],
     [
       'a blank improved field',
-      JSON.stringify({improved: '   ', explanation: 'why', severity: 'none'}),
+      JSON.stringify({ improved: '   ', explanation: 'why', severity: 'none' }),
     ],
     [
       'a non-string explanation',
-      JSON.stringify({improved: 'Fixed.', explanation: 3, severity: 'none'}),
+      JSON.stringify({ improved: 'Fixed.', explanation: 3, severity: 'none' }),
     ],
     ['a missing severity field', '{"improved": "Fixed.", "explanation": "why"}'],
     [
       'a blank severity field',
-      JSON.stringify({improved: 'Fixed.', explanation: 'why', severity: '   '}),
+      JSON.stringify({ improved: 'Fixed.', explanation: 'why', severity: '   ' }),
     ],
     [
       'an unknown severity value',
-      JSON.stringify({improved: 'Fixed.', explanation: 'why', severity: 'major'}),
+      JSON.stringify({ improved: 'Fixed.', explanation: 'why', severity: 'major' }),
     ],
     [
       'a non-string severity value',
-      JSON.stringify({improved: 'Fixed.', explanation: 'why', severity: 3}),
+      JSON.stringify({ improved: 'Fixed.', explanation: 'why', severity: 3 }),
     ],
   ])('rejects %s with OpenRouterResponseError', async (_label, responseText) => {
     const client = mockClient(responseText);
 
     await expect(
-      generateImprovement(client, {level: 'B1', originalMessage: 'Hello!'}),
+      generateImprovement(client, { level: 'B1', originalMessage: 'Hello!' }),
     ).rejects.toBeInstanceOf(OpenRouterResponseError);
   });
 });

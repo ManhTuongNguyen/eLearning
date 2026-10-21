@@ -11,7 +11,7 @@
  * playback starts and off whenever playback stops (pause, end, unmount),
  * and the last call wins.
  */
-import {NativeModules} from 'react-native';
+import { NativeModules } from 'react-native';
 
 /** Shape of the keep-awake method on the native Speech module. */
 interface NativeKeepAwake {
@@ -21,9 +21,7 @@ interface NativeKeepAwake {
 /** True when the native module exposes the keep-screen-on control. */
 export function isKeepScreenOnAvailable(): boolean {
   const candidate = NativeModules.Speech as NativeKeepAwake | null | undefined;
-  return (
-    !!candidate && typeof candidate.setKeepScreenOn === 'function'
-  );
+  return !!candidate && typeof candidate.setKeepScreenOn === 'function';
 }
 
 /**

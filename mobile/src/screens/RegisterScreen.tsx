@@ -1,5 +1,5 @@
 /** Registration screen creating an account via the backend API. */
-import React, {useMemo, useState} from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,10 +11,10 @@ import {
   View,
 } from 'react-native';
 
-import {useAuth} from '../auth/AuthContext';
-import type {RegisterScreenProps} from '../navigation/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import { useAuth } from '../auth/AuthContext';
+import type { RegisterScreenProps } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -81,19 +81,16 @@ function createStyles(c: ThemeColors) {
   });
 }
 
-export function RegisterScreen({navigation}: RegisterScreenProps) {
-  const {register, busy, error} = useAuth();
-  const {colors} = useTheme();
+export function RegisterScreen({ navigation }: RegisterScreenProps) {
+  const { register, busy, error } = useAuth();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const canSubmit =
-    username.trim().length > 0 &&
-    email.trim().length > 0 &&
-    password.length > 0 &&
-    !busy;
+    username.trim().length > 0 && email.trim().length > 0 && password.length > 0 && !busy;
 
   return (
     <KeyboardAvoidingView
@@ -159,9 +156,7 @@ export function RegisterScreen({navigation}: RegisterScreenProps) {
           )}
         </Pressable>
 
-        <Pressable
-          onPress={() => navigation.replace('Login')}
-          testID="register-switch-login">
+        <Pressable onPress={() => navigation.replace('Login')} testID="register-switch-login">
           <Text style={styles.switchText}>
             Already have an account? <Text style={styles.switchLink}>Log in</Text>
           </Text>

@@ -13,19 +13,12 @@
  * MessageActionsMenu/ImprovementSheet: a bottom card over a dismissible
  * backdrop whose body is an accessibility modal with labeled controls.
  */
-import React, {useCallback, useMemo, useState} from 'react';
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import type {TextInputSelectionChangeEvent} from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import type { TextInputSelectionChangeEvent } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 /** A non-collapsed selection span within the pinned message content. */
 interface SelectionSpan {
@@ -161,8 +154,8 @@ interface SurfaceProps {
  * The interactive body of the sheet. Mounted only while the sheet is
  * presented, so its selection state never leaks across openings.
  */
-function SelectionSurface({content, onClose, onSave}: SurfaceProps) {
-  const {colors} = useTheme();
+function SelectionSurface({ content, onClose, onSave }: SurfaceProps) {
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [selection, setSelection] = useState<SelectionSpan | null>(null);
 
@@ -172,13 +165,13 @@ function SelectionSurface({content, onClose, onSave}: SurfaceProps) {
    */
   const handleSelectionChange = useCallback(
     (event: TextInputSelectionChangeEvent) => {
-      const {start, end} = event.nativeEvent.selection;
+      const { start, end } = event.nativeEvent.selection;
       const clampedEnd = Math.min(end, content.length);
       if (start >= clampedEnd) {
         setSelection(null);
         return;
       }
-      setSelection({start, end: clampedEnd});
+      setSelection({ start, end: clampedEnd });
     },
     [content.length],
   );
@@ -227,11 +220,7 @@ function SelectionSurface({content, onClose, onSave}: SurfaceProps) {
           />
           <Text style={styles.sectionLabel}>Selected</Text>
           <View style={styles.previewBox} testID="chat-selection-preview">
-            <Text
-              style={[
-                styles.previewText,
-                trimmedSelection === '' && styles.previewEmpty,
-              ]}>
+            <Text style={[styles.previewText, trimmedSelection === '' && styles.previewEmpty]}>
               {trimmedSelection === '' ? 'Nothing selected yet.' : trimmedSelection}
             </Text>
           </View>
@@ -251,7 +240,7 @@ function SelectionSurface({content, onClose, onSave}: SurfaceProps) {
               testID="chat-selection-save"
               accessibilityRole="button"
               accessibilityLabel="Save selected word"
-              accessibilityState={{disabled: trimmedSelection === ''}}>
+              accessibilityState={{ disabled: trimmedSelection === '' }}>
               <Text style={styles.saveButtonText}>Save word</Text>
             </Pressable>
           </View>
@@ -272,12 +261,7 @@ interface TextSelectionSheetProps {
   onSave: (selectedText: string) => void;
 }
 
-export function TextSelectionSheet({
-  visible,
-  content,
-  onClose,
-  onSave,
-}: TextSelectionSheetProps) {
+export function TextSelectionSheet({ visible, content, onClose, onSave }: TextSelectionSheetProps) {
   if (!visible) {
     return null;
   }

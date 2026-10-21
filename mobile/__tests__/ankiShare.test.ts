@@ -8,8 +8,8 @@
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import Share from 'react-native-share';
 
-import {VOCABULARY_EXPORT_FILENAME} from '../src/api/vocabulary';
-import {shareAnkiCsv} from '../src/utils/ankiShare';
+import { VOCABULARY_EXPORT_FILENAME } from '../src/api/vocabulary';
+import { shareAnkiCsv } from '../src/utils/ankiShare';
 
 const mockedWriteFile = jest.mocked(ReactNativeBlobUtil.fs.writeFile);
 const mockedOpen = jest.mocked(Share.open);

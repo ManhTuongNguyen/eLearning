@@ -7,19 +7,13 @@
  * serverless — so serverless-local data can never accidentally reach server
  * APIs.
  */
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import type React from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import {loadApplicationMode, saveApplicationMode} from './modeStorage';
-import {setRuntimeApplicationMode} from './runtime';
-import {DEFAULT_APPLICATION_MODE, parseApplicationMode} from './types';
-import type {ApplicationMode} from './types';
+import { loadApplicationMode, saveApplicationMode } from './modeStorage';
+import { setRuntimeApplicationMode } from './runtime';
+import type { ApplicationMode } from './types';
+import { DEFAULT_APPLICATION_MODE, parseApplicationMode } from './types';
 
 export type ModeStatus = 'loading' | 'ready';
 
@@ -37,7 +31,7 @@ export interface ModeContextValue {
 
 const ModeContext = createContext<ModeContextValue | undefined>(undefined);
 
-export function ModeProvider({children}: {children: React.ReactNode}) {
+export function ModeProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<ModeStatus>('loading');
   const [mode, setModeState] = useState<ApplicationMode>(DEFAULT_APPLICATION_MODE);
 
@@ -69,7 +63,7 @@ export function ModeProvider({children}: {children: React.ReactNode}) {
   }, []);
 
   const value = useMemo<ModeContextValue>(
-    () => ({status, mode, setMode}),
+    () => ({ status, mode, setMode }),
     [status, mode, setMode],
   );
 

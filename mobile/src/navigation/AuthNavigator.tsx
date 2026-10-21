@@ -1,10 +1,10 @@
 /** Auth stack: Login and Register for unauthenticated users (TASK-043). */
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import {LoginScreen} from '../screens/LoginScreen';
-import {RegisterScreen} from '../screens/RegisterScreen';
-import {stackScreenOptions} from './stackScreenOptions';
-import type {AuthStackParamList} from './types';
+import { LoginScreen } from '../screens/LoginScreen';
+import { RegisterScreen } from '../screens/RegisterScreen';
+import { stackScreenOptions } from './stackScreenOptions';
+import type { AuthStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 

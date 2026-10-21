@@ -18,9 +18,9 @@ import {
   INITIAL_SCHEDULE,
   INTERVAL_MAX_DAYS,
   LEARNING_STEP_MINUTES,
+  type SchedulerState,
   scheduleNext,
   schedulerStateFrom,
-  type SchedulerState,
 } from '../src/srs/scheduler';
 
 const NOW = new Date('2026-10-19T09:00:00.000Z');
@@ -115,7 +115,7 @@ describe('scheduleNext — Good', () => {
 
     const next = scheduleNext(learning, 'good', NOW);
 
-    expect(next).toMatchObject({status: 'review', interval_days: 1, reps: 1, lapses: 2});
+    expect(next).toMatchObject({ status: 'review', interval_days: 1, reps: 1, lapses: 2 });
     expect(next.ease).toBeCloseTo(2.3, 5);
     expect(next.due_at).toBe(ONE_DAY_LATER);
   });
@@ -174,7 +174,7 @@ describe('invariants', () => {
   });
 
   test('never shrinks an interval, even from an inconsistent state', () => {
-    const inconsistent = reviewCard({interval_days: 0, ease: EASE_MIN});
+    const inconsistent = reviewCard({ interval_days: 0, ease: EASE_MIN });
 
     const good = scheduleNext(inconsistent, 'good', NOW);
     const easy = scheduleNext(inconsistent, 'easy', NOW);
@@ -198,7 +198,7 @@ describe('invariants', () => {
   });
 
   test('caps the interval at one year', () => {
-    const nearlyMaxed = reviewCard({interval_days: 300, ease: EASE_MAX});
+    const nearlyMaxed = reviewCard({ interval_days: 300, ease: EASE_MAX });
 
     const good = scheduleNext(nearlyMaxed, 'good', NOW);
     const easy = scheduleNext(nearlyMaxed, 'easy', NOW);
@@ -217,12 +217,12 @@ describe('invariants', () => {
 
   test('schedulerStateFrom keeps only the schedule half of a row', () => {
     const row = {
-      ...reviewCard({interval_days: 2.5}),
+      ...reviewCard({ interval_days: 2.5 }),
       id: 7,
       text: 'Nice to meet you.',
       meaning: 'A greeting.',
     };
 
-    expect(schedulerStateFrom(row)).toEqual(reviewCard({interval_days: 2.5}));
+    expect(schedulerStateFrom(row)).toEqual(reviewCard({ interval_days: 2.5 }));
   });
 });

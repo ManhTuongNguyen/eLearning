@@ -16,31 +16,30 @@
  * large-list case profiles the same behavior through the failed-response
  * retry pipeline (TASK-054) on a long preloaded conversation.
  */
-import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 
-import {streamChatTurn, streamRetryTurn} from '../src/api/chatStream';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import * as authApi from '../src/api/auth';
 import type {
   ChatStreamEvent,
   StreamChatTurnOptions,
   StreamRetryTurnOptions,
 } from '../src/api/chatStream';
-import * as authApi from '../src/api/auth';
+import { streamChatTurn, streamRetryTurn } from '../src/api/chatStream';
+import type { ChatMessage, Paginated, Session } from '../src/api/sessions';
 import * as sessionsApi from '../src/api/sessions';
-import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
-import {AuthProvider} from '../src/auth/AuthContext';
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import type {MainStackParamList} from '../src/navigation/types';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {ChatScreen} from '../src/screens/ChatScreen';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import type { MainStackParamList } from '../src/navigation/types';
+import { ChatScreen } from '../src/screens/ChatScreen';
 import {
   CHAT_LIST_INITIAL_NUM_TO_RENDER,
   STREAM_FLUSH_INTERVAL_MS,
 } from '../src/screens/streamingUx';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -60,7 +59,7 @@ jest.mock('../src/screens/MessageRow', () => {
   const ActualRow = actual.MessageRow;
   // MUST stay memoized in sync with the real MessageRow: the wrapper bails
   // out on the same shallow prop comparison, so invocations == renders.
-  const CountingRow = react.memo(function CountingRow(props: {item: {id: number}}) {
+  const CountingRow = react.memo(function CountingRow(props: { item: { id: number } }) {
     const key = String(props.item.id);
     mockRenderCounts.set(key, (mockRenderCounts.get(key) ?? 0) + 1);
     return react.createElement(ActualRow, props);
@@ -80,7 +79,7 @@ const mockedStreamRetry = jest.mocked(streamRetryTurn);
 
 interface CapturedTurn {
   options: StreamChatTurnOptions | StreamRetryTurnOptions;
-  handle: {abort: () => void};
+  handle: { abort: () => void };
 }
 
 let turns: CapturedTurn[] = [];
@@ -99,7 +98,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
 
 /** A conversation with `count` preloaded rows. */
 function preloadConversation(count: number, failedId?: number): ChatMessage[] {
-  return Array.from({length: count}, (_, index) =>
+  return Array.from({ length: count }, (_, index) =>
     makeMessage({
       id: 1000 + index,
       role: index % 2 === 0 ? 'user' : 'assistant',
@@ -114,7 +113,7 @@ function preloadConversation(count: number, failedId?: number): ChatMessage[] {
 }
 
 function pageOf(results: ChatMessage[]): Paginated<ChatMessage> {
-  return {count: results.length, next: null, previous: null, results};
+  return { count: results.length, next: null, previous: null, results };
 }
 
 function makeSession(): Session {
@@ -141,8 +140,8 @@ async function renderChat(params?: MainStackParamList['Chat']) {
     <ModeProvider>
       <ThemeProvider>
         <AuthProvider>
-          <NavigationContainer initialState={{index: 0, routes: [{name: 'Chat', params}]}}>
-            <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="Chat">
+          <NavigationContainer initialState={{ index: 0, routes: [{ name: 'Chat', params }] }}>
+            <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Chat">
               <Stack.Screen name="Chat" component={ChatScreen} />
               <Stack.Screen name="NewConversation">{() => null}</Stack.Screen>
               <Stack.Screen name="History">{() => null}</Stack.Screen>
@@ -166,9 +165,7 @@ async function deliver(turn: CapturedTurn, event: ChatStreamEvent): Promise<void
 /** Let the TASK-050 delta buffer's deferred flush tick elapse inside act. */
 async function flushStreamTick(): Promise<void> {
   await act(async () => {
-    await new Promise<void>(resolve =>
-      setTimeout(() => resolve(), STREAM_FLUSH_INTERVAL_MS + 20),
-    );
+    await new Promise<void>(resolve => setTimeout(() => resolve(), STREAM_FLUSH_INTERVAL_MS + 20));
   });
 }
 
@@ -186,18 +183,18 @@ beforeEach(async () => {
   // now default to serverless.
   await saveApplicationMode('server');
   mockRenderCounts.clear();
-  mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-  mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+  mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
   mockedSessions.getSession.mockResolvedValue(makeSession());
   turns = [];
   mockedStream.mockImplementation(options => {
-    const handle = {abort: jest.fn()};
-    turns.push({options, handle});
+    const handle = { abort: jest.fn() };
+    turns.push({ options, handle });
     return handle;
   });
   mockedStreamRetry.mockImplementation(options => {
-    const handle = {abort: jest.fn()};
-    turns.push({options, handle});
+    const handle = { abort: jest.fn() };
+    turns.push({ options, handle });
     return handle;
   });
 });
@@ -207,7 +204,7 @@ describe('streaming render profile (TASK-103)', () => {
     // Eight preloaded rows keep the optimistic echo + pending bubble inside
     // the FlatList initial render window so the streamed bubble is mounted.
     mockedSessions.listMessages.mockResolvedValue(pageOf(preloadConversation(8)));
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
     // Initial mount counts once per rendered row; reset so the profile
@@ -223,8 +220,8 @@ describe('streaming render profile (TASK-103)', () => {
     const turn = turns[0];
     expect(turn).toBeDefined();
 
-    await deliver(turn, {type: 'start', model: 'vendor/model'});
-    await deliver(turn, {type: 'delta', text: 'Hello'});
+    await deliver(turn, { type: 'start', model: 'vendor/model' });
+    await deliver(turn, { type: 'delta', text: 'Hello' });
     await flushStreamTick();
 
     // The bubble content landed exactly once per flush.
@@ -242,7 +239,7 @@ describe('streaming render profile (TASK-103)', () => {
 
     // A second flush behaves the same: still only the streaming bubble.
     resetRenderCounts();
-    await deliver(turn, {type: 'delta', text: ', how are you?'});
+    await deliver(turn, { type: 'delta', text: ', how are you?' });
     await flushStreamTick();
     expect(screen.getByText('Hello, how are you?')).toBeOnTheScreen();
     expect(mockRenderCounts.size).toBe(1);
@@ -253,17 +250,13 @@ describe('streaming render profile (TASK-103)', () => {
     // 60 preloaded rows: far beyond the initial render window, so only a
     // bounded slice mounts. The failed row sits inside that slice and is
     // retried so streaming renders land on an already-mounted bubble.
-    mockedSessions.listMessages.mockResolvedValue(
-      pageOf(preloadConversation(60, 1003)),
-    );
-    await renderChat({sessionId: 5});
+    mockedSessions.listMessages.mockResolvedValue(pageOf(preloadConversation(60, 1003)));
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
     // Large-list usability: mounting stays bounded by the initial render
     // window instead of laying out the whole conversation.
-    expect(mountedMessageIds().length).toBeLessThanOrEqual(
-      CHAT_LIST_INITIAL_NUM_TO_RENDER,
-    );
+    expect(mountedMessageIds().length).toBeLessThanOrEqual(CHAT_LIST_INITIAL_NUM_TO_RENDER);
     expect(mountedMessageIds().length).toBeLessThan(60);
 
     const failedRowId = '1003';
@@ -276,7 +269,7 @@ describe('streaming render profile (TASK-103)', () => {
     await flushStreamTick();
     resetRenderCounts();
 
-    await deliver(turn, {type: 'delta', text: 'Well'});
+    await deliver(turn, { type: 'delta', text: 'Well' });
     await flushStreamTick();
     expect(screen.getByText('Well')).toBeOnTheScreen();
 

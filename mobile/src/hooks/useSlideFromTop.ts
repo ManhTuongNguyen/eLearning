@@ -16,22 +16,20 @@
  * screen visible beneath the sliding panel and prevents the native stack
  * from animating at the same time.
  */
-import {useEffect, useRef} from 'react';
-import {Animated, Easing, useWindowDimensions} from 'react-native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
-import type {MainStackParamList} from '../navigation/types';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useEffect, useRef } from 'react';
+import { Animated, Easing, useWindowDimensions } from 'react-native';
+
+import type { MainStackParamList } from '../navigation/types';
 
 const ENTER_DURATION_MS = 260;
 const EXIT_DURATION_MS = 220;
 
 type SettingsNavigation = NativeStackNavigationProp<MainStackParamList, 'Settings'>;
 
-export function useSlideFromTop(
-  enabled: boolean,
-  navigation: SettingsNavigation,
-): Animated.Value {
-  const {height: windowHeight} = useWindowDimensions();
+export function useSlideFromTop(enabled: boolean, navigation: SettingsNavigation): Animated.Value {
+  const { height: windowHeight } = useWindowDimensions();
 
   // Start offscreen so the very first frame cannot flash the panel at its
   // resting position before the entrance animation starts.

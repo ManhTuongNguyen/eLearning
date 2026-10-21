@@ -6,16 +6,13 @@
  * instead of failing speech playback.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import {normalizeSpeechPreferences} from './types';
-import type {SpeechPreferences} from './types';
+import type { SpeechPreferences } from './types';
+import { normalizeSpeechPreferences } from './types';
 
 const SPEECH_SETTINGS_KEY = 'app.speechPreferences';
 
 /** Persist the current preferences; partial writes replace the whole entry. */
-export async function saveSpeechPreferences(
-  preferences: SpeechPreferences,
-): Promise<void> {
+export async function saveSpeechPreferences(preferences: SpeechPreferences): Promise<void> {
   await AsyncStorage.setItem(SPEECH_SETTINGS_KEY, JSON.stringify(preferences));
 }
 

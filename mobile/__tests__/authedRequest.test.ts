@@ -5,12 +5,13 @@
  * AuthContext.refreshAccess) so the wrapper's own guarantees are judged in
  * isolation from React.
  */
-import {createAuthedRequester} from '../src/auth/authedRequest';
-import type {AuthedRequester, AuthedRequestOptions} from '../src/auth/authedRequest';
-import {ApiError} from '../src/api/client';
+
 import * as client from '../src/api/client';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
-import type {AuthTokens} from '../src/auth/tokens';
+import { ApiError } from '../src/api/client';
+import type { AuthedRequester, AuthedRequestOptions } from '../src/auth/authedRequest';
+import { createAuthedRequester } from '../src/auth/authedRequest';
+import type { AuthTokens } from '../src/auth/tokens';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
 
 jest.mock('../src/api/client', () => ({
   ...jest.requireActual('../src/api/client'),
@@ -19,7 +20,7 @@ jest.mock('../src/api/client', () => ({
 
 const mockedApiRequest = jest.mocked(client.apiRequest);
 
-const TOKENS: AuthTokens = {access: 'access-1', refresh: 'refresh-1'};
+const TOKENS: AuthTokens = { access: 'access-1', refresh: 'refresh-1' };
 
 function unauthorized(): ApiError {
   return new ApiError(401, 'Token is invalid or expired', {}, 'authentication');
@@ -45,7 +46,7 @@ function makeHarness(initialTokens: AuthTokens | null = TOKENS) {
     }
     const attempt = refreshFn()
       .then(async access => {
-        tokens = {...current, access};
+        tokens = { ...current, access };
         return access;
       })
       .catch(async () => {
@@ -65,7 +66,7 @@ function makeHarness(initialTokens: AuthTokens | null = TOKENS) {
     refresh,
   });
 
-  return {authedRequest, refreshFn, currentTokens: () => tokens};
+  return { authedRequest, refreshFn, currentTokens: () => tokens };
 }
 
 beforeEach(() => {
@@ -78,27 +79,25 @@ beforeEach(() => {
 describe('authedRequest wrapper (TASK-AUDIT-005)', () => {
   it('executes a normal request with the current access token', async () => {
     const harness = makeHarness();
-    mockedApiRequest.mockResolvedValue({level: 'B2'});
+    mockedApiRequest.mockResolvedValue({ level: 'B2' });
 
-    await expect(
-      harness.authedRequest<{level: string}>('/api/v1/profile/'),
-    ).resolves.toEqual({level: 'B2'});
+    await expect(harness.authedRequest<{ level: string }>('/api/v1/profile/')).resolves.toEqual({
+      level: 'B2',
+    });
 
     expect(mockedApiRequest).toHaveBeenCalledTimes(1);
-    expect(mockedApiRequest).toHaveBeenCalledWith('/api/v1/profile/', {token: 'access-1'});
+    expect(mockedApiRequest).toHaveBeenCalledWith('/api/v1/profile/', { token: 'access-1' });
     expect(harness.refreshFn).not.toHaveBeenCalled();
   });
 
   it('retries the original request exactly once after a 401 refresh', async () => {
     const harness = makeHarness();
-    mockedApiRequest
-      .mockRejectedValueOnce(unauthorized())
-      .mockResolvedValueOnce({level: 'A2'});
-    const options: AuthedRequestOptions = {method: 'PATCH', body: {level: 'B1'}};
+    mockedApiRequest.mockRejectedValueOnce(unauthorized()).mockResolvedValueOnce({ level: 'A2' });
+    const options: AuthedRequestOptions = { method: 'PATCH', body: { level: 'B1' } };
 
     await expect(
-      harness.authedRequest<{level: string}>('/api/v1/profile/', options),
-    ).resolves.toEqual({level: 'A2'});
+      harness.authedRequest<{ level: string }>('/api/v1/profile/', options),
+    ).resolves.toEqual({ level: 'A2' });
 
     expect(harness.refreshFn).toHaveBeenCalledTimes(1);
     expect(mockedApiRequest).toHaveBeenCalledTimes(2);
@@ -112,7 +111,7 @@ describe('authedRequest wrapper (TASK-AUDIT-005)', () => {
       ...options,
       token: 'access-2',
     });
-    expect(harness.currentTokens()).toEqual({access: 'access-2', refresh: 'refresh-1'});
+    expect(harness.currentTokens()).toEqual({ access: 'access-2', refresh: 'refresh-1' });
   });
 
   it('ends the session and rethrows the original 401 when the refresh fails', async () => {
@@ -179,7 +178,7 @@ describe('authedRequest wrapper (TASK-AUDIT-005)', () => {
       if (options?.token === 'access-1') {
         throw unauthorized();
       }
-      return {path};
+      return { path };
     });
 
     const first = harness.authedRequest('/api/v1/sessions/');
@@ -199,12 +198,12 @@ describe('authedRequest wrapper (TASK-AUDIT-005)', () => {
     releaseRefresh('access-2');
 
     await Promise.all([
-      expect(first).resolves.toEqual({path: '/api/v1/sessions/'}),
-      expect(second).resolves.toEqual({path: '/api/v1/profile/'}),
-      expect(third).resolves.toEqual({path: '/api/v1/vocabulary/'}),
+      expect(first).resolves.toEqual({ path: '/api/v1/sessions/' }),
+      expect(second).resolves.toEqual({ path: '/api/v1/profile/' }),
+      expect(third).resolves.toEqual({ path: '/api/v1/vocabulary/' }),
     ]);
     // Three originals + three retries, but exactly one network refresh.
     expect(mockedApiRequest).toHaveBeenCalledTimes(6);
-    expect(harness.currentTokens()).toEqual({access: 'access-2', refresh: 'refresh-1'});
+    expect(harness.currentTokens()).toEqual({ access: 'access-2', refresh: 'refresh-1' });
   });
 });

@@ -10,22 +10,20 @@
  * no account information is displayed there. Theme segments and the
  * application-mode switcher are visible in both modes.
  */
-import React from 'react';
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import {useAuth} from '../src/auth/AuthContext';
-import {SCREEN_GUTTER} from '../src/components/ScreenLayout';
-import {
-  loadGrammarCheckEnabled,
-  saveGrammarCheckEnabled,
-} from '../src/preferences/grammarCheck';
-import {loadPracticeMode} from '../src/preferences/practiceMode';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
-import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
-import type {MainStackParamList, SettingsScreenProps} from '../src/navigation/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type React from 'react';
+
+import { useAuth } from '../src/auth/AuthContext';
+import { SCREEN_GUTTER } from '../src/components/ScreenLayout';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
+import { DEFAULT_APPLICATION_MODE } from '../src/mode/types';
+import type { MainStackParamList, SettingsScreenProps } from '../src/navigation/types';
+import { loadGrammarCheckEnabled, saveGrammarCheckEnabled } from '../src/preferences/grammarCheck';
+import { loadPracticeMode } from '../src/preferences/practiceMode';
 import {
   CONFIG_SAVED_TOAST_DURATION_MS,
   createStyles,
@@ -33,15 +31,15 @@ import {
   SettingsScreen,
 } from '../src/screens/SettingsScreen';
 import * as serverlessSettings from '../src/serverless/settings';
-import type {OpenRouterClientConfig} from '../src/serverless/types';
-import {lightColors} from '../src/theme/colors';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import type { OpenRouterClientConfig } from '../src/serverless/types';
+import { lightColors } from '../src/theme/colors';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/auth/AuthContext', () => ({
   __esModule: true,
   useAuth: jest.fn(),
   toErrorMessage: (err: unknown) => String(err),
-  AuthProvider: ({children}: {children: React.ReactNode}) => children,
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('../src/serverless/settings');
 jest.mock('../src/preferences/grammarCheck');
@@ -62,7 +60,7 @@ const mockedUseAuth = jest.mocked(useAuth);
 function stubAuth() {
   mockedUseAuth.mockReturnValue({
     status: 'authenticated',
-    user: {id: 1, username: 'alice', email: 'alice@example.com'},
+    user: { id: 1, username: 'alice', email: 'alice@example.com' },
     error: null,
     busy: false,
     logout: mockLogout,
@@ -83,17 +81,19 @@ function configuredStub(): OpenRouterClientConfig {
 
 function settingsProps(params?: MainStackParamList['Settings']): SettingsScreenProps {
   return {
-    navigation: {navigate: jest.fn(), goBack: jest.fn(), popToTop: jest.fn(), setParams: jest.fn()},
-    route: {key: 'settings-test', name: 'Settings', params},
+    navigation: {
+      navigate: jest.fn(),
+      goBack: jest.fn(),
+      popToTop: jest.fn(),
+      setParams: jest.fn(),
+    },
+    route: { key: 'settings-test', name: 'Settings', params },
   } as unknown as SettingsScreenProps;
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   const entries = Array.isArray(style) ? style : [style];
-  return Object.assign(
-    {},
-    ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})),
-  );
+  return Object.assign({}, ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})));
 }
 
 /** Checked state of one of the settings radio controls, read once settled. */
@@ -106,7 +106,10 @@ function checkedStateOf(testID: string): boolean | undefined {
  * Renders the screen inside the providers it consumes, restoring the given
  * application mode exactly like an app start would (persisted flag -> Mode).
  */
-async function renderSettings(mode: 'server' | 'serverless', params?: MainStackParamList['Settings']) {
+async function renderSettings(
+  mode: 'server' | 'serverless',
+  params?: MainStackParamList['Settings'],
+) {
   await saveApplicationMode(mode);
   const props = settingsProps(params);
 
@@ -123,7 +126,9 @@ async function renderSettings(mode: 'server' | 'serverless', params?: MainStackP
 
   // Wait until the restored mode is reflected by the switcher.
   await waitFor(() => {
-    expect(checkedStateOf(mode === 'server' ? 'settings-mode-server' : 'settings-mode-serverless')).toBe(true);
+    expect(
+      checkedStateOf(mode === 'server' ? 'settings-mode-server' : 'settings-mode-serverless'),
+    ).toBe(true);
   });
 
   return props;
@@ -151,9 +156,7 @@ describe('controls present in every mode', () => {
   it('shows the signed-in account identity in server mode', async () => {
     await renderSettings('server');
 
-    expect(screen.getByTestId('settings-account-email')).toHaveTextContent(
-      'alice@example.com',
-    );
+    expect(screen.getByTestId('settings-account-email')).toHaveTextContent('alice@example.com');
     expect(screen.getByText('Signed in as')).toBeOnTheScreen();
   });
 
@@ -214,7 +217,7 @@ describe('controls present in every mode', () => {
   );
 
   it('renders the top-drop transition wrapper when opened from Chat', async () => {
-    await renderSettings('server', {slideFromTop: true});
+    await renderSettings('server', { slideFromTop: true });
 
     expect(screen.getByTestId('settings-transition')).toBeOnTheScreen();
     expect(screen.getByTestId('settings-screen')).toBeOnTheScreen();
@@ -385,14 +388,14 @@ describe('SettingsScreen scrollbar anchoring (TASK-IMPROVEMENT-001)', () => {
 // ever appear.
 describe('configuration-saved toast (TASK-IMPROVEMENT-005)', () => {
   it('flashes the success toast when the editor reports a completed save', async () => {
-    const props = await renderSettings('serverless', {configSaved: true});
+    const props = await renderSettings('serverless', { configSaved: true });
 
     const toast = await screen.findByTestId('settings-saved-toast');
     expect(toast).toHaveTextContent('Configuration saved successfully.');
     expect(screen.getByTestId('settings-saved-toast-text').props.role).toBe('status');
     // The one-shot flag is dropped from the route immediately, so a later
     // revisit or refocus can never replay a stale success toast.
-    expect(props.navigation.setParams).toHaveBeenCalledWith({configSaved: undefined});
+    expect(props.navigation.setParams).toHaveBeenCalledWith({ configSaved: undefined });
   });
 
   it('shows no toast when returning without the saved flag', async () => {
@@ -405,7 +408,7 @@ describe('configuration-saved toast (TASK-IMPROVEMENT-005)', () => {
   });
 
   it('ignores an explicitly false saved flag', async () => {
-    await renderSettings('serverless', {configSaved: false});
+    await renderSettings('serverless', { configSaved: false });
 
     await waitFor(() =>
       expect(screen.getByTestId('settings-ai-provider-key-status')).toBeOnTheScreen(),
@@ -433,7 +436,7 @@ describe('configuration-saved toast (TASK-IMPROVEMENT-005)', () => {
         view.rerender(
           <ModeProvider>
             <ThemeProvider>
-              <SettingsScreen {...settingsProps({configSaved: true})} />
+              <SettingsScreen {...settingsProps({ configSaved: true })} />
             </ThemeProvider>
           </ModeProvider>,
         );
@@ -464,9 +467,7 @@ describe('grammar auto-check toggle', () => {
   it('warns that enabling consumes extra AI requests per message', async () => {
     await renderSettings('server');
 
-    expect(
-      screen.getByText(/extra AI request per message/i),
-    ).toBeOnTheScreen();
+    expect(screen.getByText(/extra AI request per message/i)).toBeOnTheScreen();
   });
 
   it('persists the enabled state through the preference store', async () => {
@@ -494,9 +495,7 @@ describe('sentence practice mode setting (TASK-SENT-013)', () => {
   it('defaults to auto and offers all three modes in serverless mode', async () => {
     await renderSettings('serverless');
 
-    expect(
-      await screen.findByTestId('settings-practice-mode-section'),
-    ).toBeOnTheScreen();
+    expect(await screen.findByTestId('settings-practice-mode-section')).toBeOnTheScreen();
     expect(checkedStateOf('settings-practice-mode-auto')).toBe(true);
     expect(checkedStateOf('settings-practice-mode-dictation')).toBe(false);
     expect(checkedStateOf('settings-practice-mode-recall')).toBe(false);
@@ -507,9 +506,7 @@ describe('sentence practice mode setting (TASK-SENT-013)', () => {
 
     await fireEvent.press(screen.getByTestId('settings-practice-mode-dictation'));
 
-    await waitFor(() =>
-      expect(checkedStateOf('settings-practice-mode-dictation')).toBe(true),
-    );
+    await waitFor(() => expect(checkedStateOf('settings-practice-mode-dictation')).toBe(true));
     // The preference store the practice screen reads on mount now holds the
     // chosen mode, so the next card is dictated.
     await expect(loadPracticeMode()).resolves.toBe('dictation');
@@ -518,20 +515,14 @@ describe('sentence practice mode setting (TASK-SENT-013)', () => {
   it('keeps the chosen mode across a remount', async () => {
     await renderSettings('serverless');
     await fireEvent.press(screen.getByTestId('settings-practice-mode-recall'));
-    await waitFor(() =>
-      expect(checkedStateOf('settings-practice-mode-recall')).toBe(true),
-    );
+    await waitFor(() => expect(checkedStateOf('settings-practice-mode-recall')).toBe(true));
 
     screen.unmount();
 
     await renderSettings('serverless');
 
-    expect(
-      await screen.findByTestId('settings-practice-mode-section'),
-    ).toBeOnTheScreen();
-    await waitFor(() =>
-      expect(checkedStateOf('settings-practice-mode-recall')).toBe(true),
-    );
+    expect(await screen.findByTestId('settings-practice-mode-section')).toBeOnTheScreen();
+    await waitFor(() => expect(checkedStateOf('settings-practice-mode-recall')).toBe(true));
     expect(checkedStateOf('settings-practice-mode-auto')).toBe(false);
   });
 
@@ -565,19 +556,13 @@ describe('speaking practice scroll speed', () => {
     // The displayed value follows the slider immediately…
     expect(screen.getByTestId('settings-speaking-speed-value')).toHaveTextContent('55 px/s');
     // …but nothing is written yet — the save waits out its period.
-    expect(asyncStorage.setItem).not.toHaveBeenCalledWith(
-      'app.speakingScrollSpeedPxPerS',
-      '55',
-    );
+    expect(asyncStorage.setItem).not.toHaveBeenCalledWith('app.speakingScrollSpeedPxPerS', '55');
 
     // Once the debounce period elapses, exactly that value lands in storage.
     await waitFor(
       () =>
-        expect(asyncStorage.setItem).toHaveBeenCalledWith(
-          'app.speakingScrollSpeedPxPerS',
-          '55',
-        ),
-      {timeout: SCROLL_SPEED_SAVE_DELAY_MS * 3},
+        expect(asyncStorage.setItem).toHaveBeenCalledWith('app.speakingScrollSpeedPxPerS', '55'),
+      { timeout: SCROLL_SPEED_SAVE_DELAY_MS * 3 },
     );
   });
 

@@ -11,8 +11,8 @@
  * most-recently-updated-first follow conversation activity.
  */
 
-import {getLocalDatabase} from './database';
-import type {SqlDriver} from './driver';
+import { getLocalDatabase } from './database';
+import type { SqlDriver } from './driver';
 import * as messageStore from './messageStore';
 import * as sessionStore from './sessionStore';
 import * as summaryStore from './summaryStore';
@@ -43,9 +43,7 @@ export interface NewRepositorySummary {
 
 /** Conversation-oriented facade over the local SQLite database. */
 export class LocalConversationRepository {
-  constructor(
-    private readonly openDb: () => Promise<SqlDriver> = getLocalDatabase,
-  ) {}
+  constructor(private readonly openDb: () => Promise<SqlDriver> = getLocalDatabase) {}
 
   /** Create a session with sensible defaults; returns the persisted row. */
   async createSession(input: NewLocalSession = {}): Promise<LocalSession> {
@@ -108,10 +106,6 @@ export class LocalConversationRepository {
     messageId: number,
     improvement: LocalMessageImprovement,
   ): Promise<void> {
-    await messageStore.saveMessageImprovement(
-      await this.openDb(),
-      messageId,
-      improvement,
-    );
+    await messageStore.saveMessageImprovement(await this.openDb(), messageId, improvement);
   }
 }

@@ -16,20 +16,21 @@
  * `2 * 3 * 4`, `snake_case_identifiers` and stray asterisks never turn
  * into formatting.
  */
-import React, {useMemo} from 'react';
-import type {ReactNode} from 'react';
-import {Platform, Text} from 'react-native';
-import type {StyleProp, TextStyle} from 'react-native';
 
-import type {ThemeColors} from '../theme/colors';
+import type { ReactNode } from 'react';
+import { useMemo } from 'react';
+import type { StyleProp, TextStyle } from 'react-native';
+import { Platform, Text } from 'react-native';
+
+import type { ThemeColors } from '../theme/colors';
 
 export type InlineNode =
-  | {kind: 'text'; text: string}
-  | {kind: 'code'; text: string}
-  | {kind: 'bold'; children: InlineNode[]}
-  | {kind: 'italic'; children: InlineNode[]}
-  | {kind: 'boldItalic'; children: InlineNode[]}
-  | {kind: 'strike'; children: InlineNode[]};
+  | { kind: 'text'; text: string }
+  | { kind: 'code'; text: string }
+  | { kind: 'bold'; children: InlineNode[] }
+  | { kind: 'italic'; children: InlineNode[] }
+  | { kind: 'boldItalic'; children: InlineNode[] }
+  | { kind: 'strike'; children: InlineNode[] };
 
 /** Opener candidates, longest first so `***` wins over `**` and `*`. */
 const OPENERS = ['***', '**', '~~', '__', '`', '*', '_'];
@@ -91,7 +92,7 @@ function findOpener(line: string, from: number): OpenerMatch | null {
   for (let index = from; index < line.length; index += 1) {
     for (const marker of OPENERS) {
       if (line.startsWith(marker, index) && isValidOpener(line, marker, index)) {
-        return {marker, index};
+        return { marker, index };
       }
     }
   }
@@ -105,7 +106,7 @@ function findOpener(line: string, from: number): OpenerMatch | null {
  * because parsing is line-bounded.
  */
 function findCloser(line: string, opener: OpenerMatch): number {
-  const {marker, index} = opener;
+  const { marker, index } = opener;
   const contentStart = index + marker.length;
   for (let at = contentStart; at <= line.length - marker.length; at += 1) {
     if (!line.startsWith(marker, at)) {
@@ -149,33 +150,33 @@ function parseLine(line: string, depth: number): InlineNode[] {
       continue;
     }
     if (plain) {
-      nodes.push({kind: 'text', text: plain});
+      nodes.push({ kind: 'text', text: plain });
       plain = '';
     }
     const inner = line.slice(opener.index + opener.marker.length, closeAt);
     switch (opener.marker) {
       case '***':
-        nodes.push({kind: 'boldItalic', children: parseLine(inner, depth + 1)});
+        nodes.push({ kind: 'boldItalic', children: parseLine(inner, depth + 1) });
         break;
       case '**':
       case '__':
-        nodes.push({kind: 'bold', children: parseLine(inner, depth + 1)});
+        nodes.push({ kind: 'bold', children: parseLine(inner, depth + 1) });
         break;
       case '*':
       case '_':
-        nodes.push({kind: 'italic', children: parseLine(inner, depth + 1)});
+        nodes.push({ kind: 'italic', children: parseLine(inner, depth + 1) });
         break;
       case '~~':
-        nodes.push({kind: 'strike', children: parseLine(inner, depth + 1)});
+        nodes.push({ kind: 'strike', children: parseLine(inner, depth + 1) });
         break;
       default:
-        nodes.push({kind: 'code', text: inner});
+        nodes.push({ kind: 'code', text: inner });
         break;
     }
     at = closeAt + opener.marker.length;
   }
   if (plain) {
-    nodes.push({kind: 'text', text: plain});
+    nodes.push({ kind: 'text', text: plain });
   }
   return nodes;
 }
@@ -188,22 +189,22 @@ export function parseInlineMarkdown(input: string): InlineNode[] {
   const nodes: InlineNode[] = [];
   input.split('\n').forEach((line, index) => {
     if (index > 0) {
-      nodes.push({kind: 'text', text: '\n'});
+      nodes.push({ kind: 'text', text: '\n' });
     }
     nodes.push(...parseLine(line, 0));
   });
   return nodes;
 }
 
-const BOLD_STYLE: TextStyle = {fontWeight: '700'};
-const ITALIC_STYLE: TextStyle = {fontStyle: 'italic'};
-const BOLD_ITALIC_STYLE: TextStyle = {fontWeight: '700', fontStyle: 'italic'};
-const STRIKE_STYLE: TextStyle = {textDecorationLine: 'line-through'};
+const BOLD_STYLE: TextStyle = { fontWeight: '700' };
+const ITALIC_STYLE: TextStyle = { fontStyle: 'italic' };
+const BOLD_ITALIC_STYLE: TextStyle = { fontWeight: '700', fontStyle: 'italic' };
+const STRIKE_STYLE: TextStyle = { textDecorationLine: 'line-through' };
 
 /** Monospace styling for inline code, derived from the active theme. */
 export function createCodeStyle(c: ThemeColors): TextStyle {
   return {
-    fontFamily: Platform.select({ios: 'Menlo', android: 'monospace', default: 'monospace'}),
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
     fontSize: 14,
     color: c.textPrimary,
     backgroundColor: c.border,
@@ -266,7 +267,7 @@ export interface MarkdownTextProps {
  * message-row contract: parsing is memoized per content string and
  * streaming flushes simply re-parse the growing text.
  */
-export function MarkdownText({content, style, codeStyle}: MarkdownTextProps) {
+export function MarkdownText({ content, style, codeStyle }: MarkdownTextProps) {
   const nodes = useMemo(() => parseInlineMarkdown(content), [content]);
   return <Text style={style}>{renderChildren(nodes, codeStyle)}</Text>;
 }

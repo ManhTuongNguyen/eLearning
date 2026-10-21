@@ -6,7 +6,7 @@
  * order, the 20-card cap and the Anki-style requeue-every-Again rule without
  * touching SQLite or React.
  */
-import type {SentenceRecord} from '../src/db/types';
+import type { SentenceRecord } from '../src/db/types';
 import {
   applyPracticeGrade,
   buildPracticeSession,
@@ -16,10 +16,7 @@ import {
 
 const NOW = new Date('2026-10-19T09:00:00.000Z');
 
-function sentence(
-  id: number,
-  overrides: Partial<SentenceRecord> = {},
-): SentenceRecord {
+function sentence(id: number, overrides: Partial<SentenceRecord> = {}): SentenceRecord {
   return {
     id,
     topic_id: 1,
@@ -44,30 +41,28 @@ function sentence(
 describe('buildPracticeSession', () => {
   test('keeps only due, non-suspended sentences in due order then id order', () => {
     const cards = [
-      sentence(1, {due_at: '2026-10-19T08:30:00.000Z'}),
-      sentence(2, {due_at: '2026-10-19T08:00:00.000Z'}),
-      sentence(3, {due_at: '2026-10-19T08:00:00.000Z'}),
-      sentence(4, {due_at: '2026-10-19T12:00:00.000Z'}),
-      sentence(5, {status: 'suspended', due_at: '2026-10-19T07:00:00.000Z'}),
+      sentence(1, { due_at: '2026-10-19T08:30:00.000Z' }),
+      sentence(2, { due_at: '2026-10-19T08:00:00.000Z' }),
+      sentence(3, { due_at: '2026-10-19T08:00:00.000Z' }),
+      sentence(4, { due_at: '2026-10-19T12:00:00.000Z' }),
+      sentence(5, { status: 'suspended', due_at: '2026-10-19T07:00:00.000Z' }),
     ];
 
     expect(buildPracticeSession(cards, NOW).map(card => card.id)).toEqual([2, 3, 1]);
   });
 
   test('caps the session at 20 cards by default and honours a custom limit', () => {
-    const cards = Array.from({length: 25}, (_, index) => sentence(index + 1));
+    const cards = Array.from({ length: 25 }, (_, index) => sentence(index + 1));
 
     expect(MAX_PRACTICE_SESSION_CARDS).toBe(20);
     expect(buildPracticeSession(cards, NOW)).toHaveLength(20);
-    expect(buildPracticeSession(cards, NOW, 3).map(card => card.id)).toEqual([
-      1, 2, 3,
-    ]);
+    expect(buildPracticeSession(cards, NOW, 3).map(card => card.id)).toEqual([1, 2, 3]);
   });
 
   test('never mutates the input array', () => {
     const cards = [
-      sentence(1, {due_at: '2026-10-19T08:30:00.000Z'}),
-      sentence(2, {due_at: '2026-10-19T08:00:00.000Z'}),
+      sentence(1, { due_at: '2026-10-19T08:30:00.000Z' }),
+      sentence(2, { due_at: '2026-10-19T08:00:00.000Z' }),
     ];
     const snapshot = cards.map(card => card.id);
 
@@ -78,10 +73,7 @@ describe('buildPracticeSession', () => {
 
   test('returns an empty queue when nothing is due', () => {
     expect(
-      buildPracticeSession(
-        [sentence(1, {due_at: '2026-10-20T09:00:00.000Z'})],
-        NOW,
-      ),
+      buildPracticeSession([sentence(1, { due_at: '2026-10-20T09:00:00.000Z' })], NOW),
     ).toEqual([]);
   });
 });
@@ -109,11 +101,10 @@ describe('applyPracticeGrade', () => {
       ...first,
       status: 'learning',
     });
-    const afterSecondAgain = applyPracticeGrade(
-      afterFirstAgain,
-      'again',
-      {...afterFirstAgain.queue[0], status: 'learning'},
-    );
+    const afterSecondAgain = applyPracticeGrade(afterFirstAgain, 'again', {
+      ...afterFirstAgain.queue[0],
+      status: 'learning',
+    });
 
     expect(afterFirstAgain.queue.map(card => card.id)).toEqual([1]);
     expect(afterSecondAgain.queue.map(card => card.id)).toEqual([1]);

@@ -7,20 +7,20 @@
  * null, and snapshot staleness is derived deterministically from the
  * stored timestamp without ever discarding the cached models.
  */
-import {openLocalDatabase} from '../src/db/database';
-import type {SqlDriver} from '../src/db/driver';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
-import {FakeOpenRouterClient} from '../testing/fakeOpenRouter';
-import {OpenRouterAvailabilityError} from '../src/serverless/errors';
-import type {ModelInfo} from '../src/serverless/types';
+import { openLocalDatabase } from '../src/db/database';
+import type { SqlDriver } from '../src/db/driver';
+import { OpenRouterAvailabilityError } from '../src/serverless/errors';
 import {
-  MODEL_CATALOG_MAX_AGE_MS,
-  MODEL_CATALOG_SETTING_KEY,
   getCachedModelCatalog,
   isModelCatalogStale,
+  MODEL_CATALOG_MAX_AGE_MS,
+  MODEL_CATALOG_SETTING_KEY,
   modelCatalogAgeMs,
   refreshModelCatalog,
 } from '../src/serverless/modelCatalog';
+import type { ModelInfo } from '../src/serverless/types';
+import { FakeOpenRouterClient } from '../testing/fakeOpenRouter';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 /** Full normalized ModelInfo with the optional catalog fields defaulted. */
 function model(id: string, name: string, contextLength: number | null = null): ModelInfo {
@@ -131,7 +131,13 @@ describe('serverless model discovery (TASK-084)', () => {
       MODEL_CATALOG_SETTING_KEY,
       JSON.stringify({
         models: [
-          {id: 'vendor/legacy', name: 'Legacy', description: null, contextLength: 1024, created: 5},
+          {
+            id: 'vendor/legacy',
+            name: 'Legacy',
+            description: null,
+            contextLength: 1024,
+            created: 5,
+          },
         ],
         fetchedAt: '2026-01-01T00:00:00.000Z',
       }),
@@ -173,36 +179,42 @@ describe('catalog snapshot staleness (TASK-AUDIT-017)', () => {
   });
 
   test('a just-fetched snapshot is not stale', () => {
-    const snapshot = {models: [], fetchedAt: new Date(NOW_MS).toISOString()};
+    const snapshot = { models: [], fetchedAt: new Date(NOW_MS).toISOString() };
     expect(modelCatalogAgeMs(snapshot, NOW_MS)).toBe(0);
     expect(isModelCatalogStale(snapshot, NOW_MS)).toBe(false);
   });
 
   test('a snapshot within the default window is not stale', () => {
-    const snapshot = {models: [], fetchedAt: new Date(NOW_MS - MODEL_CATALOG_MAX_AGE_MS + 1).toISOString()};
+    const snapshot = {
+      models: [],
+      fetchedAt: new Date(NOW_MS - MODEL_CATALOG_MAX_AGE_MS + 1).toISOString(),
+    };
     expect(isModelCatalogStale(snapshot, NOW_MS)).toBe(false);
   });
 
   test('a snapshot older than the default window is stale', () => {
-    const snapshot = {models: [], fetchedAt: new Date(NOW_MS - MODEL_CATALOG_MAX_AGE_MS - 1).toISOString()};
+    const snapshot = {
+      models: [],
+      fetchedAt: new Date(NOW_MS - MODEL_CATALOG_MAX_AGE_MS - 1).toISOString(),
+    };
     expect(isModelCatalogStale(snapshot, NOW_MS)).toBe(true);
   });
 
   test('staleness honours a custom window at the exact boundary', () => {
     const ONE_HOUR_MS = 60 * 60 * 1000;
-    const snapshot = {models: [], fetchedAt: new Date(NOW_MS - ONE_HOUR_MS).toISOString()};
+    const snapshot = { models: [], fetchedAt: new Date(NOW_MS - ONE_HOUR_MS).toISOString() };
     expect(isModelCatalogStale(snapshot, NOW_MS, ONE_HOUR_MS)).toBe(false);
     expect(isModelCatalogStale(snapshot, NOW_MS, ONE_HOUR_MS - 1)).toBe(true);
   });
 
   test('a future timestamp clamps to a zero age instead of going negative', () => {
-    const snapshot = {models: [], fetchedAt: new Date(NOW_MS + 60_000).toISOString()};
+    const snapshot = { models: [], fetchedAt: new Date(NOW_MS + 60_000).toISOString() };
     expect(modelCatalogAgeMs(snapshot, NOW_MS)).toBe(0);
     expect(isModelCatalogStale(snapshot, NOW_MS)).toBe(false);
   });
 
   test('an unusable timestamp reports stale so a refresh can repair it', () => {
-    const snapshot = {models: [], fetchedAt: 'not-a-timestamp'};
+    const snapshot = { models: [], fetchedAt: 'not-a-timestamp' };
     expect(modelCatalogAgeMs(snapshot, NOW_MS)).toBeNull();
     expect(isModelCatalogStale(snapshot, NOW_MS)).toBe(true);
   });
@@ -214,15 +226,20 @@ describe('catalog snapshot staleness (TASK-AUDIT-017)', () => {
 
     // Age the stored snapshot far past the window without rewriting it.
     const stored = await getCachedModelCatalog(db);
-    expect(stored).not.toBeNull();
+    if (!stored) {
+      throw new Error('Expected the catalog snapshot to be cached');
+    }
     await db.execute('UPDATE settings SET value = ? WHERE key = ?', [
-      JSON.stringify({models: stored!.models, fetchedAt: '2020-01-01T00:00:00.000Z'}),
+      JSON.stringify({ models: stored.models, fetchedAt: '2020-01-01T00:00:00.000Z' }),
       MODEL_CATALOG_SETTING_KEY,
     ]);
 
     const aged = await getCachedModelCatalog(db);
-    expect(aged!.models).toEqual([model('vendor/model-a', 'Model A')]);
-    expect(isModelCatalogStale(aged!)).toBe(true);
+    if (!aged) {
+      throw new Error('Expected the aged catalog to remain readable');
+    }
+    expect(aged.models).toEqual([model('vendor/model-a', 'Model A')]);
+    expect(isModelCatalogStale(aged)).toBe(true);
     // Reading the aged cache never went back to the provider.
     expect(fake.modelsCalls).toBe(1);
   });

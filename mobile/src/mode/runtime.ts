@@ -8,8 +8,9 @@
  * transition into this holder; until the first restore completes the
  * process behaves as the default (server) mode.
  */
-import {DEFAULT_APPLICATION_MODE} from './types';
-import type {ApplicationMode} from './types';
+
+import type { ApplicationMode } from './types';
+import { DEFAULT_APPLICATION_MODE } from './types';
 
 /** Raised when serverless mode prevents a backend API call. */
 export class ServerApiBlockedError extends Error {

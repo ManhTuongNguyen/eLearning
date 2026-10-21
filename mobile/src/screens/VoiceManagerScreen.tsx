@@ -13,23 +13,13 @@
  * Every selection writes through speechSettings AND applySpeechPreferences
  * so the change is live immediately (no restart, no stale settings screen).
  */
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import {
-  Screen,
-  ScreenHeader,
-  ScreenScrollView,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
-
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import type { VoiceManagerScreenProps } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 import {
   applySpeechPreferences,
   getSystemEngineId,
@@ -38,16 +28,9 @@ import {
   previewSystemVoice,
   selectSystemEngine,
 } from '../tts/androidSpeech';
-import {loadSpeechPreferences, saveSpeechPreferences} from '../tts/speechSettings';
-import type {
-  SpeechEngineInfo,
-  SpeechPreferences,
-  SpeechVoiceInfo,
-} from '../tts/types';
-import {isEnglishVoice} from '../tts/types';
-import type {VoiceManagerScreenProps} from '../navigation/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import { loadSpeechPreferences, saveSpeechPreferences } from '../tts/speechSettings';
+import type { SpeechEngineInfo, SpeechPreferences, SpeechVoiceInfo } from '../tts/types';
+import { isEnglishVoice } from '../tts/types';
 
 /** Sentence spoken by the per-voice audition buttons. */
 export const VOICE_SAMPLE_SENTENCE = 'Hello! This is how this voice sounds.';
@@ -245,8 +228,8 @@ function voiceMetaLine(voice: SpeechVoiceInfo): string {
   ].join(' · ');
 }
 
-export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
-  const {colors} = useTheme();
+export function VoiceManagerScreen({ navigation }: VoiceManagerScreenProps) {
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [query, setQuery] = useState('');
@@ -259,7 +242,7 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
     if (!current) {
       return;
     }
-    const updated: SpeechPreferences = {...current, ...patch};
+    const updated: SpeechPreferences = { ...current, ...patch };
     prefsRef.current = updated;
     setPreferences(updated);
     saveSpeechPreferences(updated);
@@ -331,7 +314,7 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
 
   const selectSystemVoice = useCallback(
     (voice: SpeechVoiceInfo | null) => {
-      updatePreferences({systemVoiceId: voice?.id ?? null});
+      updatePreferences({ systemVoiceId: voice?.id ?? null });
     },
     [updatePreferences],
   );
@@ -406,9 +389,8 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
       </ScreenHeader>
       <ScreenScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.notice}>
-          English voices installed on this device. Tapping a voice makes it
-          the active system voice immediately; Preview auditions it without
-          selecting.
+          English voices installed on this device. Tapping a voice makes it the active system voice
+          immediately; Preview auditions it without selecting.
         </Text>
 
         {/* Shared search filter */}
@@ -428,9 +410,9 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
             filters so the setting and its effect read as one unit. */}
         <Pressable
           accessibilityRole="switch"
-          accessibilityState={{checked: preferences.instantOnly}}
-          onPress={() => updatePreferences({instantOnly: !preferences.instantOnly})}
-          style={({pressed}) => [styles.switchRow, pressed && styles.rowPressed]}
+          accessibilityState={{ checked: preferences.instantOnly }}
+          onPress={() => updatePreferences({ instantOnly: !preferences.instantOnly })}
+          style={({ pressed }) => [styles.switchRow, pressed && styles.rowPressed]}
           testID="tts-instant-only">
           <View style={styles.cardTexts}>
             <Text style={styles.voiceName}>Instant voices only</Text>
@@ -438,9 +420,7 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
               Hide voices that need a network fetch before speaking.
             </Text>
           </View>
-          <Text style={styles.switchValue}>
-            {preferences.instantOnly ? 'On' : 'Off'}
-          </Text>
+          <Text style={styles.switchValue}>{preferences.instantOnly ? 'On' : 'Off'}</Text>
         </Pressable>
 
         {systemLoading ? (
@@ -450,23 +430,18 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
           </View>
         ) : !systemAvailable ? (
           <Text style={styles.emptyText}>
-            System voice options are not available on this device; the
-            platform default voice will be used.
+            System voice options are not available on this device; the platform default voice will
+            be used.
           </Text>
         ) : filteredSystemVoices.length === 0 ? (
-          <Text style={styles.emptyText}>
-            No voices match the current filters.
-          </Text>
+          <Text style={styles.emptyText}>No voices match the current filters.</Text>
         ) : (
           <>
             <Pressable
               accessibilityRole="radio"
-              accessibilityState={{checked: preferences.systemVoiceId === null}}
+              accessibilityState={{ checked: preferences.systemVoiceId === null }}
               onPress={() => selectSystemVoice(null)}
-              style={[
-                styles.card,
-                preferences.systemVoiceId === null && styles.cardSelected,
-              ]}
+              style={[styles.card, preferences.systemVoiceId === null && styles.cardSelected]}
               testID="voice-system-default">
               <Text style={styles.voiceName}>Device default voice</Text>
               <Text style={styles.voiceMeta}>The engine's built-in choice.</Text>
@@ -477,7 +452,7 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
                 <Pressable
                   key={voice.id}
                   accessibilityRole="radio"
-                  accessibilityState={{checked: isSelected}}
+                  accessibilityState={{ checked: isSelected }}
                   onPress={() => selectSystemVoice(voice)}
                   style={[styles.card, isSelected && styles.cardSelected]}
                   testID={`voice-system-${voice.id}`}>
@@ -498,21 +473,15 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
                       accessibilityLabel={`Preview ${voice.name}`}
                       onPress={() => previewVoiceRow(voice)}
                       disabled={previewVoiceId === voice.id}
-                      style={({pressed}) => [
+                      style={({ pressed }) => [
                         styles.actionButton,
                         styles.actionButtonSecondary,
                         previewVoiceId === voice.id && styles.actionButtonDisabled,
                         pressed && styles.actionButtonDisabled,
                       ]}
                       testID={`voice-system-preview-${voice.id}`}>
-                      {previewVoiceId === voice.id ? (
-                        <ActivityIndicator size="small" />
-                      ) : null}
-                      <Text
-                        style={[
-                          styles.actionButtonText,
-                          styles.actionButtonTextSecondary,
-                        ]}>
+                      {previewVoiceId === voice.id ? <ActivityIndicator size="small" /> : null}
+                      <Text style={[styles.actionButtonText, styles.actionButtonTextSecondary]}>
                         {previewVoiceId === voice.id ? 'Playing…' : 'Preview'}
                       </Text>
                     </Pressable>
@@ -529,18 +498,17 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
             <Text style={styles.notice}>TTS engine</Text>
             <View style={styles.filterRow}>
               {engines.map(engine => {
-                const isSelected =
-                  engine.id === (activeSystemEngineId ?? engines[0]?.id);
+                const isSelected = engine.id === (activeSystemEngineId ?? engines[0]?.id);
                 return (
                   <Pressable
                     key={engine.id}
                     accessibilityRole="radio"
-                    accessibilityState={{checked: isSelected}}
+                    accessibilityState={{ checked: isSelected }}
                     onPress={() => {
                       selectSystemEngine(engine.id)
                         .then(() => {
                           setActiveSystemEngineId(engine.id);
-                          updatePreferences({systemEngineId: engine.id});
+                          updatePreferences({ systemEngineId: engine.id });
                           loadSystemVoices();
                         })
                         .catch(() => {
@@ -550,10 +518,7 @@ export function VoiceManagerScreen({navigation}: VoiceManagerScreenProps) {
                     style={[styles.filterChip, isSelected && styles.filterChipSelected]}
                     testID={`voice-manager-engine-${engine.id}`}>
                     <Text
-                      style={[
-                        styles.filterChipText,
-                        isSelected && styles.filterChipTextSelected,
-                      ]}>
+                      style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
                       {engine.label}
                     </Text>
                   </Pressable>

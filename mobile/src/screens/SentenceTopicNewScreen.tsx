@@ -10,30 +10,18 @@
  * Saving replaces this screen with the new topic's detail screen, so Back from
  * the topic always returns to the topics list rather than to the form.
  */
-import React, {useCallback, useMemo, useState} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import {Icon} from '../components/Icon';
-import {
-  Screen,
-  ScreenHeader,
-  ScreenScrollView,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
-import {getLocalDatabase} from '../db/database';
-import {createSentenceTopic} from '../db/sentenceRepository';
-import {useApplicationMode} from '../mode/ModeContext';
-import type {SentenceTopicNewScreenProps} from '../navigation/types';
-import {MAX_GENERATION_PROMPT_LENGTH} from '../serverless/sentenceGeneration';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import { Icon } from '../components/Icon';
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import { getLocalDatabase } from '../db/database';
+import { createSentenceTopic } from '../db/sentenceRepository';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { SentenceTopicNewScreenProps } from '../navigation/types';
+import { MAX_GENERATION_PROMPT_LENGTH } from '../serverless/sentenceGeneration';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -176,11 +164,9 @@ export function createStyles(c: ThemeColors) {
   });
 }
 
-export function SentenceTopicNewScreen({
-  navigation,
-}: SentenceTopicNewScreenProps) {
-  const {status: modeStatus, mode} = useApplicationMode();
-  const {colors} = useTheme();
+export function SentenceTopicNewScreen({ navigation }: SentenceTopicNewScreenProps) {
+  const { status: modeStatus, mode } = useApplicationMode();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [title, setTitle] = useState('');
@@ -208,7 +194,7 @@ export function SentenceTopicNewScreen({
         generation_prompt: advancedOpen ? generationPrompt.trim() : '',
       });
       // Replace the form: Back from the topic should land on the topics list.
-      navigation.replace('SentenceTopic', {topicId: created.id});
+      navigation.replace('SentenceTopic', { topicId: created.id });
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -225,8 +211,7 @@ export function SentenceTopicNewScreen({
           testID="sentence-new-topic-back"
           onPress={() => navigation.goBack()}
           style={styles.backLinkButton}
-          disabled={saving}
-        >
+          disabled={saving}>
           <Text style={styles.backLinkText}>‹ Topics</Text>
         </Pressable>
         <Text style={styles.title} numberOfLines={1}>
@@ -241,15 +226,11 @@ export function SentenceTopicNewScreen({
       ) : serverMode ? (
         <View style={styles.centered} testID="sentence-new-topic-mode-notice">
           <Text style={styles.stateText}>
-            Topics are saved on this device only. Switch to serverless mode to
-            create one.
+            Topics are saved on this device only. Switch to serverless mode to create one.
           </Text>
         </View>
       ) : (
-        <ScreenScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.form}
-        >
+        <ScreenScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
           <Text style={styles.inputLabel}>Topic</Text>
           <TextInput
             placeholder="e.g. Meeting someone new"
@@ -274,17 +255,12 @@ export function SentenceTopicNewScreen({
           <Pressable
             accessibilityRole="checkbox"
             accessibilityLabel="Show advanced generation options"
-            accessibilityState={{checked: advancedOpen}}
+            accessibilityState={{ checked: advancedOpen }}
             testID="sentence-topic-advanced-toggle"
             onPress={() => setAdvancedOpen(value => !value)}
-            style={styles.advancedToggle}
-          >
-            <View
-              style={[styles.checkbox, advancedOpen && styles.checkboxChecked]}
-            >
-              {advancedOpen ? (
-                <Icon name="check" size={15} color={colors.onPrimary} />
-              ) : null}
+            style={styles.advancedToggle}>
+            <View style={[styles.checkbox, advancedOpen && styles.checkboxChecked]}>
+              {advancedOpen ? <Icon name="check" size={15} color={colors.onPrimary} /> : null}
             </View>
             <View style={styles.advancedText}>
               <Text style={styles.advancedLabel}>Advanced</Text>
@@ -296,9 +272,7 @@ export function SentenceTopicNewScreen({
 
           {advancedOpen ? (
             <>
-              <Text style={styles.inputLabel}>
-                Generation instructions (optional)
-              </Text>
+              <Text style={styles.inputLabel}>Generation instructions (optional)</Text>
               <TextInput
                 placeholder="e.g. Use British spelling and focus on phone calls"
                 value={generationPrompt}
@@ -310,8 +284,8 @@ export function SentenceTopicNewScreen({
                 maxLength={MAX_GENERATION_PROMPT_LENGTH}
               />
               <Text style={styles.hint}>
-                This is sent as background context only. It is never treated as
-                an instruction that can change the app's prompt or output format.
+                This is sent as background context only. It is never treated as an instruction that
+                can change the app's prompt or output format.
               </Text>
             </>
           ) : null}
@@ -327,12 +301,11 @@ export function SentenceTopicNewScreen({
               testID="sentence-topic-cancel"
               onPress={() => navigation.goBack()}
               disabled={saving}
-              style={({pressed}) => [
+              style={({ pressed }) => [
                 styles.actionButton,
                 styles.cancelButton,
                 pressed && styles.pressedFade,
-              ]}
-            >
+              ]}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
             <Pressable
@@ -343,13 +316,12 @@ export function SentenceTopicNewScreen({
               testID="sentence-topic-save"
               onPress={handleSave}
               disabled={saving || !title.trim() || !ready}
-              style={({pressed}) => [
+              style={({ pressed }) => [
                 styles.actionButton,
                 styles.saveButton,
-                (saving || !title.trim()) && {opacity: 0.45},
+                (saving || !title.trim()) && { opacity: 0.45 },
                 pressed && styles.pressedFade,
-              ]}
-            >
+              ]}>
               {saving ? (
                 <ActivityIndicator size="small" color={colors.onPrimary} />
               ) : (

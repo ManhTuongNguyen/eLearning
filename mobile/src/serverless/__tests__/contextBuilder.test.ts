@@ -2,9 +2,9 @@
  * Tests for serverless conversation context building (SPEC TASK-087).
  */
 
-import {buildContext} from '../contextBuilder';
-import type {ContextInput} from '../contextBuilder';
-import type {LocalMessage} from '../../db/types';
+import type { LocalMessage } from '../../db/types';
+import type { ContextInput } from '../contextBuilder';
+import { buildContext } from '../contextBuilder';
 
 describe('buildContext', () => {
   const baseTopic = {
@@ -42,7 +42,7 @@ describe('buildContext', () => {
   });
 
   it('omits summary section when blank', () => {
-    const request = buildContext({...baseInput, summary: ''});
+    const request = buildContext({ ...baseInput, summary: '' });
     expect(request.messages[0].content).not.toContain('Summary of');
   });
 
@@ -68,7 +68,7 @@ describe('buildContext', () => {
       },
     ];
 
-    const request = buildContext({...baseInput, recentMessages});
+    const request = buildContext({ ...baseInput, recentMessages });
 
     expect(request.messages).toHaveLength(4);
     expect(request.messages[1].role).toBe('user');
@@ -100,7 +100,7 @@ describe('buildContext', () => {
       },
     ];
 
-    const request = buildContext({...baseInput, recentMessages});
+    const request = buildContext({ ...baseInput, recentMessages });
 
     expect(request.messages).toHaveLength(3); // system + 1 complete user + current
     expect(request.messages[1].content).toBe('Hello');
@@ -119,25 +119,25 @@ describe('buildContext', () => {
       },
     ];
 
-    const request = buildContext({...baseInput, recentMessages});
+    const request = buildContext({ ...baseInput, recentMessages });
 
     expect(request.messages).toHaveLength(2); // system + current only
   });
 
   it('rejects blank current message', () => {
-    expect(() =>
-      buildContext({...baseInput, currentMessage: '   '}),
-    ).toThrow('currentMessage must not be empty');
+    expect(() => buildContext({ ...baseInput, currentMessage: '   ' })).toThrow(
+      'currentMessage must not be empty',
+    );
   });
 
   it('rejects unknown learning level', () => {
-    expect(() =>
-      buildContext({...baseInput, level: 'X9' as any}),
-    ).toThrow('Unknown learning level');
+    expect(() => buildContext({ ...baseInput, level: 'X9' as never })).toThrow(
+      'Unknown learning level',
+    );
   });
 
   it('handles AUTO level', () => {
-    const request = buildContext({...baseInput, level: 'AUTO'});
+    const request = buildContext({ ...baseInput, level: 'AUTO' });
     expect(request.messages[0].content).toContain('level is unknown');
     expect(request.messages[0].content).toContain('infer an appropriate level');
   });
@@ -145,7 +145,7 @@ describe('buildContext', () => {
   it('handles all CEFR levels', () => {
     const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
     for (const level of levels) {
-      const request = buildContext({...baseInput, level});
+      const request = buildContext({ ...baseInput, level });
       expect(request.messages[0].content).toContain(`${level} (CEFR)`);
     }
   });
@@ -184,12 +184,10 @@ describe('buildContext', () => {
   });
 
   it('includes a single-line hint as a topic idea in list-of-questions mode', () => {
-    const request = buildContext({...baseInput, hint: 'Where to go this summer?'});
+    const request = buildContext({ ...baseInput, hint: 'Where to go this summer?' });
 
     // A single line is not a question list, so the hint is omitted.
-    expect(request.messages[0].content).not.toContain(
-      'Questions the learner wants to cover',
-    );
+    expect(request.messages[0].content).not.toContain('Questions the learner wants to cover');
   });
 
   it('formats a multi-line hint as a list of questions', () => {
@@ -206,10 +204,8 @@ describe('buildContext', () => {
   });
 
   it('omits the hint section when absent', () => {
-    const request = buildContext({...baseInput, hint: ''});
+    const request = buildContext({ ...baseInput, hint: '' });
 
-    expect(request.messages[0].content).not.toContain(
-      'Questions the learner wants to cover',
-    );
+    expect(request.messages[0].content).not.toContain('Questions the learner wants to cover');
   });
 });

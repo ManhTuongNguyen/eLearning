@@ -8,10 +8,10 @@
  * offers the way back down. The near-bottom flag lives in a ref so scroll
  * callbacks never re-render; only the threshold boundary flips the pill.
  */
-import {useCallback, useRef, useState} from 'react';
-import type {FlatList, NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import type { FlatList, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
-import {isNearBottom, STICK_TO_BOTTOM_THRESHOLD_PX} from '../screens/streamingUx';
+import { isNearBottom, STICK_TO_BOTTOM_THRESHOLD_PX } from '../screens/streamingUx';
 
 export function useFollowBottom<ItemT>() {
   const listRef = useRef<FlatList<ItemT> | null>(null);
@@ -20,7 +20,7 @@ export function useFollowBottom<ItemT>() {
 
   /** Follow the conversation tail; no-op when the list is not mounted. */
   const stickToBottom = useCallback((animated: boolean) => {
-    listRef.current?.scrollToEnd({animated});
+    listRef.current?.scrollToEnd({ animated });
   }, []);
 
   /**
@@ -34,22 +34,19 @@ export function useFollowBottom<ItemT>() {
     }
   }, [stickToBottom]);
 
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
-      const near = isNearBottom(
-        {
-          offsetY: contentOffset.y,
-          contentHeight: contentSize.height,
-          viewportHeight: layoutMeasurement.height,
-        },
-        STICK_TO_BOTTOM_THRESHOLD_PX,
-      );
-      nearBottomRef.current = near;
-      setDetachedFromBottom(!near);
-    },
-    [],
-  );
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const near = isNearBottom(
+      {
+        offsetY: contentOffset.y,
+        contentHeight: contentSize.height,
+        viewportHeight: layoutMeasurement.height,
+      },
+      STICK_TO_BOTTOM_THRESHOLD_PX,
+    );
+    nearBottomRef.current = near;
+    setDetachedFromBottom(!near);
+  }, []);
 
   const jumpToLatest = useCallback(() => {
     nearBottomRef.current = true;

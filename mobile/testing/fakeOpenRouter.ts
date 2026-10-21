@@ -7,7 +7,7 @@
  * resolution has already happened by the time an outcome is returned:
  * script one outcome per call in the order calls arrive.
  */
-import {LLMError} from '../src/serverless/errors';
+import { LLMError } from '../src/serverless/errors';
 import type {
   CompletionRequest,
   CompletionResult,
@@ -21,7 +21,7 @@ import type {
 /** One scripted streaming outcome. */
 export type StreamScript =
   /** start → one delta per entry → completed with the joined text. */
-  | {type: 'success'; model?: string; deltas: readonly string[]}
+  | { type: 'success'; model?: string; deltas: readonly string[] }
   /** Optional start, then a single terminal failed event. */
   | {
       type: 'failure';
@@ -31,7 +31,7 @@ export type StreamScript =
       startModel?: string;
     }
   /** Verbatim event sequence; caller guarantees exactly one terminal. */
-  | {type: 'raw'; events: readonly ServerlessStreamEvent[]};
+  | { type: 'raw'; events: readonly ServerlessStreamEvent[] };
 
 const FAKE_MODEL = 'fake/model';
 
@@ -158,7 +158,7 @@ function materialize(script: StreamScript, request: CompletionRequest): Serverle
   if (script.type === 'failure') {
     const events: ServerlessStreamEvent[] = [];
     if (script.startModel || script.partialText) {
-      events.push({type: 'start', model: script.startModel ?? FAKE_MODEL});
+      events.push({ type: 'start', model: script.startModel ?? FAKE_MODEL });
     }
     events.push({
       type: 'failed',
@@ -171,8 +171,8 @@ function materialize(script: StreamScript, request: CompletionRequest): Serverle
   const model = script.model ?? (typeof request.model === 'string' ? request.model : FAKE_MODEL);
   const text = script.deltas.join('');
   return [
-    {type: 'start', model},
-    ...script.deltas.map((delta): ServerlessStreamEvent => ({type: 'delta', text: delta})),
-    {type: 'completed', text, model, deltaCount: script.deltas.length},
+    { type: 'start', model },
+    ...script.deltas.map((delta): ServerlessStreamEvent => ({ type: 'delta', text: delta })),
+    { type: 'completed', text, model, deltaCount: script.deltas.length },
   ];
 }

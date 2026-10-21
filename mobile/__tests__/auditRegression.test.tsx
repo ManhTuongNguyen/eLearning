@@ -23,38 +23,39 @@
  * simulated by remounting the application through a key change (authJourney
  * pattern) on the same persistent in-memory device stores.
  */
-import React from 'react';
-import type {TestInstance} from 'test-renderer';
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type React from 'react';
 import * as Keychain from 'react-native-keychain';
+import type { TestInstance } from 'test-renderer';
 
 import App from '../App';
 import * as authApi from '../src/api/auth';
-import * as profileApi from '../src/api/profile';
-import * as sessionsApi from '../src/api/sessions';
-import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
-import * as vocabularyApi from '../src/api/vocabulary';
-import type {VocabularyItem} from '../src/api/vocabulary';
-import {ApiError} from '../src/api/client';
 import * as client from '../src/api/client';
-import {createAuthedRequester} from '../src/auth/authedRequest';
-import type {AuthedRequestOptions} from '../src/auth/authedRequest';
-import {API_BASE_URL, resolveApiBaseUrl} from '../src/config';
-import {resetLocalDatabase} from '../src/db/database';
+import { ApiError } from '../src/api/client';
+import * as profileApi from '../src/api/profile';
+import type { ChatMessage, Paginated, Session } from '../src/api/sessions';
+import * as sessionsApi from '../src/api/sessions';
+import type { VocabularyItem } from '../src/api/vocabulary';
+import * as vocabularyApi from '../src/api/vocabulary';
+import type { AuthedRequestOptions } from '../src/auth/authedRequest';
+import { createAuthedRequester } from '../src/auth/authedRequest';
+import type { AuthTokens } from '../src/auth/tokens';
+import { API_BASE_URL, resolveApiBaseUrl } from '../src/config';
+import { resetLocalDatabase } from '../src/db/database';
 import * as nativeDriver from '../src/db/nativeDriver';
-import {getRuntimeApplicationMode, setRuntimeApplicationMode} from '../src/mode/runtime';
-import {saveApplicationMode} from '../src/mode/modeStorage';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { getRuntimeApplicationMode, setRuntimeApplicationMode } from '../src/mode/runtime';
+import { createRowStyles, MessageRow } from '../src/screens/MessageRow';
 import {
   createProviderClient,
   listProviderModels,
   resolveProviderId,
   SUPPORTED_PROVIDER_IDS,
 } from '../src/serverless/providerRegistry';
-import type {LLMClientConfig} from '../src/serverless/types';
-import {createRowStyles, MessageRow} from '../src/screens/MessageRow';
-import {lightColors} from '../src/theme/colors';
-import type {AuthTokens} from '../src/auth/tokens';
+import type { LLMClientConfig } from '../src/serverless/types';
+import { lightColors } from '../src/theme/colors';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -75,7 +76,7 @@ jest.mock('../src/api/profile', () => ({
  * a fresh install.
  */
 jest.mock('../src/db/nativeDriver', () => {
-  const {openSqlJsDriver} = require('../testing/sqlJsDriver');
+  const { openSqlJsDriver } = require('../testing/sqlJsDriver');
   let mockDbPromise: Promise<unknown> | null = null;
   return {
     LOCAL_DB_NAME: 'elearning-serverless.db',
@@ -106,8 +107,8 @@ const mockedNativeDriver = nativeDriver as typeof nativeDriver & {
   __resetLocalDriver: () => void;
 };
 
-const TOKENS: AuthTokens = {access: 'access-1', refresh: 'refresh-1'};
-const USER = {id: 1, username: 'alice', email: 'alice@example.com'};
+const TOKENS: AuthTokens = { access: 'access-1', refresh: 'refresh-1' };
+const USER = { id: 1, username: 'alice', email: 'alice@example.com' };
 const KEYCHAIN_SERVICE = 'com.elearningmobile.auth';
 const MESSAGE_CONTENT = 'The early bird catches the worm.';
 
@@ -191,11 +192,11 @@ function makeItem(overrides: Partial<VocabularyItem> = {}): VocabularyItem {
 }
 
 function sessionPage(results: Session[]): Paginated<Session> {
-  return {count: results.length, next: null, previous: null, results};
+  return { count: results.length, next: null, previous: null, results };
 }
 
 function messagePage(results: ChatMessage[]): Paginated<ChatMessage> {
-  return {count: results.length, next: null, previous: null, results};
+  return { count: results.length, next: null, previous: null, results };
 }
 
 async function fillLoginForm(identifier: string, password: string): Promise<void> {
@@ -207,11 +208,9 @@ async function fillLoginForm(identifier: string, password: string): Promise<void
 
 /** Simulate a native selection span over the pinned selection input. */
 async function selectRange(start: number, end: number): Promise<void> {
-  await fireEvent(
-    screen.getByTestId('chat-selection-input'),
-    'selectionChange',
-    {nativeEvent: {selection: {start, end}}},
-  );
+  await fireEvent(screen.getByTestId('chat-selection-input'), 'selectionChange', {
+    nativeEvent: { selection: { start, end } },
+  });
 }
 
 beforeEach(async () => {
@@ -224,7 +223,7 @@ beforeEach(async () => {
   await saveApplicationMode('server');
   setRuntimeApplicationMode('server');
   jest.clearAllMocks();
-  mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
+  mockedProfile.getProfile.mockResolvedValue({ level: 'AUTO' });
   // The no-session landing route checks the authoritative history before it
   // may claim the empty state (TASK-AUDIT-008); default to an empty one.
   mockedSessions.listSessions.mockResolvedValue(sessionPage([]));
@@ -301,11 +300,11 @@ describe('serverless mode regression (TASK-AUDIT-003/016)', () => {
 
 describe('history after login regression (TASK-AUDIT-008)', () => {
   it('lists the existing server history after logging in', async () => {
-    mockedAuth.login.mockResolvedValue({...TOKENS, user: USER});
+    mockedAuth.login.mockResolvedValue({ ...TOKENS, user: USER });
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 9}), makeSession({id: 7})]),
+      sessionPage([makeSession({ id: 9 }), makeSession({ id: 7 })]),
     );
-    mockedSessions.getSession.mockResolvedValue(makeSession({id: 9}));
+    mockedSessions.getSession.mockResolvedValue(makeSession({ id: 9 }));
     mockedSessions.listMessages.mockResolvedValue(messagePage([]));
 
     await render(launch(launchCount++));
@@ -336,8 +335,8 @@ describe('immediate vocabulary save regression (TASK-AUDIT-007)', () => {
   it('saves the selected word at once with a toast and no confirmation popup', async () => {
     await seedKeychain(TOKENS);
     mockedAuth.getMe.mockResolvedValue(USER);
-    mockedSessions.listSessions.mockResolvedValue(sessionPage([makeSession({id: 5})]));
-    mockedSessions.getSession.mockResolvedValue(makeSession({id: 5}));
+    mockedSessions.listSessions.mockResolvedValue(sessionPage([makeSession({ id: 5 })]));
+    mockedSessions.getSession.mockResolvedValue(makeSession({ id: 5 }));
     mockedSessions.listMessages.mockResolvedValue(messagePage([makeMessage()]));
     mockedVocabulary.saveVocabulary.mockResolvedValue(makeItem());
 
@@ -349,9 +348,7 @@ describe('immediate vocabulary save regression (TASK-AUDIT-007)', () => {
     // Reach the conversation through History (a second Chat instance mounts).
     await pressTop('chat-open-history');
     await fireEvent.press(await screen.findByTestId('history-item-5'));
-    await waitFor(() =>
-      expect(top('chat-message-810')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(top('chat-message-810')).toBeOnTheScreen());
 
     // Capture the word "early" out of the assistant message.
     await fireEvent(top('chat-message-810'), 'longPress');
@@ -391,10 +388,7 @@ const rowStyles = createRowStyles(lightColors);
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   const entries = Array.isArray(style) ? style : [style];
-  return Object.assign(
-    {},
-    ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})),
-  );
+  return Object.assign({}, ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})));
 }
 
 function parentOf(element: TestInstance): TestInstance {
@@ -406,7 +400,7 @@ function parentOf(element: TestInstance): TestInstance {
 }
 
 async function renderRow(role: ChatMessage['role']): Promise<TestInstance> {
-  const item = makeMessage({role});
+  const item = makeMessage({ role });
   await render(
     <MessageRow
       item={item}
@@ -429,10 +423,10 @@ describe('chat message layout regression (TASK-AUDIT-009)', () => {
     const bubble = await renderRow('assistant');
 
     const wrapperStyle = flattenStyle(parentOf(bubble).props.style);
-    expect(wrapperStyle).toMatchObject({maxWidth: '85%', flexShrink: 1});
+    expect(wrapperStyle).toMatchObject({ maxWidth: '85%', flexShrink: 1 });
 
     const rowStyle = flattenStyle(parentOf(parentOf(bubble)).props.style);
-    expect(rowStyle).toMatchObject({flexDirection: 'row'});
+    expect(rowStyle).toMatchObject({ flexDirection: 'row' });
   });
 
   it('aligns user messages right and assistant messages left', async () => {
@@ -445,7 +439,7 @@ describe('chat message layout regression (TASK-AUDIT-009)', () => {
 
     const assistantBubble = await renderRow('assistant');
     const assistantRowStyle = flattenStyle(parentOf(parentOf(assistantBubble)).props.style);
-    expect(assistantRowStyle).toMatchObject({flexDirection: 'row'});
+    expect(assistantRowStyle).toMatchObject({ flexDirection: 'row' });
     expect(assistantRowStyle).not.toHaveProperty('justifyContent', 'flex-end');
   });
 });
@@ -470,7 +464,7 @@ function makeHarness(initialTokens: AuthTokens | null = TOKENS) {
     }
     const attempt = refreshFn()
       .then(async access => {
-        tokens = {...current, access};
+        tokens = { ...current, access };
         return access;
       })
       .catch(async () => {
@@ -490,7 +484,7 @@ function makeHarness(initialTokens: AuthTokens | null = TOKENS) {
     refresh,
   });
 
-  return {authedRequest, refreshFn, currentTokens: () => tokens};
+  return { authedRequest, refreshFn, currentTokens: () => tokens };
 }
 
 function unauthorized(): ApiError {
@@ -500,14 +494,12 @@ function unauthorized(): ApiError {
 describe('one-time refresh wrapper regression (TASK-AUDIT-005)', () => {
   it('retries the original request exactly once after one refresh', async () => {
     const harness = makeHarness();
-    mockedApiRequest
-      .mockRejectedValueOnce(unauthorized())
-      .mockResolvedValueOnce({level: 'A2'});
-    const options: AuthedRequestOptions = {method: 'PATCH', body: {level: 'B1'}};
+    mockedApiRequest.mockRejectedValueOnce(unauthorized()).mockResolvedValueOnce({ level: 'A2' });
+    const options: AuthedRequestOptions = { method: 'PATCH', body: { level: 'B1' } };
 
     await expect(
-      harness.authedRequest<{level: string}>('/api/v1/profile/', options),
-    ).resolves.toEqual({level: 'A2'});
+      harness.authedRequest<{ level: string }>('/api/v1/profile/', options),
+    ).resolves.toEqual({ level: 'A2' });
 
     expect(harness.refreshFn).toHaveBeenCalledTimes(1);
     expect(mockedApiRequest).toHaveBeenCalledTimes(2);
@@ -572,12 +564,12 @@ function jsonResponse(status: number, body: unknown): Response {
     ok: status >= 200 && status < 300,
     status,
     text: async () => text,
-    headers: {get: () => null},
+    headers: { get: () => null },
   } as unknown as Response;
 }
 
 function providerConfig(provider: LLMClientConfig['provider']): LLMClientConfig {
-  return {provider, apiKey: 'user-key', primaryModel: 'vendor/primary'};
+  return { provider, apiKey: 'user-key', primaryModel: 'vendor/primary' };
 }
 
 describe('provider strategy selection regression (TASK-AUDIT-013/004)', () => {
@@ -597,7 +589,7 @@ describe('provider strategy selection regression (TASK-AUDIT-013/004)', () => {
   });
 
   it('discovers models keylessly for public catalogs and authed otherwise', async () => {
-    const catalog = {data: [{id: 'vendor/model-a'}, {id: 'vendor/model-b'}]};
+    const catalog = { data: [{ id: 'vendor/model-a' }, { id: 'vendor/model-b' }] };
     fetchSpy.mockResolvedValue(jsonResponse(200, catalog));
 
     const models = await listProviderModels('openrouter');
@@ -607,7 +599,7 @@ describe('provider strategy selection regression (TASK-AUDIT-013/004)', () => {
     expect(init?.headers).toBeUndefined();
     expect(models.map(model => model.id)).toEqual(['vendor/model-a', 'vendor/model-b']);
 
-    await listProviderModels('openai', {apiKey: 'sk-openai-key'});
+    await listProviderModels('openai', { apiKey: 'sk-openai-key' });
     expect(fetchSpy.mock.calls[1][1]?.headers).toEqual({
       Authorization: 'Bearer sk-openai-key',
     });

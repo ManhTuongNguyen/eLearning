@@ -15,26 +15,18 @@
  * Only the network API modules and the native share seam are
  * substituted; navigation, providers and secure storage are real.
  */
-import React from 'react';
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react-native';
 
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import * as Keychain from 'react-native-keychain';
 import App from '../App';
 import * as authApi from '../src/api/auth';
 import * as profileApi from '../src/api/profile';
+import type { ChatMessage, Paginated, Session } from '../src/api/sessions';
 import * as sessionsApi from '../src/api/sessions';
-import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
+import type { VocabularyItem } from '../src/api/vocabulary';
 import * as vocabularyApi from '../src/api/vocabulary';
-import type {VocabularyItem} from '../src/api/vocabulary';
-import * as Keychain from 'react-native-keychain';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {VOCAB_TOAST_DURATION_MS} from '../src/screens/ChatScreen';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { VOCAB_TOAST_DURATION_MS } from '../src/screens/ChatScreen';
 import * as ankiShare from '../src/utils/ankiShare';
 
 jest.mock('../src/api/auth');
@@ -56,8 +48,8 @@ const mockedKeychain = Keychain as jest.Mocked<typeof Keychain> & {
   __resetKeychainStore: () => void;
 };
 
-const TOKENS = {access: 'access-1', refresh: 'refresh-1'};
-const USER = {id: 1, username: 'alice', email: 'alice@example.com'};
+const TOKENS = { access: 'access-1', refresh: 'refresh-1' };
+const USER = { id: 1, username: 'alice', email: 'alice@example.com' };
 const KEYCHAIN_SERVICE = 'com.elearningmobile.auth';
 const MESSAGE_CONTENT = 'The early bird catches the worm.';
 const EXPORT_CSV = 'Front,Back,Example,Pronunciation\n"early",,,\n';
@@ -105,18 +97,18 @@ function makeItem(overrides: Partial<VocabularyItem> = {}): VocabularyItem {
 }
 
 function messagePage(results: ChatMessage[]): Paginated<ChatMessage> {
-  return {count: results.length, next: null, previous: null, results};
+  return { count: results.length, next: null, previous: null, results };
 }
 
 function sessionPage(results: Session[]): Paginated<Session> {
-  return {count: results.length, next: null, previous: null, results};
+  return { count: results.length, next: null, previous: null, results };
 }
 
 function itemPage(results: VocabularyItem[]): Paginated<VocabularyItem> {
-  return {count: results.length, next: null, previous: null, results};
+  return { count: results.length, next: null, previous: null, results };
 }
 
-async function seedKeychain(tokens: {access: string; refresh: string}) {
+async function seedKeychain(tokens: { access: string; refresh: string }) {
   await Keychain.setGenericPassword('elearning-auth', JSON.stringify(tokens), {
     service: KEYCHAIN_SERVICE,
   });
@@ -124,11 +116,9 @@ async function seedKeychain(tokens: {access: string; refresh: string}) {
 
 /** Simulate a native selection span over the pinned selection input. */
 async function selectRange(start: number, end: number): Promise<void> {
-  await fireEvent(
-    screen.getByTestId('chat-selection-input'),
-    'selectionChange',
-    {nativeEvent: {selection: {start, end}}},
-  );
+  await fireEvent(screen.getByTestId('chat-selection-input'), 'selectionChange', {
+    nativeEvent: { selection: { start, end } },
+  });
 }
 
 /**
@@ -136,27 +126,19 @@ async function selectRange(start: number, end: number): Promise<void> {
  * History pushes a second Chat instance), so screen-level controls are
  * resolved against the topmost mounted instance.
  */
-function topScreenByTestId(
-  testId: string,
-): ReturnType<typeof screen.getAllByTestId>[number] {
+function topScreenByTestId(testId: string): ReturnType<typeof screen.getAllByTestId>[number] {
   const matches = screen.getAllByTestId(testId);
   return matches[matches.length - 1];
 }
 
 /** Capture the word "early" out of the assistant message (sheet stays open). */
 async function captureWordFromMessage(): Promise<void> {
-  await waitFor(() =>
-    expect(topScreenByTestId('chat-message-810')).toBeOnTheScreen(),
-  );
+  await waitFor(() => expect(topScreenByTestId('chat-message-810')).toBeOnTheScreen());
   await fireEvent(topScreenByTestId('chat-message-810'), 'longPress');
   await fireEvent.press(screen.getByTestId('chat-menu-select-text'));
-  expect(screen.getByTestId('chat-selection-input').props.value).toBe(
-    MESSAGE_CONTENT,
-  );
+  expect(screen.getByTestId('chat-selection-input').props.value).toBe(MESSAGE_CONTENT);
   await selectRange(4, 9);
-  expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent(
-    'early',
-  );
+  expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent('early');
 }
 
 beforeEach(async () => {
@@ -171,7 +153,7 @@ describe('TASK-112 vocabulary journey', () => {
   it('saves a selected expression from chat and exports it from the vocabulary list', async () => {
     await seedKeychain(TOKENS);
     mockedAuth.getMe.mockResolvedValue(USER);
-    mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
+    mockedProfile.getProfile.mockResolvedValue({ level: 'AUTO' });
     mockedSessions.listSessions.mockResolvedValue(sessionPage([makeSession()]));
     mockedSessions.getSession.mockResolvedValue(makeSession());
     mockedSessions.listMessages.mockResolvedValue(messagePage([makeMessage()]));
@@ -209,7 +191,11 @@ describe('TASK-112 vocabulary journey', () => {
       });
 
       expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledTimes(1);
-      expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledWith(expect.any(Function), 'early', 810);
+      expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledWith(
+        expect.any(Function),
+        'early',
+        810,
+      );
       expect(screen.queryByTestId('chat-vocab-modal')).toBeNull();
       expect(screen.getByTestId('chat-toast')).toHaveTextContent('Saved to vocabulary');
 
@@ -230,9 +216,7 @@ describe('TASK-112 vocabulary journey', () => {
     expect(mockedVocabulary.listVocabulary).toHaveBeenCalledWith(expect.any(Function), 1);
     const savedRow = await screen.findByTestId('vocabulary-item-42');
     expect(within(savedRow).getByText('early')).toBeOnTheScreen();
-    expect(within(savedRow).getByTestId('vocab-badge-pending')).toHaveTextContent(
-      'Enriching…',
-    );
+    expect(within(savedRow).getByTestId('vocab-badge-pending')).toHaveTextContent('Enriching…');
 
     // The export action fetches the Anki CSV and hands it to the native
     // share seam, then confirms with its own toast.
@@ -252,13 +236,11 @@ describe('TASK-112 vocabulary journey', () => {
   it('a failed save surfaces an error toast and the vocabulary list stays empty', async () => {
     await seedKeychain(TOKENS);
     mockedAuth.getMe.mockResolvedValue(USER);
-    mockedProfile.getProfile.mockResolvedValue({level: 'AUTO'});
+    mockedProfile.getProfile.mockResolvedValue({ level: 'AUTO' });
     mockedSessions.listSessions.mockResolvedValue(sessionPage([makeSession()]));
     mockedSessions.getSession.mockResolvedValue(makeSession());
     mockedSessions.listMessages.mockResolvedValue(messagePage([makeMessage()]));
-    mockedVocabulary.saveVocabulary.mockRejectedValue(
-      new Error('Network request failed.'),
-    );
+    mockedVocabulary.saveVocabulary.mockRejectedValue(new Error('Network request failed.'));
     mockedVocabulary.listVocabulary.mockResolvedValue(itemPage([]));
 
     await render(<App />);
@@ -274,9 +256,7 @@ describe('TASK-112 vocabulary journey', () => {
     // The failure surfaces as an alert toast (no confirmation popup ever
     // appears); nothing is stored and no success toast flashes.
     expect(await screen.findByTestId('chat-toast')).toBeOnTheScreen();
-    expect(screen.getByTestId('chat-toast')).toHaveTextContent(
-      'Network request failed.',
-    );
+    expect(screen.getByTestId('chat-toast')).toHaveTextContent('Network request failed.');
     expect(screen.getByTestId('chat-toast-text').props.role).toBe('alert');
     expect(screen.queryByTestId('chat-vocab-modal')).toBeNull();
     expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledTimes(1);

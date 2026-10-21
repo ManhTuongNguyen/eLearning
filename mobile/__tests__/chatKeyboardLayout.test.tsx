@@ -9,23 +9,22 @@
  * with the keyboard, offset by the status-bar inset the app applies above
  * the screen (edge-to-edge).
  */
-import React from 'react';
-import {DeviceEventEmitter, Pressable, Text, View} from 'react-native';
-import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 
-import {streamChatTurn, streamRetryTurn} from '../src/api/chatStream';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { DeviceEventEmitter, Pressable, Text, View } from 'react-native';
 import * as authApi from '../src/api/auth';
+import { streamChatTurn, streamRetryTurn } from '../src/api/chatStream';
+import type { ChatMessage, Paginated, Session } from '../src/api/sessions';
 import * as sessionsApi from '../src/api/sessions';
-import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
-import {AuthProvider} from '../src/auth/AuthContext';
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import type {MainStackParamList} from '../src/navigation/types';
-import {ChatScreen} from '../src/screens/ChatScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import type { MainStackParamList } from '../src/navigation/types';
+import { ChatScreen } from '../src/screens/ChatScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -46,7 +45,7 @@ const mockedStorage = jest.mocked(secureStorage);
  * geometry (the real insets reach the app through useSafeAreaInsets).
  */
 const safeArea = jest.requireMock('react-native-safe-area-context') as {
-  __setSafeAreaInsets: (patch: {top?: number; bottom?: number}) => void;
+  __setSafeAreaInsets: (patch: { top?: number; bottom?: number }) => void;
   __resetSafeAreaInsets: () => void;
 };
 
@@ -63,34 +62,26 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 }
 
 function emptyPage(): Paginated<ChatMessage> {
-  return {count: 0, next: null, previous: null, results: []};
+  return { count: 0, next: null, previous: null, results: [] };
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   const entries = Array.isArray(style) ? style : [style];
-  return Object.assign(
-    {},
-    ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})),
-  );
+  return Object.assign({}, ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})));
 }
 
 /** Current bottom padding of the keyboard-avoiding shell, read once. */
 function shellPaddingBottom(): unknown {
-  return flattenStyle(screen.getByTestId('chat-screen').props.style)
-    .paddingBottom;
+  return flattenStyle(screen.getByTestId('chat-screen').props.style).paddingBottom;
 }
 
 /** Push one keyboard event through the OS event seam, like a device would. */
 async function emitKeyboard(
-  name:
-    | 'keyboardWillShow'
-    | 'keyboardDidShow'
-    | 'keyboardWillHide'
-    | 'keyboardDidHide',
-  endCoordinates: {screenX: number; screenY: number; width: number; height: number},
+  name: 'keyboardWillShow' | 'keyboardDidShow' | 'keyboardWillHide' | 'keyboardDidHide',
+  endCoordinates: { screenX: number; screenY: number; width: number; height: number },
 ) {
   await act(async () => {
-    DeviceEventEmitter.emit(name, {duration: 0, easing: 'keyboard', endCoordinates});
+    DeviceEventEmitter.emit(name, { duration: 0, easing: 'keyboard', endCoordinates });
     await Promise.resolve();
   });
 }
@@ -102,14 +93,14 @@ async function renderChat(params?: MainStackParamList['Chat']) {
     <ModeProvider>
       <ThemeProvider>
         <AuthProvider>
-          <NavigationContainer initialState={{index: 0, routes: [{name: 'Chat', params}]}}>
-            <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="Chat">
+          <NavigationContainer initialState={{ index: 0, routes: [{ name: 'Chat', params }] }}>
+            <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Chat">
               <Stack.Screen name="Chat" component={ChatScreen} />
               <Stack.Screen name="NewConversation">
                 {() => <View testID="new-conversation-screen" />}
               </Stack.Screen>
               <Stack.Screen name="History">
-                {({navigation}) => (
+                {({ navigation }) => (
                   <Pressable testID="history-stub-back" onPress={() => navigation.goBack()}>
                     <Text>back</Text>
                   </Pressable>
@@ -138,10 +129,10 @@ async function expectComposerToRideTheKeyboard(options: {
   keyboardScreenY: number;
   keyboardHeight: number;
 }) {
-  const {statusBarInset, shellHeight, keyboardScreenY, keyboardHeight} = options;
-  safeArea.__setSafeAreaInsets({top: statusBarInset, bottom: 12});
+  const { statusBarInset, shellHeight, keyboardScreenY, keyboardHeight } = options;
+  safeArea.__setSafeAreaInsets({ top: statusBarInset, bottom: 12 });
 
-  await renderChat({sessionId: 5});
+  await renderChat({ sessionId: 5 });
   await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
   // Keyboard closed: the shell keeps its plain layout (no fixed offset).
@@ -150,7 +141,7 @@ async function expectComposerToRideTheKeyboard(options: {
   const shell = screen.getByTestId('chat-screen');
   await fireEvent(shell, 'layout', {
     persist: () => {},
-    nativeEvent: {layout: {x: 0, y: 0, width: 400, height: shellHeight}},
+    nativeEvent: { layout: { x: 0, y: 0, width: 400, height: shellHeight } },
   });
 
   await emitKeyboard('keyboardWillShow', {
@@ -185,12 +176,12 @@ beforeEach(async () => {
   jest.clearAllMocks();
   safeArea.__resetSafeAreaInsets();
   await saveApplicationMode('server');
-  mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-  mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+  mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
   mockedSessions.getSession.mockResolvedValue(makeSession());
   mockedSessions.listMessages.mockResolvedValue(emptyPage());
-  mockedStream.mockImplementation(_options => ({abort: jest.fn()}));
-  mockedStreamRetry.mockImplementation(_options => ({abort: jest.fn()}));
+  mockedStream.mockImplementation(_options => ({ abort: jest.fn() }));
+  mockedStreamRetry.mockImplementation(_options => ({ abort: jest.fn() }));
 });
 
 afterEach(() => {
@@ -232,8 +223,8 @@ describe('chat keyboard avoidance (TASK-IMPROVEMENT-002)', () => {
   });
 
   it('keeps the message list interactive while the keyboard is open', async () => {
-    safeArea.__setSafeAreaInsets({top: 24, bottom: 12});
-    await renderChat({sessionId: 5});
+    safeArea.__setSafeAreaInsets({ top: 24, bottom: 12 });
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
     const list = screen.getByTestId('chat-list');
@@ -248,14 +239,14 @@ describe('chat keyboard avoidance (TASK-IMPROVEMENT-002)', () => {
     // status-bar-height padding above the composer after dismissal (the
     // "ghost margin" on Android 16 + Gboard with edge-to-edge). The shell
     // must restore the plain layout exactly, whatever the payload reports.
-    safeArea.__setSafeAreaInsets({top: 24, bottom: 12});
-    await renderChat({sessionId: 5});
+    safeArea.__setSafeAreaInsets({ top: 24, bottom: 12 });
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
     const shell = screen.getByTestId('chat-screen');
     await fireEvent(shell, 'layout', {
       persist: () => {},
-      nativeEvent: {layout: {x: 0, y: 0, width: 400, height: 700}},
+      nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 700 } },
     });
 
     await emitKeyboard('keyboardDidShow', {

@@ -20,21 +20,22 @@
  * a one-shot `configSaved` flag only after persistence resolved — a failed
  * save stays on the editor with the inline error and never navigates.
  */
-import React from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {act, render, screen, userEvent, waitFor, within} from '@testing-library/react-native';
 
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
-import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
-import type {AIProviderSettingsScreenProps} from '../src/navigation/types';
-import {createStyles, AIProviderSettingsScreen} from '../src/screens/AIProviderSettingsScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, render, screen, userEvent, waitFor, within } from '@testing-library/react-native';
+
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
+import { DEFAULT_APPLICATION_MODE } from '../src/mode/types';
+import type { AIProviderSettingsScreenProps } from '../src/navigation/types';
+import { AIProviderSettingsScreen, createStyles } from '../src/screens/AIProviderSettingsScreen';
 import * as modelCatalog from '../src/serverless/modelCatalog';
 import * as providerRegistry from '../src/serverless/providerRegistry';
 import * as serverlessSettings from '../src/serverless/settings';
-import type {ModelInfo} from '../src/serverless/types';import {lightColors} from '../src/theme/colors';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import type { ModelInfo } from '../src/serverless/types';
+import { lightColors } from '../src/theme/colors';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/db/database');
 jest.mock('../src/serverless/settings');
@@ -90,7 +91,7 @@ const CATALOG: ModelInfo[] = [
 ];
 
 function catalogSnapshot(models = CATALOG, fetchedAt = '2026-08-27T00:00:00.000Z') {
-  return {models, fetchedAt};
+  return { models, fetchedAt };
 }
 
 function checkedStateOf(testID: string): boolean | undefined {
@@ -105,8 +106,8 @@ function createScreenStyles() {
 
 async function renderScreen(): Promise<AIProviderSettingsScreenProps> {
   const props = {
-    navigation: {navigate: jest.fn(), goBack: jest.fn(), popTo: jest.fn()},
-    route: {key: 'ai-provider-settings-test', name: 'AIProviderSettings', params: undefined},
+    navigation: { navigate: jest.fn(), goBack: jest.fn(), popTo: jest.fn() },
+    route: { key: 'ai-provider-settings-test', name: 'AIProviderSettings', params: undefined },
   } as unknown as AIProviderSettingsScreenProps;
 
   // @testing-library/react-native v14 render() is asynchronous; awaiting it
@@ -174,9 +175,9 @@ describe('rendering stored configuration (TASK-092)', () => {
     expect(screen.getByTestId('ai-provider-fallback-chain')).toBeOnTheScreen();
     // The entry appears once in the catalog row and once in the ordered chip.
     expect(screen.getAllByText('vendor/model-b').length).toBeGreaterThanOrEqual(1);
-    expect(
-      screen.getAllByText('vendor/model-b').some(node => Boolean(node.props.testID)),
-    ).toBe(false);
+    expect(screen.getAllByText('vendor/model-b').some(node => Boolean(node.props.testID))).toBe(
+      false,
+    );
 
     // The key is masked and its real value never appears anywhere.
     const input = screen.getByTestId('ai-provider-api-key-input');
@@ -230,7 +231,9 @@ describe('model selection from the discovered catalog', () => {
     });
     // Saving promotes the draft key to storage and clears it from the
     // input so the secret does not linger on screen.
-    await waitFor(() => expect(screen.getByTestId('ai-provider-api-key-input').props.value).toBe(''));
+    await waitFor(() =>
+      expect(screen.getByTestId('ai-provider-api-key-input').props.value).toBe(''),
+    );
   });
 
   it('keeps the stored key working when the field is left untouched', async () => {
@@ -244,9 +247,7 @@ describe('model selection from the discovered catalog', () => {
 
     await user.press(screen.getByTestId('ai-provider-save'));
     await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
-    expect(mockedSaveConfig).toHaveBeenCalledWith(
-      expect.objectContaining({apiKey: STORED_KEY}),
-    );
+    expect(mockedSaveConfig).toHaveBeenCalledWith(expect.objectContaining({ apiKey: STORED_KEY }));
   });
 
   it('demotes a promoted primary out of the fallback queue', async () => {
@@ -264,9 +265,7 @@ describe('model selection from the discovered catalog', () => {
 
     await user.press(screen.getByTestId('ai-provider-model-primary-vendor/model-b'));
 
-    await waitFor(() =>
-      expect(screen.queryByTestId('ai-provider-fallback-chain')).toBeNull(),
-    );
+    await waitFor(() => expect(screen.queryByTestId('ai-provider-fallback-chain')).toBeNull());
 
     await user.press(screen.getByTestId('ai-provider-save'));
     await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
@@ -293,7 +292,7 @@ describe('model selection from the discovered catalog', () => {
 
     await waitFor(() => expect(mockedSaveConfig).toHaveBeenCalledTimes(1));
     expect(mockedSaveConfig).toHaveBeenCalledWith(
-      expect.objectContaining({fallbackModels: ['vendor/model-b']}),
+      expect.objectContaining({ fallbackModels: ['vendor/model-b'] }),
     );
   });
 });
@@ -416,12 +415,8 @@ describe('model catalog refresh', () => {
     );
     // Discovery is keyless (TASK-AUDIT-004): no key configured or sent.
     expect(mockedListProviderModels).toHaveBeenCalledTimes(1);
-    expect(mockedListProviderModels).toHaveBeenCalledWith('openrouter', {apiKey: undefined});
-    expect(mockedRefresh).toHaveBeenCalledWith(
-      undefined,
-      expect.any(Function),
-      'openrouter',
-    );
+    expect(mockedListProviderModels).toHaveBeenCalledWith('openrouter', { apiKey: undefined });
+    expect(mockedRefresh).toHaveBeenCalledWith(undefined, expect.any(Function), 'openrouter');
     // Catalog source labels stay intact after refresh.
     expect(screen.queryByTestId('ai-provider-models-empty')).toBeNull();
   });
@@ -460,7 +455,7 @@ describe('model catalog refresh', () => {
     );
     // Discovery is keyless: it succeeds with no key stored and none typed.
     expect(mockedListProviderModels).toHaveBeenCalledTimes(1);
-    expect(mockedListProviderModels).toHaveBeenCalledWith('openrouter', {apiKey: undefined});
+    expect(mockedListProviderModels).toHaveBeenCalledWith('openrouter', { apiKey: undefined });
     expect(mockedRefresh).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('ai-provider-form-error')).toBeNull();
   });
@@ -496,9 +491,9 @@ describe('provider switching (TASK-AUDIT-013)', () => {
     for (const id of ['openrouter', 'gemini', 'openai']) {
       expect(screen.getByTestId(`provider-chip-${id}`)).toBeOnTheScreen();
     }
-    expect(
-      screen.getByTestId('provider-chip-openrouter').props.accessibilityState,
-    ).toMatchObject({selected: true});
+    expect(screen.getByTestId('provider-chip-openrouter').props.accessibilityState).toMatchObject({
+      selected: true,
+    });
   });
 
   it('switches the editor onto the selected provider namespace', async () => {
@@ -517,9 +512,7 @@ describe('provider switching (TASK-AUDIT-013)', () => {
     await user.press(screen.getByTestId('provider-chip-gemini'));
 
     // The Gemini namespace state is loaded: no key, no models, fresh hint.
-    await waitFor(() =>
-      expect(mockedLoadProviderState).toHaveBeenLastCalledWith('gemini'),
-    );
+    await waitFor(() => expect(mockedLoadProviderState).toHaveBeenLastCalledWith('gemini'));
     await waitFor(() =>
       expect(String(screen.getByTestId('ai-provider-api-key-input').props.placeholder)).toBe(
         'AIza…',
@@ -558,9 +551,7 @@ describe('provider switching (TASK-AUDIT-013)', () => {
     await renderSettledScreen();
 
     await user.press(screen.getByTestId('provider-chip-openai'));
-    await waitFor(() =>
-      expect(mockedLoadProviderState).toHaveBeenLastCalledWith('openai'),
-    );
+    await waitFor(() => expect(mockedLoadProviderState).toHaveBeenLastCalledWith('openai'));
 
     await user.press(screen.getByTestId('ai-provider-save'));
 
@@ -578,9 +569,7 @@ describe('provider switching (TASK-AUDIT-013)', () => {
     );
 
     await user.press(screen.getByTestId('provider-chip-gemini'));
-    await waitFor(() =>
-      expect(mockedLoadProviderState).toHaveBeenLastCalledWith('gemini'),
-    );
+    await waitFor(() => expect(mockedLoadProviderState).toHaveBeenLastCalledWith('gemini'));
 
     await user.press(screen.getByTestId('provider-chip-openrouter'));
 
@@ -595,9 +584,7 @@ describe('catalog usability', () => {
     mockedGetCached.mockResolvedValue(catalogSnapshot());
 
     await renderSettledScreen();
-    await waitFor(() =>
-      expect(screen.getByTestId('ai-provider-model-filter')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ai-provider-model-filter')).toBeOnTheScreen());
 
     expect(screen.getByTestId('ai-provider-model-primary-vendor/claude-x')).toBeOnTheScreen();
     await user.type(screen.getByTestId('ai-provider-model-filter'), 'claude');
@@ -615,9 +602,7 @@ describe('catalog usability', () => {
 
     await renderSettledScreen();
 
-    expect(await screen.findByTestId('ai-provider-model-count')).toHaveTextContent(
-      /3 model\(s\)/,
-    );
+    expect(await screen.findByTestId('ai-provider-model-count')).toHaveTextContent(/3 model\(s\)/);
   });
 });
 
@@ -643,9 +628,7 @@ describe('model catalog caching (TASK-AUDIT-017)', () => {
     // below proves the explicit control is the single network path (the
     // key guard is satisfied by typing the key first).
     await user.press(screen.getByTestId('provider-chip-openai'));
-    await waitFor(() =>
-      expect(mockedLoadProviderState).toHaveBeenLastCalledWith('openai'),
-    );
+    await waitFor(() => expect(mockedLoadProviderState).toHaveBeenLastCalledWith('openai'));
 
     expect(mockedRefresh).not.toHaveBeenCalled();
     expect(mockedListProviderModels).not.toHaveBeenCalled();
@@ -661,7 +644,7 @@ describe('model catalog caching (TASK-AUDIT-017)', () => {
 
     await waitFor(() => expect(mockedRefresh).toHaveBeenCalledTimes(1));
     expect(mockedListProviderModels).toHaveBeenCalledTimes(1);
-    expect(mockedListProviderModels).toHaveBeenCalledWith('openai', {apiKey: 'sk-openai-key'});
+    expect(mockedListProviderModels).toHaveBeenCalledWith('openai', { apiKey: 'sk-openai-key' });
   });
 
   it('shows a distinct loading state until the cached catalog has loaded', async () => {
@@ -726,9 +709,7 @@ describe('AIProviderSettingsScreen in server mode (TASK-AUDIT-016)', () => {
 
     await renderScreen();
 
-    await waitFor(() =>
-      expect(screen.getByTestId('ai-provider-mode-notice')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ai-provider-mode-notice')).toBeOnTheScreen());
     expect(screen.getByText(/serverless feature/)).toBeOnTheScreen();
     expect(screen.queryByTestId('ai-provider-api-key-input')).toBeNull();
     expect(screen.queryByTestId('ai-provider-save')).toBeNull();
@@ -740,9 +721,7 @@ describe('AIProviderSettingsScreen in server mode (TASK-AUDIT-016)', () => {
     setRuntimeApplicationMode('server');
 
     await renderScreen();
-    await waitFor(() =>
-      expect(screen.getByTestId('ai-provider-mode-notice')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('ai-provider-mode-notice')).toBeOnTheScreen());
 
     expect(mockedLoadProvider).not.toHaveBeenCalled();
     expect(mockedLoadProviderState).not.toHaveBeenCalled();
@@ -810,12 +789,8 @@ describe('primary/fallback configuration guide (TASK-IMPROVEMENT-004)', () => {
 
     const guide = await screen.findByTestId('ai-provider-model-guide');
     expect(guide).toBeOnTheScreen();
-    expect(
-      within(guide).getByText(/model you want to use first/i),
-    ).toBeOnTheScreen();
-    expect(
-      within(guide).getByText(/default for conversations/i),
-    ).toBeOnTheScreen();
+    expect(within(guide).getByText(/model you want to use first/i)).toBeOnTheScreen();
+    expect(within(guide).getByText(/default for conversations/i)).toBeOnTheScreen();
     expect(
       within(guide).getByText(/alternative models used when the primary model fails/i),
     ).toBeOnTheScreen();
@@ -842,10 +817,8 @@ describe('primary/fallback configuration guide (TASK-IMPROVEMENT-004)', () => {
     await renderSettledScreen();
 
     const row = await screen.findByTestId('ai-provider-model-primary-vendor/model-a');
-    expect(row.props.accessibilityState).toMatchObject({checked: true});
-    expect(
-      screen.getByTestId('ai-provider-model-primary-badge-vendor/model-a'),
-    ).toBeOnTheScreen();
+    expect(row.props.accessibilityState).toMatchObject({ checked: true });
+    expect(screen.getByTestId('ai-provider-model-primary-badge-vendor/model-a')).toBeOnTheScreen();
 
     // Switching the primary moves the highlight and badge to the new row.
     await user.press(screen.getByTestId('ai-provider-model-primary-vendor/model-b'));
@@ -854,9 +827,7 @@ describe('primary/fallback configuration guide (TASK-IMPROVEMENT-004)', () => {
         screen.getByTestId('ai-provider-model-primary-badge-vendor/model-b'),
       ).toBeOnTheScreen(),
     );
-    expect(
-      screen.queryByTestId('ai-provider-model-primary-badge-vendor/model-a'),
-    ).toBeNull();
+    expect(screen.queryByTestId('ai-provider-model-primary-badge-vendor/model-a')).toBeNull();
   });
 
   it('styles the selected primary row with the accent wash and unselected rows without it', () => {
@@ -876,9 +847,9 @@ describe('primary/fallback configuration guide (TASK-IMPROVEMENT-004)', () => {
 
     await renderSettledScreen();
 
-    expect(
-      await screen.findByTestId('ai-provider-fallback-order-note'),
-    ).toHaveTextContent(/one after another, in this order/i);
+    expect(await screen.findByTestId('ai-provider-fallback-order-note')).toHaveTextContent(
+      /one after another, in this order/i,
+    );
     expect(screen.getByTestId('ai-provider-fallback-chip-0')).toBeOnTheScreen();
     expect(screen.getByTestId('ai-provider-fallback-chip-1')).toBeOnTheScreen();
   });

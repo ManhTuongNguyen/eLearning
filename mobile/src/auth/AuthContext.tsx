@@ -12,7 +12,8 @@
  * serverless app never reads credentials or contacts the backend; stored
  * credentials are left untouched for a later switch back to server mode.
  */
-import React, {
+import type React from 'react';
+import {
   createContext,
   useCallback,
   useContext,
@@ -21,15 +22,14 @@ import React, {
   useRef,
   useState,
 } from 'react';
-
+import type { RegisterInput } from '../api/auth';
 import * as authApi from '../api/auth';
-import type {RegisterInput} from '../api/auth';
-import {ApiError} from '../api/client';
-import {createAuthedRequester} from './authedRequest';
-import type {AuthedRequestOptions} from './authedRequest';
-import {useOptionalApplicationMode} from '../mode/ModeContext';
-import {clearTokens, loadTokens, saveTokens} from './secureStorage';
-import type {AuthTokens, AuthUser} from './tokens';
+import { ApiError } from '../api/client';
+import { useOptionalApplicationMode } from '../mode/ModeContext';
+import type { AuthedRequestOptions } from './authedRequest';
+import { createAuthedRequester } from './authedRequest';
+import { clearTokens, loadTokens, saveTokens } from './secureStorage';
+import type { AuthTokens, AuthUser } from './tokens';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -56,7 +56,7 @@ export interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-export function AuthProvider({children}: {children: React.ReactNode}) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<AuthUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -95,8 +95,8 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     }
     const attempt = authApi
       .refreshAccessToken(current.refresh)
-      .then(async ({access}) => {
-        const nextTokens = {...current, access};
+      .then(async ({ access }) => {
+        const nextTokens = { ...current, access };
         tokensRef.current = nextTokens;
         await saveTokens(nextTokens);
         return access;
@@ -180,27 +180,24 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   }, [applicationMode, refreshAccess]);
 
   const applyLoginResponse = useCallback(async (response: authApi.LoginResponse) => {
-    const tokens: AuthTokens = {access: response.access, refresh: response.refresh};
+    const tokens: AuthTokens = { access: response.access, refresh: response.refresh };
     tokensRef.current = tokens;
     await saveTokens(tokens);
     setUser(response.user);
     setStatus('authenticated');
   }, []);
 
-  const runAction = useCallback(
-    async (action: () => Promise<void>) => {
-      setBusy(true);
-      setError(null);
-      try {
-        await action();
-      } catch (err) {
-        setError(toErrorMessage(err));
-      } finally {
-        setBusy(false);
-      }
-    },
-    [],
-  );
+  const runAction = useCallback(async (action: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (err) {
+      setError(toErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
   const login = useCallback(
     (identifier: string, password: string) =>
@@ -300,7 +297,6 @@ export function toErrorMessage(err: unknown): string {
         return err.message || 'Invalid input. Please check your data and try again.';
       case 'llm':
         return 'The AI service is temporarily unavailable. Please try again in a moment.';
-      case 'server':
       default:
         if (err.status === 0 || err.status >= 500) {
           return 'The server is unreachable right now. Please try again later.';

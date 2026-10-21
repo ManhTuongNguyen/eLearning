@@ -39,28 +39,20 @@
  * other pushed screens while devices that draw under the status bar
  * (edge-to-edge Android) still clear it.
  */
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import {toErrorMessage} from '../auth/AuthContext';
+import { toErrorMessage } from '../auth/AuthContext';
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import { SecretInput } from '../components/SecretInput';
+import { getLocalDatabase } from '../db/database';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { AIProviderSettingsScreenProps } from '../navigation/types';
 import {
-  Screen,
-  ScreenHeader,
-  ScreenScrollView,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
-import {SecretInput} from '../components/SecretInput';
-import {getLocalDatabase} from '../db/database';
-import {useApplicationMode} from '../mode/ModeContext';
-import type {AIProviderSettingsScreenProps} from '../navigation/types';
-import {getCachedModelCatalog, isModelCatalogStale, refreshModelCatalog} from '../serverless/modelCatalog';
+  getCachedModelCatalog,
+  isModelCatalogStale,
+  refreshModelCatalog,
+} from '../serverless/modelCatalog';
 import {
   listProviderModels,
   PROVIDER_DESCRIPTORS,
@@ -71,9 +63,9 @@ import {
   loadServerlessProviderState,
   saveServerlessConfig,
 } from '../serverless/settings';
-import type {LLMClientConfig, ModelInfo, ProviderId} from '../serverless/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import type { LLMClientConfig, ModelInfo, ProviderId } from '../serverless/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 /** Upper bound of model rows rendered at once; the filter narrows further. */
 const MAX_VISIBLE_MODELS = 50;
@@ -509,16 +501,13 @@ function modelLabel(model: ModelInfo): string {
   return model.name || model.id;
 }
 
-export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenProps) {
-  const {colors} = useTheme();
+export function AIProviderSettingsScreen({ navigation }: AIProviderSettingsScreenProps) {
+  const { colors } = useTheme();
   // TASK-AUDIT-016: this editor configures the serverless provider stack,
   // so it is only operable in serverless mode; server-mode mounts see a
   // notice instead of serverless-only configuration controls.
-  const {status: modeStatus, mode} = useApplicationMode();
-  const styles = useMemo(
-    () => createStyles(colors),
-    [colors],
-  );
+  const { status: modeStatus, mode } = useApplicationMode();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [loading, setLoading] = useState(true);
   /** Provider currently being edited (defaults to the historic choice). */
@@ -661,7 +650,7 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
       // whose discovery endpoint is authenticated require the key.
       const snapshot = await refreshModelCatalog(
         db,
-        () => listProviderModels(provider, {apiKey: discoveryKey}),
+        () => listProviderModels(provider, { apiKey: discoveryKey }),
         provider,
       );
       setModels(snapshot.models);
@@ -738,13 +727,13 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
     }
     setSaving(true);
     try {
-      const config: LLMClientConfig = {provider, apiKey, primaryModel, fallbackModels};
+      const config: LLMClientConfig = { provider, apiKey, primaryModel, fallbackModels };
       await saveServerlessConfig(config);
       // The typed key has been persisted; forget it from component state so
       // it cannot linger longer than necessary.
       setStoredKey(apiKey);
       setApiKeyDraft('');
-      navigation.popTo('Settings', {configSaved: true});
+      navigation.popTo('Settings', { configSaved: true });
     } catch (err) {
       setError(toErrorMessage(err));
     } finally {
@@ -753,9 +742,9 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
   }, [saving, resolveApiKey, primaryModel, fallbackModels, provider, navigation]);
 
   /** Filtered + alphabetically stable subset of the discovered catalog. */
-  const visibleModels = useMemo<{models: ModelInfo[]; total: number}>(() => {
+  const visibleModels = useMemo<{ models: ModelInfo[]; total: number }>(() => {
     if (!models) {
-      return {models: [], total: 0};
+      return { models: [], total: 0 };
     }
     const query = filter.trim().toLowerCase();
     const matching = query
@@ -766,10 +755,9 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
         )
       : models;
     const sorted = [...matching].sort(
-      (a, b) =>
-        modelLabel(a).localeCompare(modelLabel(b)) || a.id.localeCompare(b.id),
+      (a, b) => modelLabel(a).localeCompare(modelLabel(b)) || a.id.localeCompare(b.id),
     );
-    return {models: sorted.slice(0, MAX_VISIBLE_MODELS), total: sorted.length};
+    return { models: sorted.slice(0, MAX_VISIBLE_MODELS), total: sorted.length };
   }, [models, filter]);
 
   // TASK-AUDIT-017: the catalog card distinguishes loading (initial mount
@@ -784,7 +772,7 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
     if (models === null || modelsUpdatedAt === null) {
       return false;
     }
-    return isModelCatalogStale({models, fetchedAt: modelsUpdatedAt});
+    return isModelCatalogStale({ models, fetchedAt: modelsUpdatedAt });
   }, [models, modelsUpdatedAt]);
 
   // TASK-AUDIT-016: once the persisted mode is known, a server-mode mount
@@ -806,9 +794,8 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
         </ScreenHeader>
         <View style={styles.modeNotice} testID="ai-provider-mode-notice">
           <Text style={styles.modeNoticeText}>
-            Direct AI connections are a serverless feature. Switch the
-            application to serverless mode to configure a provider, API key
-            and models on this device.
+            Direct AI connections are a serverless feature. Switch the application to serverless
+            mode to configure a provider, API key and models on this device.
           </Text>
         </View>
       </Screen>
@@ -839,18 +826,14 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
               <Pressable
                 key={id}
                 accessibilityRole="button"
-                accessibilityState={{selected: active}}
+                accessibilityState={{ selected: active }}
                 disabled={switching || loading}
                 onPress={() => {
                   switchProvider(id);
                 }}
                 style={[styles.providerChip, active && styles.providerChipActive]}
                 testID={`provider-chip-${id}`}>
-                <Text
-                  style={[
-                    styles.providerChipText,
-                    active && styles.providerChipTextActive,
-                  ]}>
+                <Text style={[styles.providerChipText, active && styles.providerChipTextActive]}>
                   {chipDescriptor.label}
                 </Text>
               </Pressable>
@@ -889,7 +872,7 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
               onPress={() => {
                 handleRefreshModels();
               }}
-              style={({pressed}) => [
+              style={({ pressed }) => [
                 styles.refreshButton,
                 (refreshing || pressed) && styles.refreshButtonDisabled,
               ]}
@@ -917,28 +900,27 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
             <>
               <View style={styles.guide} testID="ai-provider-model-guide">
                 <Text style={styles.guideIntro}>
-                  Models are used in order: the primary model first, then each
-                  fallback until one answers.
+                  Models are used in order: the primary model first, then each fallback until one
+                  answers.
                 </Text>
                 <View>
                   <Text style={[styles.guideHeading, styles.guideHeadingAccent]}>
                     Primary model
                   </Text>
                   <Text style={styles.guideBody}>
-                    The model you want to use first — your default for
-                    conversations.
+                    The model you want to use first — your default for conversations.
                   </Text>
                 </View>
                 <View>
                   <Text style={styles.guideHeading}>Fallback models</Text>
                   <Text style={styles.guideBody}>
-                    Alternative models used when the primary model fails or
-                    cannot complete the request.
+                    Alternative models used when the primary model fails or cannot complete the
+                    request.
                   </Text>
                 </View>
                 <Text style={styles.guideTip}>
-                  Tip: choose a reliable model as your primary model, then add
-                  other compatible models as fallbacks.
+                  Tip: choose a reliable model as your primary model, then add other compatible
+                  models as fallbacks.
                 </Text>
               </View>
               {modelsUpdatedAt ? (
@@ -968,35 +950,28 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
                   </View>
                   {visibleModels.models.map(model => {
                     const isPrimary = model.id === primaryModel;
-                    const isFallback =
-                      !isPrimary && fallbackModels.includes(model.id);
+                    const isFallback = !isPrimary && fallbackModels.includes(model.id);
                     return (
                       <View
                         key={model.id}
                         style={[styles.modelRow, isPrimary && styles.modelRowSelected]}>
                         <Pressable
                           accessibilityRole="radio"
-                          accessibilityState={{checked: isPrimary}}
+                          accessibilityState={{ checked: isPrimary }}
                           onPress={() => choosePrimary(model.id)}
                           onLongPress={() =>
-                            setModelTooltip({label: modelLabel(model), id: model.id})
+                            setModelTooltip({ label: modelLabel(model), id: model.id })
                           }
                           style={styles.primaryButton}
                           testID={`ai-provider-model-primary-${model.id}`}>
                           <View
-                            style={[
-                              styles.radioOuter,
-                              isPrimary && styles.radioOuterSelected,
-                            ]}
+                            style={[styles.radioOuter, isPrimary && styles.radioOuterSelected]}
                           />
                           <View style={styles.modelTexts}>
                             <View style={styles.nameRow}>
                               <Text
                                 numberOfLines={1}
-                                style={[
-                                  styles.modelName,
-                                  isPrimary && styles.modelNameSelected,
-                                ]}>
+                                style={[styles.modelName, isPrimary && styles.modelNameSelected]}>
                                 {modelLabel(model)}
                               </Text>
                               {isPrimary ? (
@@ -1014,7 +989,7 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
                         </Pressable>
                         <Pressable
                           accessibilityRole="checkbox"
-                          accessibilityState={{checked: isFallback}}
+                          accessibilityState={{ checked: isFallback }}
                           onPress={() => {
                             if (!isPrimary) {
                               toggleFallback(model.id);
@@ -1039,9 +1014,8 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
                   })}
                   {visibleModels.total > visibleModels.models.length ? (
                     <Text style={styles.catalogMeta}>
-                      Showing {visibleModels.models.length} of{' '}
-                      {visibleModels.total} models. Refine the filter to narrow the
-                      list.
+                      Showing {visibleModels.models.length} of {visibleModels.total} models. Refine
+                      the filter to narrow the list.
                     </Text>
                   ) : (
                     <Text style={styles.catalogMeta} testID="ai-provider-model-count">
@@ -1059,13 +1033,13 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
               testID="ai-provider-fallback-chain">
               <Text style={styles.chainHeader}>Fallback order</Text>
               <Text style={styles.chainIntro} testID="ai-provider-fallback-order-note">
-                These models are tried one after another, in this order, when
-                the primary model cannot complete the request.
+                These models are tried one after another, in this order, when the primary model
+                cannot complete the request.
               </Text>
               {fallbackModels.map((id, index) => (
                 <Pressable
                   key={id}
-                  onLongPress={() => setModelTooltip({label: id, id: ''})}
+                  onLongPress={() => setModelTooltip({ label: id, id: '' })}
                   style={styles.chainRow}
                   testID={`ai-provider-fallback-chip-${index}`}>
                   <Text style={styles.chainOrder}>{index + 1}.</Text>
@@ -1096,9 +1070,7 @@ export function AIProviderSettingsScreen({navigation}: AIProviderSettingsScreenP
                     onPress={() => removeFallback(index)}
                     style={[styles.chainControl, styles.chainControlRemove]}
                     testID={`ai-provider-fallback-remove-${index}`}>
-                    <Text style={[styles.chainControlText, styles.chainControlRemoveText]}>
-                      ✕
-                    </Text>
+                    <Text style={[styles.chainControlText, styles.chainControlRemoveText]}>✕</Text>
                   </Pressable>
                 </Pressable>
               ))}

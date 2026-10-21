@@ -12,13 +12,14 @@
  * Settings scroll speed, re-speaks from the last spoken word on resume, and
  * completes WITHOUT saving a new history record.
  */
-import React from 'react';
-import {Animated, PanResponder} from 'react-native';
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
-import type {SpeakingPracticeScreenProps} from '../src/navigation/types';
-import {SpeakingPracticeScreen} from '../src/screens/SpeakingPracticeScreen';
-import type {LLMClient} from '../src/serverless/types';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Animated, PanResponder } from 'react-native';
+import type { SpeakingPracticeScreenProps } from '../src/navigation/types';
+import { SpeakingPracticeScreen } from '../src/screens/SpeakingPracticeScreen';
+import type { LLMClient } from '../src/serverless/types';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+
 const mockLoadConfig = jest.fn();
 const mockCreateProviderClient = jest.fn();
 jest.mock('../src/serverless/settings', () => ({
@@ -28,15 +29,15 @@ jest.mock('../src/serverless/providerRegistry', () => ({
   createProviderClient: (config: unknown) => mockCreateProviderClient(config),
 }));
 jest.mock('../src/db/profileStore', () => ({
-  getLearningProfile: jest.fn(async () => ({level: 'B1', updated_at: ''})),
+  getLearningProfile: jest.fn(async () => ({ level: 'B1', updated_at: '' })),
 }));
 // Controllable TTS engine: every speak() call is recorded with its
 // progress callback and a manual settlement handle.
 const mockSpeak = jest.fn();
 const mockEngineStop = jest.fn();
 jest.mock('../src/tts/textToSpeech', () => ({
-  getSpeechEngine: () => ({speak: mockSpeak, stop: mockEngineStop}),
-  stubSpeechEngine: {speak: jest.fn(), stop: jest.fn()},
+  getSpeechEngine: () => ({ speak: mockSpeak, stop: mockEngineStop }),
+  stubSpeechEngine: { speak: jest.fn(), stop: jest.fn() },
   setSpeechEngine: jest.fn(),
 }));
 const mockLoadSpeed = jest.fn();
@@ -49,8 +50,7 @@ const mockCreateRecord = jest.fn();
 jest.mock('../src/db/speakingPracticeRepository', () => ({
   createSpeakingPracticeRecord: (...args: unknown[]) => mockCreateRecord(...args),
 }));
-(globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const fakeClient: LLMClient = {
   complete: jest.fn(async () => ({
     text: 'The quiet morning at the lake.\n\nBy noon the town was wide awake.',
@@ -77,7 +77,7 @@ type ResumeParams = {
 /** One recorded engine.speak() call with its manual settlement handle. */
 type SpeakCall = {
   text: string;
-  onProgress?: (progress: {charStart: number; charEnd: number}) => void;
+  onProgress?: (progress: { charStart: number; charEnd: number }) => void;
   resolve: () => void;
 };
 
@@ -90,7 +90,7 @@ function speakingProps(params?: ResumeParams): SpeakingPracticeScreenProps {
       navigate: jest.fn(),
       addListener: jest.fn(() => jest.fn()),
     },
-    route: {key: 'speaking-test', name: 'SpeakingPractice', params},
+    route: { key: 'speaking-test', name: 'SpeakingPractice', params },
   } as unknown as SpeakingPracticeScreenProps;
 }
 async function renderSpeaking(params?: ResumeParams) {
@@ -102,7 +102,7 @@ async function renderSpeaking(params?: ResumeParams) {
       <SpeakingPracticeScreen {...props} />
     </ThemeProvider>,
   );
-  return {props, instance};
+  return { props, instance };
 }
 beforeEach(() => {
   jest.clearAllMocks();
@@ -114,7 +114,7 @@ beforeEach(() => {
   mockSpeak.mockImplementation(
     (text: string, onProgress?: SpeakCall['onProgress']) =>
       new Promise<void>(resolve => {
-        speakCalls.push({text, onProgress, resolve});
+        speakCalls.push({ text, onProgress, resolve });
       }),
   );
   mockEngineStop.mockReset();
@@ -161,9 +161,7 @@ describe('SpeakingPracticeScreen', () => {
     expect(screen.queryByTestId('speaking-karaoke')).toBeNull();
   });
   it('surfaces provider failures inline and stays on the form', async () => {
-    (fakeClient.complete as jest.Mock).mockRejectedValueOnce(
-      new Error('Provider is down.'),
-    );
+    (fakeClient.complete as jest.Mock).mockRejectedValueOnce(new Error('Provider is down.'));
     await renderSpeaking();
     await screen.findByTestId('speaking-practice-screen');
     await act(async () => {
@@ -190,8 +188,9 @@ describe('SpeakingPracticeScreen', () => {
     // The scroll speed slider lives on the Settings screen now; the practice
     // view only reads the persisted value.
     expect(screen.queryByTestId('speaking-speed')).toBeNull();
-    const [, userTurn] = (fakeClient.complete as jest.Mock).mock.calls[0][0]
-      .messages as Array<{content: string}>;
+    const [, userTurn] = (fakeClient.complete as jest.Mock).mock.calls[0][0].messages as Array<{
+      content: string;
+    }>;
     expect(userTurn.content).toContain('A day at the lake');
   });
   it('pauses and resumes the session timer', async () => {
@@ -200,7 +199,7 @@ describe('SpeakingPracticeScreen', () => {
     // Animated animations instantly, which would end the read session.
     const timing = jest
       .spyOn(Animated, 'timing')
-      .mockReturnValue({start: jest.fn(), stop: jest.fn(), reset: jest.fn()} as never);
+      .mockReturnValue({ start: jest.fn(), stop: jest.fn(), reset: jest.fn() } as never);
     try {
       await renderSpeaking();
       await screen.findByTestId('speaking-practice-screen');
@@ -237,7 +236,7 @@ describe('SpeakingPracticeScreen', () => {
     jest.useFakeTimers();
     const timing = jest
       .spyOn(Animated, 'timing')
-      .mockReturnValue({start: jest.fn(), stop: jest.fn(), reset: jest.fn()} as never);
+      .mockReturnValue({ start: jest.fn(), stop: jest.fn(), reset: jest.fn() } as never);
     try {
       await renderSpeaking();
       await screen.findByTestId('speaking-practice-screen');
@@ -247,17 +246,17 @@ describe('SpeakingPracticeScreen', () => {
       await screen.findByTestId('speaking-karaoke');
       await act(async () => {
         screen.getByTestId('speaking-karaoke').props.onLayout({
-          nativeEvent: {layout: {height: 300, y: 0, x: 0, width: 300}},
+          nativeEvent: { layout: { height: 300, y: 0, x: 0, width: 300 } },
         });
       });
       await act(async () => {
         fireEvent(screen.getByTestId('speaking-text-block'), 'layout', {
-          nativeEvent: {layout: {height: 1000, y: 0, x: 0, width: 300}},
+          nativeEvent: { layout: { height: 1000, y: 0, x: 0, width: 300 } },
         });
       });
       // maxOffset = 1000 + 2 * 48 - 300 = 796 px, speed 15 px/s.
       const glideTargets = () =>
-        timing.mock.calls.map(([, config]) => config as {toValue: number; duration: number});
+        timing.mock.calls.map(([, config]) => config as { toValue: number; duration: number });
       expect(glideTargets().at(-1)?.toValue).toBe(796);
       expect(glideTargets().at(-1)?.duration).toBeCloseTo(53067, 0);
 
@@ -286,7 +285,7 @@ describe('SpeakingPracticeScreen', () => {
     jest.useFakeTimers();
     const timing = jest
       .spyOn(Animated, 'timing')
-      .mockReturnValue({start: jest.fn(), stop: jest.fn(), reset: jest.fn()} as never);
+      .mockReturnValue({ start: jest.fn(), stop: jest.fn(), reset: jest.fn() } as never);
     const create = jest.spyOn(PanResponder, 'create');
     try {
       await renderSpeaking();
@@ -297,16 +296,16 @@ describe('SpeakingPracticeScreen', () => {
       await screen.findByTestId('speaking-karaoke');
       await act(async () => {
         screen.getByTestId('speaking-karaoke').props.onLayout({
-          nativeEvent: {layout: {height: 300, y: 0, x: 0, width: 300}},
+          nativeEvent: { layout: { height: 300, y: 0, x: 0, width: 300 } },
         });
       });
       await act(async () => {
         fireEvent(screen.getByTestId('speaking-text-block'), 'layout', {
-          nativeEvent: {layout: {height: 1000, y: 0, x: 0, width: 300}},
+          nativeEvent: { layout: { height: 1000, y: 0, x: 0, width: 300 } },
         });
       });
       const glideTargets = () =>
-        timing.mock.calls.map(([, config]) => config as {toValue: number; duration: number});
+        timing.mock.calls.map(([, config]) => config as { toValue: number; duration: number });
 
       // Play for 10 s (150 px down), then pause.
       await act(async () => {
@@ -322,15 +321,15 @@ describe('SpeakingPracticeScreen', () => {
         onPanResponderMove: (event: unknown, gesture: unknown) => void;
       };
       await act(async () => {
-        pan.onPanResponderGrant({}, {dy: 0, dx: 0});
-        pan.onPanResponderMove({}, {dy: 100, dx: 0});
+        pan.onPanResponderGrant({}, { dy: 0, dx: 0 });
+        pan.onPanResponderMove({}, { dy: 100, dx: 0 });
       });
 
       // Resume: the remaining distance is measured from the dragged position.
       await act(async () => {
         fireEvent.press(screen.getByTestId('speaking-pause'));
       });
-      const resumed = glideTargets().at(-1) as {toValue: number; duration: number};
+      const resumed = glideTargets().at(-1) as { toValue: number; duration: number };
       expect(resumed.toValue).toBe(796);
       // Dragged from 150 px to 50 px, so resume covers 796 - 50 px at 15 px/s.
       expect(resumed.duration).toBeCloseTo(((796 - 50) / 15) * 1000, 0);
@@ -346,7 +345,7 @@ describe('SpeakingPracticeScreen', () => {
     const timing = jest.spyOn(Animated, 'timing').mockImplementation(
       () =>
         ({
-          start: (done?: (result: {finished: boolean}) => void) => done?.({finished: true}),
+          start: (done?: (result: { finished: boolean }) => void) => done?.({ finished: true }),
           stop: jest.fn(),
           reset: jest.fn(),
         }) as never,
@@ -360,12 +359,12 @@ describe('SpeakingPracticeScreen', () => {
       await screen.findByTestId('speaking-karaoke');
       await act(async () => {
         fireEvent(screen.getByTestId('speaking-karaoke'), 'layout', {
-          nativeEvent: {layout: {height: 300, y: 0, x: 0, width: 300}},
+          nativeEvent: { layout: { height: 300, y: 0, x: 0, width: 300 } },
         });
       });
       await act(async () => {
         fireEvent(screen.getByTestId('speaking-text-block'), 'layout', {
-          nativeEvent: {layout: {height: 1000, y: 0, x: 0, width: 300}},
+          nativeEvent: { layout: { height: 1000, y: 0, x: 0, width: 300 } },
         });
       });
       await act(async () => {
@@ -415,7 +414,7 @@ describe('SpeakingPracticeScreen', () => {
     // Animated animations instantly, which would end the read session.
     const timing = jest
       .spyOn(Animated, 'timing')
-      .mockReturnValue({start: jest.fn(), stop: jest.fn(), reset: jest.fn()} as never);
+      .mockReturnValue({ start: jest.fn(), stop: jest.fn(), reset: jest.fn() } as never);
     try {
       await renderSpeaking();
       await screen.findByTestId('speaking-practice-screen');
@@ -462,8 +461,7 @@ describe('SpeakingPracticeScreen', () => {
 });
 
 describe('SpeakingPracticeScreen — listen mode', () => {
-  const SAVED_TEXT =
-    'The quiet morning at the lake.\n\nBy noon the town was wide awake.';
+  const SAVED_TEXT = 'The quiet morning at the lake.\n\nBy noon the town was wide awake.';
 
   function listenParams(): ResumeParams {
     return {
@@ -494,7 +492,7 @@ describe('SpeakingPracticeScreen — listen mode', () => {
 
     // The engine reports a spoken range; the teleprompter target follows.
     await act(async () => {
-      speakCalls[0].onProgress?.({charStart: 0, charEnd: 10});
+      speakCalls[0].onProgress?.({ charStart: 0, charEnd: 10 });
     });
 
     // Pause silences the engine and flips the control.
@@ -517,26 +515,26 @@ describe('SpeakingPracticeScreen — listen mode', () => {
     jest.useFakeTimers();
     const timing = jest
       .spyOn(Animated, 'timing')
-      .mockReturnValue({start: jest.fn(), stop: jest.fn(), reset: jest.fn()} as never);
+      .mockReturnValue({ start: jest.fn(), stop: jest.fn(), reset: jest.fn() } as never);
     try {
       await renderSpeaking(listenParams());
       await screen.findByTestId('speaking-karaoke');
       await act(async () => {
         screen.getByTestId('speaking-karaoke').props.onLayout({
-          nativeEvent: {layout: {height: 300, y: 0, x: 0, width: 300}},
+          nativeEvent: { layout: { height: 300, y: 0, x: 0, width: 300 } },
         });
       });
       await act(async () => {
         fireEvent(screen.getByTestId('speaking-text-block'), 'layout', {
-          nativeEvent: {layout: {height: 1000, y: 0, x: 0, width: 300}},
+          nativeEvent: { layout: { height: 1000, y: 0, x: 0, width: 300 } },
         });
       });
       // The engine speaks the first half of the text, the glide follows it.
       const halfway = Math.floor(SAVED_TEXT.length / 2);
       await act(async () => {
-        speakCalls[0].onProgress?.({charStart: 0, charEnd: halfway});
+        speakCalls[0].onProgress?.({ charStart: 0, charEnd: halfway });
       });
-      const glideBeforePause = timing.mock.calls.at(-1)?.[1] as {toValue: number};
+      const glideBeforePause = timing.mock.calls.at(-1)?.[1] as { toValue: number };
       expect(glideBeforePause.toValue).toBeGreaterThan(0);
 
       // Pause mid-glide: a little time has passed, so the text sits partway.
@@ -555,9 +553,9 @@ describe('SpeakingPracticeScreen — listen mode', () => {
       // remaining text; the teleprompter must continue from where it stopped
       // and never glide back up to the top.
       await act(async () => {
-        speakCalls[1].onProgress?.({charStart: 0, charEnd: 5});
+        speakCalls[1].onProgress?.({ charStart: 0, charEnd: 5 });
       });
-      const resumedGlide = timing.mock.calls.at(-1)?.[1] as {toValue: number};
+      const resumedGlide = timing.mock.calls.at(-1)?.[1] as { toValue: number };
       expect(resumedGlide.toValue).toBeGreaterThanOrEqual(glideBeforePause.toValue);
     } finally {
       timing.mockRestore();
@@ -568,19 +566,19 @@ describe('SpeakingPracticeScreen — listen mode', () => {
   it('keeps following the spoken words after the learner drags the paused text further down', async () => {
     const timing = jest
       .spyOn(Animated, 'timing')
-      .mockReturnValue({start: jest.fn(), stop: jest.fn(), reset: jest.fn()} as never);
+      .mockReturnValue({ start: jest.fn(), stop: jest.fn(), reset: jest.fn() } as never);
     const create = jest.spyOn(PanResponder, 'create');
     try {
       await renderSpeaking(listenParams());
       await screen.findByTestId('speaking-karaoke');
       await act(async () => {
         screen.getByTestId('speaking-karaoke').props.onLayout({
-          nativeEvent: {layout: {height: 300, y: 0, x: 0, width: 300}},
+          nativeEvent: { layout: { height: 300, y: 0, x: 0, width: 300 } },
         });
       });
       await act(async () => {
         fireEvent(screen.getByTestId('speaking-text-block'), 'layout', {
-          nativeEvent: {layout: {height: 1000, y: 0, x: 0, width: 300}},
+          nativeEvent: { layout: { height: 1000, y: 0, x: 0, width: 300 } },
         });
       });
       await act(async () => {
@@ -593,8 +591,8 @@ describe('SpeakingPracticeScreen — listen mode', () => {
         onPanResponderMove: (event: unknown, gesture: unknown) => void;
       };
       await act(async () => {
-        pan.onPanResponderGrant({}, {dy: 0, dx: 0});
-        pan.onPanResponderMove({}, {dy: -700, dx: 0});
+        pan.onPanResponderGrant({}, { dy: 0, dx: 0 });
+        pan.onPanResponderMove({}, { dy: -700, dx: 0 });
       });
 
       await act(async () => {
@@ -604,9 +602,9 @@ describe('SpeakingPracticeScreen — listen mode', () => {
       // where the words are, not stall at the dragged position.
       const halfway = Math.floor(SAVED_TEXT.length / 2);
       await act(async () => {
-        speakCalls[1].onProgress?.({charStart: 0, charEnd: halfway});
+        speakCalls[1].onProgress?.({ charStart: 0, charEnd: halfway });
       });
-      const lastGlide = timing.mock.calls.at(-1)?.[1] as {toValue: number};
+      const lastGlide = timing.mock.calls.at(-1)?.[1] as { toValue: number };
       const expected = (halfway / SAVED_TEXT.length) * 796;
       expect(lastGlide.toValue).toBeCloseTo(expected, 0);
     } finally {
@@ -625,10 +623,8 @@ describe('SpeakingPracticeScreen — listen mode', () => {
 
     // The session closes only after the teleprompter glides to the end of the
     // text, so the summary waits for the scroll rather than the speech alone.
-    expect(await screen.findByTestId('speaking-summary', {}, {timeout: 5000})).toBeOnTheScreen();
-    expect(screen.getByTestId('speaking-summary-detail')).toHaveTextContent(
-      /of listening/,
-    );
+    expect(await screen.findByTestId('speaking-summary', {}, { timeout: 5000 })).toBeOnTheScreen();
+    expect(screen.getByTestId('speaking-summary-detail')).toHaveTextContent(/of listening/);
     // The session replays an EXISTING history record — never duplicated.
     expect(mockCreateRecord).not.toHaveBeenCalled();
   });

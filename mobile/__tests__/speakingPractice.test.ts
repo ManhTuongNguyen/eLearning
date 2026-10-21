@@ -4,19 +4,20 @@
  * the parser strips code fences and rejects empty responses, and the
  * paragraphs are split on blank lines for the centered karaoke display.
  */
-import {FakeOpenRouterClient} from '../testing/fakeOpenRouter';
-import {OpenRouterResponseError} from '../src/serverless/errors';
+
+import { openLocalDatabase } from '../src/db/database';
+import type { SqlDriver } from '../src/db/driver';
+import { OpenRouterResponseError } from '../src/serverless/errors';
 import {
-  WORDS_PER_MINUTE,
   buildSpeakingPracticeUserPrompt,
   generateSpeakingPracticeText,
   generateSpeakingText,
   parseGeneratedSpeechText,
   splitPracticeParagraphs,
+  WORDS_PER_MINUTE,
 } from '../src/serverless/speakingPractice';
-import {openLocalDatabase} from '../src/db/database';
-import type {SqlDriver} from '../src/db/driver';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import { FakeOpenRouterClient } from '../testing/fakeOpenRouter';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 describe('buildSpeakingPracticeUserPrompt', () => {
   it('sizes the word budget to the requested minutes', () => {
@@ -45,9 +46,7 @@ describe('buildSpeakingPracticeUserPrompt', () => {
 
 describe('parseGeneratedSpeechText', () => {
   it('returns plain prose unchanged', () => {
-    expect(parseGeneratedSpeechText('Hello world. How are you?')).toBe(
-      'Hello world. How are you?',
-    );
+    expect(parseGeneratedSpeechText('Hello world. How are you?')).toBe('Hello world. How are you?');
   });
 
   it('strips a wrapping code fence', () => {
@@ -56,17 +55,16 @@ describe('parseGeneratedSpeechText', () => {
 
   it('rejects an empty response with a response error', () => {
     expect(() => parseGeneratedSpeechText('   \n  ')).toThrow(OpenRouterResponseError);
-    expect(() => parseGeneratedSpeechText('```\n```', 'vendor/m')).toThrow(
-      OpenRouterResponseError,
-    );
+    expect(() => parseGeneratedSpeechText('```\n```', 'vendor/m')).toThrow(OpenRouterResponseError);
   });
 });
 
 describe('splitPracticeParagraphs', () => {
   it('splits on blank lines and drops empty paragraphs', () => {
-    expect(
-      splitPracticeParagraphs('First paragraph.\n\nSecond paragraph.\n\n\n'),
-    ).toEqual(['First paragraph.', 'Second paragraph.']);
+    expect(splitPracticeParagraphs('First paragraph.\n\nSecond paragraph.\n\n\n')).toEqual([
+      'First paragraph.',
+      'Second paragraph.',
+    ]);
   });
 
   it('keeps single-line text as one paragraph', () => {
@@ -84,9 +82,9 @@ describe('generateSpeakingText', () => {
       requestId: null,
     });
 
-    const {text, paragraphs} = await generateSpeakingText(
+    const { text, paragraphs } = await generateSpeakingText(
       request => fake.complete(request),
-      {material: 'A day at the beach', minutes: 2},
+      { material: 'A day at the beach', minutes: 2 },
       'A2',
     );
 
@@ -112,7 +110,7 @@ describe('generateSpeakingText', () => {
       requestId: null,
     });
     await expect(
-      generateSpeakingText(request => fake.complete(request), {material: '', minutes: 1}, 'B1'),
+      generateSpeakingText(request => fake.complete(request), { material: '', minutes: 1 }, 'B1'),
     ).rejects.toBeInstanceOf(OpenRouterResponseError);
   });
 });
@@ -137,15 +135,12 @@ describe('generateSpeakingPracticeText (db-backed level)', () => {
       requestId: null,
     });
 
-    await generateSpeakingPracticeText(
-      db,
-      request => fake.complete(request),
-      {material: 'Weekend plans', minutes: 1},
-    );
+    await generateSpeakingPracticeText(db, request => fake.complete(request), {
+      material: 'Weekend plans',
+      minutes: 1,
+    });
 
     const [request] = fake.completeRequests;
-    expect(request.messages[1].content).toContain(
-      "The learner's English level is A1 (CEFR)",
-    );
+    expect(request.messages[1].content).toContain("The learner's English level is A1 (CEFR)");
   });
 });

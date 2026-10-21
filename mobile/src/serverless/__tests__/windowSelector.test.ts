@@ -2,8 +2,8 @@
  * Tests for window selection logic (SPEC TASK-087).
  */
 
-import {selectRecentMessages} from '../windowSelector';
-import type {LocalMessage} from '../../db/types';
+import type { LocalMessage } from '../../db/types';
+import { selectRecentMessages } from '../windowSelector';
 
 describe('selectRecentMessages', () => {
   const createMessage = (id: number, sequence: number): LocalMessage => ({
@@ -38,20 +38,14 @@ describe('selectRecentMessages', () => {
   });
 
   it('preserves chronological order', () => {
-    const messages = [
-      createMessage(1, 1),
-      createMessage(2, 2),
-      createMessage(3, 3),
-    ];
+    const messages = [createMessage(1, 1), createMessage(2, 2), createMessage(3, 3)];
     const result = selectRecentMessages(messages, 2);
     expect(result[0].sequence).toBe(2);
     expect(result[1].sequence).toBe(3);
   });
 
   it('uses configured default limit', () => {
-    const messages = Array.from({length: 30}, (_, i) =>
-      createMessage(i + 1, i + 1),
-    );
+    const messages = Array.from({ length: 30 }, (_, i) => createMessage(i + 1, i + 1));
     const result = selectRecentMessages(messages);
     expect(result).toHaveLength(20); // RECENT_MESSAGE_WINDOW default
   });
@@ -69,14 +63,8 @@ describe('selectRecentMessages', () => {
 
   it('throws on invalid limit', () => {
     const messages = [createMessage(1, 1)];
-    expect(() => selectRecentMessages(messages, 0)).toThrow(
-      'limit must be a positive integer',
-    );
-    expect(() => selectRecentMessages(messages, -5)).toThrow(
-      'limit must be a positive integer',
-    );
-    expect(() => selectRecentMessages(messages, 1.5)).toThrow(
-      'limit must be a positive integer',
-    );
+    expect(() => selectRecentMessages(messages, 0)).toThrow('limit must be a positive integer');
+    expect(() => selectRecentMessages(messages, -5)).toThrow('limit must be a positive integer');
+    expect(() => selectRecentMessages(messages, 1.5)).toThrow('limit must be a positive integer');
   });
 });

@@ -7,9 +7,9 @@
  * implicitly through this module.
  */
 
-import type {SqlDriver} from './driver';
-import {migrateDatabase} from './migrations';
-import {openNativeDriver} from './nativeDriver';
+import type { SqlDriver } from './driver';
+import { migrateDatabase } from './migrations';
+import { openNativeDriver } from './nativeDriver';
 
 let openPromise: Promise<SqlDriver> | null = null;
 

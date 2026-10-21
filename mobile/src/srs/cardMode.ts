@@ -12,8 +12,8 @@
  * session, but they are mapped like the other non-review states so the function
  * stays total.
  */
-import type {ReviewCardMode, SentenceStatus} from '../db/types';
-import type {PracticeMode} from '../preferences/practiceMode';
+import type { ReviewCardMode, SentenceStatus } from '../db/types';
+import type { PracticeMode } from '../preferences/practiceMode';
 
 /** Pick the card shape for one sentence under the given preference. */
 export function selectCardMode(

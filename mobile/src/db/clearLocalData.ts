@@ -6,10 +6,11 @@
  * the authentication tokens used by server mode. The operation is
  * transactional: either everything is cleared or nothing is.
  */
-import {getLocalDatabase} from './database';
-import type {SqlDriver, SqlExecutor} from './driver';
-import {SUPPORTED_PROVIDER_IDS} from '../serverless/providerRegistry';
-import {clearServerlessApiKey} from '../serverless/secureApiKey';
+
+import { SUPPORTED_PROVIDER_IDS } from '../serverless/providerRegistry';
+import { clearServerlessApiKey } from '../serverless/secureApiKey';
+import { getLocalDatabase } from './database';
+import type { SqlDriver, SqlExecutor } from './driver';
 
 /**
  * Clear all serverless local data.
@@ -50,7 +51,7 @@ export async function clearServerlessLocalData(
     // SQLite keeps counters in sqlite_sequence; deleting from that table
     // resets AUTOINCREMENT for the named tables.
     await tx.execute(
-      "DELETE FROM sqlite_sequence WHERE name IN " +
+      'DELETE FROM sqlite_sequence WHERE name IN ' +
         "('sessions', 'messages', 'summaries', 'sentence_topics', 'sentences', 'sentence_review_log')",
     );
   });

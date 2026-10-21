@@ -14,7 +14,8 @@
  * the shared one-playback contract: one utterance at a time, stopped when the
  * card changes, the screen blurs or it unmounts.
  */
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { TextStyle } from 'react-native';
 import {
   ActivityIndicator,
   Keyboard,
@@ -24,63 +25,49 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import type {TextStyle} from 'react-native';
 
-import {Icon} from '../components/Icon';
-import {
-  Screen,
-  ScreenHeader,
-  ScreenScrollView,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
-import {getLocalDatabase} from '../db/database';
+import { Icon } from '../components/Icon';
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import { getLocalDatabase } from '../db/database';
 import {
   getSentenceTopicById,
   listSentencesByTopic,
   recordSentenceReview,
 } from '../db/sentenceRepository';
-import type {
-  ReviewCardMode,
-  ReviewGrade,
-  SentenceRecord,
-  SentenceTopicRecord,
-} from '../db/types';
-import type {SentencePracticeScreenProps} from '../navigation/types';
+import type { ReviewCardMode, ReviewGrade, SentenceRecord, SentenceTopicRecord } from '../db/types';
+import type { SentencePracticeScreenProps } from '../navigation/types';
+import { loadPracticeMode, type PracticeMode } from '../preferences/practiceMode';
 import {
-  loadPracticeMode,
-  type PracticeMode,
-} from '../preferences/practiceMode';
-import {
+  type DiffKind,
+  type DiffSegment,
   diffDisplayTokens,
   diffTokens,
   suggestGrade,
   summarizeDiff,
-  type DiffKind,
-  type DiffSegment,
 } from '../srs/answerCheck';
-import {selectCardMode} from '../srs/cardMode';
-import {scheduleNext, schedulerStateFrom} from '../srs/scheduler';
+import { selectCardMode } from '../srs/cardMode';
+import { scheduleNext, schedulerStateFrom } from '../srs/scheduler';
 import {
   applyPracticeGrade,
   createPracticeSessionState,
   type PracticeSessionState,
 } from '../srs/session';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
-import type {TextToSpeechEngine} from '../tts/textToSpeech';
-import {getSpeechEngine} from '../tts/textToSpeech';
-import {useSpeechPlayback} from '../tts/useSpeechPlayback';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { TextToSpeechEngine } from '../tts/textToSpeech';
+import { getSpeechEngine } from '../tts/textToSpeech';
+import { useSpeechPlayback } from '../tts/useSpeechPlayback';
 
-const GRADE_OPTIONS: Array<{grade: ReviewGrade; label: string}> = [
-  {grade: 'again', label: 'Again'},
-  {grade: 'good', label: 'Good'},
-  {grade: 'easy', label: 'Easy'},
+const GRADE_OPTIONS: Array<{ grade: ReviewGrade; label: string }> = [
+  { grade: 'again', label: 'Again' },
+  { grade: 'good', label: 'Good' },
+  { grade: 'easy', label: 'Easy' },
 ];
 
 type GradeCounts = Record<ReviewGrade, number>;
 
 function emptyGradeCounts(): GradeCounts {
-  return {again: 0, good: 0, easy: 0};
+  return { again: 0, good: 0, easy: 0 };
 }
 
 export function createStyles(c: ThemeColors) {
@@ -369,10 +356,7 @@ function describeError(err: unknown): string {
  * non-suspended sentences count; an empty topic yields null and the caller
  * shows its own copy.
  */
-export function formatNextDueLabel(
-  sentences: readonly SentenceRecord[],
-  now: Date,
-): string | null {
+export function formatNextDueLabel(sentences: readonly SentenceRecord[], now: Date): string | null {
   const pending = sentences
     .filter(sentence => sentence.status !== 'suspended')
     .map(sentence => Date.parse(sentence.due_at))
@@ -415,13 +399,13 @@ export function formatNextDueLabel(
 function diffTokenStyle(kind: DiffKind, colors: ThemeColors): TextStyle {
   switch (kind) {
     case 'correct':
-      return {color: colors.success};
+      return { color: colors.success };
     case 'missing':
-      return {color: colors.danger};
+      return { color: colors.danger };
     case 'extra':
-      return {color: colors.warning, textDecorationLine: 'line-through'};
+      return { color: colors.warning, textDecorationLine: 'line-through' };
     case 'substituted':
-      return {color: colors.danger, textDecorationLine: 'underline'};
+      return { color: colors.danger, textDecorationLine: 'underline' };
   }
 }
 
@@ -451,13 +435,7 @@ interface GradeButtonsProps {
   onGrade: (grade: ReviewGrade) => void;
 }
 
-function GradeButtons({
-  suggested,
-  saving,
-  colors,
-  styles,
-  onGrade,
-}: GradeButtonsProps) {
+function GradeButtons({ suggested, saving, colors, styles, onGrade }: GradeButtonsProps) {
   return (
     <View style={styles.gradeRow}>
       {GRADE_OPTIONS.map(option => {
@@ -467,22 +445,20 @@ function GradeButtons({
             key={option.grade}
             accessibilityRole="button"
             accessibilityLabel={`Grade ${option.label}`}
-            accessibilityState={{disabled: saving, selected: isSuggested}}
+            accessibilityState={{ disabled: saving, selected: isSuggested }}
             testID={`sentence-grade-${option.grade}`}
             disabled={saving}
             onPress={() => onGrade(option.grade)}
-            style={({pressed}) => [
+            style={({ pressed }) => [
               styles.gradeButton,
               isSuggested && styles.gradeButtonSuggested,
               pressed && styles.pressedFade,
-            ]}
-          >
+            ]}>
             <Text
               style={[
                 styles.gradeText,
-                {color: isSuggested ? colors.primary : colors.textPrimary},
-              ]}
-            >
+                { color: isSuggested ? colors.primary : colors.textPrimary },
+              ]}>
               {option.label}
             </Text>
           </Pressable>
@@ -502,7 +478,7 @@ export function SentencePracticeScreen({
   route,
   speech = getSpeechEngine(),
 }: SentencePracticeScreenInternalProps) {
-  const {colors} = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const topicId = route.params.topicId;
 
@@ -528,7 +504,7 @@ export function SentencePracticeScreen({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const gradingRef = useRef(false);
-  const {speakingId, speak, stop} = useSpeechPlayback(speech);
+  const { speakingId, speak, stop } = useSpeechPlayback(speech);
 
   const loadSession = useCallback(async () => {
     setLoading(true);
@@ -585,6 +561,7 @@ export function SentencePracticeScreen({
 
   // Dictation cards speak once when they appear. `presentationKey` makes a
   // requeued card re-play even when it is the only card in the session.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: presentationKey is an intentional re-play trigger
   useEffect(() => {
     if (!currentCard || selectCardMode(currentCard.status, practiceMode) !== 'dictation') {
       return;
@@ -595,6 +572,7 @@ export function SentencePracticeScreen({
   // Whatever the card shape, moving to the next card (or leaving the screen)
   // must silence the previous utterance first — including a recall answer that
   // was played by an explicit reveal.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: presentationKey is an intentional card-change trigger
   useEffect(
     () => () => {
       stop();
@@ -652,13 +630,11 @@ export function SentencePracticeScreen({
           updated_at: nextState.last_reviewed_at,
         };
         setAllSentences(previous =>
-          previous.map(sentence =>
-            sentence.id === updated.id ? updated : sentence,
-          ),
+          previous.map(sentence => (sentence.id === updated.id ? updated : sentence)),
         );
         setSession(previous => applyPracticeGrade(previous, grade, updated));
         setReviewedCount(count => count + 1);
-        setGradeCounts(counts => ({...counts, [grade]: counts[grade] + 1}));
+        setGradeCounts(counts => ({ ...counts, [grade]: counts[grade] + 1 }));
         setPresentationKey(key => key + 1);
         setAnswer('');
         setDiff(null);
@@ -685,8 +661,7 @@ export function SentencePracticeScreen({
     createPracticeSessionState(allSentences, new Date(), 1).queue.length > 0;
 
   const sessionFinished = !loading && !loadError && currentCard === null;
-  const showGradeButtons =
-    currentMode === 'dictation' ? diff !== null : revealed;
+  const showGradeButtons = currentMode === 'dictation' ? diff !== null : revealed;
 
   return (
     <Screen style={styles.container} testID="sentence-practice-screen">
@@ -696,8 +671,7 @@ export function SentencePracticeScreen({
           accessibilityLabel="Back to topic"
           testID="sentence-practice-back"
           onPress={() => navigation.goBack()}
-          style={styles.backLinkButton}
-        >
+          style={styles.backLinkButton}>
           <Text style={styles.backLinkText}>‹ Topic</Text>
         </Pressable>
         <Text style={styles.title} numberOfLines={1} testID="sentence-practice-title">
@@ -722,8 +696,7 @@ export function SentencePracticeScreen({
         <View style={styles.centered} testID="sentence-practice-empty">
           <Text style={styles.stateTitle}>All caught up</Text>
           <Text style={styles.stateText}>
-            No cards are due right now. Come back when the next sentence is
-            scheduled.
+            No cards are due right now. Come back when the next sentence is scheduled.
           </Text>
           {nextDueLabel ? (
             <Text style={styles.stateText} testID="sentence-practice-next-due">
@@ -739,8 +712,7 @@ export function SentencePracticeScreen({
               {reviewedCount} card{reviewedCount === 1 ? '' : 's'} reviewed
             </Text>
             <Text style={styles.summaryValue} testID="sentence-practice-grades">
-              Again {gradeCounts.again} · Good {gradeCounts.good} · Easy{' '}
-              {gradeCounts.easy}
+              Again {gradeCounts.again} · Good {gradeCounts.good} · Easy {gradeCounts.easy}
             </Text>
             {hasRemainingDue ? (
               <Text style={styles.summaryValue} testID="sentence-practice-more-due">
@@ -757,12 +729,11 @@ export function SentencePracticeScreen({
                   accessibilityRole="button"
                   testID="sentence-practice-review-again"
                   onPress={handleReviewAgain}
-                  style={({pressed}) => [
+                  style={({ pressed }) => [
                     styles.summaryAction,
                     styles.primaryButton,
                     pressed && styles.pressedFade,
-                  ]}
-                >
+                  ]}>
                   <Text style={styles.primaryButtonText}>Review again</Text>
                 </Pressable>
               ) : null}
@@ -770,12 +741,11 @@ export function SentencePracticeScreen({
                 accessibilityRole="button"
                 testID="sentence-practice-back-to-topic"
                 onPress={() => navigation.goBack()}
-                style={({pressed}) => [
+                style={({ pressed }) => [
                   styles.summaryAction,
                   styles.secondaryButton,
                   pressed && styles.pressedFade,
-                ]}
-              >
+                ]}>
                 <Text style={styles.secondaryButtonText}>Back to topic</Text>
               </Pressable>
             </View>
@@ -784,8 +754,7 @@ export function SentencePracticeScreen({
       ) : currentCard && currentMode ? (
         <ScreenScrollView
           contentContainerStyle={styles.cardBody}
-          keyboardShouldPersistTaps="handled"
-        >
+          keyboardShouldPersistTaps="handled">
           <Text style={styles.progress} testID="sentence-practice-progress">
             {reviewedCount + 1} / {reviewedCount + session.queue.length}
           </Text>
@@ -798,11 +767,7 @@ export function SentencePracticeScreen({
                 accessibilityLabel="Replay the sentence"
                 testID="sentence-practice-replay"
                 onPress={handleReplay}
-                style={({pressed}) => [
-                  styles.replayButton,
-                  pressed && styles.pressedFade,
-                ]}
-              >
+                style={({ pressed }) => [styles.replayButton, pressed && styles.pressedFade]}>
                 <Icon
                   name="speaker"
                   size={20}
@@ -833,11 +798,7 @@ export function SentencePracticeScreen({
                   testID="sentence-dictation-check"
                   onPress={handleCheck}
                   disabled={saving}
-                  style={({pressed}) => [
-                    styles.primaryButton,
-                    pressed && styles.pressedFade,
-                  ]}
-                >
+                  style={({ pressed }) => [styles.primaryButton, pressed && styles.pressedFade]}>
                   <Text style={styles.primaryButtonText}>Check</Text>
                 </Pressable>
               ) : (
@@ -845,6 +806,7 @@ export function SentencePracticeScreen({
                   <View style={styles.diffRow} testID="sentence-diff">
                     {diffDisplayTokens(diff).map((token, index) => (
                       <Text
+                        // biome-ignore lint/suspicious/noArrayIndexKey: diff tokens are positional
                         key={`${token.kind}-${index}`}
                         accessibilityLabel={
                           token.expected
@@ -852,41 +814,29 @@ export function SentencePracticeScreen({
                             : `${token.kind}: ${token.text}`
                         }
                         style={[styles.diffToken, diffTokenStyle(token.kind, colors)]}
-                        testID={`sentence-diff-token-${index}`}
-                      >
+                        testID={`sentence-diff-token-${index}`}>
                         {token.kind === 'substituted' && token.expected
                           ? `${token.text} → ${token.expected}`
                           : token.text}
                       </Text>
                     ))}
                   </View>
-                  <View
-                    style={styles.answerBlock}
-                    testID="sentence-dictation-answer-block"
-                  >
+                  <View style={styles.answerBlock} testID="sentence-dictation-answer-block">
                     <Text style={styles.contextLabel}>Correct sentence</Text>
-                    <Text
-                      style={styles.answerText}
-                      selectable
-                      testID="sentence-dictation-answer"
-                    >
+                    <Text style={styles.answerText} selectable testID="sentence-dictation-answer">
                       {currentCard.text}
                     </Text>
                   </View>
                   <Text style={styles.diffSummary} testID="sentence-diff-summary">
                     {diffSummary(diff)}
                   </Text>
-                  <Text
-                    style={styles.suggestion}
-                    testID="sentence-suggested-grade"
-                  >
+                  <Text style={styles.suggestion} testID="sentence-suggested-grade">
                     Suggested: {suggested === 'good' ? 'Good' : 'Again'}
                   </Text>
                 </>
               )}
 
-              {diff !== null &&
-              (currentCard.meaning || currentCard.situation) ? (
+              {diff !== null && (currentCard.meaning || currentCard.situation) ? (
                 <View style={styles.contextBlock} testID="sentence-dictation-context">
                   {currentCard.meaning ? (
                     <>
@@ -894,8 +844,7 @@ export function SentencePracticeScreen({
                       <Text
                         style={styles.meaningText}
                         selectable
-                        testID="sentence-dictation-meaning"
-                      >
+                        testID="sentence-dictation-meaning">
                         {currentCard.meaning}
                       </Text>
                     </>
@@ -906,8 +855,7 @@ export function SentencePracticeScreen({
                       <Text
                         style={styles.situationText}
                         selectable
-                        testID="sentence-dictation-situation"
-                      >
+                        testID="sentence-dictation-situation">
                         {currentCard.situation}
                       </Text>
                     </>
@@ -919,35 +867,24 @@ export function SentencePracticeScreen({
             <View style={styles.card} testID="sentence-recall-card">
               <Text style={styles.cardLabel}>Recall the sentence</Text>
               <Text style={styles.contextLabel}>Situation</Text>
-              <Text
-                style={styles.situationText}
-                selectable
-                testID="sentence-recall-situation"
-              >
-                {currentCard.situation ||
-                  'No situation was saved for this sentence.'}
+              <Text style={styles.situationText} selectable testID="sentence-recall-situation">
+                {currentCard.situation || 'No situation was saved for this sentence.'}
               </Text>
               <Text style={styles.recallHint}>
-                Say the English sentence a native speaker would use in this
-                situation.
+                Say the English sentence a native speaker would use in this situation.
               </Text>
 
               <Pressable
                 accessibilityRole="button"
                 testID="sentence-recall-show-meaning"
                 onPress={() => setMeaningVisible(value => !value)}
-                style={styles.linkButton}
-              >
+                style={styles.linkButton}>
                 <Text style={styles.linkButtonText}>
                   {meaningVisible ? 'Hide meaning' : 'Show meaning'}
                 </Text>
               </Pressable>
               {meaningVisible ? (
-                <Text
-                  style={styles.meaningText}
-                  selectable
-                  testID="sentence-recall-meaning"
-                >
+                <Text style={styles.meaningText} selectable testID="sentence-recall-meaning">
                   {currentCard.meaning || 'No meaning was saved.'}
                 </Text>
               ) : null}
@@ -962,19 +899,11 @@ export function SentencePracticeScreen({
                     accessibilityLabel="Replay the sentence"
                     testID="sentence-practice-replay"
                     onPress={handleReplay}
-                    style={({pressed}) => [
-                      styles.replayButton,
-                      pressed && styles.pressedFade,
-                    ]}
-                  >
+                    style={({ pressed }) => [styles.replayButton, pressed && styles.pressedFade]}>
                     <Icon
                       name="speaker"
                       size={20}
-                      color={
-                        speakingId === currentCard.id
-                          ? colors.primary
-                          : colors.textSecondary
-                      }
+                      color={speakingId === currentCard.id ? colors.primary : colors.textSecondary}
                     />
                     <Text style={styles.replayText}>
                       {speakingId === currentCard.id ? 'Playing…' : 'Replay'}
@@ -986,11 +915,7 @@ export function SentencePracticeScreen({
                   accessibilityRole="button"
                   testID="sentence-recall-reveal"
                   onPress={handleReveal}
-                  style={({pressed}) => [
-                    styles.primaryButton,
-                    pressed && styles.pressedFade,
-                  ]}
-                >
+                  style={({ pressed }) => [styles.primaryButton, pressed && styles.pressedFade]}>
                   <Text style={styles.primaryButtonText}>Reveal answer</Text>
                 </Pressable>
               )}
@@ -998,11 +923,7 @@ export function SentencePracticeScreen({
           )}
 
           {actionError ? (
-            <Text
-              role="alert"
-              style={styles.error}
-              testID="sentence-practice-action-error"
-            >
+            <Text role="alert" style={styles.error} testID="sentence-practice-action-error">
               {actionError}
             </Text>
           ) : null}
@@ -1017,9 +938,7 @@ export function SentencePracticeScreen({
             />
           ) : null}
 
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : null}
+          {saving ? <ActivityIndicator size="small" color={colors.primary} /> : null}
         </ScreenScrollView>
       ) : null}
     </Screen>

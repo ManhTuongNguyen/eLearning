@@ -7,7 +7,7 @@
  * database only ever replays the migrations it has not seen yet.
  */
 
-import type {SqlDriver} from './driver';
+import type { SqlDriver } from './driver';
 
 /** Version 1: initial serverless schema (sessions/messages/summaries/profile/settings). */
 const MIGRATION_001: readonly string[] = [

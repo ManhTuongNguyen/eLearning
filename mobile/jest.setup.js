@@ -77,7 +77,7 @@ jest.mock('react-native-blob-util', () => ({
   default: {
     fs: {
       dirs: { CacheDir: '/mock-cache' },
-      writeFile: jest.fn(async (path, contents) => path),
+      writeFile: jest.fn(async (path, _contents) => path),
     },
   },
 }));
@@ -102,7 +102,8 @@ jest.mock('@react-native-community/slider', () => {
   const React = require('react');
   const { View } = require('react-native');
 
-  const Slider = (props) => React.createElement(View, { ...props, testID: props.testID ?? 'slider' }, null);
+  const Slider = props =>
+    React.createElement(View, { ...props, testID: props.testID ?? 'slider' }, null);
 
   return {
     __esModule: true,
@@ -194,7 +195,7 @@ const mockKeychainStore = new Map();
 jest.mock('react-native-keychain', () => {
   const store = mockKeychainStore;
 
-  const serviceOf = (options) =>
+  const serviceOf = options =>
     options && typeof options.service === 'string' ? options.service : 'default';
 
   return {
@@ -204,17 +205,23 @@ jest.mock('react-native-keychain', () => {
       store.set(serviceOf(options), JSON.stringify({ username, password }));
       return { service: serviceOf(options), storage: 'none' };
     }),
-    getGenericPassword: jest.fn(async (options) => {
+    getGenericPassword: jest.fn(async options => {
       const entry = store.get(serviceOf(options));
       if (!entry) {
         return false;
       }
-      return { ...JSON.parse(entry), service: serviceOf(options), storage: 'none' };
+      return {
+        ...JSON.parse(entry),
+        service: serviceOf(options),
+        storage: 'none',
+      };
     }),
-    resetGenericPassword: jest.fn(async (options) => store.delete(serviceOf(options))),
+    resetGenericPassword: jest.fn(async options => store.delete(serviceOf(options))),
     SECURITY_LEVEL: { SECURE_SOFTWARE: 'SECURE_SOFTWARE', ANY: 'ANY' },
     STORAGE_TYPE: { AES: 'AES' },
-    ACCESSIBLE: { WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WhenUnlockedThisDeviceOnly' },
+    ACCESSIBLE: {
+      WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WhenUnlockedThisDeviceOnly',
+    },
     __resetKeychainStore: () => {
       store.clear();
     },

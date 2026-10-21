@@ -9,29 +9,20 @@
  */
 import * as Keychain from 'react-native-keychain';
 
-import {clearServerlessLocalData, resetLocalDatabaseForTests} from '../src/db/clearLocalData';
-import {openLocalDatabase, resetLocalDatabase} from '../src/db/database';
-import {
-  insertSession,
-  listSessions,
-} from '../src/db/sessionStore';
-import {
-  insertMessage,
-  listMessages,
-} from '../src/db/messageStore';
-import {getLearningProfile, saveLearningProfile} from '../src/db/profileStore';
-import {
-  getSetting,
-  setSetting,
-} from '../src/db/settingsStore';
-import {saveSummary} from '../src/db/summaryStore';
+import { clearServerlessLocalData, resetLocalDatabaseForTests } from '../src/db/clearLocalData';
+import { openLocalDatabase, resetLocalDatabase } from '../src/db/database';
+import { insertMessage, listMessages } from '../src/db/messageStore';
+import { getLearningProfile, saveLearningProfile } from '../src/db/profileStore';
 import {
   createSentenceTopic,
   insertSentences,
   logSentenceReview,
 } from '../src/db/sentenceRepository';
-import {loadServerlessApiKey, saveServerlessApiKey} from '../src/serverless/secureApiKey';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import { insertSession, listSessions } from '../src/db/sessionStore';
+import { getSetting, setSetting } from '../src/db/settingsStore';
+import { saveSummary } from '../src/db/summaryStore';
+import { loadServerlessApiKey, saveServerlessApiKey } from '../src/serverless/secureApiKey';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 const mockAsyncStorageStore = new Map<string, string>();
 const mockAsyncStorage = {
@@ -80,12 +71,12 @@ describe('clearLocalData (TASK-094)', () => {
     const db = await openLocalDatabase(() => openSqlJsDriver());
 
     // Create sessions with messages and summaries
-    const session1 = await insertSession(db, {title: 'First chat'});
-    const session2 = await insertSession(db, {title: 'Second chat'});
+    const session1 = await insertSession(db, { title: 'First chat' });
+    const session2 = await insertSession(db, { title: 'Second chat' });
 
-    await insertMessage(db, {session_id: session1.id, role: 'user', content: 'hello'});
-    await insertMessage(db, {session_id: session1.id, role: 'assistant', content: 'hi there'});
-    await insertMessage(db, {session_id: session2.id, role: 'user', content: 'another session'});
+    await insertMessage(db, { session_id: session1.id, role: 'user', content: 'hello' });
+    await insertMessage(db, { session_id: session1.id, role: 'assistant', content: 'hi there' });
+    await insertMessage(db, { session_id: session2.id, role: 'user', content: 'another session' });
 
     await saveSummary(db, {
       session_id: session1.id,
@@ -168,8 +159,8 @@ describe('clearLocalData (TASK-094)', () => {
   it('resets auto-increment counters so new sessions start from 1', async () => {
     const db = await openLocalDatabase(() => openSqlJsDriver());
 
-    const session1 = await insertSession(db, {title: 'First'});
-    const session2 = await insertSession(db, {title: 'Second'});
+    const session1 = await insertSession(db, { title: 'First' });
+    const session2 = await insertSession(db, { title: 'Second' });
 
     expect(session1.id).toBe(1);
     expect(session2.id).toBe(2);
@@ -177,7 +168,7 @@ describe('clearLocalData (TASK-094)', () => {
     await clearServerlessLocalData(() => Promise.resolve(db));
 
     // New session after clear should start from 1
-    const newSession = await insertSession(db, {title: 'After clear'});
+    const newSession = await insertSession(db, { title: 'After clear' });
     expect(newSession.id).toBe(1);
 
     await db.close();
@@ -207,7 +198,7 @@ describe('clearLocalData (TASK-094)', () => {
       grade: 'good',
       mode: 'recall',
     });
-    await insertSession(db, {title: 'Separate conversation'});
+    await insertSession(db, { title: 'Separate conversation' });
 
     await clearServerlessLocalData(() => Promise.resolve(db));
 
@@ -219,7 +210,7 @@ describe('clearLocalData (TASK-094)', () => {
     expect((await listSessions(db)).length).toBe(0);
 
     // Auto-increment counters restart so the next topic/sentence starts at 1.
-    const nextTopic = await createSentenceTopic(db, {title: 'After clear'});
+    const nextTopic = await createSentenceTopic(db, { title: 'After clear' });
     expect(nextTopic.id).toBe(1);
     const nextSentences = await insertSentences(db, nextTopic.id, [
       {
@@ -246,8 +237,8 @@ describe('clearLocalData (TASK-094)', () => {
   it('is transactional: partial failure leaves no orphaned state', async () => {
     const db = await openLocalDatabase(() => openSqlJsDriver());
 
-    const session1 = await insertSession(db, {title: 'First'});
-    await insertMessage(db, {session_id: session1.id, role: 'user', content: 'hello'});
+    const session1 = await insertSession(db, { title: 'First' });
+    await insertMessage(db, { session_id: session1.id, role: 'user', content: 'hello' });
 
     // Clear should succeed completely
     await expect(clearServerlessLocalData(() => Promise.resolve(db))).resolves.toBeUndefined();
@@ -266,7 +257,7 @@ describe('clearLocalData (TASK-094)', () => {
     await saveLearningProfile(db, 'C1');
     await saveServerlessApiKey(SECRET);
     await setSetting(db, 'serverless_primary_model', 'openai/gpt-4o-mini');
-    await insertSession(db, {title: 'Some chat'});
+    await insertSession(db, { title: 'Some chat' });
 
     await resetLocalDatabaseForTests(() => Promise.resolve(db));
 

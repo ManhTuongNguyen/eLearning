@@ -31,11 +31,11 @@
  *
  * Message text and API keys are never logged.
  */
-import {getLocalDatabase} from '../db/database';
-import type {SqlDriver} from '../db/driver';
+import { getLocalDatabase } from '../db/database';
+import type { SqlDriver } from '../db/driver';
 import * as messageStore from '../db/messageStore';
-import {getSession, touchSession} from '../db/sessionStore';
-import type {LocalMessage, LocalSession} from '../db/types';
+import { getSession, touchSession } from '../db/sessionStore';
+import type { LocalMessage, LocalSession } from '../db/types';
 import type {
   CompletionRequest,
   ServerlessStreamEvent,
@@ -82,12 +82,9 @@ export interface ServerlessTurnHandle {
 
 const BLANK_TEXT_MESSAGE = 'Message text must not be empty.';
 const SESSION_MISSING_MESSAGE = 'Conversation not found.';
-const RETRY_NOT_FAILED_MESSAGE =
-  'Only failed assistant responses can be retried.';
-const RETRY_NO_PROMPT_MESSAGE =
-  'The failed response has no user message to retry.';
-const SAVE_FAILURE_MESSAGE =
-  'The response could not be saved on this device.';
+const RETRY_NOT_FAILED_MESSAGE = 'Only failed assistant responses can be retried.';
+const RETRY_NO_PROMPT_MESSAGE = 'The failed response has no user message to retry.';
+const SAVE_FAILURE_MESSAGE = 'The response could not be saved on this device.';
 
 export interface ServerlessTurnOptions {
   /** DB opener; defaults to the shared auto-initialized local database. */
@@ -108,7 +105,7 @@ export interface ServerlessTurnOptions {
  * the text is blank or the session does not exist.
  */
 export async function streamServerlessTurn(
-  options: ServerlessTurnOptions & {text: string},
+  options: ServerlessTurnOptions & { text: string },
 ): Promise<ServerlessTurnHandle> {
   const openDb = options.openDb ?? getLocalDatabase;
   const db = await openDb();
@@ -123,11 +120,16 @@ export async function streamServerlessTurn(
  * streams into that exact row.
  */
 export async function retryServerlessTurn(
-  options: ServerlessTurnOptions & {messageId: number},
+  options: ServerlessTurnOptions & { messageId: number },
 ): Promise<ServerlessTurnHandle> {
   const openDb = options.openDb ?? getLocalDatabase;
   const db = await openDb();
-  const prepared = await prepareRetry(db, options.sessionId, options.messageId, options.buildRequest);
+  const prepared = await prepareRetry(
+    db,
+    options.sessionId,
+    options.messageId,
+    options.buildRequest,
+  );
   return runTurn(openDb, options.stream, prepared.turn, prepared.request, options.onEvent);
 }
 
@@ -136,7 +138,7 @@ async function prepareNewTurn(
   sessionId: number,
   text: string,
   buildRequest: TurnRequestBuilder,
-): Promise<{turn: PreparedTurn; request: CompletionRequest}> {
+): Promise<{ turn: PreparedTurn; request: CompletionRequest }> {
   const stripped = typeof text === 'string' ? text.trim() : '';
   if (!stripped) {
     throw new ServerlessTurnError(BLANK_TEXT_MESSAGE);
@@ -158,10 +160,10 @@ async function prepareNewTurn(
       status: 'pending',
     });
     await touchSession(tx, sessionId);
-    const turn: PreparedTurn = {session, userMessage, assistantMessage};
+    const turn: PreparedTurn = { session, userMessage, assistantMessage };
     // Assembled inside the transaction like backend chat.py: a failing
     // builder rolls the whole turn back.
-    return {turn, request: await buildRequest(turn)};
+    return { turn, request: await buildRequest(turn) };
   });
 }
 
@@ -170,7 +172,7 @@ async function prepareRetry(
   sessionId: number,
   messageId: number,
   buildRequest: TurnRequestBuilder,
-): Promise<{turn: PreparedTurn; request: CompletionRequest}> {
+): Promise<{ turn: PreparedTurn; request: CompletionRequest }> {
   return db.transaction(async tx => {
     const session = await getSession(tx, sessionId);
     if (!session) {
@@ -178,7 +180,7 @@ async function prepareRetry(
     }
     const messages = await messageStore.listMessages(tx, sessionId);
     const target = messages.find(message => message.id === messageId);
-    if (!target || target.role !== 'assistant' || target.status !== 'failed') {
+    if (target?.role !== 'assistant' || target.status !== 'failed') {
       throw new ServerlessTurnError(RETRY_NOT_FAILED_MESSAGE);
     }
     const userMessage = findPromptingUserMessage(messages, target.sequence);
@@ -190,9 +192,9 @@ async function prepareRetry(
     const turn: PreparedTurn = {
       session,
       userMessage,
-      assistantMessage: {...target, status: 'pending', content: ''},
+      assistantMessage: { ...target, status: 'pending', content: '' },
     };
-    return {turn, request: await buildRequest(turn)};
+    return { turn, request: await buildRequest(turn) };
   });
 }
 
@@ -258,7 +260,7 @@ function runTurn(
 async function settleTerminal(
   openDb: () => Promise<SqlDriver>,
   messageId: number,
-  event: Extract<ServerlessStreamEvent, {type: 'completed'} | {type: 'failed'}>,
+  event: Extract<ServerlessStreamEvent, { type: 'completed' } | { type: 'failed' }>,
   isAborted: () => boolean,
   onEvent: (event: ServerlessStreamEvent) => void,
 ): Promise<void> {

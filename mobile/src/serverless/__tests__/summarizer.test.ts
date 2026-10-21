@@ -2,9 +2,9 @@
  * Tests for rolling conversation summarizer (SPEC TASK-087).
  */
 
-import {generateSummary} from '../summarizer';
-import type {LocalMessage} from '../../db/types';
-import type {OpenRouterClient, CompletionResult} from '../types';
+import type { LocalMessage } from '../../db/types';
+import { generateSummary } from '../summarizer';
+import type { CompletionResult, OpenRouterClient } from '../types';
 
 describe('generateSummary', () => {
   const createMessage = (
@@ -39,13 +39,13 @@ describe('generateSummary', () => {
       createMessage('assistant', 'Great choice!', 2),
     ];
 
-    const result = await generateSummary(client, {archivedMessages: messages});
+    const result = await generateSummary(client, { archivedMessages: messages });
 
     expect(result).toBe('The learner discussed travel plans to Japan.');
     expect(client.complete).toHaveBeenCalledWith({
       messages: expect.arrayContaining([
-        expect.objectContaining({role: 'system'}),
-        expect.objectContaining({role: 'user'}),
+        expect.objectContaining({ role: 'system' }),
+        expect.objectContaining({ role: 'user' }),
       ]),
     });
   });
@@ -66,12 +66,9 @@ describe('generateSummary', () => {
 
   it('formats archived messages as role: content', async () => {
     const client = mockClient('Summary text');
-    const messages = [
-      createMessage('user', 'Hello', 1),
-      createMessage('assistant', 'Hi there', 2),
-    ];
+    const messages = [createMessage('user', 'Hello', 1), createMessage('assistant', 'Hi there', 2)];
 
-    await generateSummary(client, {archivedMessages: messages});
+    await generateSummary(client, { archivedMessages: messages });
 
     const userPrompt = (client.complete as jest.Mock).mock.calls[0][0].messages[1].content;
     expect(userPrompt).toContain('user: Hello');
@@ -82,7 +79,7 @@ describe('generateSummary', () => {
     const client = mockClient('```\nSummary inside fence\n```');
     const messages = [createMessage('user', 'Test', 1)];
 
-    const result = await generateSummary(client, {archivedMessages: messages});
+    const result = await generateSummary(client, { archivedMessages: messages });
 
     expect(result).toBe('Summary inside fence');
   });
@@ -91,7 +88,7 @@ describe('generateSummary', () => {
     const client = mockClient('```text\nSummary with language\n```');
     const messages = [createMessage('user', 'Test', 1)];
 
-    const result = await generateSummary(client, {archivedMessages: messages});
+    const result = await generateSummary(client, { archivedMessages: messages });
 
     expect(result).toBe('Summary with language');
   });
@@ -100,7 +97,7 @@ describe('generateSummary', () => {
     const client = mockClient('Plain summary text');
     const messages = [createMessage('user', 'Test', 1)];
 
-    const result = await generateSummary(client, {archivedMessages: messages});
+    const result = await generateSummary(client, { archivedMessages: messages });
 
     expect(result).toBe('Plain summary text');
   });
@@ -109,45 +106,45 @@ describe('generateSummary', () => {
     const client = mockClient('   ');
     const messages = [createMessage('user', 'Test', 1)];
 
-    await expect(
-      generateSummary(client, {archivedMessages: messages}),
-    ).rejects.toThrow('Summary response was empty');
+    await expect(generateSummary(client, { archivedMessages: messages })).rejects.toThrow(
+      'Summary response was empty',
+    );
   });
 
   it('throws on empty archived messages', async () => {
     const client = mockClient('Summary');
 
-    await expect(
-      generateSummary(client, {archivedMessages: []}),
-    ).rejects.toThrow('archivedMessages must not be empty');
+    await expect(generateSummary(client, { archivedMessages: [] })).rejects.toThrow(
+      'archivedMessages must not be empty',
+    );
   });
 
   it('throws on invalid role in archived messages', async () => {
     const client = mockClient('Summary');
     const invalidMessage = {
       ...createMessage('user', 'Test', 1),
-      role: 'system' as any,
+      role: 'system' as never,
     };
 
-    await expect(
-      generateSummary(client, {archivedMessages: [invalidMessage]}),
-    ).rejects.toThrow('invalid role');
+    await expect(generateSummary(client, { archivedMessages: [invalidMessage] })).rejects.toThrow(
+      'invalid role',
+    );
   });
 
   it('throws on empty content in archived messages', async () => {
     const client = mockClient('Summary');
     const messages = [createMessage('user', '   ', 1)];
 
-    await expect(
-      generateSummary(client, {archivedMessages: messages}),
-    ).rejects.toThrow('content must not be empty');
+    await expect(generateSummary(client, { archivedMessages: messages })).rejects.toThrow(
+      'content must not be empty',
+    );
   });
 
   it('handles missing previous summary', async () => {
     const client = mockClient('First summary');
     const messages = [createMessage('user', 'Hello', 1)];
 
-    const result = await generateSummary(client, {archivedMessages: messages});
+    const result = await generateSummary(client, { archivedMessages: messages });
 
     expect(result).toBe('First summary');
     const userPrompt = (client.complete as jest.Mock).mock.calls[0][0].messages[1].content;
@@ -158,7 +155,7 @@ describe('generateSummary', () => {
     const client = mockClient('  Summary with whitespace  \n');
     const messages = [createMessage('user', 'Test', 1)];
 
-    const result = await generateSummary(client, {archivedMessages: messages});
+    const result = await generateSummary(client, { archivedMessages: messages });
 
     expect(result).toBe('Summary with whitespace');
   });
@@ -171,8 +168,8 @@ describe('generateSummary', () => {
     };
     const messages = [createMessage('user', 'Test', 1)];
 
-    await expect(
-      generateSummary(client, {archivedMessages: messages}),
-    ).rejects.toThrow('Provider error');
+    await expect(generateSummary(client, { archivedMessages: messages })).rejects.toThrow(
+      'Provider error',
+    );
   });
 });

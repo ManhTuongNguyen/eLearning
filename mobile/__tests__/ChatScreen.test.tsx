@@ -25,28 +25,19 @@
  * confirmed-empty history shows the empty state, failed lookup shows an
  * error with retry, and regaining focus re-runs the check).
  */
-import React from 'react';
-import {Pressable, Text, View} from 'react-native';
-import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react-native';
 
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { Pressable, Text, View } from 'react-native';
+import * as authApi from '../src/api/auth';
 import type {
   ChatStreamEvent,
   StreamChatTurnOptions,
   StreamRetryTurnOptions,
 } from '../src/api/chatStream';
-import {streamChatTurn, streamRetryTurn} from '../src/api/chatStream';
-import * as authApi from '../src/api/auth';
-import {ApiError} from '../src/api/client';
-import * as sessionsApi from '../src/api/sessions';
+import { streamChatTurn, streamRetryTurn } from '../src/api/chatStream';
+import { ApiError } from '../src/api/client';
 import type {
   ChatMessage,
   MessageImprovement,
@@ -55,17 +46,18 @@ import type {
   SampleTurn,
   Session,
 } from '../src/api/sessions';
+import * as sessionsApi from '../src/api/sessions';
 import * as vocabularyApi from '../src/api/vocabulary';
-import {AuthProvider} from '../src/auth/AuthContext';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import type {MainStackParamList} from '../src/navigation/types';
-import {ChatScreen, VOCAB_TOAST_DURATION_MS} from '../src/screens/ChatScreen';
-import {STREAM_FLUSH_INTERVAL_MS} from '../src/screens/streamingUx';
-import {ThemeProvider} from '../src/theme/ThemeContext';
-import {setSpeechEngine, stubSpeechEngine} from '../src/tts/textToSpeech';
-import {copyText} from '../src/utils/clipboard';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import type { MainStackParamList } from '../src/navigation/types';
+import { ChatScreen, VOCAB_TOAST_DURATION_MS } from '../src/screens/ChatScreen';
+import { STREAM_FLUSH_INTERVAL_MS } from '../src/screens/streamingUx';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+import { setSpeechEngine, stubSpeechEngine } from '../src/tts/textToSpeech';
+import { copyText } from '../src/utils/clipboard';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -86,7 +78,7 @@ const mockedStreamRetry = jest.mocked(streamRetryTurn);
 /** One captured stream invocation (send or retry) plus its abort spy. */
 interface CapturedTurn {
   options: StreamChatTurnOptions | StreamRetryTurnOptions;
-  handle: {abort: () => void};
+  handle: { abort: () => void };
 }
 
 let turns: CapturedTurn[] = [];
@@ -116,40 +108,40 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 }
 
 function makeSampleTurn(overrides: Partial<SampleTurn> = {}): SampleTurn {
-  return {role: 'assistant', content: 'Example line', ...overrides};
+  return { role: 'assistant', content: 'Example line', ...overrides };
 }
 
 function emptyPage(): Paginated<ChatMessage> {
-  return {count: 0, next: null, previous: null, results: []};
+  return { count: 0, next: null, previous: null, results: [] };
 }
 
 function pageOf(results: ChatMessage[]): Paginated<ChatMessage> {
-  return {count: results.length, next: null, previous: null, results};
+  return { count: results.length, next: null, previous: null, results };
 }
 
 function emptySessionPage(): Paginated<Session> {
-  return {count: 0, next: null, previous: null, results: []};
+  return { count: 0, next: null, previous: null, results: [] };
 }
 
 function sessionPageOf(results: Session[]): Paginated<Session> {
-  return {count: results.length, next: null, previous: null, results};
+  return { count: results.length, next: null, previous: null, results };
 }
 
 async function renderChat(
   params?: MainStackParamList['Chat'],
-  options: {startAtHome?: boolean; onChatRoute?: (key: string) => void} = {},
+  options: { startAtHome?: boolean; onChatRoute?: (key: string) => void } = {},
 ) {
   const Stack = createNativeStackNavigator<MainStackParamList>();
   const initialState = options.startAtHome
-    ? {index: 1, routes: [{name: 'Home' as const}, {name: 'Chat' as const, params}]}
-    : {index: 0, routes: [{name: 'Chat' as const, params}]};
+    ? { index: 1, routes: [{ name: 'Home' as const }, { name: 'Chat' as const, params }] }
+    : { index: 0, routes: [{ name: 'Chat' as const, params }] };
 
   return render(
     <ModeProvider>
       <ThemeProvider>
         <AuthProvider>
           <NavigationContainer initialState={initialState}>
-            <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="Chat">
+            <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Chat">
               <Stack.Screen name="Home">{() => <View testID="home-screen-stub" />}</Stack.Screen>
               <Stack.Screen name="Chat">
                 {props => {
@@ -161,7 +153,7 @@ async function renderChat(
                 {() => <View testID="new-conversation-screen" />}
               </Stack.Screen>
               <Stack.Screen name="History">
-                {({navigation}) => (
+                {({ navigation }) => (
                   <Pressable testID="history-stub-back" onPress={() => navigation.goBack()}>
                     <Text>back</Text>
                   </Pressable>
@@ -197,16 +189,12 @@ async function failTransport(turn: CapturedTurn, error: unknown): Promise<void> 
  */
 async function flushStreamTick(): Promise<void> {
   await act(async () => {
-    await new Promise<void>(resolve =>
-      setTimeout(() => resolve(), STREAM_FLUSH_INTERVAL_MS + 20),
-    );
+    await new Promise<void>(resolve => setTimeout(() => resolve(), STREAM_FLUSH_INTERVAL_MS + 20));
   });
 }
 
 function messageTestIds(): string[] {
-  return screen
-    .queryAllByTestId(/^chat-message-/)
-    .map(element => element.props.testID as string);
+  return screen.queryAllByTestId(/^chat-message-/).map(element => element.props.testID as string);
 }
 
 beforeEach(async () => {
@@ -214,8 +202,8 @@ beforeEach(async () => {
   // Server-flow journeys: pin the persisted mode because fresh installs
   // now default to serverless.
   await saveApplicationMode('server');
-  mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-  mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+  mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
   // The no-session landing route checks the authoritative history before it
   // may claim the empty state (TASK-AUDIT-008); default to an empty one.
   mockedSessions.listSessions.mockResolvedValue(emptySessionPage());
@@ -245,13 +233,13 @@ beforeEach(async () => {
   });
   turns = [];
   mockedStream.mockImplementation(options => {
-    const handle = {abort: jest.fn()};
-    turns.push({options, handle});
+    const handle = { abort: jest.fn() };
+    turns.push({ options, handle });
     return handle;
   });
   mockedStreamRetry.mockImplementation(options => {
-    const handle = {abort: jest.fn()};
-    turns.push({options, handle});
+    const handle = { abort: jest.fn() };
+    turns.push({ options, handle });
     return handle;
   });
 });
@@ -265,7 +253,7 @@ describe('ChatScreen', () => {
       }),
     );
 
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
 
     expect(screen.getByTestId('chat-loading')).toBeOnTheScreen();
     expect(screen.queryByTestId('chat-composer')).toBeNull();
@@ -278,7 +266,7 @@ describe('ChatScreen', () => {
   it('renders an in-conversation empty state when the session has no messages', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
 
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
 
     await waitFor(() => expect(screen.getByTestId('chat-empty')).toBeOnTheScreen());
     expect(screen.getByTestId('chat-composer')).toBeOnTheScreen();
@@ -287,13 +275,13 @@ describe('ChatScreen', () => {
   it('renders loaded messages in chronological order regardless of delivery order', async () => {
     mockedSessions.listMessages.mockResolvedValue(
       pageOf([
-        makeMessage({id: 103, role: 'assistant', sequence: 3, content: 'Third'}),
-        makeMessage({id: 101, role: 'user', sequence: 1, content: 'First'}),
-        makeMessage({id: 102, role: 'assistant', sequence: 2, content: 'Second'}),
+        makeMessage({ id: 103, role: 'assistant', sequence: 3, content: 'Third' }),
+        makeMessage({ id: 101, role: 'user', sequence: 1, content: 'First' }),
+        makeMessage({ id: 102, role: 'assistant', sequence: 2, content: 'Second' }),
       ]),
     );
 
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
 
     await waitFor(() =>
       expect(messageTestIds()).toEqual([
@@ -306,9 +294,9 @@ describe('ChatScreen', () => {
 
   it('sends a typed message by appending it chronologically and clearing the composer', async () => {
     mockedSessions.listMessages.mockResolvedValue(
-      pageOf([makeMessage({id: 201, role: 'user', sequence: 1, content: 'Hello'})]),
+      pageOf([makeMessage({ id: 201, role: 'user', sequence: 1, content: 'Hello' })]),
     );
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-message-201')).toBeOnTheScreen());
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Hi there');
@@ -335,7 +323,7 @@ describe('ChatScreen', () => {
 
   it('streams assistant deltas into one growing bubble then swaps in persisted rows', async () => {
     const finalRows = pageOf([
-      makeMessage({id: 501, role: 'user', sequence: 1, content: 'Hello AI'}),
+      makeMessage({ id: 501, role: 'user', sequence: 1, content: 'Hello AI' }),
       makeMessage({
         id: 502,
         role: 'assistant',
@@ -344,10 +332,8 @@ describe('ChatScreen', () => {
         content: 'Hello, how are you?',
       }),
     ]);
-    mockedSessions.listMessages
-      .mockResolvedValueOnce(emptyPage())
-      .mockResolvedValueOnce(finalRows);
-    await renderChat({sessionId: 5});
+    mockedSessions.listMessages.mockResolvedValueOnce(emptyPage()).mockResolvedValueOnce(finalRows);
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Hello AI');
@@ -356,13 +342,11 @@ describe('ChatScreen', () => {
 
     // Chunks append incrementally while streaming (visible after the
     // buffer's flush tick — commits are coalesced, not per-delta).
-    await deliver(turn, {type: 'start', model: 'vendor/model'});
-    await deliver(turn, {type: 'delta', text: 'Hello'});
+    await deliver(turn, { type: 'start', model: 'vendor/model' });
+    await deliver(turn, { type: 'delta', text: 'Hello' });
     await waitFor(() => expect(screen.getByText('Hello')).toBeOnTheScreen());
-    await deliver(turn, {type: 'delta', text: ', how are you?'});
-    await waitFor(() =>
-      expect(screen.getByText('Hello, how are you?')).toBeOnTheScreen(),
-    );
+    await deliver(turn, { type: 'delta', text: ', how are you?' });
+    await waitFor(() => expect(screen.getByText('Hello, how are you?')).toBeOnTheScreen());
 
     // Completion finalizes and silently reloads canonical (persisted) rows.
     await deliver(turn, {
@@ -379,28 +363,24 @@ describe('ChatScreen', () => {
 
     // The turn is over: composing a new message is possible again.
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Next');
-    expect(
-      (screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled,
-    ).toBe(false);
+    expect(screen.getByTestId('chat-send').props.accessibilityState?.disabled).toBe(false);
   });
 
   it('coalesces a rapid delta burst into one deferred commit, then swaps in the completed text', async () => {
     const fullText = 'Otters are semiaquatic mammals that juggle stones.';
-    mockedSessions.listMessages
-      .mockResolvedValueOnce(emptyPage())
-      .mockResolvedValueOnce(
-        pageOf([
-          makeMessage({id: 701, role: 'user', sequence: 1, content: 'Tell me about otters'}),
-          makeMessage({
-            id: 702,
-            role: 'assistant',
-            status: 'complete',
-            sequence: 2,
-            content: fullText,
-          }),
-        ]),
-      );
-    await renderChat({sessionId: 7});
+    mockedSessions.listMessages.mockResolvedValueOnce(emptyPage()).mockResolvedValueOnce(
+      pageOf([
+        makeMessage({ id: 701, role: 'user', sequence: 1, content: 'Tell me about otters' }),
+        makeMessage({
+          id: 702,
+          role: 'assistant',
+          status: 'complete',
+          sequence: 2,
+          content: fullText,
+        }),
+      ]),
+    );
+    await renderChat({ sessionId: 7 });
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Tell me about otters');
@@ -419,7 +399,7 @@ describe('ChatScreen', () => {
         'juggle ',
         'stones.',
       ]) {
-        turn.options.onEvent({type: 'delta', text: part});
+        turn.options.onEvent({ type: 'delta', text: part });
       }
     });
     expect(screen.queryByText(fullText)).toBeNull();
@@ -430,16 +410,14 @@ describe('ChatScreen', () => {
 
     // Deltas buffered behind a completed frame are superseded by its
     // authoritative text — no duplication and no lost tail.
-    await deliver(turn, {type: 'delta', text: ' EXTRA-NOT-PERSISTED'});
+    await deliver(turn, { type: 'delta', text: ' EXTRA-NOT-PERSISTED' });
     await deliver(turn, {
       type: 'completed',
       text: fullText,
       model: 'vendor/model',
       deltaCount: 7,
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('chat-message-702')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('chat-message-702')).toBeOnTheScreen());
     expect(screen.getByTestId('chat-message-701')).toBeOnTheScreen();
     expect(screen.queryByText(/EXTRA-NOT-PERSISTED/)).toBeNull();
     expect(screen.getAllByText(fullText)).toHaveLength(1);
@@ -450,7 +428,7 @@ describe('ChatScreen', () => {
     // (the test environment mounts only the first ~10 items).
     mockedSessions.listMessages.mockResolvedValue(
       pageOf(
-        Array.from({length: 6}, (_, i) =>
+        Array.from({ length: 6 }, (_, i) =>
           makeMessage({
             id: 800 + i,
             role: i % 2 === 0 ? 'user' : 'assistant',
@@ -460,7 +438,7 @@ describe('ChatScreen', () => {
         ),
       ),
     );
-    await renderChat({sessionId: 9});
+    await renderChat({ sessionId: 9 });
     await waitFor(() => expect(screen.getByTestId('chat-message-805')).toBeOnTheScreen());
 
     // Reading the tail: no detaching pill.
@@ -469,9 +447,9 @@ describe('ChatScreen', () => {
     // An intentional scroll far above the bottom flips to detached…
     const scrollUp = {
       nativeEvent: {
-        contentOffset: {x: 0, y: 100},
-        contentSize: {height: 2400, width: 0},
-        layoutMeasurement: {height: 400, width: 0},
+        contentOffset: { x: 0, y: 100 },
+        contentSize: { height: 2400, width: 0 },
+        layoutMeasurement: { height: 400, width: 0 },
       },
     };
     await fireEvent.scroll(screen.getByTestId('chat-list'), scrollUp);
@@ -481,7 +459,7 @@ describe('ChatScreen', () => {
     // forcing the viewport back down.
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Still there?');
     await fireEvent.press(screen.getByTestId('chat-send'));
-    await deliver(turns[0], {type: 'delta', text: 'Yes.'});
+    await deliver(turns[0], { type: 'delta', text: 'Yes.' });
     await flushStreamTick();
     expect(screen.getByText('Yes.')).toBeOnTheScreen();
     expect(screen.getByTestId('chat-jump-latest')).toBeOnTheScreen();
@@ -489,9 +467,9 @@ describe('ChatScreen', () => {
     // Scrolling back into the threshold window re-sticks and hides the pill.
     await fireEvent.scroll(screen.getByTestId('chat-list'), {
       nativeEvent: {
-        contentOffset: {x: 0, y: 1880},
-        contentSize: {height: 2400, width: 0},
-        layoutMeasurement: {height: 400, width: 0},
+        contentOffset: { x: 0, y: 1880 },
+        contentSize: { height: 2400, width: 0 },
+        layoutMeasurement: { height: 400, width: 0 },
       },
     });
     expect(screen.queryByTestId('chat-jump-latest')).toBeNull();
@@ -504,34 +482,30 @@ describe('ChatScreen', () => {
   });
 
   it('drops unflushed deltas when the turn fails so no ghost text lands afterwards', async () => {
-    mockedSessions.listMessages
-      .mockResolvedValueOnce(emptyPage())
-      .mockResolvedValueOnce(
-        pageOf([
-          makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
-          makeMessage({
-            id: 902,
-            role: 'assistant',
-            status: 'failed',
-            sequence: 2,
-            content: '',
-          }),
-        ]),
-      );
-    await renderChat({sessionId: 11});
+    mockedSessions.listMessages.mockResolvedValueOnce(emptyPage()).mockResolvedValueOnce(
+      pageOf([
+        makeMessage({ id: 901, role: 'user', sequence: 1, content: 'Hello' }),
+        makeMessage({
+          id: 902,
+          role: 'assistant',
+          status: 'failed',
+          sequence: 2,
+          content: '',
+        }),
+      ]),
+    );
+    await renderChat({ sessionId: 11 });
     await waitFor(() => expect(screen.getByTestId('chat-empty')).toBeOnTheScreen());
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Hello');
     await fireEvent.press(screen.getByTestId('chat-send'));
-    await deliver(turns[0], {type: 'delta', text: 'ghost-text-never-committed'});
+    await deliver(turns[0], { type: 'delta', text: 'ghost-text-never-committed' });
     await deliver(turns[0], {
       type: 'error',
       message: 'Generation failed.',
       retryable: true,
     });
-    expect(screen.getByTestId('chat-stream-error')).toHaveTextContent(
-      'Generation failed.',
-    );
+    expect(screen.getByTestId('chat-stream-error')).toHaveTextContent('Generation failed.');
 
     // The pending tick finds no target row anymore: the dropped delta never
     // renders — neither now…
@@ -545,7 +519,7 @@ describe('ChatScreen', () => {
 
   it('shows an empty pending bubble while waiting for the first delta', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-empty')).toBeOnTheScreen());
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Hi');
@@ -559,21 +533,19 @@ describe('ChatScreen', () => {
   });
 
   it('displays error frames inline and re-syncs server truth afterwards', async () => {
-    mockedSessions.listMessages
-      .mockResolvedValueOnce(emptyPage())
-      .mockResolvedValueOnce(
-        pageOf([
-          makeMessage({id: 601, role: 'user', sequence: 1, content: 'Hi'}),
-          makeMessage({
-            id: 602,
-            role: 'assistant',
-            sequence: 2,
-            status: 'failed',
-            content: '',
-          }),
-        ]),
-      );
-    await renderChat({sessionId: 5});
+    mockedSessions.listMessages.mockResolvedValueOnce(emptyPage()).mockResolvedValueOnce(
+      pageOf([
+        makeMessage({ id: 601, role: 'user', sequence: 1, content: 'Hi' }),
+        makeMessage({
+          id: 602,
+          role: 'assistant',
+          sequence: 2,
+          status: 'failed',
+          content: '',
+        }),
+      ]),
+    );
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-empty')).toBeOnTheScreen());
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Hi');
@@ -593,14 +565,12 @@ describe('ChatScreen', () => {
     expect(messageTestIds()).toEqual(['chat-message-601', 'chat-message-602']);
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Trying again');
-    expect(
-      (screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled,
-    ).toBe(false);
+    expect(screen.getByTestId('chat-send').props.accessibilityState?.disabled).toBe(false);
   });
 
   it('surfaces transport failures as friendly unreachable errors', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Hello?');
@@ -614,7 +584,7 @@ describe('ChatScreen', () => {
 
   it('aborts the in-flight stream when leaving the screen', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
-    const utils = await renderChat({sessionId: 5});
+    const utils = await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Still here?');
@@ -630,32 +600,30 @@ describe('ChatScreen', () => {
 
   it('prevents sending again while a turn is still streaming', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'One');
     await fireEvent.press(screen.getByTestId('chat-send'));
 
-    const sendDisabled = () =>
-      (screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled;
+    const sendDisabled = () => screen.getByTestId('chat-send').props.accessibilityState?.disabled;
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Two');
     expect(sendDisabled()).toBe(true);
 
     await fireEvent.press(screen.getByTestId('chat-send'));
     expect(mockedStream).toHaveBeenCalledTimes(1);
 
-    await deliver(turns[0], {type: 'completed', text: 'Done.', model: 'm', deltaCount: 1});
+    await deliver(turns[0], { type: 'completed', text: 'Done.', model: 'm', deltaCount: 1 });
     await waitFor(() => expect(sendDisabled()).toBe(false));
     expect(mockedStream).toHaveBeenCalledTimes(1);
   });
 
   it('disables send while the draft is blank or whitespace-only', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
 
-    const sendDisabled = () =>
-      (screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled;
+    const sendDisabled = () => screen.getByTestId('chat-send').props.accessibilityState?.disabled;
 
     expect(sendDisabled()).toBe(true);
 
@@ -669,9 +637,9 @@ describe('ChatScreen', () => {
   it('shows an error state with retry when loading messages fails', async () => {
     mockedSessions.listMessages
       .mockRejectedValueOnce(new ApiError(0, 'Network request failed.'))
-      .mockResolvedValueOnce(pageOf([makeMessage({id: 301})]));
+      .mockResolvedValueOnce(pageOf([makeMessage({ id: 301 })]));
 
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
 
     await waitFor(() =>
       expect(screen.getByTestId('form-error')).toHaveTextContent(
@@ -712,9 +680,9 @@ describe('ChatScreen', () => {
 
   it('opens the most recent conversation after login instead of the empty state (TASK-AUDIT-008)', async () => {
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPageOf([makeSession({id: 9}), makeSession({id: 7})]),
+      sessionPageOf([makeSession({ id: 9 }), makeSession({ id: 7 })]),
     );
-    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({id: 501})]));
+    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({ id: 501 })]));
 
     await renderChat(undefined);
 
@@ -727,10 +695,8 @@ describe('ChatScreen', () => {
   });
 
   it('adopts the most recent conversation in place without replacing the Chat route', async () => {
-    mockedSessions.listSessions.mockResolvedValue(
-      sessionPageOf([makeSession({id: 9})]),
-    );
-    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({id: 501})]));
+    mockedSessions.listSessions.mockResolvedValue(sessionPageOf([makeSession({ id: 9 })]));
+    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({ id: 501 })]));
 
     // Chat is pushed on top of Home, exactly like the Home hub does. The
     // restore must update this route's params instead of calling replace:
@@ -751,8 +717,8 @@ describe('ChatScreen', () => {
   it('shows an error instead of a false empty state when the history lookup fails (TASK-AUDIT-008)', async () => {
     mockedSessions.listSessions
       .mockRejectedValueOnce(new ApiError(0, 'Network request failed.'))
-      .mockResolvedValueOnce(sessionPageOf([makeSession({id: 9})]));
-    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({id: 501})]));
+      .mockResolvedValueOnce(sessionPageOf([makeSession({ id: 9 })]));
+    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({ id: 501 })]));
 
     await renderChat(undefined);
 
@@ -776,8 +742,8 @@ describe('ChatScreen', () => {
           resolveFirst = resolve;
         }),
       )
-      .mockResolvedValue(sessionPageOf([makeSession({id: 9})]));
-    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({id: 501})]));
+      .mockResolvedValue(sessionPageOf([makeSession({ id: 9 })]));
+    mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage({ id: 501 })]));
 
     await renderChat(undefined);
     expect(screen.getByTestId('chat-loading')).toBeOnTheScreen();
@@ -788,7 +754,7 @@ describe('ChatScreen', () => {
     // before the lookup's answer arrives.
     await fireEvent.press(screen.getByTestId('chat-open-history'));
     await screen.findByTestId('history-stub-back');
-    resolveFirst(sessionPageOf([makeSession({id: 9})]));
+    resolveFirst(sessionPageOf([makeSession({ id: 9 })]));
 
     // Returning re-runs the check against the authoritative history and
     // opens the most recent conversation in place of the stale landing.
@@ -801,7 +767,7 @@ describe('ChatScreen', () => {
 
   it('hosts the full conversation shell inside the keyboard-avoiding root', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
 
     await waitFor(() => expect(screen.getByTestId('chat-composer')).toBeOnTheScreen());
     // The screen root is the keyboard-avoiding shell; header, list and
@@ -814,7 +780,7 @@ describe('ChatScreen', () => {
 
   it('opens the new conversation flow from the header link (TASK-051)', async () => {
     mockedSessions.listMessages.mockResolvedValue(pageOf([makeMessage()]));
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
 
     await fireEvent.press(screen.getByTestId('chat-open-new'));
@@ -824,7 +790,7 @@ describe('ChatScreen', () => {
 
   it('returns to the existing Home screen from the header link instead of pushing a duplicate', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
-    await renderChat({sessionId: 5}, {startAtHome: true});
+    await renderChat({ sessionId: 5 }, { startAtHome: true });
     await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
 
     await fireEvent.press(screen.getByTestId('chat-open-home'));
@@ -846,19 +812,17 @@ describe('ChatScreen', () => {
   it('shows a compact collapsed topic header once the session detail loads (TASK-052)', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
     mockedSessions.getSession.mockResolvedValue(
-      makeSession({id: 5, title: 'Traveling', topic: 'A long topic description'}),
+      makeSession({ id: 5, title: 'Traveling', topic: 'A long topic description' }),
     );
 
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-topic')).toBeOnTheScreen());
 
     // Compact by default: only the title line, never the full description.
     expect(mockedSessions.getSession).toHaveBeenCalledWith(expect.any(Function), 5);
     expect(screen.getByTestId('chat-topic-title')).toHaveTextContent('Traveling');
     expect(screen.queryByTestId('chat-topic-text')).toBeNull();
-    expect(
-      (screen.getByTestId('chat-topic').props.accessibilityState ?? {}).expanded,
-    ).toBe(false);
+    expect(screen.getByTestId('chat-topic').props.accessibilityState?.expanded).toBe(false);
   });
 
   it('expands and collapses the full topic description on toggle', async () => {
@@ -870,7 +834,7 @@ describe('ChatScreen', () => {
         topic: 'Talking about favorite destinations and travel plans.',
       }),
     );
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-topic')).toBeOnTheScreen());
 
     await fireEvent.press(screen.getByTestId('chat-topic'));
@@ -878,16 +842,12 @@ describe('ChatScreen', () => {
     expect(screen.getByTestId('chat-topic-text')).toHaveTextContent(
       'Talking about favorite destinations and travel plans.',
     );
-    expect(
-      (screen.getByTestId('chat-topic').props.accessibilityState ?? {}).expanded,
-    ).toBe(true);
+    expect(screen.getByTestId('chat-topic').props.accessibilityState?.expanded).toBe(true);
 
     await fireEvent.press(screen.getByTestId('chat-topic'));
 
     expect(screen.queryByTestId('chat-topic-text')).toBeNull();
-    expect(
-      (screen.getByTestId('chat-topic').props.accessibilityState ?? {}).expanded,
-    ).toBe(false);
+    expect(screen.getByTestId('chat-topic').props.accessibilityState?.expanded).toBe(false);
     expect(screen.getByTestId('chat-topic-title')).toBeOnTheScreen();
   });
 
@@ -903,7 +863,7 @@ describe('ChatScreen', () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
     mockedSessions.getSession.mockRejectedValueOnce(new ApiError(0, 'Network request failed.'));
 
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
 
     // Messages win over metadata: composer present, no error banner, the
     // topic bar is simply absent.
@@ -915,7 +875,7 @@ describe('ChatScreen', () => {
   it('hides the example entry when no sample turns were provided (TASK-053)', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
 
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
 
     await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
     expect(screen.queryByTestId('chat-show-example')).toBeNull();
@@ -924,7 +884,7 @@ describe('ChatScreen', () => {
   it('hides the example entry for an explicitly empty turn list', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
 
-    await renderChat({sessionId: 5, sampleTurns: []});
+    await renderChat({ sessionId: 5, sampleTurns: [] });
 
     await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
     expect(screen.queryByTestId('chat-show-example')).toBeNull();
@@ -932,13 +892,13 @@ describe('ChatScreen', () => {
 
   it('opens the sample overlay from "Show me an example" separate from chat history', async () => {
     mockedSessions.listMessages.mockResolvedValue(
-      pageOf([makeMessage({id: 201, role: 'user', sequence: 1, content: 'Hello'})]),
+      pageOf([makeMessage({ id: 201, role: 'user', sequence: 1, content: 'Hello' })]),
     );
     await renderChat({
       sessionId: 5,
       sampleTurns: [
-        makeSampleTurn({role: 'assistant', content: 'Coach greeting example'}),
-        makeSampleTurn({role: 'user', content: 'Learner reply example'}),
+        makeSampleTurn({ role: 'assistant', content: 'Coach greeting example' }),
+        makeSampleTurn({ role: 'user', content: 'Learner reply example' }),
       ],
     });
     await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
@@ -967,7 +927,7 @@ describe('ChatScreen', () => {
   it('shows a retry control only on failed assistant rows (TASK-054)', async () => {
     mockedSessions.listMessages.mockResolvedValue(
       pageOf([
-        makeMessage({id: 401, role: 'user', sequence: 1, content: 'Hi'}),
+        makeMessage({ id: 401, role: 'user', sequence: 1, content: 'Hi' }),
         makeMessage({
           id: 402,
           role: 'assistant',
@@ -975,18 +935,16 @@ describe('ChatScreen', () => {
           sequence: 2,
           content: 'All good.',
         }),
-        makeMessage({id: 403, role: 'assistant', status: 'failed', sequence: 3, content: ''}),
+        makeMessage({ id: 403, role: 'assistant', status: 'failed', sequence: 3, content: '' }),
       ]),
     );
 
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
 
     const failedBubble = await screen.findByTestId('chat-message-403');
     expect(within(failedBubble).getByText('The response failed to generate.')).toBeOnTheScreen();
     expect(screen.getByTestId('chat-retry-403')).toBeOnTheScreen();
-    expect(
-      (screen.getByTestId('chat-retry-403').props.accessibilityState ?? {}).disabled,
-    ).toBe(false);
+    expect(screen.getByTestId('chat-retry-403').props.accessibilityState?.disabled).toBe(false);
     expect(screen.queryByTestId('chat-retry-401')).toBeNull();
     expect(screen.queryByTestId('chat-retry-402')).toBeNull();
   });
@@ -994,11 +952,11 @@ describe('ChatScreen', () => {
   it('pressing Retry invokes the backend retry for that exact row and re-arms it', async () => {
     mockedSessions.listMessages.mockResolvedValue(
       pageOf([
-        makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
-        makeMessage({id: 902, role: 'assistant', status: 'failed', sequence: 2, content: ''}),
+        makeMessage({ id: 901, role: 'user', sequence: 1, content: 'Hello' }),
+        makeMessage({ id: 902, role: 'assistant', status: 'failed', sequence: 2, content: '' }),
       ]),
     );
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-retry-902')).toBeOnTheScreen());
 
     // A pending draft proves sending is blocked by the running retry, not
@@ -1019,20 +977,20 @@ describe('ChatScreen', () => {
     await waitFor(() => expect(screen.queryByTestId('chat-retry-902')).toBeNull());
     const bubble = screen.getByTestId('chat-message-902');
     expect(within(bubble).queryByText('The response failed to generate.')).toBeNull();
-    expect((screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled).toBe(true);
+    expect(screen.getByTestId('chat-send').props.accessibilityState?.disabled).toBe(true);
   });
 
   it('streams the replacement into the same row and removes the failure state on completion', async () => {
     mockedSessions.listMessages
       .mockResolvedValueOnce(
         pageOf([
-          makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
-          makeMessage({id: 902, role: 'assistant', status: 'failed', sequence: 2, content: ''}),
+          makeMessage({ id: 901, role: 'user', sequence: 1, content: 'Hello' }),
+          makeMessage({ id: 902, role: 'assistant', status: 'failed', sequence: 2, content: '' }),
         ]),
       )
       .mockResolvedValueOnce(
         pageOf([
-          makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
+          makeMessage({ id: 901, role: 'user', sequence: 1, content: 'Hello' }),
           makeMessage({
             id: 902,
             role: 'assistant',
@@ -1042,7 +1000,7 @@ describe('ChatScreen', () => {
           }),
         ]),
       );
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-retry-902')).toBeOnTheScreen());
 
     // A pending draft proves sending is blocked by the running retry, not
@@ -1052,7 +1010,7 @@ describe('ChatScreen', () => {
     const turn = turns[0];
 
     // Deltas grow the very same (persisted) row in place.
-    await deliver(turn, {type: 'delta', text: 'A fresh '});
+    await deliver(turn, { type: 'delta', text: 'A fresh ' });
     await flushStreamTick();
     expect(screen.getByText('A fresh ')).toBeOnTheScreen();
 
@@ -1067,24 +1025,24 @@ describe('ChatScreen', () => {
     expect(screen.queryByTestId('chat-retry-902')).toBeNull();
     expect(screen.queryByTestId('chat-stream-error')).toBeNull();
     // The pending draft from before the retry is sendable again.
-    expect((screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled).toBe(false);
+    expect(screen.getByTestId('chat-send').props.accessibilityState?.disabled).toBe(false);
   });
 
   it('keeps the failure state usable when the retried attempt fails again', async () => {
     mockedSessions.listMessages
       .mockResolvedValueOnce(
         pageOf([
-          makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
-          makeMessage({id: 902, role: 'assistant', status: 'failed', sequence: 2, content: ''}),
+          makeMessage({ id: 901, role: 'user', sequence: 1, content: 'Hello' }),
+          makeMessage({ id: 902, role: 'assistant', status: 'failed', sequence: 2, content: '' }),
         ]),
       )
       .mockResolvedValueOnce(
         pageOf([
-          makeMessage({id: 901, role: 'user', sequence: 1, content: 'Hello'}),
-          makeMessage({id: 902, role: 'assistant', status: 'failed', sequence: 2, content: ''}),
+          makeMessage({ id: 901, role: 'user', sequence: 1, content: 'Hello' }),
+          makeMessage({ id: 902, role: 'assistant', status: 'failed', sequence: 2, content: '' }),
         ]),
       );
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-retry-902')).toBeOnTheScreen());
 
     await fireEvent.press(screen.getByTestId('chat-retry-902'));
@@ -1100,7 +1058,11 @@ describe('ChatScreen', () => {
     // Server truth restores the still-failed row; the control is available
     // for another attempt.
     await waitFor(() =>
-      expect(within(screen.getByTestId('chat-message-902')).getByText('The response failed to generate.')).toBeOnTheScreen(),
+      expect(
+        within(screen.getByTestId('chat-message-902')).getByText(
+          'The response failed to generate.',
+        ),
+      ).toBeOnTheScreen(),
     );
     const control = screen.getByTestId('chat-retry-902');
     expect(control.props.accessibilityState?.disabled ?? false).toBe(false);
@@ -1111,9 +1073,9 @@ describe('ChatScreen', () => {
 
   it('surfaces transport failures of a retry as friendly unreachable errors', async () => {
     mockedSessions.listMessages.mockResolvedValue(
-      pageOf([makeMessage({id: 905, role: 'assistant', status: 'failed', sequence: 1})]),
+      pageOf([makeMessage({ id: 905, role: 'assistant', status: 'failed', sequence: 1 })]),
     );
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-retry-905')).toBeOnTheScreen());
 
     await fireEvent.press(screen.getByTestId('chat-retry-905'));
@@ -1127,11 +1089,11 @@ describe('ChatScreen', () => {
   it('does not start another stream while one is already running', async () => {
     mockedSessions.listMessages.mockResolvedValue(
       pageOf([
-        makeMessage({id: 701, role: 'assistant', status: 'failed', sequence: 1}),
-        makeMessage({id: 702, role: 'assistant', status: 'failed', sequence: 2}),
+        makeMessage({ id: 701, role: 'assistant', status: 'failed', sequence: 1 }),
+        makeMessage({ id: 702, role: 'assistant', status: 'failed', sequence: 2 }),
       ]),
     );
-    await renderChat({sessionId: 5});
+    await renderChat({ sessionId: 5 });
     await waitFor(() => expect(screen.getByTestId('chat-retry-701')).toBeOnTheScreen());
 
     await fireEvent.changeText(screen.getByTestId('composer-input'), 'Draft waiting');
@@ -1143,17 +1105,17 @@ describe('ChatScreen', () => {
     // …and the other failed row's control is visible but inert: pressing it
     // cannot start a second stream while one is running.
     const other = screen.getByTestId('chat-retry-702');
-    expect((other.props.accessibilityState ?? {}).disabled).toBe(true);
+    expect(other.props.accessibilityState?.disabled).toBe(true);
     await fireEvent.press(other);
     expect(mockedStreamRetry).toHaveBeenCalledTimes(1);
 
-    await deliver(turns[0], {type: 'completed', text: 'Recovered.', model: 'm', deltaCount: 1});
+    await deliver(turns[0], { type: 'completed', text: 'Recovered.', model: 'm', deltaCount: 1 });
     // After completion the untouched row re-enables, the resync restores
     // 701 as still-failed with its control back, and the draft is sendable.
     await waitFor(() =>
-      expect((screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled).toBe(false),
+      expect(screen.getByTestId('chat-send').props.accessibilityState?.disabled).toBe(false),
     );
-    expect((screen.getByTestId('chat-retry-702').props.accessibilityState ?? {}).disabled).toBe(false);
+    expect(screen.getByTestId('chat-retry-702').props.accessibilityState?.disabled).toBe(false);
     expect(screen.getByTestId('chat-retry-701')).toBeOnTheScreen();
   });
 
@@ -1170,11 +1132,11 @@ describe('ChatScreen', () => {
     it('keeps the menu closed until a message is long-pressed', async () => {
       mockedSessions.listMessages.mockResolvedValue(
         pageOf([
-          makeMessage({id: 801, role: 'user', sequence: 1, content: 'Hi there'}),
-          makeMessage({id: 802, role: 'assistant', sequence: 2}),
+          makeMessage({ id: 801, role: 'user', sequence: 1, content: 'Hi there' }),
+          makeMessage({ id: 802, role: 'assistant', sequence: 2 }),
         ]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
 
       expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
@@ -1183,12 +1145,12 @@ describe('ChatScreen', () => {
     it('offers Suggest replies only on the latest assistant message', async () => {
       mockedSessions.listMessages.mockResolvedValue(
         pageOf([
-          makeMessage({id: 801, role: 'assistant', sequence: 1, content: 'First reply.'}),
-          makeMessage({id: 802, role: 'user', sequence: 2, content: 'My answer.'}),
-          makeMessage({id: 803, role: 'assistant', sequence: 3, content: 'Latest reply.'}),
+          makeMessage({ id: 801, role: 'assistant', sequence: 1, content: 'First reply.' }),
+          makeMessage({ id: 802, role: 'user', sequence: 2, content: 'My answer.' }),
+          makeMessage({ id: 803, role: 'assistant', sequence: 3, content: 'Latest reply.' }),
         ]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-803')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-803'), 'longPress');
@@ -1212,9 +1174,11 @@ describe('ChatScreen', () => {
 
     it('offers user-message actions including Improve my English on long-press', async () => {
       mockedSessions.listMessages.mockResolvedValue(
-        pageOf([makeMessage({id: 801, role: 'user', sequence: 1, content: 'I go to store yesterday.'})]),
+        pageOf([
+          makeMessage({ id: 801, role: 'user', sequence: 1, content: 'I go to store yesterday.' }),
+        ]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-801'), 'longPress');
@@ -1230,9 +1194,9 @@ describe('ChatScreen', () => {
 
     it('copies the chosen message and dismisses when Copy is selected', async () => {
       mockedSessions.listMessages.mockResolvedValue(
-        pageOf([makeMessage({id: 803, role: 'assistant', sequence: 1, content: 'Copy me!'})]),
+        pageOf([makeMessage({ id: 803, role: 'assistant', sequence: 1, content: 'Copy me!' })]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-803')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-803'), 'longPress');
@@ -1244,9 +1208,9 @@ describe('ChatScreen', () => {
 
     it('dismisses without copying when another action is selected', async () => {
       mockedSessions.listMessages.mockResolvedValue(
-        pageOf([makeMessage({id: 804, role: 'assistant', sequence: 1})]),
+        pageOf([makeMessage({ id: 804, role: 'assistant', sequence: 1 })]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-804')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-804'), 'longPress');
@@ -1258,9 +1222,9 @@ describe('ChatScreen', () => {
 
     it('dismisses through the menu Close control after a long-press', async () => {
       mockedSessions.listMessages.mockResolvedValue(
-        pageOf([makeMessage({id: 805, role: 'assistant', sequence: 1})]),
+        pageOf([makeMessage({ id: 805, role: 'assistant', sequence: 1 })]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-805')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-805'), 'longPress');
@@ -1289,7 +1253,7 @@ describe('ChatScreen', () => {
           }),
         ]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-902')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-902'), 'longPress');
@@ -1302,7 +1266,11 @@ describe('ChatScreen', () => {
   describe('message read-aloud speech (TASK-078)', () => {
     let speakMock: jest.Mock;
     let stopMock: jest.Mock;
-    let utterance: {promise: Promise<void>; resolve: () => void; reject: (reason?: unknown) => void};
+    let utterance: {
+      promise: Promise<void>;
+      resolve: () => void;
+      reject: (reason?: unknown) => void;
+    };
 
     function nextUtterance(): void {
       let resolve!: () => void;
@@ -1311,7 +1279,7 @@ describe('ChatScreen', () => {
         resolve = res;
         reject = rej;
       });
-      utterance = {promise, resolve, reject};
+      utterance = { promise, resolve, reject };
     }
 
     beforeEach(() => {
@@ -1320,7 +1288,7 @@ describe('ChatScreen', () => {
         nextUtterance();
         return utterance.promise;
       });
-      setSpeechEngine({speak: speakMock, stop: stopMock});
+      setSpeechEngine({ speak: speakMock, stop: stopMock });
     });
 
     afterEach(() => {
@@ -1329,9 +1297,11 @@ describe('ChatScreen', () => {
 
     it('speaks an assistant message from Read aloud and shows playback state', async () => {
       mockedSessions.listMessages.mockResolvedValue(
-        pageOf([makeMessage({id: 806, role: 'assistant', sequence: 1, content: 'Read me aloud.'})]),
+        pageOf([
+          makeMessage({ id: 806, role: 'assistant', sequence: 1, content: 'Read me aloud.' }),
+        ]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-806')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-806'), 'longPress');
@@ -1353,7 +1323,7 @@ describe('ChatScreen', () => {
           }),
         ]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-813')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-813'), 'longPress');
@@ -1365,9 +1335,9 @@ describe('ChatScreen', () => {
 
     it('halts playback through the visible Stop control and hides the state', async () => {
       mockedSessions.listMessages.mockResolvedValue(
-        pageOf([makeMessage({id: 807, role: 'assistant', sequence: 1})]),
+        pageOf([makeMessage({ id: 807, role: 'assistant', sequence: 1 })]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-807')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-807'), 'longPress');
@@ -1383,11 +1353,11 @@ describe('ChatScreen', () => {
     it('starting another message stops the previous one cleanly', async () => {
       mockedSessions.listMessages.mockResolvedValue(
         pageOf([
-          makeMessage({id: 808, role: 'assistant', sequence: 1, content: 'First line'}),
-          makeMessage({id: 809, role: 'assistant', sequence: 2, content: 'Second line'}),
+          makeMessage({ id: 808, role: 'assistant', sequence: 1, content: 'First line' }),
+          makeMessage({ id: 809, role: 'assistant', sequence: 2, content: 'Second line' }),
         ]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-809')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-808'), 'longPress');
@@ -1404,9 +1374,9 @@ describe('ChatScreen', () => {
 
     it('finishing playback clears the visible state on its own', async () => {
       mockedSessions.listMessages.mockResolvedValue(
-        pageOf([makeMessage({id: 810, role: 'assistant', sequence: 1})]),
+        pageOf([makeMessage({ id: 810, role: 'assistant', sequence: 1 })]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-810'), 'longPress');
@@ -1423,9 +1393,9 @@ describe('ChatScreen', () => {
 
     it('a failed utterance clears the state without crashing the screen', async () => {
       mockedSessions.listMessages.mockResolvedValue(
-        pageOf([makeMessage({id: 811, role: 'assistant', sequence: 1})]),
+        pageOf([makeMessage({ id: 811, role: 'assistant', sequence: 1 })]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-811')).toBeOnTheScreen());
 
       await fireEvent(screen.getByTestId('chat-message-811'), 'longPress');
@@ -1461,7 +1431,7 @@ describe('ChatScreen', () => {
           }),
         ]),
       );
-      return renderChat({sessionId: 5});
+      return renderChat({ sessionId: 5 });
     }
 
     /** Long-press an assistant row and pick Suggest replies from its menu. */
@@ -1473,7 +1443,9 @@ describe('ChatScreen', () => {
     async function expectChips(values: string[]): Promise<void> {
       await waitFor(() => expect(screen.getByTestId('chat-suggestions')).toBeOnTheScreen());
       for (const [index, value] of values.entries()) {
-        expect(within(screen.getByTestId(`chat-suggestion-${index}`)).getByText(value)).toBeTruthy();
+        expect(
+          within(screen.getByTestId(`chat-suggestion-${index}`)).getByText(value),
+        ).toBeTruthy();
       }
       expect(screen.queryByTestId(`chat-suggestion-${values.length}`)).toBeNull();
     }
@@ -1503,17 +1475,21 @@ describe('ChatScreen', () => {
       // The menu dismissed and the read-only endpoint was asked for exactly
       // this conversation + message with the current token.
       expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
-      expect(mockedSessions.getMessageSuggestions).toHaveBeenCalledWith(expect.any(Function), 5, 802);
+      expect(mockedSessions.getMessageSuggestions).toHaveBeenCalledWith(
+        expect.any(Function),
+        5,
+        802,
+      );
       expect(mockedStream).not.toHaveBeenCalled();
       expect(screen.getByTestId('chat-suggestions-loading')).toBeOnTheScreen();
 
-      resolve({replies: REPLIES});
+      resolve({ replies: REPLIES });
       await expectChips(REPLIES);
       expect(screen.queryByTestId('chat-suggestions-loading')).toBeNull();
     });
 
     it('inserts a tapped suggestion into the composer without sending it', async () => {
-      mockedSessions.getMessageSuggestions.mockResolvedValueOnce({replies: REPLIES});
+      mockedSessions.getMessageSuggestions.mockResolvedValueOnce({ replies: REPLIES });
       await renderOneMessage();
       await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
       await requestSuggestionsFor(802);
@@ -1528,13 +1504,11 @@ describe('ChatScreen', () => {
       // The strip served its purpose once a suggestion was chosen.
       expect(screen.queryByTestId('chat-suggestions')).toBeNull();
       // The inserted draft makes Send available like any typed text.
-      expect(
-        (screen.getByTestId('chat-send').props.accessibilityState ?? {}).disabled,
-      ).toBe(false);
+      expect(screen.getByTestId('chat-send').props.accessibilityState?.disabled).toBe(false);
     });
 
     it('closes the suggestion strip with the × button without filling the composer', async () => {
-      mockedSessions.getMessageSuggestions.mockResolvedValueOnce({replies: REPLIES});
+      mockedSessions.getMessageSuggestions.mockResolvedValueOnce({ replies: REPLIES });
       await renderOneMessage();
       await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
       await requestSuggestionsFor(802);
@@ -1552,7 +1526,7 @@ describe('ChatScreen', () => {
       await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
       mockedSessions.getMessageSuggestions
         .mockRejectedValueOnce(new ApiError(503, 'Provider temporarily unavailable.'))
-        .mockResolvedValueOnce({replies: REPLIES});
+        .mockResolvedValueOnce({ replies: REPLIES });
 
       await requestSuggestionsFor(802);
 
@@ -1569,15 +1543,15 @@ describe('ChatScreen', () => {
     it('replaces displayed suggestions when another message requests new ones', async () => {
       const olderReplies = ['Old A', 'Old B', 'Old C'];
       mockedSessions.getMessageSuggestions
-        .mockResolvedValueOnce({replies: olderReplies})
-        .mockResolvedValueOnce({replies: REPLIES});
+        .mockResolvedValueOnce({ replies: olderReplies })
+        .mockResolvedValueOnce({ replies: REPLIES });
       mockedSessions.listMessages.mockResolvedValue(
         pageOf([
-          makeMessage({id: 801, role: 'user', sequence: 1, content: 'Hi, how are you?'}),
-          makeMessage({id: 802, role: 'assistant', sequence: 2, content: 'Great, thanks!'}),
+          makeMessage({ id: 801, role: 'user', sequence: 1, content: 'Hi, how are you?' }),
+          makeMessage({ id: 802, role: 'assistant', sequence: 2, content: 'Great, thanks!' }),
         ]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
 
       // Suggest replies is only offered on the latest assistant reply, so a
@@ -1588,11 +1562,15 @@ describe('ChatScreen', () => {
       await requestSuggestionsFor(802);
       await expectChips(REPLIES);
       expect(screen.queryByText('Old B')).toBeNull();
-      expect(mockedSessions.getMessageSuggestions).toHaveBeenLastCalledWith(expect.any(Function), 5, 802);
+      expect(mockedSessions.getMessageSuggestions).toHaveBeenLastCalledWith(
+        expect.any(Function),
+        5,
+        802,
+      );
     });
 
     it('clears the suggestion strip when the user sends a message', async () => {
-      mockedSessions.getMessageSuggestions.mockResolvedValueOnce({replies: REPLIES});
+      mockedSessions.getMessageSuggestions.mockResolvedValueOnce({ replies: REPLIES });
       await renderOneMessage();
       await waitFor(() => expect(screen.getByTestId('chat-message-802')).toBeOnTheScreen());
       await requestSuggestionsFor(802);
@@ -1604,9 +1582,7 @@ describe('ChatScreen', () => {
       expect(mockedStream).toHaveBeenCalledTimes(1);
       // The stale chips are gone; the sent turn renders underneath.
       expect(screen.queryByTestId('chat-suggestions')).toBeNull();
-      await waitFor(() =>
-        expect(screen.getByText('My own message')).toBeOnTheScreen(),
-      );
+      await waitFor(() => expect(screen.getByText('My own message')).toBeOnTheScreen());
     });
   });
 
@@ -1635,7 +1611,7 @@ describe('ChatScreen', () => {
           }),
         ]),
       );
-      return renderChat({sessionId: 5});
+      return renderChat({ sessionId: 5 });
     }
 
     /** Long-press the user row and pick Improve my English from its menu. */
@@ -1650,9 +1626,7 @@ describe('ChatScreen', () => {
       const original = await screen.findByTestId('chat-improvement-original');
       expect(within(original).getByText(IMPROVEMENT.original)).toBeTruthy();
       expect(
-        within(screen.getByTestId('chat-improvement-improved')).getByText(
-          IMPROVEMENT.improved,
-        ),
+        within(screen.getByTestId('chat-improvement-improved')).getByText(IMPROVEMENT.improved),
       ).toBeTruthy();
       expect(
         within(screen.getByTestId('chat-improvement-explanation')).getByText(
@@ -1693,7 +1667,7 @@ describe('ChatScreen', () => {
           }),
         ]),
       );
-      await renderChat({sessionId: 5});
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
 
       expect(screen.getByTestId('chat-grammar-badge-801')).toBeOnTheScreen();
@@ -1819,15 +1793,13 @@ describe('ChatScreen', () => {
           }),
         ]),
       );
-      mockedSessions.improveMessage
-        .mockResolvedValueOnce(IMPROVEMENT)
-        .mockResolvedValueOnce({
-          original: "She don't like it.",
-          improved: "She doesn't like it.",
-          explanation: 'Third-person singular subjects take "does not" in the present tense.',
-          severity: 'critical',
-        });
-      await renderChat({sessionId: 5});
+      mockedSessions.improveMessage.mockResolvedValueOnce(IMPROVEMENT).mockResolvedValueOnce({
+        original: "She don't like it.",
+        improved: "She doesn't like it.",
+        explanation: 'Third-person singular subjects take "does not" in the present tense.',
+        severity: 'critical',
+      });
+      await renderChat({ sessionId: 5 });
       await waitFor(() => expect(screen.getByTestId('chat-message-801')).toBeOnTheScreen());
 
       await requestImprovementForUserMessage();
@@ -1847,7 +1819,7 @@ describe('ChatScreen', () => {
   describe('text selection flow (TASK-069)', () => {
     function renderWithMessages(messages: ChatMessage[]) {
       mockedSessions.listMessages.mockResolvedValue(pageOf(messages));
-      return renderChat({sessionId: 5});
+      return renderChat({ sessionId: 5 });
     }
 
     async function openSelectionSheet(testId: string): Promise<void> {
@@ -1857,11 +1829,9 @@ describe('ChatScreen', () => {
 
     /** Simulate a native selection span over the pinned input. */
     async function selectRange(start: number, end: number): Promise<void> {
-      await fireEvent(
-        screen.getByTestId('chat-selection-input'),
-        'selectionChange',
-        {nativeEvent: {selection: {start, end}}},
-      );
+      await fireEvent(screen.getByTestId('chat-selection-input'), 'selectionChange', {
+        nativeEvent: { selection: { start, end } },
+      });
     }
 
     it('renders no selection sheet until Select text is chosen', async () => {
@@ -1974,18 +1944,16 @@ describe('ChatScreen', () => {
   describe('vocabulary save flow (TASK-070, TASK-AUDIT-007)', () => {
     function renderWithMessages(messages: ChatMessage[]) {
       mockedSessions.listMessages.mockResolvedValue(pageOf(messages));
-      return renderChat({sessionId: 5});
+      return renderChat({ sessionId: 5 });
     }
 
     /** Open the selection sheet, capture "early" and press Save word. */
     async function saveFromSelection(testId = 'chat-message-810'): Promise<void> {
       await fireEvent(screen.getByTestId(testId), 'longPress');
       await fireEvent.press(screen.getByTestId('chat-menu-select-text'));
-      await fireEvent(
-        screen.getByTestId('chat-selection-input'),
-        'selectionChange',
-        {nativeEvent: {selection: {start: 4, end: 9}}},
-      );
+      await fireEvent(screen.getByTestId('chat-selection-input'), 'selectionChange', {
+        nativeEvent: { selection: { start: 4, end: 9 } },
+      });
       await fireEvent.press(screen.getByTestId('chat-selection-save'));
     }
 
@@ -2001,11 +1969,9 @@ describe('ChatScreen', () => {
       await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
       await fireEvent(screen.getByTestId('chat-message-810'), 'longPress');
       await fireEvent.press(screen.getByTestId('chat-menu-select-text'));
-      await fireEvent(
-        screen.getByTestId('chat-selection-input'),
-        'selectionChange',
-        {nativeEvent: {selection: {start: 4, end: 9}}},
-      );
+      await fireEvent(screen.getByTestId('chat-selection-input'), 'selectionChange', {
+        nativeEvent: { selection: { start: 4, end: 9 } },
+      });
 
       await fireEvent.press(screen.getByTestId('chat-selection-cancel'));
 
@@ -2052,11 +2018,9 @@ describe('ChatScreen', () => {
       await waitFor(() => expect(screen.getByTestId('chat-message-810')).toBeOnTheScreen());
       await fireEvent(screen.getByTestId('chat-message-810'), 'longPress');
       await fireEvent.press(screen.getByTestId('chat-menu-select-text'));
-      await fireEvent(
-        screen.getByTestId('chat-selection-input'),
-        'selectionChange',
-        {nativeEvent: {selection: {start: 4, end: 9}}},
-      );
+      await fireEvent(screen.getByTestId('chat-selection-input'), 'selectionChange', {
+        nativeEvent: { selection: { start: 4, end: 9 } },
+      });
 
       jest.useFakeTimers();
       try {
@@ -2066,9 +2030,7 @@ describe('ChatScreen', () => {
 
         expect(screen.queryByTestId('chat-vocab-modal')).toBeNull();
         expect(screen.getByTestId('chat-toast')).toBeOnTheScreen();
-        expect(screen.getByTestId('chat-toast')).toHaveTextContent(
-          'Saved to vocabulary',
-        );
+        expect(screen.getByTestId('chat-toast')).toHaveTextContent('Saved to vocabulary');
 
         await act(async () => {
           jest.advanceTimersByTime(VOCAB_TOAST_DURATION_MS);
@@ -2081,7 +2043,9 @@ describe('ChatScreen', () => {
 
     it('a failed save surfaces the normalized error as an alert toast', async () => {
       mockedVocabulary.saveVocabulary
-        .mockRejectedValueOnce(new ApiError(0, 'Network request failed. Check your connection and try again.'))
+        .mockRejectedValueOnce(
+          new ApiError(0, 'Network request failed. Check your connection and try again.'),
+        )
         .mockResolvedValueOnce({
           id: 9,
           expression: 'early',

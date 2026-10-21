@@ -11,21 +11,15 @@
  * registry: a persisted Gemini configuration must reach the Gemini endpoint
  * — never OpenRouter or the backend.
  */
-import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react-native';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Keychain from 'react-native-keychain';
 
 import * as authApi from '../src/api/auth';
-import {ApiError} from '../src/api/client';
-import * as sessionsApi from '../src/api/sessions';
+import { ApiError } from '../src/api/client';
 import type {
   ChatMessage,
   CreatedSession,
@@ -33,18 +27,19 @@ import type {
   SampleTurn,
   Session,
 } from '../src/api/sessions';
-import {AuthProvider} from '../src/auth/AuthContext';
-import {ModeProvider} from '../src/mode/ModeContext';
+import * as sessionsApi from '../src/api/sessions';
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import type {MainStackParamList} from '../src/navigation/types';
-import {resetLocalDatabase} from '../src/db/database';
+import { resetLocalDatabase } from '../src/db/database';
 import * as nativeDriver from '../src/db/nativeDriver';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {getRuntimeApplicationMode} from '../src/mode/runtime';
-import {saveServerlessConfig} from '../src/serverless/settings';
-import {ChatScreen} from '../src/screens/ChatScreen';
-import {NewConversationScreen} from '../src/screens/NewConversationScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { getRuntimeApplicationMode } from '../src/mode/runtime';
+import type { MainStackParamList } from '../src/navigation/types';
+import { ChatScreen } from '../src/screens/ChatScreen';
+import { NewConversationScreen } from '../src/screens/NewConversationScreen';
+import { saveServerlessConfig } from '../src/serverless/settings';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -57,7 +52,7 @@ jest.mock('../src/auth/secureStorage');
  * file never touch the local database.
  */
 jest.mock('../src/db/nativeDriver', () => {
-  const {openSqlJsDriver} = require('../testing/sqlJsDriver');
+  const { openSqlJsDriver } = require('../testing/sqlJsDriver');
   let mockDbPromise: Promise<unknown> | null = null;
   return {
     LOCAL_DB_NAME: 'elearning-serverless.db',
@@ -94,8 +89,8 @@ const VALID_COMBINED_JSON = JSON.stringify({
   topic: JSON.parse(VALID_TOPIC_JSON),
   sample_conversation: {
     turns: [
-      {role: 'assistant', content: 'Welcome aboard, traveler!'},
-      {role: 'user', content: 'Thanks! Where should we go?'},
+      { role: 'assistant', content: 'Welcome aboard, traveler!' },
+      { role: 'user', content: 'Thanks! Where should we go?' },
     ],
   },
 });
@@ -118,13 +113,13 @@ function makeCreatedSession(
 ): CreatedSession {
   const session: CreatedSession = makeSession(overrides);
   if (sampleTurns !== undefined) {
-    session.sample_conversation = {turns: sampleTurns};
+    session.sample_conversation = { turns: sampleTurns };
   }
   return session;
 }
 
 function emptyMessagesPage(): Paginated<ChatMessage> {
-  return {count: 0, next: null, previous: null, results: []};
+  return { count: 0, next: null, previous: null, results: [] };
 }
 
 async function renderScreen() {
@@ -134,7 +129,9 @@ async function renderScreen() {
       <ThemeProvider>
         <AuthProvider>
           <NavigationContainer>
-            <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="NewConversation">
+            <Stack.Navigator
+              screenOptions={{ headerShown: false }}
+              initialRouteName="NewConversation">
               <Stack.Screen name="Chat" component={ChatScreen} />
               <Stack.Screen name="NewConversation" component={NewConversationScreen} />
             </Stack.Navigator>
@@ -150,8 +147,8 @@ beforeEach(async () => {
   // Server-flow journeys: pin the persisted mode because fresh installs
   // now default to serverless.
   await saveApplicationMode('server');
-  mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-  mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+  mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
   mockedSessions.listMessages.mockResolvedValue(emptyMessagesPage());
   // ChatScreen (the post-create destination) checks the authoritative
   // history on the no-session landing route (TASK-AUDIT-008); default to an
@@ -179,7 +176,7 @@ describe('NewConversationScreen', () => {
   });
 
   it('starts a conversation with the typed hint and opens chat for the created session', async () => {
-    mockedSessions.createSession.mockResolvedValue(makeSession({topic_hint: 'Traveling'}));
+    mockedSessions.createSession.mockResolvedValue(makeSession({ topic_hint: 'Traveling' }));
     await renderScreen();
 
     await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), 'Traveling');
@@ -194,19 +191,21 @@ describe('NewConversationScreen', () => {
   });
 
   it('creates a session when Start is pressed with an untouched (empty) input', async () => {
-    mockedSessions.createSession.mockResolvedValue(makeSession({id: 7}));
+    mockedSessions.createSession.mockResolvedValue(makeSession({ id: 7 }));
     await renderScreen();
     await screen.findByTestId('new-conversation-screen');
 
     await fireEvent.press(screen.getByTestId('new-conversation-start'));
 
-    await waitFor(() => expect(mockedSessions.createSession).toHaveBeenCalledWith(expect.any(Function), ''));
+    await waitFor(() =>
+      expect(mockedSessions.createSession).toHaveBeenCalledWith(expect.any(Function), ''),
+    );
     await screen.findByTestId('chat-screen');
     expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 7);
   });
 
   it('sends an empty hint when the user clears the input before pressing Start', async () => {
-    mockedSessions.createSession.mockResolvedValue(makeSession({id: 9, topic_hint: ''}));
+    mockedSessions.createSession.mockResolvedValue(makeSession({ id: 9, topic_hint: '' }));
     await renderScreen();
     await screen.findByTestId('new-conversation-screen');
 
@@ -214,23 +213,21 @@ describe('NewConversationScreen', () => {
     await fireEvent.changeText(screen.getByTestId('new-conversation-hint'), '');
     await fireEvent.press(screen.getByTestId('new-conversation-start'));
 
-    await waitFor(() => expect(mockedSessions.createSession).toHaveBeenCalledWith(expect.any(Function), ''));
+    await waitFor(() =>
+      expect(mockedSessions.createSession).toHaveBeenCalledWith(expect.any(Function), ''),
+    );
     await screen.findByTestId('chat-screen');
     expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 9);
   });
 
   it('shows an inline error and stays on the form when creation fails', async () => {
-    mockedSessions.createSession.mockRejectedValue(
-      new ApiError(400, 'Topic hint is too long.'),
-    );
+    mockedSessions.createSession.mockRejectedValue(new ApiError(400, 'Topic hint is too long.'));
     await renderScreen();
     await screen.findByTestId('new-conversation-screen');
 
     await fireEvent.press(screen.getByTestId('new-conversation-start'));
 
-    expect(await screen.findByTestId('form-error')).toHaveTextContent(
-      'Topic hint is too long.',
-    );
+    expect(await screen.findByTestId('form-error')).toHaveTextContent('Topic hint is too long.');
     expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen();
     expect(screen.queryByTestId('chat-loading')).toBeNull();
     // The form recovers: the action is enabled again for a retry.
@@ -272,9 +269,9 @@ describe('NewConversationScreen', () => {
             <NavigationContainer
               initialState={{
                 index: 1,
-                routes: [{name: 'Chat'}, {name: 'NewConversation'}],
+                routes: [{ name: 'Chat' }, { name: 'NewConversation' }],
               }}>
-              <Stack.Navigator screenOptions={{headerShown: false}}>
+              <Stack.Navigator screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="Chat" component={ChatScreen} />
                 <Stack.Screen name="NewConversation" component={NewConversationScreen} />
               </Stack.Navigator>
@@ -294,8 +291,8 @@ describe('NewConversationScreen', () => {
   it('hands the generated sample conversation to chat for the example overlay (TASK-053)', async () => {
     mockedSessions.createSession.mockResolvedValue(
       makeCreatedSession([
-        {role: 'assistant', content: 'Welcome aboard, traveler!'},
-        {role: 'user', content: 'Thanks! Where should we go?'},
+        { role: 'assistant', content: 'Welcome aboard, traveler!' },
+        { role: 'user', content: 'Thanks! Where should we go?' },
       ]),
     );
     await renderScreen();
@@ -305,9 +302,7 @@ describe('NewConversationScreen', () => {
 
     // The created conversation opens and exposes the example entry point.
     await screen.findByTestId('chat-screen');
-    await waitFor(() =>
-      expect(screen.getByTestId('chat-show-example')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('chat-show-example')).toBeOnTheScreen());
 
     // The example overlay presents the creation-response turns.
     await fireEvent.press(screen.getByTestId('chat-show-example'));
@@ -316,7 +311,7 @@ describe('NewConversationScreen', () => {
   });
 
   it('opens chat without the example entry when creation carries no sample', async () => {
-    mockedSessions.createSession.mockResolvedValue(makeCreatedSession(undefined, {id: 7}));
+    mockedSessions.createSession.mockResolvedValue(makeCreatedSession(undefined, { id: 7 }));
     await renderScreen();
     await screen.findByTestId('new-conversation-screen');
 
@@ -340,9 +335,7 @@ describe('NewConversationScreen dynamic start action', () => {
     const action = screen.getByTestId('new-conversation-start');
     expect(screen.getByText('Start')).toBeOnTheScreen();
     expect(screen.queryByText('Let AI choose a topic')).toBeNull();
-    expect(action.props.accessibilityLabel).toBe(
-      'Start conversation with your topic or questions',
-    );
+    expect(action.props.accessibilityLabel).toBe('Start conversation with your topic or questions');
   });
 
   it('switches to the secondary Let-AI-choose label and style when the hint is empty', async () => {
@@ -384,7 +377,7 @@ describe('NewConversationScreen dynamic start action', () => {
   });
 
   it('treats whitespace-only input as empty and sends an empty hint', async () => {
-    mockedSessions.createSession.mockResolvedValue(makeSession({id: 11}));
+    mockedSessions.createSession.mockResolvedValue(makeSession({ id: 11 }));
     await renderScreen();
     await screen.findByTestId('new-conversation-screen');
 
@@ -401,7 +394,7 @@ describe('NewConversationScreen dynamic start action', () => {
 
   it('ships a multi-line list of questions to the backend verbatim', async () => {
     const multiLine = 'Traveling\n1. Where did you go last summer?\n- What do you pack first?';
-    mockedSessions.createSession.mockResolvedValue(makeSession({id: 12, topic_hint: multiLine}));
+    mockedSessions.createSession.mockResolvedValue(makeSession({ id: 12, topic_hint: multiLine }));
     await renderScreen();
     await screen.findByTestId('new-conversation-screen');
 
@@ -429,13 +422,13 @@ describe('serverless creation honors the configured provider (TASK-AUDIT-013/019
         JSON.stringify({
           candidates: [
             {
-              content: {parts: [{text}]},
+              content: { parts: [{ text }] },
               finishReason: 'stop',
             },
           ],
           modelVersion: GEMINI_MODEL,
         }),
-      headers: {get: () => null},
+      headers: { get: () => null },
     } as unknown as Response;
   }
 
@@ -477,10 +470,9 @@ describe('serverless creation honors the configured provider (TASK-AUDIT-013/019
     expect(url).toBe(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
     );
-    expect((init?.headers as Record<string, string>)['x-goog-api-key']).toBe(GEMINI_KEY);
-    await waitFor(() =>
-      expect(screen.getByTestId('chat-show-example')).toBeOnTheScreen(),
-    );
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    expect(headers['x-goog-api-key']).toBe(GEMINI_KEY);
+    await waitFor(() => expect(screen.getByTestId('chat-show-example')).toBeOnTheScreen());
     // No request went to OpenRouter and nothing touched the backend.
     expect(fetchSpy.mock.calls.some(([target]) => String(target).includes('openrouter.ai'))).toBe(
       false,

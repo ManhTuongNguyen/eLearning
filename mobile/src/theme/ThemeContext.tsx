@@ -8,12 +8,21 @@
  * install — and every switch is saved best-effort, mirroring the
  * application-mode context's restore/persist pattern (TASK-080).
  */
-import React, {createContext, useCallback, useContext, useEffect, useMemo, useRef, useState} from 'react';
+import type React from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
-import {DEFAULT_THEME_MODE, loadThemeMode, saveThemeMode} from '../preferences/theme';
-import {darkColors, lightColors} from './colors';
-import type {ThemeColors} from './colors';
-import {useSystemColorScheme} from './system';
+import { DEFAULT_THEME_MODE, loadThemeMode, saveThemeMode } from '../preferences/theme';
+import type { ThemeColors } from './colors';
+import { darkColors, lightColors } from './colors';
+import { useSystemColorScheme } from './system';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type ResolvedScheme = 'light' | 'dark';
@@ -32,7 +41,10 @@ const FALLBACK_SYSTEM_SCHEME: ResolvedScheme = 'light';
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-function resolveScheme(mode: ThemeMode, systemScheme: 'light' | 'dark' | null | undefined): ResolvedScheme {
+function resolveScheme(
+  mode: ThemeMode,
+  systemScheme: 'light' | 'dark' | null | undefined,
+): ResolvedScheme {
   if (mode === 'system') {
     if (systemScheme === 'dark') {
       return 'dark';
@@ -42,7 +54,7 @@ function resolveScheme(mode: ThemeMode, systemScheme: 'light' | 'dark' | null | 
   return mode;
 }
 
-export function ThemeProvider({children}: {children: React.ReactNode}) {
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<ThemeMode>(DEFAULT_THEME_MODE);
   const systemScheme = useSystemColorScheme();
   const resolvedScheme = resolveScheme(mode, systemScheme);

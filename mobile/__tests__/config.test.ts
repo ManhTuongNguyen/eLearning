@@ -5,7 +5,7 @@
  * actionable error instead of letting misconfiguration surface as a
  * confusing fetch failure.
  */
-import {API_BASE_URL, resolveApiBaseUrl} from '../src/config';
+import { API_BASE_URL, resolveApiBaseUrl } from '../src/config';
 
 describe('config (TASK-AUDIT-010)', () => {
   describe('API_BASE_URL', () => {
@@ -24,28 +24,18 @@ describe('config (TASK-AUDIT-010)', () => {
 
   describe('resolveApiBaseUrl', () => {
     it('accepts and trims a valid http(s) URL', () => {
-      expect(resolveApiBaseUrl('  http://10.0.2.2:8000  ')).toBe(
-        'http://10.0.2.2:8000',
-      );
-      expect(resolveApiBaseUrl('https://api.example.com')).toBe(
-        'https://api.example.com',
-      );
+      expect(resolveApiBaseUrl('  http://10.0.2.2:8000  ')).toBe('http://10.0.2.2:8000');
+      expect(resolveApiBaseUrl('https://api.example.com')).toBe('https://api.example.com');
     });
 
     it('strips trailing slashes so API paths join cleanly', () => {
-      expect(resolveApiBaseUrl('http://10.0.2.2:8000/')).toBe(
-        'http://10.0.2.2:8000',
-      );
-      expect(resolveApiBaseUrl('http://10.0.2.2:8000///')).toBe(
-        'http://10.0.2.2:8000',
-      );
+      expect(resolveApiBaseUrl('http://10.0.2.2:8000/')).toBe('http://10.0.2.2:8000');
+      expect(resolveApiBaseUrl('http://10.0.2.2:8000///')).toBe('http://10.0.2.2:8000');
     });
 
     it('rejects missing, empty, and non-http values with an actionable error', () => {
       for (const bad of [undefined, '', '   ', '10.0.2.2:8000', 'ftp://host']) {
-        expect(() => resolveApiBaseUrl(bad)).toThrow(
-          'API_BASE_URL is not configured',
-        );
+        expect(() => resolveApiBaseUrl(bad)).toThrow('API_BASE_URL is not configured');
       }
     });
   });

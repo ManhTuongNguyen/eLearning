@@ -14,8 +14,8 @@
  * deterministic, and bounded by construction.
  */
 
-import {RECENT_MESSAGE_WINDOW} from './contextConfig';
-import type {LocalMessage} from '../db/types';
+import type { LocalMessage } from '../db/types';
+import { RECENT_MESSAGE_WINDOW } from './contextConfig';
 
 /**
  * Return the most recent `limit` messages in chronological order.

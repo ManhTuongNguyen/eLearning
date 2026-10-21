@@ -79,66 +79,45 @@
  * scroll-follow behavior in `useFollowBottom` and the mode-branched
  * conversation reads in `services/conversationSource`.
  */
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type {ChatMessage, Session} from '../api/sessions';
-import {toErrorMessage, useAuth} from '../auth/AuthContext';
-import {
-  Screen,
-  ScreenHeader,
-  ScreenList,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
-import {
-  useMessageImprovement,
-} from '../hooks/useMessageImprovement';
-import {
-  useMessageSuggestions,
-} from '../hooks/useMessageSuggestions';
-import {
-  useVocabularySave,
-  VOCAB_TOAST_DURATION_MS,
-} from '../hooks/useVocabularySave';
-import {useChatTurns} from '../hooks/useChatTurns';
-import {useChatKeyboardAvoidance} from '../hooks/useChatKeyboardAvoidance';
-import {useGrammarAutoCheck} from '../hooks/useGrammarAutoCheck';
-import {useFollowBottom} from '../hooks/useFollowBottom';
-import type {ChatScreenProps} from '../navigation/types';
-import {useApplicationMode} from '../mode/ModeContext';
-import {
-  loadGrammarCheckEnabled,
-} from '../preferences/grammarCheck';
+import type { ChatMessage, Session } from '../api/sessions';
+import { toErrorMessage, useAuth } from '../auth/AuthContext';
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { useChatKeyboardAvoidance } from '../hooks/useChatKeyboardAvoidance';
+import { useChatTurns } from '../hooks/useChatTurns';
+import { useFollowBottom } from '../hooks/useFollowBottom';
+import { useGrammarAutoCheck } from '../hooks/useGrammarAutoCheck';
+import { useMessageImprovement } from '../hooks/useMessageImprovement';
+import { useMessageSuggestions } from '../hooks/useMessageSuggestions';
+import { useVocabularySave, VOCAB_TOAST_DURATION_MS } from '../hooks/useVocabularySave';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { ChatScreenProps } from '../navigation/types';
+import { loadGrammarCheckEnabled } from '../preferences/grammarCheck';
 import {
   listFirstSessionPage,
   loadConversation,
   localSessionExists,
 } from '../services/conversationSource';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { useSpeechPlayback } from '../tts/useSpeechPlayback';
+import { copyText } from '../utils/clipboard';
+import { ImprovementSheet } from './ImprovementSheet';
+import type { MessageAction } from './MessageActionsMenu';
+import { MessageActionsMenu } from './MessageActionsMenu';
+import { createRowStyles, MessageRow } from './MessageRow';
+import { SampleConversationModal } from './SampleConversationModal';
 import {
   CHAT_LIST_INITIAL_NUM_TO_RENDER,
   CHAT_LIST_MAX_TO_RENDER_PER_BATCH,
   CHAT_LIST_WINDOW_SIZE,
 } from './streamingUx';
-import {ImprovementSheet} from './ImprovementSheet';
-import {MessageActionsMenu} from './MessageActionsMenu';
-import type {MessageAction} from './MessageActionsMenu';
-import {MessageRow, createRowStyles} from './MessageRow';
-import {SampleConversationModal} from './SampleConversationModal';
-import {TextSelectionSheet} from './TextSelectionSheet';
-import {copyText} from '../utils/clipboard';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
-import {useSpeechPlayback} from '../tts/useSpeechPlayback';
+import { TextSelectionSheet } from './TextSelectionSheet';
 
-export {VOCAB_TOAST_DURATION_MS};
+export { VOCAB_TOAST_DURATION_MS };
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -383,7 +362,7 @@ function createStyles(c: ThemeColors) {
       shadowColor: '#000',
       shadowOpacity: 0.15,
       shadowRadius: 8,
-      shadowOffset: {width: 0, height: 2},
+      shadowOffset: { width: 0, height: 2 },
       elevation: 6,
     },
     toastText: {
@@ -401,15 +380,15 @@ function createStyles(c: ThemeColors) {
   });
 }
 
-export function ChatScreen({route, navigation}: ChatScreenProps) {
+export function ChatScreen({ route, navigation }: ChatScreenProps) {
   const sessionId = route.params?.sessionId;
   // Sample turns exist only in the session-creation response, so they ride
   // in as a route param (TASK-053); sessions opened any other way have none.
   const sampleTurns = route.params?.sampleTurns;
   const hasSample = sampleTurns !== undefined && sampleTurns.length > 0;
-  const {getAccessToken, authedRequest} = useAuth();
-  const {colors} = useTheme();
-  const {mode, status: modeStatus} = useApplicationMode();
+  const { getAccessToken, authedRequest } = useAuth();
+  const { colors } = useTheme();
+  const { mode, status: modeStatus } = useApplicationMode();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   // Row styles are created once per theme so the memoized MessageRow sees a
@@ -448,7 +427,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
 
   // TASK-078: single-playback speech controller; speakingMessageId drives
   // the visible playback state on the bubble currently being read aloud.
-  const {speakingId: speakingMessageId, speak, stop: stopSpeech} = useSpeechPlayback();
+  const { speakingId: speakingMessageId, speak, stop: stopSpeech } = useSpeechPlayback();
 
   // TASK-050: scroll-follow behavior (stick to the tail, detach on scroll
   // up, jump-to-latest pill).
@@ -463,19 +442,14 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
 
   // Keyboard avoidance (TASK-IMPROVEMENT-002): the shell lifts the composer
   // above the keyboard and re-anchors it to the bottom on dismissal.
-  const {paddingBottom: keyboardPadding, handleShellLayout} =
-    useChatKeyboardAvoidance(insets.top);
+  const { paddingBottom: keyboardPadding, handleShellLayout } = useChatKeyboardAvoidance(
+    insets.top,
+  );
 
   // Turn pipeline (TASK-050/054/086): optimistic rows, buffered deltas,
   // terminal outcomes and aborts for both modes.
-  const {
-    streaming,
-    streamError,
-    clearStreamError,
-    endTurn,
-    sendUserTurn,
-    retryFailedTurn,
-  } = useChatTurns({sessionId, mode, getAccessToken, authedRequest, setMessages});
+  const { streaming, streamError, clearStreamError, endTurn, sendUserTurn, retryFailedTurn } =
+    useChatTurns({ sessionId, mode, getAccessToken, authedRequest, setMessages });
 
   // TASK-061/088: suggested replies for one selected message.
   const {
@@ -485,7 +459,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     startSuggestions,
     clearSuggestions,
     invalidateSuggestions,
-  } = useMessageSuggestions({sessionId, mode, authedRequest, messages, session});
+  } = useMessageSuggestions({ sessionId, mode, authedRequest, messages, session });
 
   // TASK-064/089: improvement sheet for one selected user message.
   const {
@@ -495,10 +469,10 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     startImprovement,
     showImprovement,
     invalidateImprovement,
-  } = useMessageImprovement({sessionId, mode, authedRequest, messages});
+  } = useMessageImprovement({ sessionId, mode, authedRequest, messages });
 
   // TASK-069/070: immediate vocabulary save + self-dismissing toast.
-  const {toast, saveVocabularySelection, invalidateVocabSave} = useVocabularySave({
+  const { toast, saveVocabularySelection, invalidateVocabSave } = useVocabularySave({
     authedRequest,
   });
 
@@ -525,7 +499,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
 
   // Grammar auto-check pipeline: checks every newly sent user message when
   // enabled and caches the improvement for the badge to display.
-  const {checks: grammarChecks, getResult: getGrammarCheck} = useGrammarAutoCheck({
+  const { checks: grammarChecks, getResult: getGrammarCheck } = useGrammarAutoCheck({
     sessionId,
     mode,
     authedRequest,
@@ -559,6 +533,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   useEffect(() => {
     localDataRef.current = modeStatus === 'ready' && mode === 'serverless';
   }, [modeStatus, mode]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: modeStatus/mode re-run the probe after the persisted mode is restored
   useEffect(() => {
     if (sessionId === undefined || !localDataRef.current) {
       return;
@@ -567,13 +542,14 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
     const unsubscribe = navigation.addListener?.('focus', () => {
       localSessionExists(currentSessionId).then(exists => {
         if (!exists && navigation.isFocused?.()) {
-          navigation.setParams({sessionId: undefined, sampleTurns: undefined});
+          navigation.setParams({ sessionId: undefined, sampleTurns: undefined });
         }
       });
     });
     return unsubscribe;
   }, [navigation, sessionId, modeStatus, mode]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey and restoreKey are intentional reload triggers
   useEffect(() => {
     let cancelled = false;
 
@@ -619,7 +595,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             return;
           }
           if (restoreFocusedRef.current) {
-            navigation.setParams({sessionId: mostRecent});
+            navigation.setParams({ sessionId: mostRecent });
             return;
           }
           // The user navigated elsewhere before the lookup settled: the
@@ -816,9 +792,11 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   const handleGrammarBadgePress = useCallback(
     (message: ChatMessage) => {
       const check = getGrammarCheck(message.id);
-      const payload = check ?? (message.improvement && message.improvement.improved.trim().length > 0
-        ? {...message.improvement, messageId: message.id}
-        : null);
+      const payload =
+        check ??
+        (message.improvement && message.improvement.improved.trim().length > 0
+          ? { ...message.improvement, messageId: message.id }
+          : null);
       if (payload) {
         showImprovement(payload);
       }
@@ -843,7 +821,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
   );
 
   const renderMessage = useCallback(
-    ({item}: {item: ChatMessage}) => {
+    ({ item }: { item: ChatMessage }) => {
       // Badge severity: the persisted improvement wins; the live auto-check
       // result covers messages checked during this visit before a reload.
       const persisted =
@@ -882,27 +860,23 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
 
   return (
     <Screen
-      style={[styles.container, {paddingBottom: keyboardPadding}]}
+      style={[styles.container, { paddingBottom: keyboardPadding }]}
       onLayout={handleShellLayout}
       testID="chat-screen">
       <ScreenHeader style={styles.header}>
         <Text style={styles.headerTitle}>Chat</Text>
         <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => navigation.popToTop()}
-            testID="chat-open-home">
+          <Pressable onPress={() => navigation.popToTop()} testID="chat-open-home">
             <Text style={styles.headerLink}>Home</Text>
           </Pressable>
-          <Pressable
-            onPress={() => navigation.navigate('NewConversation')}
-            testID="chat-open-new">
+          <Pressable onPress={() => navigation.navigate('NewConversation')} testID="chat-open-new">
             <Text style={styles.headerLink}>New</Text>
           </Pressable>
           <Pressable onPress={() => navigation.navigate('History')} testID="chat-open-history">
             <Text style={styles.headerLink}>History</Text>
           </Pressable>
           <Pressable
-            onPress={() => navigation.navigate('Settings', {slideFromTop: true})}
+            onPress={() => navigation.navigate('Settings', { slideFromTop: true })}
             testID="chat-open-settings">
             <Text style={styles.headerLink}>Settings</Text>
           </Pressable>
@@ -932,9 +906,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
           <Text style={styles.emptyTitle} testID="chat-no-session">
             No conversation yet
           </Text>
-          <Text style={styles.emptyHint}>
-            Start a new conversation to practice English.
-          </Text>
+          <Text style={styles.emptyHint}>Start a new conversation to practice English.</Text>
           <Pressable
             style={styles.retryButton}
             onPress={() => navigation.navigate('NewConversation')}
@@ -954,10 +926,8 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
               }}
               testID="chat-topic"
               accessibilityRole="button"
-              accessibilityLabel={
-                topicExpanded ? 'Hide topic details' : 'Show topic details'
-              }
-              accessibilityState={{expanded: topicExpanded}}>
+              accessibilityLabel={topicExpanded ? 'Hide topic details' : 'Show topic details'}
+              accessibilityState={{ expanded: topicExpanded }}>
               <View style={styles.topicMeta}>
                 <Text
                   numberOfLines={topicExpanded ? undefined : 1}
@@ -1039,7 +1009,9 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             </View>
           ) : null}
           {suggestionsLoading ? (
-            <View style={[styles.suggestionsBar, styles.suggestionsLoading]} testID="chat-suggestions-loading">
+            <View
+              style={[styles.suggestionsBar, styles.suggestionsLoading]}
+              testID="chat-suggestions-loading">
               <ActivityIndicator size="small" color={colors.textMuted} />
             </View>
           ) : suggestionsError !== null ? (
@@ -1061,6 +1033,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
               </Pressable>
               {suggestions.replies.map((reply, index) => (
                 <Pressable
+                  // biome-ignore lint/suspicious/noArrayIndexKey: suggestions are a positional, transient list
                   key={`${suggestions.messageId}-${index}`}
                   style={styles.suggestionChip}
                   onPress={() => {
@@ -1105,9 +1078,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
             }}
           />
           <ImprovementSheet
-            visible={
-              improvementLoading || improvementError !== null || improvement !== null
-            }
+            visible={improvementLoading || improvementError !== null || improvement !== null}
             loading={improvementLoading}
             error={improvementError}
             result={improvement}
@@ -1139,10 +1110,7 @@ export function ChatScreen({route, navigation}: ChatScreenProps) {
               testID="chat-toast">
               <Text
                 role={toast.kind === 'error' ? 'alert' : 'status'}
-                style={[
-                  styles.toastText,
-                  toast.kind === 'error' ? styles.toastTextError : null,
-                ]}
+                style={[styles.toastText, toast.kind === 'error' ? styles.toastTextError : null]}
                 testID="chat-toast-text">
                 {toast.text}
               </Text>

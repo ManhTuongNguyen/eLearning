@@ -8,14 +8,14 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type {SentenceStatus} from '../src/db/types';
-import {selectCardMode} from '../src/srs/cardMode';
+import type { SentenceStatus } from '../src/db/types';
 import {
   DEFAULT_PRACTICE_MODE,
   isPracticeMode,
   loadPracticeMode,
   savePracticeMode,
 } from '../src/preferences/practiceMode';
+import { selectCardMode } from '../src/srs/cardMode';
 
 const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
   __resetAsyncStorageStore: () => void;
@@ -49,9 +49,7 @@ describe('practice-mode preference', () => {
   });
 
   test('falls back to auto when storage cannot be read', async () => {
-    jest
-      .mocked(AsyncStorage.getItem)
-      .mockRejectedValueOnce(new Error('storage unavailable'));
+    jest.mocked(AsyncStorage.getItem).mockRejectedValueOnce(new Error('storage unavailable'));
 
     await expect(loadPracticeMode()).resolves.toBe('auto');
   });
@@ -71,9 +69,7 @@ describe('selectCardMode', () => {
   const statuses: SentenceStatus[] = ['new', 'learning', 'review', 'suspended'];
 
   test.each(statuses)('auto maps %s from its schedule state', status => {
-    expect(selectCardMode(status, 'auto')).toBe(
-      status === 'review' ? 'recall' : 'dictation',
-    );
+    expect(selectCardMode(status, 'auto')).toBe(status === 'review' ? 'recall' : 'dictation');
   });
 
   test.each(statuses)('forced dictation overrides %s', status => {

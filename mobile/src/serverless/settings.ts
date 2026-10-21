@@ -18,15 +18,12 @@
  * `serverless_fallback_models`) remain the OpenRouter namespace so
  * existing installs keep working; every other provider gets suffixed keys.
  */
-import {getLocalDatabase} from '../db/database';
-import {
-  clearServerlessApiKey,
-  loadServerlessApiKey,
-  saveServerlessApiKey,
-} from './secureApiKey';
-import {clearServerlessLocalData} from '../db/clearLocalData';
-import {isProviderId, resolveProviderId} from './providerRegistry';
-import type {LLMClientConfig, ProviderId} from './types';
+
+import { clearServerlessLocalData } from '../db/clearLocalData';
+import { getLocalDatabase } from '../db/database';
+import { isProviderId, resolveProviderId } from './providerRegistry';
+import { clearServerlessApiKey, loadServerlessApiKey, saveServerlessApiKey } from './secureApiKey';
+import type { LLMClientConfig, ProviderId } from './types';
 
 const SETTING_PROVIDER = 'serverless_provider';
 const SETTING_PRIMARY_MODEL = 'serverless_primary_model';

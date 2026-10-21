@@ -8,31 +8,31 @@ import {
   formatElapsed,
   offsetForCharProgress,
   offsetForSpokenChar,
+  type ParagraphSpan,
   paragraphCharRanges,
   scrollDurationMs,
   stepOffset,
-  type ParagraphSpan,
 } from '../src/practice/karaokeScroll';
 
 describe('stepOffset', () => {
   it('advances the offset by speed × elapsed time', () => {
-    expect(stepOffset(0, 30, 1000, 1000)).toEqual({offset: 30, done: false});
+    expect(stepOffset(0, 30, 1000, 1000)).toEqual({ offset: 30, done: false });
     // Sub-tick deltas accumulate fractionally.
     expect(stepOffset(0, 30, 50, 1000).offset).toBeCloseTo(1.5);
   });
 
   it('clamps at the scrollable range and reports done', () => {
-    expect(stepOffset(999, 30, 100, 1000)).toEqual({offset: 1000, done: true});
-    expect(stepOffset(1000, 30, 100, 1000)).toEqual({offset: 1000, done: true});
+    expect(stepOffset(999, 30, 100, 1000)).toEqual({ offset: 1000, done: true });
+    expect(stepOffset(1000, 30, 100, 1000)).toEqual({ offset: 1000, done: true });
   });
 
   it('never moves at zero speed and never completes from a zero tick', () => {
-    expect(stepOffset(0, 0, 100, 1000)).toEqual({offset: 0, done: false});
-    expect(stepOffset(0, 30, 0, 1000)).toEqual({offset: 0, done: false});
+    expect(stepOffset(0, 0, 100, 1000)).toEqual({ offset: 0, done: false });
+    expect(stepOffset(0, 30, 0, 1000)).toEqual({ offset: 0, done: false });
   });
 
   it('treats a text that fits the viewport as never done', () => {
-    expect(stepOffset(0, 30, 60_000, 0)).toEqual({offset: 0, done: false});
+    expect(stepOffset(0, 30, 60_000, 0)).toEqual({ offset: 0, done: false });
   });
 });
 
@@ -98,9 +98,9 @@ describe('paragraphCharRanges', () => {
     const ranges = paragraphCharRanges(full, paragraphs);
 
     expect(ranges).toEqual([
-      {charStart: 0, charEnd: 12},
-      {charStart: 14, charEnd: 36},
-      {charStart: 38, charEnd: 44},
+      { charStart: 0, charEnd: 12 },
+      { charStart: 14, charEnd: 36 },
+      { charStart: 38, charEnd: 44 },
     ]);
     // Every range points at the matching slice of the spoken text.
     ranges.forEach((range, index) => {
@@ -123,11 +123,10 @@ describe('offsetForSpokenChar', () => {
   // Two paragraphs: 100 chars at y=50 (height 60), then 100 chars at
   // y=130 (height 100). Top inset 40, viewport 200, max scroll 500.
   const spans: ParagraphSpan[] = [
-    {charStart: 0, charEnd: 100, y: 50, height: 60},
-    {charStart: 100, charEnd: 200, y: 130, height: 100},
+    { charStart: 0, charEnd: 100, y: 50, height: 60 },
+    { charStart: 100, charEnd: 200, y: 130, height: 100 },
   ];
-  const scroll = (charEnd: number) =>
-    offsetForSpokenChar(charEnd, spans, 40, 200, 500);
+  const scroll = (charEnd: number) => offsetForSpokenChar(charEnd, spans, 40, 200, 500);
 
   it('interpolates the spoken point inside its measured paragraph box', () => {
     // Mid-first-paragraph: inset 40 + y 50 + half of 60 = 120; minus the
@@ -165,9 +164,7 @@ describe('offsetForSpokenChar', () => {
   it('does not leave unused trailing empty space above the spoken word', () => {
     // topInset=40, viewport=200, anchor=0.35: the first paragraph starts at
     // topInset (40), so the first-word anchor offset is 40-70 < 0 -> 0.
-    const spans2: ParagraphSpan[] = [
-      {charStart: 0, charEnd: 100, y: 0, height: 120},
-    ];
+    const spans2: ParagraphSpan[] = [{ charStart: 0, charEnd: 100, y: 0, height: 120 }];
     expect(offsetForSpokenChar(0, spans2, 40, 200, 500)).toBe(0);
     // Mid-paragraph: absoluteY = 40 (topInset) + y(0) + fraction(0.5)*height(120) = 100,
     // offset = 100 - 200*0.35 = 30.
@@ -186,8 +183,8 @@ describe('offsetForSpokenChar', () => {
 
   it('snaps to the end once the whole text has been spoken', () => {
     const spans3: ParagraphSpan[] = [
-      {charStart: 0, charEnd: 100, y: 0, height: 40},
-      {charStart: 100, charEnd: 200, y: 100, height: 100},
+      { charStart: 0, charEnd: 100, y: 0, height: 40 },
+      { charStart: 100, charEnd: 200, y: 100, height: 100 },
     ];
     // charEnd=199 sits inside the second paragraph, so it lands at the
     // paragraph anchor instead of snapping to the scroll end.

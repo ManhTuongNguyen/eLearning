@@ -1,7 +1,7 @@
 /** Route parameter lists for the application navigators (SPEC TASK-043). */
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import type {SampleTurn} from '../api/sessions';
+import type { SampleTurn } from '../api/sessions';
 
 /** Stack shown to unauthenticated users. */
 export type AuthStackParamList = {
@@ -24,7 +24,7 @@ export type MainStackParamList = {
    * it is handed over as a param instead of refetched. Absent for sessions
    * opened any other way, which hides the example entry point.
    */
-  Chat: {sessionId?: number; sampleTurns?: SampleTurn[]} | undefined;
+  Chat: { sessionId?: number; sampleTurns?: SampleTurn[] } | undefined;
   /** New-conversation form (optional topic hint) — SPEC TASK-051. */
   NewConversation: undefined;
   History: undefined;
@@ -34,7 +34,7 @@ export type MainStackParamList = {
    * retracts upwards on Back). Other entry points keep the standard stack
    * push from the right.
    */
-  Settings: {configSaved?: boolean; slideFromTop?: boolean} | undefined;
+  Settings: { configSaved?: boolean; slideFromTop?: boolean } | undefined;
   /** Learning-level editor pushed from Settings (SPEC TASK-018). */
   Level: undefined;
   /** Saved-expression list pushed from Settings (SPEC TASK-072). */
@@ -62,7 +62,7 @@ export type MainStackParamList = {
    * reading aloud themselves.
    */
   SpeakingPractice:
-    | {text: string; material?: string; minutes?: number; mode?: 'read' | 'listen'}
+    | { text: string; material?: string; minutes?: number; mode?: 'read' | 'listen' }
     | undefined;
   /** History of completed speaking practice sessions. */
   SpeakingHistory: undefined;
@@ -71,9 +71,9 @@ export type MainStackParamList = {
   /** Separate form for creating a topic, pushed from the topics list. */
   SentenceTopicNew: undefined;
   /** A topic's sentence bank (TASK-SENT-009). */
-  SentenceTopic: {topicId: number};
+  SentenceTopic: { topicId: number };
   /** Spaced-repetition practice for one topic (TASK-SENT-012). */
-  SentencePractice: {topicId: number};
+  SentencePractice: { topicId: number };
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -96,15 +96,9 @@ export type AIProviderSettingsScreenProps = NativeStackScreenProps<
   'AIProviderSettings'
 >;
 
-export type TTSSettingsScreenProps = NativeStackScreenProps<
-  MainStackParamList,
-  'TTSSettings'
->;
+export type TTSSettingsScreenProps = NativeStackScreenProps<MainStackParamList, 'TTSSettings'>;
 
-export type VoiceManagerScreenProps = NativeStackScreenProps<
-  MainStackParamList,
-  'VoiceManager'
->;
+export type VoiceManagerScreenProps = NativeStackScreenProps<MainStackParamList, 'VoiceManager'>;
 
 export type PracticeScreenProps = NativeStackScreenProps<MainStackParamList, 'Practice'>;
 
@@ -128,10 +122,7 @@ export type SentenceTopicNewScreenProps = NativeStackScreenProps<
   'SentenceTopicNew'
 >;
 
-export type SentenceTopicScreenProps = NativeStackScreenProps<
-  MainStackParamList,
-  'SentenceTopic'
->;
+export type SentenceTopicScreenProps = NativeStackScreenProps<MainStackParamList, 'SentenceTopic'>;
 
 export type SentencePracticeScreenProps = NativeStackScreenProps<
   MainStackParamList,

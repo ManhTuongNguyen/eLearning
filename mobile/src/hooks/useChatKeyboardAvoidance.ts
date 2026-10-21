@@ -20,14 +20,14 @@
  * (non-edge-to-edge `adjustResize`), the measured overlap is zero and the
  * shell stays put, as before.
  */
-import {useCallback, useEffect, useRef, useState} from 'react';
-import {AccessibilityInfo, Keyboard, LayoutAnimation, Platform} from 'react-native';
-import type {KeyboardEvent, LayoutChangeEvent} from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent, LayoutChangeEvent } from 'react-native';
+import { AccessibilityInfo, Keyboard, LayoutAnimation, Platform } from 'react-native';
 
 export function useChatKeyboardAvoidance(keyboardVerticalOffset: number) {
   const [paddingBottom, setPaddingBottom] = useState(0);
   const bottomRef = useRef(0);
-  const frameRef = useRef<{y: number; height: number} | null>(null);
+  const frameRef = useRef<{ y: number; height: number } | null>(null);
   const keyboardFrameRef = useRef<KeyboardEvent['endCoordinates'] | null>(null);
   const offsetRef = useRef(keyboardVerticalOffset);
   offsetRef.current = keyboardVerticalOffset;
@@ -46,10 +46,7 @@ export function useChatKeyboardAvoidance(keyboardVerticalOffset: number) {
         (await AccessibilityInfo.prefersCrossFadeTransitions());
       next = crossFadeQuirk
         ? 0
-        : Math.max(
-            frame.y + frame.height - (keyboard.screenY - offsetRef.current),
-            0,
-          );
+        : Math.max(frame.y + frame.height - (keyboard.screenY - offsetRef.current), 0);
     }
     if (bottomRef.current === next) {
       return;
@@ -60,13 +57,13 @@ export function useChatKeyboardAvoidance(keyboardVerticalOffset: number) {
 
   const handleKeyboardShow = useCallback(
     (event: KeyboardEvent) => {
-      const {duration, easing} = event;
+      const { duration, easing } = event;
       if (duration && easing) {
         LayoutAnimation.configureNext({
           // Minimal accepted duration (RCTLayoutAnimation.m), as KAV does.
-          duration: duration > 10 ? duration : 10,
+          duration: Math.max(duration, 10),
           update: {
-            duration: duration > 10 ? duration : 10,
+            duration: Math.max(duration, 10),
             type: LayoutAnimation.Types[easing] || 'keyboard',
           },
         });
@@ -84,9 +81,9 @@ export function useChatKeyboardAvoidance(keyboardVerticalOffset: number) {
 
   const handleShellLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      const {y, height} = event.nativeEvent.layout;
+      const { y, height } = event.nativeEvent.layout;
       const previous = frameRef.current;
-      frameRef.current = {y, height};
+      frameRef.current = { y, height };
       // Re-measure when the shell geometry changes (rotation, foldables,
       // multi-window) while the last reported keyboard frame still applies.
       if (previous === null || previous.y !== y || previous.height !== height) {
@@ -117,5 +114,5 @@ export function useChatKeyboardAvoidance(keyboardVerticalOffset: number) {
     };
   }, [handleKeyboardShow, handleKeyboardHide]);
 
-  return {paddingBottom, handleShellLayout};
+  return { paddingBottom, handleShellLayout };
 }

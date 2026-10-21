@@ -12,13 +12,13 @@ import {
   mulberry32,
   numberDistractors,
   numberToWords,
-  phoneDistractors,
-  phoneToWords,
   PRACTICE_RECENT_ANSWER_LIMIT,
-  yearDistractors,
-  yearToWords,
   type PracticeMode,
   type PracticeQuestion,
+  phoneDistractors,
+  phoneToWords,
+  yearDistractors,
+  yearToWords,
 } from '../src/practice/questionBank';
 
 /** Same digits, any order ("1997" ↔ "9719"). */
@@ -48,9 +48,7 @@ describe('numberToWords', () => {
   it('reads hundreds and thousands the way people say them', () => {
     expect(numberToWords(305)).toBe('three hundred and five');
     expect(numberToWords(1000)).toBe('one thousand');
-    expect(numberToWords(1997)).toBe(
-      'one thousand nine hundred and ninety-seven',
-    );
+    expect(numberToWords(1997)).toBe('one thousand nine hundred and ninety-seven');
   });
 });
 
@@ -84,9 +82,7 @@ describe('createPracticeQuestion invariants', () => {
       const question = createPracticeQuestion(mode, random);
       expect(new Set(question.options).size).toBe(4);
       expect(question.options).toContain(question.answer);
-      expect(question.options.filter(o => o === question.answer)).toHaveLength(
-        1,
-      );
+      expect(question.options.filter(o => o === question.answer)).toHaveLength(1);
     }
   });
 
@@ -104,11 +100,7 @@ describe('createPracticeQuestion invariants', () => {
       }
     }
     // Any LIMIT+1 consecutive answers must be distinct.
-    for (
-      let i = 0;
-      i + PRACTICE_RECENT_ANSWER_LIMIT < answers.length;
-      i += 1
-    ) {
+    for (let i = 0; i + PRACTICE_RECENT_ANSWER_LIMIT < answers.length; i += 1) {
       const window = answers.slice(i, i + PRACTICE_RECENT_ANSWER_LIMIT + 1);
       expect(new Set(window).size).toBe(window.length);
     }
@@ -146,9 +138,7 @@ describe('createPracticeQuestion invariants', () => {
     const random = mulberry32(5);
     for (let i = 0; i < 300; i += 1) {
       const question = createPracticeQuestion('numbers', random);
-      const distractors = question.options.filter(
-        option => option !== question.answer,
-      );
+      const distractors = question.options.filter(option => option !== question.answer);
       expect(distractors).toHaveLength(3);
       for (const distractor of distractors) {
         expect(isEngineeredDistractor(question.answer, distractor)).toBe(true);
@@ -183,9 +173,7 @@ describe('createPracticeQuestion invariants', () => {
       expect(question.kind).toBe('letter');
       expect(question.spoken).toBe(question.answer.toLowerCase());
       const family = CONFUSABLE_LETTER_GROUPS.find(group =>
-        question.options.every(option =>
-          (group as readonly string[]).includes(option),
-        ),
+        question.options.every(option => (group as readonly string[]).includes(option)),
       );
       expect(family).toBeDefined();
     }
@@ -203,9 +191,7 @@ describe('createPracticeQuestion invariants', () => {
   it('is deterministic for a given seed', () => {
     const run = (): PracticeQuestion[] => {
       const random = mulberry32(2026);
-      return Array.from({length: 50}, () =>
-        createPracticeQuestion('mixed', random),
-      );
+      return Array.from({ length: 50 }, () => createPracticeQuestion('mixed', random));
     };
     expect(run()).toEqual(run());
   });
@@ -216,9 +202,7 @@ describe('phoneToWords', () => {
     expect(phoneToWords('07942 153 860')).toBe(
       'oh seven nine four two, one five three, eight six oh',
     );
-    expect(phoneToWords('020 7946 0123')).toBe(
-      'oh two oh, seven nine four six, oh one two three',
-    );
+    expect(phoneToWords('020 7946 0123')).toBe('oh two oh, seven nine four six, oh one two three');
   });
 });
 
@@ -243,9 +227,7 @@ describe('phone number questions (IELTS format)', () => {
     for (let i = 0; i < 50; i += 1) {
       const question = createPracticeQuestion('phones', random);
       expect(question.spoken).toBe(phoneToWords(question.answer));
-      expect(question.spoken.split(', ')).toHaveLength(
-        question.answer.split(' ').length,
-      );
+      expect(question.spoken.split(', ')).toHaveLength(question.answer.split(' ').length);
     }
   });
 
@@ -254,9 +236,7 @@ describe('phone number questions (IELTS format)', () => {
     for (let i = 0; i < 200; i += 1) {
       const question = createPracticeQuestion('phones', random);
       expect(new Set(question.options).size).toBe(4);
-      expect(question.options.filter(o => o === question.answer)).toHaveLength(
-        1,
-      );
+      expect(question.options.filter(o => o === question.answer)).toHaveLength(1);
     }
   });
 
@@ -279,9 +259,7 @@ describe('phone number questions (IELTS format)', () => {
     const recent: string[] = [];
     for (let i = 0; i < 40; i += 1) {
       const question = createPracticeQuestion('phones', random, recent);
-      expect(recent.slice(-PRACTICE_RECENT_ANSWER_LIMIT)).not.toContain(
-        question.answer,
-      );
+      expect(recent.slice(-PRACTICE_RECENT_ANSWER_LIMIT)).not.toContain(question.answer);
       recent.push(question.answer);
     }
   });

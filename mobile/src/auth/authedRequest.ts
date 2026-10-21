@@ -16,10 +16,11 @@
  * (restore gate, token source, refresh), screens and endpoint bindings only
  * ever see the `AuthedRequester` callable.
  */
-import {apiRequest, ApiError} from '../api/client';
-import type {RequestOptions} from '../api/client';
-import {assertServerApiAllowed} from '../mode/runtime';
-import type {AuthTokens} from './tokens';
+
+import type { RequestOptions } from '../api/client';
+import { ApiError, apiRequest } from '../api/client';
+import { assertServerApiAllowed } from '../mode/runtime';
+import type { AuthTokens } from './tokens';
 
 /** Options for an authenticated request; the Bearer token is managed centrally. */
 export type AuthedRequestOptions = Omit<RequestOptions, 'token'>;
@@ -28,10 +29,7 @@ export type AuthedRequestOptions = Omit<RequestOptions, 'token'>;
  * Authenticated request executor. Throws the normalized ApiError of the
  * last attempt — the original 401 when the session could not be recovered.
  */
-export type AuthedRequester = <T>(
-  path: string,
-  options?: AuthedRequestOptions,
-) => Promise<T>;
+export type AuthedRequester = <T>(path: string, options?: AuthedRequestOptions) => Promise<T>;
 
 /** Session hooks the wrapper needs from the authentication provider. */
 export interface AuthedRequestHooks {
@@ -67,7 +65,7 @@ export function createAuthedRequester(hooks: AuthedRequestHooks): AuthedRequeste
       throw new ApiError(401, 'You are signed out. Please log in again.');
     }
     try {
-      return await apiRequest<T>(path, {...options, token: tokens.access});
+      return await apiRequest<T>(path, { ...options, token: tokens.access });
     } catch (err) {
       // Only an authentication failure triggers transparent re-auth;
       // network/validation/server errors surface untouched.
@@ -81,7 +79,7 @@ export function createAuthedRequester(hooks: AuthedRequestHooks): AuthedRequeste
         throw err;
       }
       // A single retry; a still-failing retry propagates without looping.
-      return apiRequest<T>(path, {...options, token: access});
+      return apiRequest<T>(path, { ...options, token: access });
     }
   };
 }

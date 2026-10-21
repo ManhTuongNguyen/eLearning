@@ -8,8 +8,10 @@
  * `SentenceReviewState` produced by the pure scheduler, and duplicate
  * detection goes through `normalizeSentenceText`.
  */
-import type {SqlDriver, SqlExecutor, SqlRow} from './driver';
-import {nowIso} from './driver';
+
+import { normalizeSentenceText } from '../srs/normalize';
+import type { SqlDriver, SqlExecutor, SqlRow } from './driver';
+import { nowIso } from './driver';
 import type {
   NewSentence,
   NewSentenceTopic,
@@ -21,7 +23,6 @@ import type {
   SentenceTopicRecord,
   SentenceTopicSummary,
 } from './types';
-import {normalizeSentenceText} from '../srs/normalize';
 
 const TOPIC_COLUMNS =
   'id, title, description, generation_prompt, english_level, created_at, updated_at';
@@ -139,10 +140,9 @@ export async function getSentenceTopicById(
   db: SqlExecutor,
   id: number,
 ): Promise<SentenceTopicRecord | null> {
-  const result = await db.execute(
-    `SELECT ${TOPIC_COLUMNS} FROM sentence_topics WHERE id = ?`,
-    [id],
-  );
+  const result = await db.execute(`SELECT ${TOPIC_COLUMNS} FROM sentence_topics WHERE id = ?`, [
+    id,
+  ]);
   const row = result.rows[0];
   return row ? mapTopicRow(row) : null;
 }
@@ -151,7 +151,7 @@ export async function getSentenceTopicById(
 export async function updateSentenceTopic(
   db: SqlExecutor,
   id: number,
-  patch: {title?: string; description?: string; generation_prompt?: string},
+  patch: { title?: string; description?: string; generation_prompt?: string },
 ): Promise<SentenceTopicRecord | null> {
   const assignments: string[] = [];
   const params: (string | number)[] = [];
@@ -177,10 +177,7 @@ export async function updateSentenceTopic(
   assignments.push('updated_at = ?');
   params.push(nowIso());
   params.push(id);
-  await db.execute(
-    `UPDATE sentence_topics SET ${assignments.join(', ')} WHERE id = ?`,
-    params,
-  );
+  await db.execute(`UPDATE sentence_topics SET ${assignments.join(', ')} WHERE id = ?`, params);
   return getSentenceTopicById(db, id);
 }
 
@@ -191,10 +188,9 @@ export async function deleteSentenceTopic(db: SqlExecutor, id: number): Promise<
 
 /** Count the sentences of one topic (suspended included). */
 export async function countSentencesInTopic(db: SqlExecutor, topicId: number): Promise<number> {
-  const result = await db.execute(
-    'SELECT COUNT(*) AS total FROM sentences WHERE topic_id = ?',
-    [topicId],
-  );
+  const result = await db.execute('SELECT COUNT(*) AS total FROM sentences WHERE topic_id = ?', [
+    topicId,
+  ]);
   return Number(result.rows[0]?.total ?? 0);
 }
 
@@ -223,10 +219,9 @@ export async function insertSentencesWith(
   topicId: number,
   candidates: readonly NewSentence[],
 ): Promise<SentenceRecord[]> {
-  const existing = await tx.execute(
-    'SELECT normalized_text FROM sentences WHERE topic_id = ?',
-    [topicId],
-  );
+  const existing = await tx.execute('SELECT normalized_text FROM sentences WHERE topic_id = ?', [
+    topicId,
+  ]);
   const seen = new Set(existing.rows.map(row => String(row.normalized_text ?? '')));
 
   const timestamp = nowIso();
@@ -287,10 +282,7 @@ export async function listSentencesByTopic(
   return result.rows.map(mapSentenceRow);
 }
 
-export async function getSentenceById(
-  db: SqlExecutor,
-  id: number,
-): Promise<SentenceRecord | null> {
+export async function getSentenceById(db: SqlExecutor, id: number): Promise<SentenceRecord | null> {
   const result = await db.execute(`SELECT ${SENTENCE_COLUMNS} FROM sentences WHERE id = ?`, [id]);
   const row = result.rows[0];
   return row ? mapSentenceRow(row) : null;
@@ -318,10 +310,7 @@ export async function listDueSentences(
   return result.rows.map(mapSentenceRow);
 }
 
-export async function countDueSentences(
-  db: SqlExecutor,
-  now: string = nowIso(),
-): Promise<number> {
+export async function countDueSentences(db: SqlExecutor, now: string = nowIso()): Promise<number> {
   const result = await db.execute(
     "SELECT COUNT(*) AS total FROM sentences WHERE status != 'suspended' AND due_at <= ?",
     [now],

@@ -9,7 +9,8 @@
  * Colors are always supplied by the caller from the active theme; the seam
  * deliberately has no hard-coded palette so dark mode cannot be broken here.
  */
-import React from 'react';
+
+import type { LucideIcon } from 'lucide-react-native';
 
 import {
   Check,
@@ -30,7 +31,6 @@ import {
   Volume2,
   X,
 } from 'lucide-react-native';
-import type {LucideIcon} from 'lucide-react-native';
 
 /** Every icon the application is allowed to render, by semantic name. */
 export const ICON_NAMES = [
@@ -93,7 +93,7 @@ export interface IconProps {
  * Render one semantic icon. An unknown name is a programming error caught by
  * the type system, never a runtime fallback.
  */
-export function Icon({name, size = 22, color, strokeWidth = 2, testID}: IconProps) {
+export function Icon({ name, size = 22, color, strokeWidth = 2, testID }: IconProps) {
   const IconComponent = ICON_COMPONENTS[name];
   return (
     <IconComponent

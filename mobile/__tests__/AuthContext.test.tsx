@@ -1,12 +1,11 @@
-import React, {useState} from 'react';
-import {Text, Pressable} from 'react-native';
-import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
-
-import {AuthProvider, useAuth} from '../src/auth/AuthContext';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { useState } from 'react';
+import { Pressable, Text } from 'react-native';
 import * as authApi from '../src/api/auth';
-import {ApiError} from '../src/api/client';
+import { ApiError } from '../src/api/client';
+import { AuthProvider, useAuth } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/auth/secureStorage');
@@ -14,8 +13,8 @@ jest.mock('../src/auth/secureStorage');
 const mockedAuth = jest.mocked(authApi);
 const mockedStorage = jest.mocked(secureStorage);
 
-const TOKENS = {access: 'access-1', refresh: 'refresh-1'};
-const USER = {id: 1, username: 'alice', email: 'alice@example.com'};
+const TOKENS = { access: 'access-1', refresh: 'refresh-1' };
+const USER = { id: 1, username: 'alice', email: 'alice@example.com' };
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -26,7 +25,7 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 function Probe() {
-  const {status, user, error, busy, login, register, logout, authedRequest} = useAuth();
+  const { status, user, error, busy, login, register, logout, authedRequest } = useAuth();
   const [request, setRequest] = useState('idle');
   return (
     <>
@@ -35,15 +34,27 @@ function Probe() {
       <Text testID="error">{error ?? 'no-error'}</Text>
       <Text testID="busy">{busy ? 'busy' : 'idle'}</Text>
       <Text testID="request">{request}</Text>
-      <Pressable onPress={() => {login('alice', 'secret');}} testID="do-login" />
-      <Pressable
-        onPress={() => {register({username: 'bob', email: 'b@e.com', password: 'pw'});}}
-        testID="do-register"
-      />
-      <Pressable onPress={() => {logout();}} testID="do-logout" />
       <Pressable
         onPress={() => {
-          authedRequest<{level: string}>('/api/v1/profile/')
+          login('alice', 'secret');
+        }}
+        testID="do-login"
+      />
+      <Pressable
+        onPress={() => {
+          register({ username: 'bob', email: 'b@e.com', password: 'pw' });
+        }}
+        testID="do-register"
+      />
+      <Pressable
+        onPress={() => {
+          logout();
+        }}
+        testID="do-logout"
+      />
+      <Pressable
+        onPress={() => {
+          authedRequest<{ level: string }>('/api/v1/profile/')
             .then(payload => setRequest(`ok:${JSON.stringify(payload)}`))
             .catch((err: unknown) =>
               setRequest(`fail:${err instanceof ApiError ? err.status : 'unknown'}`),
@@ -54,12 +65,10 @@ function Probe() {
       <Pressable
         onPress={() => {
           Promise.all([
-            authedRequest<{level: string}>('/api/v1/profile/'),
-            authedRequest<{level: string}>('/api/v1/sessions/'),
+            authedRequest<{ level: string }>('/api/v1/profile/'),
+            authedRequest<{ level: string }>('/api/v1/sessions/'),
           ])
-            .then(([a, b]) =>
-              setRequest(`ok:${JSON.stringify(a)}|${JSON.stringify(b)}`),
-            )
+            .then(([a, b]) => setRequest(`ok:${JSON.stringify(a)}|${JSON.stringify(b)}`))
             .catch((err: unknown) =>
               setRequest(`fail:${err instanceof ApiError ? err.status : 'unknown'}`),
             );
@@ -109,7 +118,7 @@ describe('AuthContext session restore', () => {
     mockedAuth.getMe
       .mockRejectedValueOnce(new ApiError(401, 'Token is invalid or expired'))
       .mockResolvedValueOnce(USER);
-    mockedAuth.refreshAccessToken.mockResolvedValue({access: 'access-2'});
+    mockedAuth.refreshAccessToken.mockResolvedValue({ access: 'access-2' });
 
     renderAuth();
 
@@ -129,16 +138,14 @@ describe('AuthContext session restore', () => {
 
     renderAuth();
 
-    await waitFor(() =>
-      expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated'),
-    );
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated'));
     expect(mockedStorage.clearTokens).toHaveBeenCalled();
   });
 });
 
 describe('AuthContext actions', () => {
   it('login stores tokens and enters the authenticated state', async () => {
-    mockedAuth.login.mockResolvedValue({...TOKENS, user: USER});
+    mockedAuth.login.mockResolvedValue({ ...TOKENS, user: USER });
     renderAuth();
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated'));
 
@@ -166,7 +173,7 @@ describe('AuthContext actions', () => {
 
   it('register auto-logs-in with the submitted credentials', async () => {
     mockedAuth.register.mockResolvedValue(USER);
-    mockedAuth.login.mockResolvedValue({...TOKENS, user: {...USER, username: 'bob'}});
+    mockedAuth.login.mockResolvedValue({ ...TOKENS, user: { ...USER, username: 'bob' } });
     renderAuth();
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated'));
 
@@ -225,7 +232,7 @@ describe('AuthContext authorized requests (TASK-047)', () => {
   it('sends the restored access token as Bearer without refreshing', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(200, {level: 'B2'}));
+      .mockResolvedValue(jsonResponse(200, { level: 'B2' }));
     await renderAuthenticated();
 
     await fireEvent.press(screen.getByTestId('do-request'));
@@ -237,7 +244,7 @@ describe('AuthContext authorized requests (TASK-047)', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/v1/profile/'),
       expect.objectContaining({
-        headers: expect.objectContaining({Authorization: 'Bearer access-1'}),
+        headers: expect.objectContaining({ Authorization: 'Bearer access-1' }),
       }),
     );
     expect(mockedAuth.refreshAccessToken).not.toHaveBeenCalled();
@@ -246,9 +253,9 @@ describe('AuthContext authorized requests (TASK-047)', () => {
   it('refreshes once on 401 and retries with the new access token', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(jsonResponse(401, {detail: 'Token is invalid or expired'}))
-      .mockResolvedValueOnce(jsonResponse(200, {level: 'A2'}));
-    mockedAuth.refreshAccessToken.mockResolvedValue({access: 'access-2'});
+      .mockResolvedValueOnce(jsonResponse(401, { detail: 'Token is invalid or expired' }))
+      .mockResolvedValueOnce(jsonResponse(200, { level: 'A2' }));
+    mockedAuth.refreshAccessToken.mockResolvedValue({ access: 'access-2' });
     await renderAuthenticated();
 
     await fireEvent.press(screen.getByTestId('do-request'));
@@ -266,7 +273,7 @@ describe('AuthContext authorized requests (TASK-047)', () => {
     expect(fetchMock).toHaveBeenLastCalledWith(
       expect.stringContaining('/api/v1/profile/'),
       expect.objectContaining({
-        headers: expect.objectContaining({Authorization: 'Bearer access-2'}),
+        headers: expect.objectContaining({ Authorization: 'Bearer access-2' }),
       }),
     );
     expect(screen.getByTestId('status')).toHaveTextContent('authenticated');
@@ -275,7 +282,7 @@ describe('AuthContext authorized requests (TASK-047)', () => {
   it('returns the user to login when refresh credentials are invalid', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(401, {detail: 'Token is invalid or expired'}));
+      .mockResolvedValue(jsonResponse(401, { detail: 'Token is invalid or expired' }));
     mockedAuth.refreshAccessToken.mockRejectedValue(
       new ApiError(401, 'Token is invalid or expired'),
     );
@@ -283,12 +290,8 @@ describe('AuthContext authorized requests (TASK-047)', () => {
 
     await fireEvent.press(screen.getByTestId('do-request'));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated'),
-    );
-    await waitFor(() =>
-      expect(screen.getByTestId('request')).toHaveTextContent('fail:401'),
-    );
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated'));
+    await waitFor(() => expect(screen.getByTestId('request')).toHaveTextContent('fail:401'));
     expect(screen.getByTestId('user')).toHaveTextContent('none');
     expect(mockedStorage.clearTokens).toHaveBeenCalled();
     // No retry after the refresh died; exactly one refresh attempt.
@@ -299,14 +302,12 @@ describe('AuthContext authorized requests (TASK-047)', () => {
   it('does not refresh for non-authentication failures', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(500, {detail: 'Server error.'}));
+      .mockResolvedValue(jsonResponse(500, { detail: 'Server error.' }));
     await renderAuthenticated();
 
     await fireEvent.press(screen.getByTestId('do-request'));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('request')).toHaveTextContent('fail:500'),
-    );
+    await waitFor(() => expect(screen.getByTestId('request')).toHaveTextContent('fail:500'));
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mockedAuth.refreshAccessToken).not.toHaveBeenCalled();
     expect(mockedStorage.clearTokens).not.toHaveBeenCalled();
@@ -316,21 +317,19 @@ describe('AuthContext authorized requests (TASK-047)', () => {
   it('retries only once when the retried request still fails', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(401, {detail: 'Token is invalid or expired'}));
-    mockedAuth.refreshAccessToken.mockResolvedValue({access: 'access-2'});
+      .mockResolvedValue(jsonResponse(401, { detail: 'Token is invalid or expired' }));
+    mockedAuth.refreshAccessToken.mockResolvedValue({ access: 'access-2' });
     await renderAuthenticated();
 
     await fireEvent.press(screen.getByTestId('do-request'));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('request')).toHaveTextContent('fail:401'),
-    );
+    await waitFor(() => expect(screen.getByTestId('request')).toHaveTextContent('fail:401'));
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(mockedAuth.refreshAccessToken).toHaveBeenCalledTimes(1);
   });
 
   it('shares a single refresh across concurrent 401 failures', async () => {
-    let releaseRefresh!: (value: {access: string}) => void;
+    let releaseRefresh!: (value: { access: string }) => void;
     mockedAuth.refreshAccessToken.mockReturnValue(
       new Promise(resolve => {
         releaseRefresh = resolve;
@@ -338,9 +337,9 @@ describe('AuthContext authorized requests (TASK-047)', () => {
     );
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(jsonResponse(401, {detail: 'expired'}))
-      .mockResolvedValueOnce(jsonResponse(401, {detail: 'expired'}))
-      .mockResolvedValue(jsonResponse(200, {level: 'B1'}));
+      .mockResolvedValueOnce(jsonResponse(401, { detail: 'expired' }))
+      .mockResolvedValueOnce(jsonResponse(401, { detail: 'expired' }))
+      .mockResolvedValue(jsonResponse(200, { level: 'B1' }));
     await renderAuthenticated();
 
     await fireEvent.press(screen.getByTestId('do-request-twice'));
@@ -356,12 +355,10 @@ describe('AuthContext authorized requests (TASK-047)', () => {
     });
     expect(mockedAuth.refreshAccessToken).toHaveBeenCalledTimes(1);
 
-    releaseRefresh({access: 'access-2'});
+    releaseRefresh({ access: 'access-2' });
 
     await waitFor(() =>
-      expect(screen.getByTestId('request')).toHaveTextContent(
-        'ok:{"level":"B1"}|{"level":"B1"}',
-      ),
+      expect(screen.getByTestId('request')).toHaveTextContent('ok:{"level":"B1"}|{"level":"B1"}'),
     );
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
@@ -373,9 +370,7 @@ describe('AuthContext authorized requests (TASK-047)', () => {
 
     await fireEvent.press(screen.getByTestId('do-request'));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('request')).toHaveTextContent('fail:401'),
-    );
+    await waitFor(() => expect(screen.getByTestId('request')).toHaveTextContent('fail:401'));
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mockedAuth.refreshAccessToken).not.toHaveBeenCalled();
     expect(mockedStorage.clearTokens).not.toHaveBeenCalled();

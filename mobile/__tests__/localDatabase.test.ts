@@ -5,20 +5,16 @@
  * with real SQL semantics: versioned migration replay, rollback on failure,
  * per-entity CRUD, cascade deletes and constraint enforcement.
  */
-import {
-  getLocalDatabase,
-  openLocalDatabase,
-  resetLocalDatabase,
-} from '../src/db/database';
-import type {SqlDriver} from '../src/db/driver';
-import {MIGRATIONS, SCHEMA_VERSION, migrateDatabase} from '../src/db/migrations';
+import { getLocalDatabase, openLocalDatabase, resetLocalDatabase } from '../src/db/database';
+import type { SqlDriver } from '../src/db/driver';
 import {
   getMessage,
   insertMessage,
   listMessages,
   updateMessageStatus,
 } from '../src/db/messageStore';
-import {getLearningProfile, saveLearningProfile} from '../src/db/profileStore';
+import { MIGRATIONS, migrateDatabase, SCHEMA_VERSION } from '../src/db/migrations';
+import { getLearningProfile, saveLearningProfile } from '../src/db/profileStore';
 import {
   deleteSession,
   getSession,
@@ -27,14 +23,9 @@ import {
   renameSession,
   touchSession,
 } from '../src/db/sessionStore';
-import {
-  deleteSetting,
-  getSetting,
-  listSettings,
-  setSetting,
-} from '../src/db/settingsStore';
-import {getSummary, saveSummary} from '../src/db/summaryStore';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import { deleteSetting, getSetting, listSettings, setSetting } from '../src/db/settingsStore';
+import { getSummary, saveSummary } from '../src/db/summaryStore';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 async function tableNames(db: SqlDriver): Promise<string[]> {
   const result = await db.execute(
@@ -61,13 +52,7 @@ describe('migrations (TASK-081)', () => {
 
     expect(await userVersion(db)).toBe(SCHEMA_VERSION);
     const tables = await tableNames(db);
-    for (const expected of [
-      'learning_profile',
-      'settings',
-      'sessions',
-      'messages',
-      'summaries',
-    ]) {
+    for (const expected of ['learning_profile', 'settings', 'sessions', 'messages', 'summaries']) {
       expect(tables).toContain(expected);
     }
     await db.close();
@@ -88,9 +73,7 @@ describe('migrations (TASK-081)', () => {
     // Simulate a database from an older app release.
     await migrateDatabase(db, MIGRATIONS.slice(0, 1));
     expect(await userVersion(db)).toBe(1);
-    await db.execute(
-      "INSERT INTO settings (key, value, updated_at) VALUES ('kept', 'yes', 't')",
-    );
+    await db.execute("INSERT INTO settings (key, value, updated_at) VALUES ('kept', 'yes', 't')");
 
     await migrateDatabase(db);
 
@@ -157,7 +140,7 @@ describe('session store (TASK-081)', () => {
   });
 
   test('insert applies defaults and getSession reads it back', async () => {
-    const created = await insertSession(db, {topic_hint: 'travel'});
+    const created = await insertSession(db, { topic_hint: 'travel' });
 
     expect(created.id).toBeGreaterThan(0);
     expect(created.title).toBe('New conversation');
@@ -189,8 +172,8 @@ describe('session store (TASK-081)', () => {
   });
 
   test('listSessions orders by most recent activity', async () => {
-    const first = await insertSession(db, {title: 'first'});
-    await insertSession(db, {title: 'second'});
+    const first = await insertSession(db, { title: 'first' });
+    await insertSession(db, { title: 'second' });
     await tick();
 
     await renameSession(db, first.id, 'first renamed');
@@ -199,14 +182,11 @@ describe('session store (TASK-081)', () => {
     await touchSession(db, first.id);
 
     const sessions = await listSessions(db);
-    expect(sessions.map(session => session.title)).toEqual([
-      'first renamed',
-      'second',
-    ]);
+    expect(sessions.map(session => session.title)).toEqual(['first renamed', 'second']);
   });
 
   test('rename updates title but keeps other fields intact', async () => {
-    const created = await insertSession(db, {topic_hint: 'movies'});
+    const created = await insertSession(db, { topic_hint: 'movies' });
 
     await renameSession(db, created.id, 'Movie night');
     const renamed = await getSession(db, created.id);
@@ -290,7 +270,7 @@ describe('message store (TASK-081)', () => {
   });
 
   test('listMessages returns chronological order for one session', async () => {
-    await insertMessage(db, {session_id: sessionId, role: 'user', content: 'one'});
+    await insertMessage(db, { session_id: sessionId, role: 'user', content: 'one' });
     await insertMessage(db, {
       session_id: otherSessionId,
       role: 'user',
@@ -320,7 +300,7 @@ describe('message store (TASK-081)', () => {
 
     await updateMessageStatus(db, pending.id, 'complete', 'Here is your answer.');
     const completed = await getMessage(db, pending.id);
-    expect(completed).toMatchObject({status: 'complete', content: 'Here is your answer.'});
+    expect(completed).toMatchObject({ status: 'complete', content: 'Here is your answer.' });
   });
 
   test('getMessage returns null for unknown ids', async () => {
@@ -328,7 +308,7 @@ describe('message store (TASK-081)', () => {
   });
 
   test('duplicate sequences within a session are rejected', async () => {
-    await insertMessage(db, {session_id: sessionId, role: 'user', content: 'one'});
+    await insertMessage(db, { session_id: sessionId, role: 'user', content: 'one' });
     await expect(
       db.execute(
         `INSERT INTO messages (session_id, role, status, content, sequence, created_at)
@@ -449,7 +429,7 @@ describe('settings store (TASK-081)', () => {
     await deleteSetting(db, 'model.primary');
 
     expect(await getSetting(db, 'model.primary')).toBeNull();
-    expect(await listSettings(db)).toEqual({'model.fallback.1': 'b'});
+    expect(await listSettings(db)).toEqual({ 'model.fallback.1': 'b' });
     await expect(deleteSetting(db, 'model.primary')).resolves.toBeUndefined();
   });
 
@@ -477,9 +457,7 @@ describe('transactions (TASK-081)', () => {
 
   test('committed work persists', async () => {
     const outcome = await db.transaction(async tx => {
-      await tx.execute(
-        "INSERT INTO settings (key, value, updated_at) VALUES ('k', 'v', 't')",
-      );
+      await tx.execute("INSERT INTO settings (key, value, updated_at) VALUES ('k', 'v', 't')");
       return 'done';
     });
 
@@ -490,12 +468,8 @@ describe('transactions (TASK-081)', () => {
   test('thrown errors roll back every statement in the transaction', async () => {
     await expect(
       db.transaction(async tx => {
-        await tx.execute(
-          "INSERT INTO settings (key, value, updated_at) VALUES ('a', '1', 't')",
-        );
-        await tx.execute(
-          "INSERT INTO settings (key, value, updated_at) VALUES ('b', '2', 't')",
-        );
+        await tx.execute("INSERT INTO settings (key, value, updated_at) VALUES ('a', '1', 't')");
+        await tx.execute("INSERT INTO settings (key, value, updated_at) VALUES ('b', '2', 't')");
         throw new Error('abort work');
       }),
     ).rejects.toThrow('abort work');

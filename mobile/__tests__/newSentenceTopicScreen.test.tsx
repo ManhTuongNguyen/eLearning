@@ -6,23 +6,22 @@
  * advanced generation guidance) and replaces the form with the new topic, while
  * Cancel and Back pop without writing anything.
  */
-import React from 'react';
-import {fireEvent, render, waitFor} from '@testing-library/react-native';
 
-import {getSentenceTopicById} from '../src/db/sentenceRepository';
-import type {SqlDriver} from '../src/db/driver';
-import {SentenceTopicNewScreen} from '../src/screens/SentenceTopicNewScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import type {SentenceTopicNewScreenProps} from '../src/navigation/types';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import type { SqlDriver } from '../src/db/driver';
+import { getSentenceTopicById } from '../src/db/sentenceRepository';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import type { SentenceTopicNewScreenProps } from '../src/navigation/types';
+import { SentenceTopicNewScreen } from '../src/screens/SentenceTopicNewScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 let db: SqlDriver;
 
 jest.mock('../src/db/database', () => {
   const actualMigrations = jest.requireActual('../src/db/migrations').migrateDatabase;
-  const handle: {db: SqlDriver} = {db: undefined as never};
+  const handle: { db: SqlDriver } = { db: undefined as never };
   return {
     getLocalDatabase: jest.fn(async () => {
       await actualMigrations(handle.db);
@@ -46,7 +45,7 @@ function screenProps(): SentenceTopicNewScreenProps {
       replace,
       goBack,
     },
-    route: {key: 'sentence-topic-new-test', name: 'SentenceTopicNew'},
+    route: { key: 'sentence-topic-new-test', name: 'SentenceTopicNew' },
   } as unknown as SentenceTopicNewScreenProps;
 }
 
@@ -102,33 +101,27 @@ describe('SentenceTopicNewScreen', () => {
   test('the save button is disabled while the title is blank', async () => {
     const view = await renderScreen();
 
-    expect(
-      view.getByTestId('sentence-topic-save').props.accessibilityState?.disabled,
-    ).toBe(true);
+    expect(view.getByTestId('sentence-topic-save').props.accessibilityState?.disabled).toBe(true);
 
     await fireEvent.changeText(view.getByTestId('sentence-topic-title'), '   ');
-    expect(
-      view.getByTestId('sentence-topic-save').props.accessibilityState?.disabled,
-    ).toBe(true);
+    expect(view.getByTestId('sentence-topic-save').props.accessibilityState?.disabled).toBe(true);
 
     await fireEvent.changeText(view.getByTestId('sentence-topic-title'), 'Greetings');
-    expect(
-      view.getByTestId('sentence-topic-save').props.accessibilityState?.disabled,
-    ).toBe(false);
+    expect(view.getByTestId('sentence-topic-save').props.accessibilityState?.disabled).toBe(false);
   });
 
   test('reveals advanced generation instructions and stores them on the topic', async () => {
     const view = await renderScreen();
 
     expect(view.queryByTestId('sentence-topic-generation-prompt')).toBeFalsy();
-    expect(
-      view.getByTestId('sentence-topic-advanced-toggle').props.accessibilityState,
-    ).toEqual({checked: false});
+    expect(view.getByTestId('sentence-topic-advanced-toggle').props.accessibilityState).toEqual({
+      checked: false,
+    });
 
     await fireEvent.press(view.getByTestId('sentence-topic-advanced-toggle'));
-    expect(
-      view.getByTestId('sentence-topic-advanced-toggle').props.accessibilityState,
-    ).toEqual({checked: true});
+    expect(view.getByTestId('sentence-topic-advanced-toggle').props.accessibilityState).toEqual({
+      checked: true,
+    });
 
     await fireEvent.changeText(view.getByTestId('sentence-topic-title'), 'Phone calls');
     await fireEvent.changeText(

@@ -17,11 +17,11 @@
  * 4. Purity — suggestions are in-memory display data; nothing persists
  */
 
-import type {EnglishLevel} from '../api/profile';
-import type {LocalMessage} from '../db/types';
-import type {GeneratedTopic} from './contextBuilder';
-import type {OpenRouterClient} from './types';
-import {OpenRouterResponseError} from './errors';
+import type { EnglishLevel } from '../api/profile';
+import type { LocalMessage } from '../db/types';
+import type { GeneratedTopic } from './contextBuilder';
+import { OpenRouterResponseError } from './errors';
+import type { OpenRouterClient } from './types';
 
 export const SUGGESTION_COUNT = 3;
 
@@ -41,8 +41,7 @@ const SPEAKER_LABELS: Record<string, string> = {
 };
 
 const TRANSCRIPT_HEADER = 'Conversation so far:';
-const EMPTY_TRANSCRIPT_LINE =
-  'The conversation has just started; there are no earlier messages.';
+const EMPTY_TRANSCRIPT_LINE = 'The conversation has just started; there are no earlier messages.';
 const SELECTED_MESSAGE_INSTRUCTION =
   'The learner long-pressed this message: "{selected}"\n' +
   'Write exactly three replies that the learner could send next.';
@@ -72,7 +71,7 @@ export async function generateSuggestions(
   client: OpenRouterClient,
   input: SuggestInput,
 ): Promise<Suggestions> {
-  const {level, topic, selectedMessage, history = []} = input;
+  const { level, topic, selectedMessage, history = [] } = input;
 
   const stripped = selectedMessage.trim();
   if (!stripped) {
@@ -82,8 +81,8 @@ export async function generateSuggestions(
   const userPrompt = buildUserPrompt(level, topic, history, stripped);
   const request = {
     messages: [
-      {role: 'system' as const, content: SYSTEM_PROMPT},
-      {role: 'user' as const, content: userPrompt},
+      { role: 'system' as const, content: SYSTEM_PROMPT },
+      { role: 'user' as const, content: userPrompt },
     ],
   };
 
@@ -103,9 +102,7 @@ function buildUserPrompt(
   ];
 
   if (level === 'AUTO') {
-    parts.push(
-      "The learner's English level is unknown; keep the replies broadly accessible.",
-    );
+    parts.push("The learner's English level is unknown; keep the replies broadly accessible.");
   } else {
     parts.push(
       `The learner's English level is ${level} (CEFR); keep vocabulary ` +
@@ -118,9 +115,7 @@ function buildUserPrompt(
   parts.push(TRANSCRIPT_HEADER);
 
   // Include only complete messages with content
-  const completeHistory = history.filter(
-    msg => msg.status === 'complete' && msg.content.trim(),
-  );
+  const completeHistory = history.filter(msg => msg.status === 'complete' && msg.content.trim());
 
   if (completeHistory.length > 0) {
     for (const msg of completeHistory) {
@@ -140,18 +135,12 @@ function parseSuggestions(text: string): Suggestions {
   const payload = extractJsonObject(text);
 
   if (typeof payload !== 'object' || payload === null) {
-    throw new OpenRouterResponseError(
-      'Suggestions response was not a JSON object.',
-      null,
-    );
+    throw new OpenRouterResponseError('Suggestions response was not a JSON object.', null);
   }
 
   const rawReplies = (payload as Record<string, unknown>).replies;
   if (!Array.isArray(rawReplies)) {
-    throw new OpenRouterResponseError(
-      "Suggestions response is missing a 'replies' list.",
-      null,
-    );
+    throw new OpenRouterResponseError("Suggestions response is missing a 'replies' list.", null);
   }
 
   if (rawReplies.length !== SUGGESTION_COUNT) {
@@ -166,10 +155,7 @@ function parseSuggestions(text: string): Suggestions {
   for (let i = 0; i < rawReplies.length; i++) {
     const entry = rawReplies[i];
     if (typeof entry !== 'string' || !entry.trim()) {
-      throw new OpenRouterResponseError(
-        `Suggestion ${i} is missing a non-empty string.`,
-        null,
-      );
+      throw new OpenRouterResponseError(`Suggestion ${i} is missing a non-empty string.`, null);
     }
     replies.push(entry.trim());
   }
@@ -183,7 +169,7 @@ function parseSuggestions(text: string): Suggestions {
     );
   }
 
-  return {replies};
+  return { replies };
 }
 
 function extractJsonObject(text: string): unknown {

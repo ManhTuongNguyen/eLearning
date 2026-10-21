@@ -5,10 +5,10 @@
  * models work against either storage backend (ROADMAP §15 data isolation:
  * local rows are separate data, but structurally compatible).
  */
-import type {EnglishLevel} from '../api/profile';
-import type {ImprovementSeverity} from '../api/sessions';
+import type { EnglishLevel } from '../api/profile';
+import type { ImprovementSeverity } from '../api/sessions';
 
-export type {ImprovementSeverity};
+export type { ImprovementSeverity };
 
 export type LocalMessageRole = 'user' | 'assistant';
 

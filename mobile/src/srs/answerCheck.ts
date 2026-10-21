@@ -21,12 +21,9 @@
  * suggested as Good, everything else as Again. Easy is never suggested — it
  * stays an explicit learner choice.
  */
-import type {ReviewGrade} from '../db/types';
-import {
-  expandTokenForComparison,
-  normalizeSentenceText,
-} from './normalize';
-import type {FollowingWord} from './normalize';
+import type { ReviewGrade } from '../db/types';
+import type { FollowingWord } from './normalize';
+import { expandTokenForComparison, normalizeSentenceText } from './normalize';
 
 /** How one position of the answer relates to the sentence. */
 export type DiffKind = 'correct' | 'missing' | 'extra' | 'substituted';
@@ -85,8 +82,8 @@ function tokenizeSurfaceSentence(text: string): SurfaceToken[] {
   const pattern = new RegExp(WORD_PATTERN.source, 'g');
   const tokens: SurfaceToken[] = [];
   let previousEnd = 0;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(text)) !== null) {
+  let match = pattern.exec(text);
+  while (match !== null) {
     if (tokens.length > 0) {
       const gap = text.slice(previousEnd, match.index);
       tokens[tokens.length - 1].followedByPunctuation = /\S/.test(gap);
@@ -98,13 +95,14 @@ function tokenizeSurfaceSentence(text: string): SurfaceToken[] {
       followedByPunctuation: false,
     });
     previousEnd = pattern.lastIndex;
+    match = pattern.exec(text);
   }
   return tokens;
 }
 
 /** Split a sentence into display words with their comparison form. */
 export function tokenizeSentence(text: string): ComparableToken[] {
-  return tokenizeSurfaceSentence(text).map(({raw, normalized}) => ({
+  return tokenizeSurfaceSentence(text).map(({ raw, normalized }) => ({
     raw,
     normalized,
   }));
@@ -134,14 +132,11 @@ function expandTokens(tokens: readonly SurfaceToken[]): ExpandedToken[] {
         precededByPunctuation: tokens[offset - 1].followedByPunctuation,
       });
     }
-    const expandedText = expandTokenForComparison(
-      token.normalized,
-      followingWords,
-    );
+    const expandedText = expandTokenForComparison(token.normalized, followingWords);
     const expandedWords = expandedText.split(' ').filter(Boolean);
     const words = expandedWords.length > 0 ? expandedWords : [token.normalized];
     for (const word of words) {
-      expanded.push({raw: token.raw, normalized: word, tokenIndex});
+      expanded.push({ raw: token.raw, normalized: word, tokenIndex });
     }
   });
   return expanded;
@@ -149,9 +144,7 @@ function expandTokens(tokens: readonly SurfaceToken[]): ExpandedToken[] {
 
 /** Contraction-expanded comparison words for grading and typo detection. */
 function comparisonWords(text: string): string[] {
-  return expandTokens(tokenizeSurfaceSentence(text)).map(
-    token => token.normalized,
-  );
+  return expandTokens(tokenizeSurfaceSentence(text)).map(token => token.normalized);
 }
 
 /** Levenshtein distance, used only to recognise a single-token typo. */
@@ -161,30 +154,30 @@ export function levenshtein(first: string, second: string): number {
   }
   const rows = first.length + 1;
   const columns = second.length + 1;
-  let previous = Array.from({length: columns}, (_, index) => index);
+  let previous = Array.from({ length: columns }, (_, index) => index);
   for (let row = 1; row < rows; row += 1) {
     const current = new Array<number>(columns);
     current[0] = row;
     for (let column = 1; column < columns; column += 1) {
       const substitution = previous[column - 1] + (first[row - 1] === second[column - 1] ? 0 : 1);
-      current[column] = Math.min(
-        previous[column] + 1,
-        current[column - 1] + 1,
-        substitution,
-      );
+      current[column] = Math.min(previous[column] + 1, current[column - 1] + 1, substitution);
     }
     previous = current;
   }
   return previous[columns - 1];
 }
 
-type AlignmentOp = {type: 'match' | 'missing' | 'extra'; expectedIndex: number; actualIndex: number};
+type AlignmentOp = {
+  type: 'match' | 'missing' | 'extra';
+  expectedIndex: number;
+  actualIndex: number;
+};
 
 /** Longest-common-subsequence alignment of two token lists. */
 function alignTokens(expected: readonly string[], actual: readonly string[]): AlignmentOp[] {
   const rows = expected.length + 1;
   const columns = actual.length + 1;
-  const table: number[][] = Array.from({length: rows}, () => new Array<number>(columns).fill(0));
+  const table: number[][] = Array.from({ length: rows }, () => new Array<number>(columns).fill(0));
 
   for (let row = 1; row < rows; row += 1) {
     for (let column = 1; column < columns; column += 1) {
@@ -200,14 +193,14 @@ function alignTokens(expected: readonly string[], actual: readonly string[]): Al
   let column = actual.length;
   while (row > 0 || column > 0) {
     if (row > 0 && column > 0 && expected[row - 1] === actual[column - 1]) {
-      ops.push({type: 'match', expectedIndex: row - 1, actualIndex: column - 1});
+      ops.push({ type: 'match', expectedIndex: row - 1, actualIndex: column - 1 });
       row -= 1;
       column -= 1;
     } else if (column > 0 && (row === 0 || table[row][column - 1] >= table[row - 1][column])) {
-      ops.push({type: 'extra', expectedIndex: -1, actualIndex: column - 1});
+      ops.push({ type: 'extra', expectedIndex: -1, actualIndex: column - 1 });
       column -= 1;
     } else {
-      ops.push({type: 'missing', expectedIndex: row - 1, actualIndex: -1});
+      ops.push({ type: 'missing', expectedIndex: row - 1, actualIndex: -1 });
       row -= 1;
     }
   }
@@ -297,7 +290,7 @@ function coalesceCorrectSegments(segments: readonly IndexedDiffSegment[]): DiffS
   let group: {
     expected: string;
     expectedTokenIndexes: Set<number>;
-    actualParts: Array<{index: number; text: string}>;
+    actualParts: Array<{ index: number; text: string }>;
   } | null = null;
 
   const flush = () => {
@@ -332,7 +325,7 @@ function coalesceCorrectSegments(segments: readonly IndexedDiffSegment[]): DiffS
     if (group !== null && sharesSurfaceToken) {
       group.expectedTokenIndexes.add(segment.expectedTokenIndex);
       if (!group.actualParts.some(part => part.index === segment.actualTokenIndex)) {
-        group.actualParts.push({index: segment.actualTokenIndex, text: actualText});
+        group.actualParts.push({ index: segment.actualTokenIndex, text: actualText });
       }
       continue;
     }
@@ -341,7 +334,7 @@ function coalesceCorrectSegments(segments: readonly IndexedDiffSegment[]): DiffS
     group = {
       expected: segment.expected ?? '',
       expectedTokenIndexes: new Set([segment.expectedTokenIndex]),
-      actualParts: [{index: segment.actualTokenIndex, text: actualText}],
+      actualParts: [{ index: segment.actualTokenIndex, text: actualText }],
     };
   }
   flush();
@@ -400,9 +393,9 @@ export function suggestGrade(expected: string, actual: string): ReviewGrade {
 export function diffDisplayTokens(segments: readonly DiffSegment[]): DisplayToken[] {
   return segments.map(segment => {
     if (segment.kind === 'missing') {
-      return {kind: segment.kind, text: segment.expected ?? ''};
+      return { kind: segment.kind, text: segment.expected ?? '' };
     }
-    const token: DisplayToken = {kind: segment.kind, text: segment.actual ?? ''};
+    const token: DisplayToken = { kind: segment.kind, text: segment.actual ?? '' };
     if (segment.kind === 'substituted' && segment.expected) {
       token.expected = segment.expected;
     }

@@ -5,8 +5,8 @@
  * batch insert, the due-date queries and the cascading delete are exercised the
  * way the practice screens will use them.
  */
-import type {SqlDriver} from '../src/db/driver';
-import {migrateDatabase} from '../src/db/migrations';
+import type { SqlDriver } from '../src/db/driver';
+import { migrateDatabase } from '../src/db/migrations';
 import {
   applyReviewState,
   countDueSentences,
@@ -26,8 +26,8 @@ import {
   recordSentenceReview,
   updateSentenceTopic,
 } from '../src/db/sentenceRepository';
-import type {SentenceReviewState} from '../src/db/types';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import type { SentenceReviewState } from '../src/db/types';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 const EARLIER = '2026-10-19T08:00:00.000Z';
 const NOW = '2026-10-19T09:00:00.000Z';
@@ -55,8 +55,16 @@ function reviewState(overrides: Partial<SentenceReviewState> = {}): SentenceRevi
 }
 
 const CANDIDATES = [
-  {text: 'Nice to meet you.', meaning: 'A greeting when you meet someone.', situation: 'Meeting a neighbour.'},
-  {text: 'Can I get a flat white?', meaning: 'Ordering a coffee.', situation: 'At a café counter.'},
+  {
+    text: 'Nice to meet you.',
+    meaning: 'A greeting when you meet someone.',
+    situation: 'Meeting a neighbour.',
+  },
+  {
+    text: 'Can I get a flat white?',
+    meaning: 'Ordering a coffee.',
+    situation: 'At a café counter.',
+  },
 ];
 
 describe('sentence topics', () => {
@@ -79,54 +87,58 @@ describe('sentence topics', () => {
 
   test('refuses a blank title', async () => {
     const db = await freshDb();
-    await expect(createSentenceTopic(db, {title: '   '})).rejects.toThrow(/needs a title/);
+    await expect(createSentenceTopic(db, { title: '   ' })).rejects.toThrow(/needs a title/);
     await db.close();
   });
 
   test('lists topics newest first with sentence and due counts', async () => {
     const db = await freshDb();
-    const first = await createSentenceTopic(db, {title: 'Coffee', description: ''});
+    const first = await createSentenceTopic(db, { title: 'Coffee', description: '' });
     await new Promise<void>(resolve => setTimeout(() => resolve(), 5));
-    const second = await createSentenceTopic(db, {title: 'Neighbours', description: ''});
+    const second = await createSentenceTopic(db, { title: 'Neighbours', description: '' });
 
     // Pin the schedule explicitly: both coffee sentences are due at NOW, the
     // neighbour sentence only later.
     const coffeeSentences = await insertSentences(db, first.id, CANDIDATES);
     for (const sentence of coffeeSentences) {
-      await applyReviewState(db, sentence.id, reviewState({due_at: EARLIER}));
+      await applyReviewState(db, sentence.id, reviewState({ due_at: EARLIER }));
     }
     const [neighbourSentence] = await insertSentences(db, second.id, [CANDIDATES[0]]);
-    await applyReviewState(db, neighbourSentence.id, reviewState({due_at: LATER}));
+    await applyReviewState(db, neighbourSentence.id, reviewState({ due_at: LATER }));
 
     const topics = await listSentenceTopics(db, NOW);
     expect(topics.map(topic => topic.title)).toEqual(['Neighbours', 'Coffee']);
-    expect(topics[0]).toMatchObject({sentence_count: 1, due_count: 0});
-    expect(topics[1]).toMatchObject({sentence_count: 2, due_count: 2});
+    expect(topics[0]).toMatchObject({ sentence_count: 1, due_count: 0 });
+    expect(topics[1]).toMatchObject({ sentence_count: 2, due_count: 2 });
 
     await db.close();
   });
 
   test('updates title or description independently and rejects a blank title', async () => {
     const db = await freshDb();
-    const topic = await createSentenceTopic(db, {title: 'Coffee', description: 'order a drink'});
+    const topic = await createSentenceTopic(db, { title: 'Coffee', description: 'order a drink' });
 
-    const renamed = await updateSentenceTopic(db, topic.id, {title: 'Ordering coffee'});
+    const renamed = await updateSentenceTopic(db, topic.id, { title: 'Ordering coffee' });
     expect(renamed?.title).toBe('Ordering coffee');
     expect(renamed?.description).toBe('order a drink');
 
-    const described = await updateSentenceTopic(db, topic.id, {description: 'barista small talk'});
+    const described = await updateSentenceTopic(db, topic.id, {
+      description: 'barista small talk',
+    });
     expect(described?.title).toBe('Ordering coffee');
     expect(described?.description).toBe('barista small talk');
 
-    await expect(updateSentenceTopic(db, topic.id, {title: '  '})).rejects.toThrow(/needs a title/);
-    expect(await updateSentenceTopic(db, 9_999, {title: 'Ghost'})).toBeNull();
+    await expect(updateSentenceTopic(db, topic.id, { title: '  ' })).rejects.toThrow(
+      /needs a title/,
+    );
+    expect(await updateSentenceTopic(db, 9_999, { title: 'Ghost' })).toBeNull();
 
     await db.close();
   });
 
   test('deleting a topic removes its sentences and review log', async () => {
     const db = await freshDb();
-    const topic = await createSentenceTopic(db, {title: 'Coffee'});
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
     const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[1]]);
     await logSentenceReview(db, {
       sentence_id: sentence.id,
@@ -148,10 +160,10 @@ describe('sentence topics', () => {
 describe('sentences', () => {
   test('inserts a batch as immediately due "new" sentences', async () => {
     const db = await freshDb();
-    const topic = await createSentenceTopic(db, {title: 'Coffee'});
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
 
     const inserted = await insertSentences(db, topic.id, [
-      {...CANDIDATES[0], text: '  Nice to meet you.  '},
+      { ...CANDIDATES[0], text: '  Nice to meet you.  ' },
       CANDIDATES[1],
     ]);
 
@@ -174,19 +186,19 @@ describe('sentences', () => {
 
   test('skips duplicates within the batch and against stored sentences', async () => {
     const db = await freshDb();
-    const topic = await createSentenceTopic(db, {title: 'Coffee'});
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
     await insertSentences(db, topic.id, [CANDIDATES[0]]);
 
     const inserted = await insertSentences(db, topic.id, [
       // Plain duplicate of a stored sentence.
-      {text: 'nice to meet you', meaning: 'duplicate'},
+      { text: 'nice to meet you', meaning: 'duplicate' },
       // Contraction/punctuation variant of the same sentence.
-      {text: 'NICE TO MEET YOU!!', meaning: 'duplicate again'},
+      { text: 'NICE TO MEET YOU!!', meaning: 'duplicate again' },
       // Duplicate of an earlier candidate in this same batch.
-      {text: 'Can I get a flat white?', meaning: 'ordering coffee'},
-      {text: 'can i get a flat white', meaning: 'same again'},
+      { text: 'Can I get a flat white?', meaning: 'ordering coffee' },
+      { text: 'can i get a flat white', meaning: 'same again' },
       // Genuinely new.
-      {text: 'Could I have the bill, please?', meaning: 'Asking to pay.'},
+      { text: 'Could I have the bill, please?', meaning: 'Asking to pay.' },
     ]);
 
     expect(inserted.map(row => row.text)).toEqual([
@@ -200,30 +212,27 @@ describe('sentences', () => {
 
   test('ignores blank candidates and normalises blank meanings', async () => {
     const db = await freshDb();
-    const topic = await createSentenceTopic(db, {title: 'Coffee'});
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
 
     const inserted = await insertSentences(db, topic.id, [
-      {text: '   ', meaning: 'nothing'},
-      {text: '...', meaning: 'punctuation only'},
-      {text: 'Thanks a lot.', meaning: '  ', situation: '  '},
+      { text: '   ', meaning: 'nothing' },
+      { text: '...', meaning: 'punctuation only' },
+      { text: 'Thanks a lot.', meaning: '  ', situation: '  ' },
     ]);
 
     expect(inserted).toHaveLength(1);
-    expect(inserted[0]).toMatchObject({meaning: '', situation: ''});
+    expect(inserted[0]).toMatchObject({ meaning: '', situation: '' });
 
     await db.close();
   });
 
   test('lists a topic newest first and deletes one sentence', async () => {
     const db = await freshDb();
-    const topic = await createSentenceTopic(db, {title: 'Coffee'});
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
     const inserted = await insertSentences(db, topic.id, CANDIDATES);
 
     const listed = await listSentencesByTopic(db, topic.id);
-    expect(listed.map(row => row.text)).toEqual([
-      'Can I get a flat white?',
-      'Nice to meet you.',
-    ]);
+    expect(listed.map(row => row.text)).toEqual(['Can I get a flat white?', 'Nice to meet you.']);
 
     await deleteSentence(db, inserted[0].id);
     expect(await getSentenceById(db, inserted[0].id)).toBeNull();
@@ -236,16 +245,16 @@ describe('sentences', () => {
 describe('due queries', () => {
   test('returns only what is due, oldest first, capped by the limit', async () => {
     const db = await freshDb();
-    const topic = await createSentenceTopic(db, {title: 'Coffee'});
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
     const [first, second, third] = await insertSentences(db, topic.id, [
       CANDIDATES[0],
       CANDIDATES[1],
-      {text: 'See you tomorrow.', meaning: 'Saying goodbye.'},
+      { text: 'See you tomorrow.', meaning: 'Saying goodbye.' },
     ]);
 
-    await applyReviewState(db, first.id, reviewState({due_at: LATER}));
-    await applyReviewState(db, second.id, reviewState({due_at: EARLIER, status: 'review'}));
-    await applyReviewState(db, third.id, reviewState({due_at: NOW, status: 'suspended'}));
+    await applyReviewState(db, first.id, reviewState({ due_at: LATER }));
+    await applyReviewState(db, second.id, reviewState({ due_at: EARLIER, status: 'review' }));
+    await applyReviewState(db, third.id, reviewState({ due_at: NOW, status: 'suspended' }));
 
     const due = await listDueSentences(db, NOW, 10);
     expect(due.map(row => row.text)).toEqual(['Can I get a flat white?']);
@@ -266,17 +275,17 @@ describe('due queries', () => {
 
   test('counts due sentences globally and per topic, excluding suspended', async () => {
     const db = await freshDb();
-    const coffee = await createSentenceTopic(db, {title: 'Coffee'});
-    const neighbours = await createSentenceTopic(db, {title: 'Neighbours'});
+    const coffee = await createSentenceTopic(db, { title: 'Coffee' });
+    const neighbours = await createSentenceTopic(db, { title: 'Neighbours' });
 
     const [coffeeSentence] = await insertSentences(db, coffee.id, [CANDIDATES[1]]);
     const [neighbourSentence] = await insertSentences(db, neighbours.id, [CANDIDATES[0]]);
 
-    await applyReviewState(db, coffeeSentence.id, reviewState({due_at: LATER}));
+    await applyReviewState(db, coffeeSentence.id, reviewState({ due_at: LATER }));
     await applyReviewState(
       db,
       neighbourSentence.id,
-      reviewState({due_at: EARLIER, status: 'suspended'}),
+      reviewState({ due_at: EARLIER, status: 'suspended' }),
     );
 
     expect(await countDueSentences(db, NOW)).toBe(0);
@@ -292,10 +301,14 @@ describe('due queries', () => {
 describe('review state and log', () => {
   test('persists the scheduler state on the sentence row', async () => {
     const db = await freshDb();
-    const topic = await createSentenceTopic(db, {title: 'Coffee'});
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
     const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[0]]);
 
-    await applyReviewState(db, sentence.id, reviewState({reps: 2, interval_days: 2.5, ease: 2.65}));
+    await applyReviewState(
+      db,
+      sentence.id,
+      reviewState({ reps: 2, interval_days: 2.5, ease: 2.65 }),
+    );
 
     const reloaded = await getSentenceById(db, sentence.id);
     expect(reloaded).toMatchObject({
@@ -318,7 +331,7 @@ describe('review state and log', () => {
 
   test('logs reviews newest first', async () => {
     const db = await freshDb();
-    const topic = await createSentenceTopic(db, {title: 'Coffee'});
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
     const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[0]]);
 
     await logSentenceReview(db, {
@@ -347,7 +360,7 @@ describe('review state and log', () => {
 
   test('records a graded review atomically (schedule + log)', async () => {
     const db = await freshDb();
-    const topic = await createSentenceTopic(db, {title: 'Coffee'});
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
     const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[0]]);
 
     await recordSentenceReview(db, {
@@ -355,14 +368,14 @@ describe('review state and log', () => {
       topic_id: topic.id,
       grade: 'easy',
       mode: 'recall',
-      state: reviewState({status: 'review', interval_days: 4, due_at: LATER, last_grade: 'easy'}),
+      state: reviewState({ status: 'review', interval_days: 4, due_at: LATER, last_grade: 'easy' }),
     });
 
     const reloaded = await getSentenceById(db, sentence.id);
-    expect(reloaded).toMatchObject({status: 'review', interval_days: 4, last_grade: 'easy'});
+    expect(reloaded).toMatchObject({ status: 'review', interval_days: 4, last_grade: 'easy' });
     const log = await listReviewLogForSentence(db, sentence.id);
     expect(log).toHaveLength(1);
-    expect(log[0]).toMatchObject({grade: 'easy', mode: 'recall'});
+    expect(log[0]).toMatchObject({ grade: 'easy', mode: 'recall' });
 
     await db.close();
   });

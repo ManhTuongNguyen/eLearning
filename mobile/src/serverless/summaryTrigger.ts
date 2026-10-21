@@ -16,7 +16,7 @@
  * All functions are deterministic, boundary-checked integer operations.
  */
 
-import {RECENT_MESSAGE_WINDOW, SUMMARY_TRIGGER_THRESHOLD} from './contextConfig';
+import { RECENT_MESSAGE_WINDOW, SUMMARY_TRIGGER_THRESHOLD } from './contextConfig';
 
 /** Inclusive [start, end] sequence range to summarize, or null when threshold not crossed. */
 export interface ArchiveRange {
@@ -39,7 +39,7 @@ export interface ArchiveRange {
 export function archiveRange(
   totalMessages: number,
   boundary: number,
-  options?: {window?: number; threshold?: number},
+  options?: { window?: number; threshold?: number },
 ): ArchiveRange | null {
   const window = options?.window ?? RECENT_MESSAGE_WINDOW;
   const threshold = options?.threshold ?? SUMMARY_TRIGGER_THRESHOLD;
@@ -50,9 +50,7 @@ export function archiveRange(
   validatePositive(threshold, 'threshold');
 
   if (boundary > totalMessages) {
-    throw new Error(
-      `boundary (${boundary}) cannot exceed totalMessages (${totalMessages}).`,
-    );
+    throw new Error(`boundary (${boundary}) cannot exceed totalMessages (${totalMessages}).`);
   }
 
   const end = totalMessages - window;
@@ -60,7 +58,7 @@ export function archiveRange(
     return null;
   }
 
-  return {start: boundary + 1, end};
+  return { start: boundary + 1, end };
 }
 
 function validateCount(value: number, label: string): void {

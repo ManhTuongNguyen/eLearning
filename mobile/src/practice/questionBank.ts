@@ -85,7 +85,7 @@ function shuffled<T>(items: readonly T[], random: () => number): T[] {
 function toDistractors(
   answer: number,
   candidates: readonly number[],
-  bounds: {min: number; max: number},
+  bounds: { min: number; max: number },
 ): string[] {
   const picked: string[] = [];
   const push = (value: number): void => {
@@ -176,11 +176,8 @@ export function numberToWords(n: number): string {
   }
   const thousands = Math.floor(n / 1000);
   const rest = n % 1000;
-  const head =
-    thousands < 100 ? spokenUnder100(thousands) : numberToWords(thousands);
-  return rest === 0
-    ? `${head} thousand`
-    : `${head} thousand ${numberToWords(rest)}`;
+  const head = thousands < 100 ? spokenUnder100(thousands) : numberToWords(thousands);
+  return rest === 0 ? `${head} thousand` : `${head} thousand ${numberToWords(rest)}`;
 }
 
 /** Confusable pairs the trainer is meant to drill. */
@@ -245,7 +242,7 @@ export function yearDistractors(year: number): string[] {
     candidates.push((first - 1) * 100 + last); // 1997 → 1897
   }
   candidates.push(year + 100, year - 100);
-  return toDistractors(year, candidates, {min: 1000, max: 9999});
+  return toDistractors(year, candidates, { min: 1000, max: 9999 });
 }
 
 /**
@@ -291,14 +288,11 @@ export function numberDistractors(answer: number): string[] {
     candidates.push(answer - 100 >= 1000 ? answer - 100 : answer + 100);
     candidates.push(answer + 1000, answer - 1000);
   }
-  return toDistractors(answer, candidates, {min: 1, max: 99999});
+  return toDistractors(answer, candidates, { min: 1, max: 99999 });
 }
 
 /** Builds one number question; `yearChance` biases toward pair-read years. */
-function buildNumberQuestion(
-  random: () => number,
-  yearChance: number,
-): PracticeQuestion {
+function buildNumberQuestion(random: () => number, yearChance: number): PracticeQuestion {
   if (random() < yearChance) {
     const year = YEAR_MIN + Math.floor(random() * (YEAR_MAX - YEAR_MIN + 1));
     return {
@@ -312,8 +306,7 @@ function buildNumberQuestion(
   let answer: number;
   if (roll < 0.45) {
     // Teens vs tens: 13/30, 15/50, 17/70…
-    answer =
-      random() < 0.5 ? pick(TEEN_NUMBERS, random) : pick(TENS_NUMBERS, random);
+    answer = random() < 0.5 ? pick(TEEN_NUMBERS, random) : pick(TENS_NUMBERS, random);
   } else if (roll < 0.75) {
     answer = 10 + Math.floor(random() * 90); // 10–99
   } else if (roll < 0.9) {
@@ -361,8 +354,8 @@ const CONFUSABLE_PHONE_DIGITS: Readonly<Record<string, string>> = {
 
 /** IELTS-style group layouts: mobile 5-3-3, landline 3-4-4 (11 digits). */
 const PHONE_GROUPINGS = [
-  {prefix: '07', groups: [5, 3, 3]},
-  {prefix: '02', groups: [3, 4, 4]},
+  { prefix: '07', groups: [5, 3, 3] },
+  { prefix: '02', groups: [3, 4, 4] },
 ] as const;
 
 /** Joins digits into groups separated by single spaces. */
@@ -395,13 +388,11 @@ export function phoneToWords(phone: string): string {
  * digit transpositions. The area prefix (first two digits) is never
  * changed. The deterministic ±1 reserve guarantees three distractors.
  */
-export function phoneDistractors(
-  phone: string,
-  random: () => number = Math.random,
-): string[] {
+export function phoneDistractors(phone: string, random: () => number = Math.random): string[] {
   const digits = phone.replace(/ /g, '');
-  const grouping = PHONE_GROUPINGS.find(entry => digits.startsWith(entry.prefix))
-    ?.groups ?? [digits.length];
+  const grouping = PHONE_GROUPINGS.find(entry => digits.startsWith(entry.prefix))?.groups ?? [
+    digits.length,
+  ];
   const variant = (index: number, replacement: string): string => {
     const next = digits.split('');
     next.splice(index, replacement.length, ...replacement.split(''));
@@ -439,11 +430,7 @@ export function phoneDistractors(
   const picked: string[] = [];
   const push = (value: string): void => {
     const grouped = groupDigits(value, grouping);
-    if (
-      picked.length < 3 &&
-      value !== digits &&
-      !picked.includes(grouped)
-    ) {
+    if (picked.length < 3 && value !== digits && !picked.includes(grouped)) {
       picked.push(grouped);
     }
   };
@@ -530,9 +517,7 @@ export function createPracticeQuestion(
   random: () => number = Math.random,
   recentAnswers: readonly string[] = [],
 ): PracticeQuestion {
-  const recent = new Set(
-    recentAnswers.slice(-PRACTICE_RECENT_ANSWER_LIMIT),
-  );
+  const recent = new Set(recentAnswers.slice(-PRACTICE_RECENT_ANSWER_LIMIT));
   const kind: PracticeQuestion['kind'] =
     mode === 'numbers'
       ? 'number'
@@ -545,9 +530,7 @@ export function createPracticeQuestion(
     if (kind === 'phone') {
       return buildPhoneQuestion(random);
     }
-    return kind === 'number'
-      ? buildNumberQuestion(random, 0.5)
-      : buildLetterQuestion(random);
+    return kind === 'number' ? buildNumberQuestion(random, 0.5) : buildLetterQuestion(random);
   };
   const first = build();
   if (!recent.has(first.answer)) {

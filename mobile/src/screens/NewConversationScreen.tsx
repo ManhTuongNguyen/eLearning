@@ -22,7 +22,7 @@
  * action; failures surface in an inline banner and leave the form ready to
  * retry.
  */
-import React, {useCallback, useMemo, useState} from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -34,17 +34,17 @@ import {
   View,
 } from 'react-native';
 
-import {createSession} from '../api/sessions';
-import {toErrorMessage, useAuth} from '../auth/AuthContext';
-import {SCREEN_GUTTER} from '../components/ScreenLayout';
-import {getLocalDatabase} from '../db/database';
-import {useApplicationMode} from '../mode/ModeContext';
-import {createProviderClient} from '../serverless/providerRegistry';
-import {createServerlessSession} from '../serverless/topicGeneration';
-import {loadServerlessConfig} from '../serverless/settings';
-import type {NewConversationScreenProps} from '../navigation/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import { createSession } from '../api/sessions';
+import { toErrorMessage, useAuth } from '../auth/AuthContext';
+import { SCREEN_GUTTER } from '../components/ScreenLayout';
+import { getLocalDatabase } from '../db/database';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { NewConversationScreenProps } from '../navigation/types';
+import { createProviderClient } from '../serverless/providerRegistry';
+import { loadServerlessConfig } from '../serverless/settings';
+import { createServerlessSession } from '../serverless/topicGeneration';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -142,10 +142,10 @@ function createStyles(c: ThemeColors) {
   });
 }
 
-export function NewConversationScreen({navigation}: NewConversationScreenProps) {
-  const {authedRequest} = useAuth();
-  const {mode} = useApplicationMode();
-  const {colors} = useTheme();
+export function NewConversationScreen({ navigation }: NewConversationScreenProps) {
+  const { authedRequest } = useAuth();
+  const { mode } = useApplicationMode();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [hint, setHint] = useState('');
@@ -173,18 +173,16 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
           // its generated example conversation, mirroring the server flow.
           const config = await loadServerlessConfig();
           if (!config) {
-            throw new Error(
-              'Add your provider API key in Settings to chat without the server.',
-            );
+            throw new Error('Add your provider API key in Settings to chat without the server.');
           }
           const client = createProviderClient(config);
           const db = await getLocalDatabase();
-          const {session, sampleTurns} = await createServerlessSession(
+          const { session, sampleTurns } = await createServerlessSession(
             db,
             request => client.complete(request),
             rawHint.trim(),
           );
-          navigation.replace('Chat', {sessionId: session.id, sampleTurns});
+          navigation.replace('Chat', { sessionId: session.id, sampleTurns });
           return;
         }
         // TASK-AUDIT-005: creation goes through the central authed requester
@@ -217,14 +215,13 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
       </View>
 
       <Text style={styles.subtitle}>
-        What would you like to talk about? Enter a topic or a list of
-        questions — one per line — or leave it blank and the AI picks a topic
-        for you.
+        What would you like to talk about? Enter a topic or a list of questions — one per line — or
+        leave it blank and the AI picks a topic for you.
       </Text>
 
       <TextInput
         style={styles.input}
-        placeholder={"e.g. Traveling\n1. Where did you go last summer?\n- What do you pack first?"}
+        placeholder={'e.g. Traveling\n1. Where did you go last summer?\n- What do you pack first?'}
         placeholderTextColor={colors.textMuted}
         multiline
         value={hint}
@@ -238,9 +235,7 @@ export function NewConversationScreen({navigation}: NewConversationScreenProps) 
         const buttonStyle = hintEmpty
           ? [styles.secondaryButton, creating && styles.buttonDisabled]
           : [styles.primaryButton, creating && styles.buttonDisabled];
-        const textStyle = hintEmpty
-          ? styles.secondaryButtonText
-          : styles.primaryButtonText;
+        const textStyle = hintEmpty ? styles.secondaryButtonText : styles.primaryButtonText;
         const label = hintEmpty ? 'Let AI choose a topic' : 'Start';
         const a11yLabel = hintEmpty
           ? 'Let AI choose a topic'

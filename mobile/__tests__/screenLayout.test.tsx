@@ -6,27 +6,24 @@
  * scroll content containers. These tests pin the shared primitives that every
  * scrolling screen builds on.
  */
-import React from 'react';
-import {Text} from 'react-native';
-import {render, screen} from '@testing-library/react-native';
+
+import { render, screen } from '@testing-library/react-native';
+import { Text } from 'react-native';
 
 import {
+  SCREEN_GUTTER,
   Screen,
   ScreenContent,
   ScreenHeader,
   ScreenList,
   ScreenScrollView,
   screenLayoutStyles,
-  SCREEN_GUTTER,
 } from '../src/components/ScreenLayout';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   const entries = Array.isArray(style) ? style : [style];
-  return Object.assign(
-    {},
-    ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})),
-  );
+  return Object.assign({}, ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})));
 }
 
 async function renderLayout() {
@@ -38,11 +35,7 @@ async function renderLayout() {
         <ScreenScrollView testID="layout-scroll">
           <Text>content</Text>
         </ScreenScrollView>
-        <ScreenList
-          data={[]}
-          renderItem={() => null}
-          testID="layout-list"
-        />
+        <ScreenList data={[]} renderItem={() => null} testID="layout-list" />
       </Screen>
     </ThemeProvider>,
   );
@@ -59,12 +52,8 @@ describe('shared screen layout', () => {
   });
 
   it('applies the shared gutter to headers and non-scrolling content', () => {
-    expect(flattenStyle(screenLayoutStyles.header).paddingHorizontal).toBe(
-      SCREEN_GUTTER,
-    );
-    expect(flattenStyle(screenLayoutStyles.content).paddingHorizontal).toBe(
-      SCREEN_GUTTER,
-    );
+    expect(flattenStyle(screenLayoutStyles.header).paddingHorizontal).toBe(SCREEN_GUTTER);
+    expect(flattenStyle(screenLayoutStyles.content).paddingHorizontal).toBe(SCREEN_GUTTER);
   });
 
   it('applies the gutter to scroll content, never to the scroll frame', async () => {
@@ -72,13 +61,9 @@ describe('shared screen layout', () => {
 
     const scroll = screen.getByTestId('layout-scroll');
     expect(flattenStyle(scroll.props.style).paddingHorizontal).toBeUndefined();
-    expect(
-      flattenStyle(scroll.props.contentContainerStyle).paddingHorizontal,
-    ).toBe(SCREEN_GUTTER);
+    expect(flattenStyle(scroll.props.contentContainerStyle).paddingHorizontal).toBe(SCREEN_GUTTER);
 
     const list = screen.getByTestId('layout-list');
-    expect(
-      flattenStyle(list.props.contentContainerStyle).paddingHorizontal,
-    ).toBe(SCREEN_GUTTER);
+    expect(flattenStyle(list.props.contentContainerStyle).paddingHorizontal).toBe(SCREEN_GUTTER);
   });
 });

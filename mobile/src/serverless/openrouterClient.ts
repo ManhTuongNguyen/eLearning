@@ -14,12 +14,12 @@
  */
 import {
   createOpenAICompatibleClient,
-  requestModelCatalog,
   DEFAULT_TIMEOUT_MS,
   type ModelListingOptions,
   type OpenAICompatibleProviderSpec,
+  requestModelCatalog,
 } from './openAICompatibleClient';
-import type {LLMClient, LLMClientConfig, ModelInfo} from './types';
+import type { LLMClient, LLMClientConfig, ModelInfo } from './types';
 
 export const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
@@ -32,14 +32,14 @@ export const OPENROUTER_PROVIDER_SPEC: OpenAICompatibleProviderSpec = {
   modelDiscoveryRequiresAuth: false,
 };
 
+export type { ModelListingOptions } from './openAICompatibleClient';
 export {
-  DEFAULT_TIMEOUT_MS,
-  MAX_ERROR_SNIPPET_LENGTH,
   buildModelChain,
+  DEFAULT_TIMEOUT_MS,
   extractErrorMessage,
+  MAX_ERROR_SNIPPET_LENGTH,
   requestModelCatalog,
 } from './openAICompatibleClient';
-export type {ModelListingOptions} from './openAICompatibleClient';
 
 /**
  * Retrieve the model catalog directly from OpenRouter's public /models

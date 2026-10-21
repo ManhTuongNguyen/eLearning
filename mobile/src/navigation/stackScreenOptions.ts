@@ -17,10 +17,10 @@
  * it resolves to the native default push, preserving the interactive
  * swipe-back gesture.
  */
-import type {RouteProp} from '@react-navigation/native';
-import type {NativeStackNavigationOptions} from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationOptions } from '@react-navigation/native-stack';
 
-import type {MainStackParamList} from './types';
+import type { MainStackParamList } from './types';
 
 export const stackScreenOptions: NativeStackNavigationOptions = {
   headerShown: false,

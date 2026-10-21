@@ -11,21 +11,19 @@
  * teleprompter scroll follows the playback pace. Serverless mode only — no
  * backend traffic.
  */
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { getLocalDatabase } from '../db/database';
 import {
-  Screen,
-  ScreenHeader,
-  ScreenList,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
-import {getLocalDatabase} from '../db/database';
-import {listSpeakingPracticeRecords, deleteSpeakingPracticeRecord} from '../db/speakingPracticeRepository';
-import type {LocalPracticeHistoryRecord} from '../db/types';
-import type {SpeakingHistoryScreenProps} from '../navigation/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+  deleteSpeakingPracticeRecord,
+  listSpeakingPracticeRecords,
+} from '../db/speakingPracticeRepository';
+import type { LocalPracticeHistoryRecord } from '../db/types';
+import type { SpeakingHistoryScreenProps } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 function formatDate(isoString: string): string {
   const date = new Date(isoString);
@@ -119,9 +117,7 @@ function RecordRow({
       onPress={canPractice ? () => onPractice(record) : undefined}
       style={styles.container}
       accessibilityRole={canPractice ? 'button' : undefined}
-      accessibilityLabel={
-        canPractice ? `Practice speaking again: ${record.title}` : undefined
-      }
+      accessibilityLabel={canPractice ? `Practice speaking again: ${record.title}` : undefined}
       testID={canPractice ? 'history-practice-again' : undefined}>
       <View style={styles.topRow}>
         <View style={styles.content}>{content}</View>
@@ -310,8 +306,8 @@ function createStyles(c: ThemeColors) {
   });
 }
 
-export function SpeakingHistoryScreen({navigation}: SpeakingHistoryScreenProps) {
-  const {colors} = useTheme();
+export function SpeakingHistoryScreen({ navigation }: SpeakingHistoryScreenProps) {
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [records, setRecords] = useState<LocalPracticeHistoryRecord[]>([]);
@@ -412,15 +408,13 @@ export function SpeakingHistoryScreen({navigation}: SpeakingHistoryScreenProps) 
 
       {records.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>
-            No speaking practice sessions yet.
-          </Text>
+          <Text style={styles.emptyText}>No speaking practice sessions yet.</Text>
         </View>
       ) : (
         <ScreenList
           data={records}
           keyExtractor={item => String(item.id)}
-          renderItem={({item}) => (
+          renderItem={({ item }) => (
             <RecordRow
               record={item}
               onPractice={handlePractice}

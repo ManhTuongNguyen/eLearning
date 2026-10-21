@@ -10,22 +10,22 @@
  * responses (session switched, newer request started, or the sheet
  * explicitly dismissed) are dropped instead of reopening stale UI.
  */
-import {useCallback, useEffect, useRef, useState} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type {ChatMessage, MessageImprovement} from '../api/sessions';
-import {improveMessage} from '../api/sessions';
-import type {AuthedRequester} from '../auth/authedRequest';
-import {toErrorMessage} from '../auth/AuthContext';
-import {getLocalDatabase} from '../db/database';
-import {saveMessageImprovement} from '../db/messageStore';
-import {getLearningProfile} from '../db/profileStore';
-import type {ApplicationMode} from '../mode/types';
-import {generateImprovement} from '../serverless/improvement';
-import {createProviderClient} from '../serverless/providerRegistry';
-import {loadServerlessConfig} from '../serverless/settings';
+import type { ChatMessage, MessageImprovement } from '../api/sessions';
+import { improveMessage } from '../api/sessions';
+import { toErrorMessage } from '../auth/AuthContext';
+import type { AuthedRequester } from '../auth/authedRequest';
+import { getLocalDatabase } from '../db/database';
+import { saveMessageImprovement } from '../db/messageStore';
+import { getLearningProfile } from '../db/profileStore';
+import type { ApplicationMode } from '../mode/types';
+import { generateImprovement } from '../serverless/improvement';
+import { createProviderClient } from '../serverless/providerRegistry';
+import { loadServerlessConfig } from '../serverless/settings';
 
 /** The improvement result currently displayed, tied to its source message. */
-export type DisplayedImprovement = MessageImprovement & {messageId: number};
+export type DisplayedImprovement = MessageImprovement & { messageId: number };
 
 export interface UseMessageImprovementOptions {
   sessionId: number | undefined;
@@ -36,7 +36,7 @@ export interface UseMessageImprovementOptions {
 }
 
 export function useMessageImprovement(options: UseMessageImprovementOptions) {
-  const {sessionId, mode, authedRequest, messages} = options;
+  const { sessionId, mode, authedRequest, messages } = options;
 
   const [improvement, setImprovement] = useState<DisplayedImprovement | null>(null);
   const [improvementLoading, setImprovementLoading] = useState(false);
@@ -92,7 +92,7 @@ export function useMessageImprovement(options: UseMessageImprovementOptions) {
       if (userMessage?.improvement && userMessage.improvement.improved.trim().length > 0) {
         // Already checked (this visit or a previous one): show the stored
         // suggestion — never another provider call.
-        showImprovement({...userMessage.improvement, messageId});
+        showImprovement({ ...userMessage.improvement, messageId });
         return;
       }
       const requestId = ++improvementRequestRef.current;
@@ -142,31 +142,22 @@ export function useMessageImprovement(options: UseMessageImprovementOptions) {
             ) {
               return;
             }
-            setImprovement({...result, messageId});
+            setImprovement({ ...result, messageId });
           } else {
             // Server mode (TASK-063): ask the backend to improve the message
             // through the central authed requester (TASK-AUDIT-005). The
             // endpoint serves its own persisted cache on repeat calls.
-            if (
-              sessionIdRef.current !== sid ||
-              improvementRequestRef.current !== requestId
-            ) {
+            if (sessionIdRef.current !== sid || improvementRequestRef.current !== requestId) {
               return;
             }
             const result = await improveMessage(authedRequestRef.current, sid, messageId);
-            if (
-              sessionIdRef.current !== sid ||
-              improvementRequestRef.current !== requestId
-            ) {
+            if (sessionIdRef.current !== sid || improvementRequestRef.current !== requestId) {
               return;
             }
-            setImprovement({...result, messageId});
+            setImprovement({ ...result, messageId });
           }
         } catch (err) {
-          if (
-            sessionIdRef.current === sid &&
-            improvementRequestRef.current === requestId
-          ) {
+          if (sessionIdRef.current === sid && improvementRequestRef.current === requestId) {
             setImprovementError(toErrorMessage(err));
           }
         } finally {

@@ -2,11 +2,12 @@
  * Mapping from the active app palette to a React Navigation theme so stack
  * chrome (headers, backgrounds) stays consistent with SPEC TASK-044 tokens.
  */
-import {DarkTheme, DefaultTheme} from '@react-navigation/native';
-import type {Theme as NavigationTheme} from '@react-navigation/native';
 
-import {darkColors, lightColors} from './colors';
-import type {ResolvedScheme} from './ThemeContext';
+import type { Theme as NavigationTheme } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme } from '@react-navigation/native';
+
+import { darkColors, lightColors } from './colors';
+import type { ResolvedScheme } from './ThemeContext';
 
 export function navigationThemeFor(scheme: ResolvedScheme): NavigationTheme {
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;

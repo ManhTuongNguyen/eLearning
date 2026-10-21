@@ -13,11 +13,11 @@
  * repeat them, and the local duplicate filter (TASK-SENT-004) is applied again
  * afterwards as the source of truth. Only zero valid candidates is fatal.
  */
-import type {EnglishLevel} from '../api/profile';
-import {getLearningProfile} from '../db/profileStore';
-import type {SqlDriver} from '../db/driver';
-import {OpenRouterResponseError} from './errors';
-import type {CompletionRequest, CompletionResult} from './types';
+import type { EnglishLevel } from '../api/profile';
+import type { SqlDriver } from '../db/driver';
+import { getLearningProfile } from '../db/profileStore';
+import { OpenRouterResponseError } from './errors';
+import type { CompletionRequest, CompletionResult } from './types';
 
 /**
  * A candidate sentence returned by the model: the English sentence, an
@@ -151,7 +151,9 @@ export function buildSentenceGenerationUserPrompt(
   if (level === 'AUTO') {
     parts.push("The learner's English level is unknown; infer an appropriate level.");
   } else {
-    parts.push(`The learner's English level is ${level} (CEFR). Keep vocabulary and grammar at that level.`);
+    parts.push(
+      `The learner's English level is ${level} (CEFR). Keep vocabulary and grammar at that level.`,
+    );
   }
 
   parts.push(
@@ -244,16 +246,12 @@ export function parseGeneratedSentences(
     }
     seen.add(normalized);
 
-    const situation =
-      typeof record.situation === 'string' ? record.situation.trim() : '';
-    result.push({sentence, meaning, situation});
+    const situation = typeof record.situation === 'string' ? record.situation.trim() : '';
+    result.push({ sentence, meaning, situation });
   }
 
   if (result.length === 0) {
-    throw new OpenRouterResponseError(
-      'Sentence generation returned no usable sentences.',
-      null,
-    );
+    throw new OpenRouterResponseError('Sentence generation returned no usable sentences.', null);
   }
   return result;
 }
@@ -270,8 +268,8 @@ export async function generateSentences(
 ): Promise<SentenceCandidate[]> {
   const request: CompletionRequest = {
     messages: [
-      {role: 'system', content: SENTENCE_GENERATION_SYSTEM_PROMPT},
-      {role: 'user', content: buildSentenceGenerationUserPrompt(level, input)},
+      { role: 'system', content: SENTENCE_GENERATION_SYSTEM_PROMPT },
+      { role: 'user', content: buildSentenceGenerationUserPrompt(level, input) },
     ],
   };
   const result = await complete(request);
@@ -357,5 +355,9 @@ function parseJsonSafely(text: string): unknown {
 
 /** A parse-time duplicate key consistent with the one stored on disk. */
 function normalizeForParse(text: string): string {
-  return (text || '').toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[^a-z0-9]+/g, ' ').trim();
+  return (text || '')
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }

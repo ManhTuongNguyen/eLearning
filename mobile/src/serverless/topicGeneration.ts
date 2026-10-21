@@ -17,13 +17,13 @@
  * blank `{"turns": []}`, mirroring the backend view's guard for unusable
  * sample output. Transport/provider failures always propagate unchanged.
  */
-import type {EnglishLevel} from '../api/profile';
-import {LocalConversationRepository} from '../db/conversationRepository';
-import type {SqlDriver} from '../db/driver';
-import {getLearningProfile} from '../db/profileStore';
-import type {LocalSession} from '../db/types';
-import {OpenRouterResponseError} from './errors';
-import type {CompletionRequest, CompletionResult} from './types';
+import type { EnglishLevel } from '../api/profile';
+import { LocalConversationRepository } from '../db/conversationRepository';
+import type { SqlDriver } from '../db/driver';
+import { getLearningProfile } from '../db/profileStore';
+import type { LocalSession } from '../db/types';
+import { OpenRouterResponseError } from './errors';
+import type { CompletionRequest, CompletionResult } from './types';
 
 /**
  * System instruction demanding one strict JSON object holding BOTH the
@@ -165,10 +165,7 @@ export function parseTopicWithSample(text: string, model: string | null = null):
 
   const topicRecord = record.topic;
   if (typeof topicRecord !== 'object' || topicRecord === null || Array.isArray(topicRecord)) {
-    throw new OpenRouterResponseError(
-      "Topic response is missing a 'topic' object.",
-      model,
-    );
+    throw new OpenRouterResponseError("Topic response is missing a 'topic' object.", model);
   }
   const topicFields = topicRecord as Record<string, unknown>;
   const title = topicFields.title;
@@ -198,7 +195,7 @@ export function parseTopicWithSample(text: string, model: string | null = null):
   }
 
   return {
-    topic: {title: title.trim(), description: description.trim()},
+    topic: { title: title.trim(), description: description.trim() },
     sampleTurns,
   };
 }
@@ -231,10 +228,7 @@ function parseSampleTurns(value: unknown, model: string | null): SampleTurn[] {
   }
   return rawTurns.map((entry, index) => {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-      throw new OpenRouterResponseError(
-        'Sample conversation turns must be JSON objects.',
-        model,
-      );
+      throw new OpenRouterResponseError('Sample conversation turns must be JSON objects.', model);
     }
     const record = entry as Record<string, unknown>;
     const role = record.role;
@@ -251,7 +245,7 @@ function parseSampleTurns(value: unknown, model: string | null): SampleTurn[] {
         model,
       );
     }
-    return {role: role as SampleTurn['role'], content: content.trim()};
+    return { role: role as SampleTurn['role'], content: content.trim() };
   });
 }
 
@@ -267,8 +261,8 @@ export async function generateTopicWithSample(
   const trimmedHint = hint.trim();
   const request: CompletionRequest = {
     messages: [
-      {role: 'system', content: TOPIC_AND_SAMPLE_SYSTEM_PROMPT},
-      {role: 'user', content: buildTopicAndSampleUserPrompt(level, trimmedHint)},
+      { role: 'system', content: TOPIC_AND_SAMPLE_SYSTEM_PROMPT },
+      { role: 'user', content: buildTopicAndSampleUserPrompt(level, trimmedHint) },
     ],
   };
   const result = await complete(request);
@@ -290,10 +284,10 @@ export async function createServerlessSession(
   db: SqlDriver,
   complete: CompleteFn,
   hint = '',
-): Promise<{session: LocalSession; sampleTurns: SampleTurn[]}> {
+): Promise<{ session: LocalSession; sampleTurns: SampleTurn[] }> {
   const trimmedHint = hint.trim();
   const profile = await getLearningProfile(db);
-  const {topic, sampleTurns} = await generateTopicWithSample(
+  const { topic, sampleTurns } = await generateTopicWithSample(
     complete,
     profile.level,
     trimmedHint,
@@ -305,7 +299,7 @@ export async function createServerlessSession(
     topic_hint: trimmedHint,
     learning_level: profile.level,
   });
-  return {session, sampleTurns};
+  return { session, sampleTurns };
 }
 
 /** Parse text as JSON, falling back to its outermost brace span; mirrors _extract_json_object. */

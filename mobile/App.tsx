@@ -16,19 +16,19 @@
  * legacy look (content below the bars) everywhere while staying a no-op on
  * Android versions without enforcement, where the insets are zero.
  */
-import {NavigationContainer} from '@react-navigation/native';
-import React from 'react';
-import {StatusBar, StyleSheet, View} from 'react-native';
-import {SafeAreaProvider, useSafeAreaInsets} from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
+import type React from 'react';
+import { StatusBar, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {AuthProvider} from './src/auth/AuthContext';
-import {ModeProvider} from './src/mode/ModeContext';
-import {RootNavigator} from './src/navigation/RootNavigator';
-import {navigationThemeFor} from './src/theme/navigationTheme';
-import {ThemeProvider, useTheme} from './src/theme/ThemeContext';
+import { AuthProvider } from './src/auth/AuthContext';
+import { ModeProvider } from './src/mode/ModeContext';
+import { RootNavigator } from './src/navigation/RootNavigator';
+import { navigationThemeFor } from './src/theme/navigationTheme';
+import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 
-function ThemedChrome({children}: {children: React.ReactNode}) {
-  const {resolvedScheme, colors} = useTheme();
+function ThemedChrome({ children }: { children: React.ReactNode }) {
+  const { resolvedScheme, colors } = useTheme();
   return (
     <>
       <StatusBar
@@ -43,18 +43,15 @@ function ThemedChrome({children}: {children: React.ReactNode}) {
 }
 
 const shellStyles = StyleSheet.create({
-  insetShell: {flex: 1},
+  insetShell: { flex: 1 },
 });
 
 /** Pads the app out of the system status/navigation bars (edge-to-edge). */
-function InsetShell({children}: {children: React.ReactNode}) {
+function InsetShell({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
   return (
     <View
-      style={[
-        shellStyles.insetShell,
-        {paddingTop: insets.top, paddingBottom: insets.bottom},
-      ]}>
+      style={[shellStyles.insetShell, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {children}
     </View>
   );

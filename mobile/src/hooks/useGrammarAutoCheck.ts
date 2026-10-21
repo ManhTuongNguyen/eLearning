@@ -28,21 +28,21 @@
  * badge simply never appears); the manual "Improve my English" action
  * remains available with its explicit error surface.
  */
-import {useCallback, useEffect, useRef, useState} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type {ChatMessage, ImprovementSeverity, MessageImprovement} from '../api/sessions';
-import {improveMessage} from '../api/sessions';
-import type {AuthedRequester} from '../auth/authedRequest';
-import {getLocalDatabase} from '../db/database';
-import {getLearningProfile} from '../db/profileStore';
-import {saveMessageImprovement} from '../db/messageStore';
-import type {ApplicationMode} from '../mode/types';
-import {generateImprovement} from '../serverless/improvement';
-import {createProviderClient} from '../serverless/providerRegistry';
-import {loadServerlessConfig} from '../serverless/settings';
+import type { ChatMessage, ImprovementSeverity, MessageImprovement } from '../api/sessions';
+import { improveMessage } from '../api/sessions';
+import type { AuthedRequester } from '../auth/authedRequest';
+import { getLocalDatabase } from '../db/database';
+import { saveMessageImprovement } from '../db/messageStore';
+import { getLearningProfile } from '../db/profileStore';
+import type { ApplicationMode } from '../mode/types';
+import { generateImprovement } from '../serverless/improvement';
+import { createProviderClient } from '../serverless/providerRegistry';
+import { loadServerlessConfig } from '../serverless/settings';
 
 /** One finished check, tied to its source message. */
-export type GrammarCheckResult = MessageImprovement & {messageId: number};
+export type GrammarCheckResult = MessageImprovement & { messageId: number };
 
 /** Every checked severity renders a badge, including "none" ("Looks good"). */
 export function badgeSeverity(severity: ImprovementSeverity): ImprovementSeverity | null {
@@ -82,7 +82,7 @@ function persistedCheckOf(message: ChatMessage): GrammarCheckResult | null {
     message.improvement &&
     message.improvement.improved.trim().length > 0
   ) {
-    return {...message.improvement, messageId: message.id};
+    return { ...message.improvement, messageId: message.id };
   }
   return null;
 }
@@ -90,22 +90,19 @@ function persistedCheckOf(message: ChatMessage): GrammarCheckResult | null {
 export function useGrammarAutoCheck(
   options: UseGrammarAutoCheckOptions,
 ): UseGrammarAutoCheckResult {
-  const {sessionId, mode, authedRequest, messages, enabled, historySettled} = options;
+  const { sessionId, mode, authedRequest, messages, enabled, historySettled } = options;
 
   const [checks, setChecks] = useState<Record<number, GrammarCheckResult>>({});
   // Ref mirror of `checks` so the badge press handler can read results
   // through a stable callback without re-creating on every check.
   const checksRef = useRef<Record<number, GrammarCheckResult>>({});
-  const applyChecks = useCallback(
-    (next: Record<number, GrammarCheckResult>) => {
-      checksRef.current = next;
-      setChecks(next);
-    },
-    [],
-  );
+  const applyChecks = useCallback((next: Record<number, GrammarCheckResult>) => {
+    checksRef.current = next;
+    setChecks(next);
+  }, []);
   const mergeChecks = useCallback(
     (additions: Record<number, GrammarCheckResult>) => {
-      applyChecks({...checksRef.current, ...additions});
+      applyChecks({ ...checksRef.current, ...additions });
     },
     [applyChecks],
   );
@@ -126,6 +123,7 @@ export function useGrammarAutoCheck(
   }, [enabled]);
 
   /** Session switch (or landing reset): drop every trace and start over. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId is an intentional reset trigger
   useEffect(() => {
     epochRef.current += 1;
     settledIdsRef.current = new Set();
@@ -135,6 +133,7 @@ export function useGrammarAutoCheck(
 
   /** Seed the history as settled and restore its persisted checks. */
   const seededSessionRef = useRef<number | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the seed captures the history snapshot once per session; later snapshots are handled below
   useEffect(() => {
     if (!historySettled || sessionId === undefined) {
       return;
@@ -157,7 +156,6 @@ export function useGrammarAutoCheck(
     // `messages` is deliberately not a dependency: the seed captures the
     // snapshot that arrives together with historySettled; later snapshots
     // are handled by the watch effect below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historySettled, sessionId, mergeChecks]);
 
   /**
@@ -205,7 +203,7 @@ export function useGrammarAutoCheck(
         if (!enabledRef.current) {
           return;
         }
-        mergeChecks({[messageId]: {...result, messageId}});
+        mergeChecks({ [messageId]: { ...result, messageId } });
       } catch {
         // Silent by design: an auto-check failure must never disturb the
         // chat; the manual improvement action surfaces errors explicitly.
@@ -256,5 +254,5 @@ export function useGrammarAutoCheck(
     [],
   );
 
-  return {checks, getResult};
+  return { checks, getResult };
 }

@@ -33,13 +33,9 @@
  * param, which flashes the self-dismissing success toast here — the same
  * transient-toast pattern the other screens already use.
  */
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+
+import Slider from '@react-native-community/slider';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -50,46 +46,36 @@ import {
   Text,
   View,
 } from 'react-native';
-import Slider from '@react-native-community/slider';
-
-import {
-  Screen,
-  ScreenHeader,
-  ScreenScrollView,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
 import { useAuth } from '../auth/AuthContext';
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
 import { useSlideFromTop } from '../hooks/useSlideFromTop';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { ApplicationMode } from '../mode/types';
 import type { SettingsScreenProps } from '../navigation/types';
-import {
-  loadGrammarCheckEnabled,
-  saveGrammarCheckEnabled,
-} from '../preferences/grammarCheck';
+import { loadGrammarCheckEnabled, saveGrammarCheckEnabled } from '../preferences/grammarCheck';
+import type { PracticeMode } from '../preferences/practiceMode';
 import {
   DEFAULT_PRACTICE_MODE,
   loadPracticeMode,
   savePracticeMode,
 } from '../preferences/practiceMode';
-import type {PracticeMode} from '../preferences/practiceMode';
 import {
+  loadSpeakingScrollSpeed,
   SPEED_MAX_PX_PER_S,
   SPEED_MIN_PX_PER_S,
   SPEED_STEP_PX_PER_S,
-  loadSpeakingScrollSpeed,
   saveSpeakingScrollSpeed,
 } from '../preferences/speakingScrollSpeed';
+import { PROVIDER_DESCRIPTORS } from '../serverless/providerRegistry';
 import {
   clearAllServerlessData,
   loadServerlessConfig,
   loadServerlessProvider,
 } from '../serverless/settings';
-import { PROVIDER_DESCRIPTORS } from '../serverless/providerRegistry';
 import type { ProviderId } from '../serverless/types';
 import type { ThemeColors } from '../theme/colors';
-import { useTheme } from '../theme/ThemeContext';
 import type { ThemeMode } from '../theme/ThemeContext';
+import { useTheme } from '../theme/ThemeContext';
 
 const THEME_OPTIONS: Array<{
   value: ThemeMode;
@@ -554,15 +540,7 @@ export function createStyles(c: ThemeColors) {
 }
 
 /** One status line of the serverless AI provider card. */
-function StatusLine({
-  label,
-  value,
-  testID,
-}: {
-  label: string;
-  value: string;
-  testID?: string;
-}) {
+function StatusLine({ label, value, testID }: { label: string; value: string; testID?: string }) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
@@ -580,11 +558,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
   // Two independent "mode" concepts live side by side here: the visual theme
   // and the SERVER/SERVERLESS application mode (TASK-080) — aliased apart.
   const { mode: themeMode, setMode: setThemeMode, colors } = useTheme();
-  const {
-    mode: appMode,
-    status: modeStatus,
-    setMode: setApplicationMode,
-  } = useApplicationMode();
+  const { mode: appMode, status: modeStatus, setMode: setApplicationMode } = useApplicationMode();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   // Chat enters Settings with `slideFromTop`, opting into the custom
@@ -610,9 +584,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
    * Grammar auto-check preference (default off). The toggle persists the
    * change immediately so the chat screen picks it up on the next visit.
    */
-  const [grammarCheckEnabled, setGrammarCheckEnabled] = useState<
-    boolean | null
-  >(null);
+  const [grammarCheckEnabled, setGrammarCheckEnabled] = useState<boolean | null>(null);
   useEffect(() => {
     let cancelled = false;
     loadGrammarCheckEnabled().then(enabled => {
@@ -761,10 +733,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
     if (!savedToastVisible) {
       return;
     }
-    const timer = setTimeout(
-      () => setSavedToastVisible(false),
-      CONFIG_SAVED_TOAST_DURATION_MS,
-    );
+    const timer = setTimeout(() => setSavedToastVisible(false), CONFIG_SAVED_TOAST_DURATION_MS);
     return () => clearTimeout(timer);
   }, [savedToastVisible]);
 
@@ -799,9 +768,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
             } catch (error) {
               Alert.alert(
                 'Clearing failed',
-                error instanceof Error
-                  ? error.message
-                  : 'Unable to clear local data.',
+                error instanceof Error ? error.message : 'Unable to clear local data.',
               );
             } finally {
               setClearing(false);
@@ -895,7 +862,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
 
   return (
     <Animated.View
-      style={[styles.transitionRoot, {transform: [{translateY: transitionOffset}]}]}
+      style={[styles.transitionRoot, { transform: [{ translateY: transitionOffset }] }]}
       testID="settings-transition">
       <Screen style={styles.container} testID="settings-screen">
         <ScreenHeader style={styles.header}>
@@ -903,8 +870,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
             accessibilityLabel="Go back"
             hitSlop={8}
             onPress={() => navigation.goBack()}
-            testID="settings-back"
-          >
+            testID="settings-back">
             <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
           <Text style={styles.title}>Settings</Text>
@@ -918,11 +884,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
               </View>
               <View style={styles.accountTexts}>
                 <Text style={styles.accountHint}>Signed in as</Text>
-                <Text
-                  style={styles.accountEmail}
-                  numberOfLines={1}
-                  testID="settings-account-email"
-                >
+                <Text style={styles.accountEmail} numberOfLines={1} testID="settings-account-email">
                   {email || 'Unknown account'}
                 </Text>
               </View>
@@ -934,26 +896,16 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
               accessibilityRole="button"
               accessibilityLabel="AI provider settings"
               onPress={() => navigation.navigate('AIProviderSettings')}
-              style={({ pressed }) => [
-                styles.aiProviderCard,
-                pressed && styles.rowPressed,
-              ]}
-              testID="settings-ai-provider-card"
-            >
+              style={({ pressed }) => [styles.aiProviderCard, pressed && styles.rowPressed]}
+              testID="settings-ai-provider-card">
               <View style={styles.aiProviderCardHeader}>
-                <Text
-                  style={styles.aiProviderCardTitle}
-                  testID="settings-ai-provider-title"
-                >
+                <Text style={styles.aiProviderCardTitle} testID="settings-ai-provider-title">
                   {providerStatus === 'loading'
                     ? 'AI provider'
                     : PROVIDER_DESCRIPTORS[providerStatus.provider].label}
                 </Text>
                 {providerStatus === 'loading' ? (
-                  <ActivityIndicator
-                    size="small"
-                    testID="settings-ai-provider-loading"
-                  />
+                  <ActivityIndicator size="small" testID="settings-ai-provider-loading" />
                 ) : providerStatus.hasApiKey ? (
                   <View style={styles.badge} testID="settings-ai-provider-badge">
                     <Text style={styles.badgeText}>Ready</Text>
@@ -961,11 +913,8 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                 ) : (
                   <View
                     style={[styles.badge, styles.badgePending]}
-                    testID="settings-ai-provider-badge"
-                  >
-                    <Text style={[styles.badgeText, styles.badgeTextPending]}>
-                      Not set up
-                    </Text>
+                    testID="settings-ai-provider-badge">
+                    <Text style={[styles.badgeText, styles.badgeTextPending]}>Not set up</Text>
                   </View>
                 )}
               </View>
@@ -975,8 +924,8 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                   providerStatus === 'loading'
                     ? '…'
                     : providerStatus.hasApiKey
-                    ? 'Saved on this device'
-                    : 'Not configured'
+                      ? 'Saved on this device'
+                      : 'Not configured'
                 }
                 testID="settings-ai-provider-key-status"
               />
@@ -985,7 +934,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                 value={
                   providerStatus === 'loading'
                     ? '…'
-                    : providerStatus.primaryModel ?? 'Not selected'
+                    : (providerStatus.primaryModel ?? 'Not selected')
                 }
                 testID="settings-ai-provider-primary-status"
               />
@@ -995,8 +944,8 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                   providerStatus === 'loading'
                     ? '…'
                     : providerStatus.fallbackCount > 0
-                    ? `${providerStatus.fallbackCount} selected`
-                    : 'None'
+                      ? `${providerStatus.fallbackCount} selected`
+                      : 'None'
                 }
                 testID="settings-ai-provider-fallback-status"
               />
@@ -1012,12 +961,8 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                   accessibilityRole="button"
                   accessibilityLabel={row.title}
                   onPress={row.onPress}
-                  style={({ pressed }) => [
-                    styles.row,
-                    pressed && styles.rowPressed,
-                  ]}
-                  testID={row.testID}
-                >
+                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                  testID={row.testID}>
                   <View style={styles.rowTexts}>
                     <Text style={styles.rowTitle}>{row.title}</Text>
                     <Text style={styles.rowDescription}>{row.description}</Text>
@@ -1039,13 +984,12 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                 accessibilityState={{ checked: grammarCheckEnabled }}
                 onPress={() => handleGrammarCheckToggle(!grammarCheckEnabled)}
                 style={styles.toggleRow}
-                testID="settings-grammar-toggle"
-              >
+                testID="settings-grammar-toggle">
                 <View style={styles.toggleTexts}>
                   <Text style={styles.toggleTitle}>Grammar auto-check</Text>
                   <Text style={styles.toggleDescription}>
-                    Check every message you send and badge it when it has issues.
-                    Tap a badge to see the suggested improvement.
+                    Check every message you send and badge it when it has issues. Tap a badge to see
+                    the suggested improvement.
                   </Text>
                   <Text style={styles.toggleWarning}>
                     Uses an extra AI request per message — consumes more tokens.
@@ -1069,8 +1013,8 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
               <View style={styles.practiceModeCard}>
                 <Text style={styles.toggleTitle}>Sentence practice mode</Text>
                 <Text style={styles.toggleDescription}>
-                  Let Auto pick dictation or recall from each sentence&apos;s
-                  schedule, or force one card shape for every sentence.
+                  Let Auto pick dictation or recall from each sentence&apos;s schedule, or force one
+                  card shape for every sentence.
                 </Text>
                 <View style={styles.segmentRow}>
                   {SENTENCE_PRACTICE_MODE_OPTIONS.map(option => {
@@ -1080,21 +1024,16 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                         key={option.value}
                         accessibilityRole="radio"
                         accessibilityLabel={option.label}
-                        accessibilityState={{checked: isSelected}}
+                        accessibilityState={{ checked: isSelected }}
                         onPress={() => handlePracticeModeChange(option.value)}
-                        style={({pressed}) => [
+                        style={({ pressed }) => [
                           styles.segment,
                           isSelected && styles.segmentSelected,
                           pressed && styles.buttonDisabled,
                         ]}
-                        testID={option.testID}
-                      >
+                        testID={option.testID}>
                         <Text
-                          style={[
-                            styles.segmentText,
-                            isSelected && styles.segmentTextSelected,
-                          ]}
-                        >
+                          style={[styles.segmentText, isSelected && styles.segmentTextSelected]}>
                           {option.label}
                         </Text>
                       </Pressable>
@@ -1112,8 +1051,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
               accessibilityLabel="Text to speech settings"
               onPress={() => navigation.navigate('TTSSettings')}
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-              testID="settings-open-tts"
-            >
+              testID="settings-open-tts">
               <View style={styles.rowTexts}>
                 <Text style={styles.rowTitle}>Text to speech</Text>
                 <Text style={styles.rowDescription}>
@@ -1137,8 +1075,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                   </Text>
                 </View>
                 <Text style={styles.toggleDescription}>
-                  How fast the text scrolls while you read aloud during speaking
-                  practice.
+                  How fast the text scrolls while you read aloud during speaking practice.
                 </Text>
                 <Slider
                   minimumValue={SPEED_MIN_PX_PER_S}
@@ -1168,14 +1105,8 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                       isSelected && styles.segmentSelected,
                       pressed && styles.buttonDisabled,
                     ]}
-                    testID={option.testID}
-                  >
-                    <Text
-                      style={[
-                        styles.segmentText,
-                        isSelected && styles.segmentTextSelected,
-                      ]}
-                    >
+                    testID={option.testID}>
+                    <Text style={[styles.segmentText, isSelected && styles.segmentTextSelected]}>
                       {option.label}
                     </Text>
                   </Pressable>
@@ -1200,28 +1131,16 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                     isSelected && styles.modeOptionSelected,
                     pressed && styles.buttonDisabled,
                   ]}
-                  testID={option.testID}
-                >
+                  testID={option.testID}>
                   <View
-                    style={[
-                      styles.modeRadioOuter,
-                      isSelected && styles.modeRadioOuterSelected,
-                    ]}
-                  >
+                    style={[styles.modeRadioOuter, isSelected && styles.modeRadioOuterSelected]}>
                     {isSelected ? <View style={styles.modeRadioInner} /> : null}
                   </View>
                   <View style={styles.modeTexts}>
-                    <Text
-                      style={[
-                        styles.modeLabel,
-                        isSelected && styles.modeLabelSelected,
-                      ]}
-                    >
+                    <Text style={[styles.modeLabel, isSelected && styles.modeLabelSelected]}>
                       {option.label}
                     </Text>
-                    <Text style={styles.modeDescription}>
-                      {option.description}
-                    </Text>
+                    <Text style={styles.modeDescription}>{option.description}</Text>
                   </View>
                 </Pressable>
               );
@@ -1236,14 +1155,10 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Clear local data"
-                style={[
-                  styles.secondaryButton,
-                  clearing && styles.buttonDisabled,
-                ]}
+                style={[styles.secondaryButton, clearing && styles.buttonDisabled]}
                 disabled={clearing}
                 onPress={confirmClearLocalData}
-                testID="settings-clear-local"
-              >
+                testID="settings-clear-local">
                 {clearing ? (
                   <ActivityIndicator color={colors.textPrimary} />
                 ) : (
@@ -1262,8 +1177,7 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
               onPress={() => {
                 logout();
               }}
-              testID="settings-logout"
-            >
+              testID="settings-logout">
               {busy ? (
                 <ActivityIndicator color={colors.onPrimary} />
               ) : (
@@ -1274,16 +1188,8 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
         </ScreenScrollView>
 
         {savedToastVisible ? (
-          <View
-            pointerEvents="none"
-            style={styles.toast}
-            testID="settings-saved-toast"
-          >
-            <Text
-              role="status"
-              style={styles.toastText}
-              testID="settings-saved-toast-text"
-            >
+          <View pointerEvents="none" style={styles.toast} testID="settings-saved-toast">
+            <Text role="status" style={styles.toastText} testID="settings-saved-toast-text">
               Configuration saved successfully.
             </Text>
           </View>

@@ -29,38 +29,21 @@
  * plain row, rename editor and delete confirmation — lives in
  * `HistorySessionRow`.
  */
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
 
-import type {Session} from '../api/sessions';
-import {deleteSession, listSessions, renameSession} from '../api/sessions';
-import {toErrorMessage, useAuth} from '../auth/AuthContext';
-import {
-  Screen,
-  ScreenHeader,
-  ScreenList,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
-import {LocalConversationRepository} from '../db/conversationRepository';
-import type {LocalSession} from '../db/types';
-import {useApplicationMode} from '../mode/ModeContext';
-import type {MainStackParamList} from '../navigation/types';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {HistorySessionRow} from './HistorySessionRow';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { Session } from '../api/sessions';
+import { deleteSession, listSessions, renameSession } from '../api/sessions';
+import { toErrorMessage, useAuth } from '../auth/AuthContext';
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { LocalConversationRepository } from '../db/conversationRepository';
+import type { LocalSession } from '../db/types';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { MainStackParamList } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { HistorySessionRow } from './HistorySessionRow';
 
 type Props = {
   navigation: NativeStackNavigationProp<MainStackParamList, 'History'>;
@@ -168,13 +151,13 @@ function createStyles(c: ThemeColors) {
   });
 }
 
-export function HistoryScreen({navigation}: Props) {
-  const {authedRequest} = useAuth();
-  const {colors} = useTheme();
+export function HistoryScreen({ navigation }: Props) {
+  const { authedRequest } = useAuth();
+  const { colors } = useTheme();
   // TASK-090: the active application mode selects the history data source.
   // Nothing is fetched until the persisted mode has been restored, so a
   // fast-tapped History screen never touches the wrong backend mid-restore.
-  const {status: modeStatus, mode} = useApplicationMode();
+  const { status: modeStatus, mode } = useApplicationMode();
   const localRepository = useLocalRepository();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -211,6 +194,7 @@ export function HistoryScreen({navigation}: Props) {
     sessionsRef.current = sessions;
   }, [sessions]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is an intentional reload trigger
   useEffect(() => {
     if (modeStatus !== 'ready') {
       return;
@@ -381,13 +365,13 @@ export function HistoryScreen({navigation}: Props) {
         await localRepository.renameSession(sessionId, trimmed);
         setSessions(prev =>
           prev.map(session =>
-            session.id === sessionId ? {...session, title: trimmed} : session,
+            session.id === sessionId ? { ...session, title: trimmed } : session,
           ),
         );
       } else {
         const updated = await renameSession(authedRequestRef.current, sessionId, trimmed);
         setSessions(prev =>
-          prev.map(session => (session.id === updated.id ? {...session, ...updated} : session)),
+          prev.map(session => (session.id === updated.id ? { ...session, ...updated } : session)),
         );
       }
       setRenamingId(null);
@@ -486,7 +470,7 @@ export function HistoryScreen({navigation}: Props) {
           data={sessions}
           keyExtractor={item => String(item.id)}
           extraData={[renamingId, draftTitle, savingRename, deletingId, deleting]}
-          renderItem={({item}) => (
+          renderItem={({ item }) => (
             <HistorySessionRow
               session={item}
               renaming={renamingId === item.id}
@@ -506,7 +490,7 @@ export function HistoryScreen({navigation}: Props) {
                 startDelete(item);
               }}
               onOpen={() => {
-                navigation.navigate('Chat', {sessionId: item.id});
+                navigation.navigate('Chat', { sessionId: item.id });
               }}
             />
           )}
@@ -520,11 +504,9 @@ export function HistoryScreen({navigation}: Props) {
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Load more conversations"
-                accessibilityState={{disabled: loadingMore}}
+                accessibilityState={{ disabled: loadingMore }}
                 testID="history-load-more">
-                <Text style={styles.loadMoreText}>
-                  {loadingMore ? 'Loading…' : 'Load more'}
-                </Text>
+                <Text style={styles.loadMoreText}>{loadingMore ? 'Loading…' : 'Load more'}</Text>
               </Pressable>
             ) : null
           }

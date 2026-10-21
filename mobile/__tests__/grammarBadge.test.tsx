@@ -8,12 +8,12 @@
  * (never a new API call — the handler receives the message), and the
  * bubble text is untouched.
  */
-import React from 'react';
-import {render, screen, fireEvent} from '@testing-library/react-native';
 
-import type {ChatMessage, ImprovementSeverity} from '../src/api/sessions';
-import {MessageRow, createRowStyles} from '../src/screens/MessageRow';
-import {lightColors} from '../src/theme/colors';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+
+import type { ChatMessage, ImprovementSeverity } from '../src/api/sessions';
+import { createRowStyles, MessageRow } from '../src/screens/MessageRow';
+import { lightColors } from '../src/theme/colors';
 
 const styles = createRowStyles(lightColors);
 
@@ -31,10 +31,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   const entries = Array.isArray(style) ? style : [style];
-  return Object.assign(
-    {},
-    ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})),
-  );
+  return Object.assign({}, ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})));
 }
 
 async function renderRow(
@@ -72,7 +69,7 @@ describe('MessageRow grammar badge', () => {
     const badge = screen.getByTestId('chat-grammar-badge-101');
     expect(badge.props.accessibilityLabel).toBe('Looks good, open feedback');
     expect(screen.getByText('✓')).toBeOnTheScreen();
-    expect(flattenStyle(badge.props.style)).toMatchObject({borderColor: lightColors.success});
+    expect(flattenStyle(badge.props.style)).toMatchObject({ borderColor: lightColors.success });
   });
 
   it('renders a warning-styled "!" mark for minor severity', async () => {
@@ -81,7 +78,7 @@ describe('MessageRow grammar badge', () => {
     const badge = screen.getByTestId('chat-grammar-badge-101');
     expect(badge.props.accessibilityLabel).toBe('Minor grammar issues found, open suggestion');
     expect(screen.getByText('!')).toBeOnTheScreen();
-    expect(flattenStyle(badge.props.style)).toMatchObject({borderColor: lightColors.warning});
+    expect(flattenStyle(badge.props.style)).toMatchObject({ borderColor: lightColors.warning });
   });
 
   it('renders an error-styled "✕" mark for critical severity', async () => {
@@ -91,7 +88,7 @@ describe('MessageRow grammar badge', () => {
     expect(badge.props.accessibilityLabel).toBe('Serious grammar issues found, open suggestion');
     expect(screen.getByText('✕')).toBeOnTheScreen();
     expect(screen.queryByText('!')).toBeNull();
-    expect(flattenStyle(badge.props.style)).toMatchObject({borderColor: lightColors.errorText});
+    expect(flattenStyle(badge.props.style)).toMatchObject({ borderColor: lightColors.errorText });
   });
 
   it('keeps the corner mark small and absolutely positioned', async () => {
@@ -108,7 +105,7 @@ describe('MessageRow grammar badge', () => {
   });
 
   it('never renders a badge on assistant rows', async () => {
-    await renderRow({role: 'assistant', content: 'Assistant says hi'}, 'critical');
+    await renderRow({ role: 'assistant', content: 'Assistant says hi' }, 'critical');
 
     expect(screen.queryByTestId('chat-grammar-badge-101')).toBeNull();
   });

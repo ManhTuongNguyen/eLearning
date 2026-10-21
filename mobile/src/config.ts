@@ -8,7 +8,7 @@
  * .env (base) -> .env.<mode>, where mode is development (debug bundles),
  * test (jest) or production (release bundles).
  */
-import {API_BASE_URL as API_BASE_URL_FROM_ENV} from '@env';
+import { API_BASE_URL as API_BASE_URL_FROM_ENV } from '@env';
 
 /**
  * Validate a raw environment value and narrow it to a defined URL string.

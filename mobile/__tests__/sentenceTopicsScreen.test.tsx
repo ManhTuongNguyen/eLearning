@@ -7,29 +7,28 @@
  * in-memory sql.js driver; persistence and counts are asserted against SQL
  * rather than stubs.
  */
-import React from 'react';
-import {act, fireEvent, render, waitFor} from '@testing-library/react-native';
 
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import type { SqlDriver } from '../src/db/driver';
 import {
   createSentenceTopic,
   insertSentences,
   listSentencesByTopic,
   listSentenceTopics,
 } from '../src/db/sentenceRepository';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
-import type {SqlDriver} from '../src/db/driver';
-import {SentenceTopicsScreen} from '../src/screens/SentenceTopicsScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import type {SentenceTopicsScreenProps} from '../src/navigation/types';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import type { SentenceTopicsScreenProps } from '../src/navigation/types';
+import { SentenceTopicsScreen } from '../src/screens/SentenceTopicsScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 /** A sql.js database wired through the mocked getLocalDatabase. */
 let db: SqlDriver;
 
 jest.mock('../src/db/database', () => {
   const actualMigrations = jest.requireActual('../src/db/migrations').migrateDatabase;
-  const handle: {db: SqlDriver} = {db: undefined as never};
+  const handle: { db: SqlDriver } = { db: undefined as never };
   return {
     getLocalDatabase: jest.fn(async () => {
       await actualMigrations(handle.db);
@@ -48,7 +47,9 @@ const navigate = jest.fn();
 let listeners: Record<string, (() => void)[]> = {};
 function flushFocus(): Promise<void> {
   return act(async () => {
-    (listeners.focus ?? []).forEach(callback => callback());
+    (listeners.focus ?? []).forEach(callback => {
+      callback();
+    });
   });
 }
 function screenProps(): SentenceTopicsScreenProps {
@@ -65,7 +66,7 @@ function screenProps(): SentenceTopicsScreenProps {
         };
       },
     },
-    route: {key: 'sentence-topics-test', name: 'SentenceTopics'},
+    route: { key: 'sentence-topics-test', name: 'SentenceTopics' },
   } as unknown as SentenceTopicsScreenProps;
 }
 
@@ -87,7 +88,7 @@ async function renderInMode(mode: 'server' | 'serverless' = 'serverless') {
       expect(view.queryByTestId('sentence-loading')).toBeFalsy();
     });
   }
-  return {view, db};
+  return { view, db };
 }
 
 beforeEach(() => {
@@ -102,7 +103,7 @@ afterEach(() => {
 
 describe('SentenceTopicsScreen — mode gating', () => {
   test('server mode shows the notice and reads no database', async () => {
-    const {view} = await renderInMode('server');
+    const { view } = await renderInMode('server');
 
     await waitFor(() => {
       expect(view.getByTestId('sentence-mode-notice')).toBeTruthy();
@@ -111,7 +112,7 @@ describe('SentenceTopicsScreen — mode gating', () => {
   });
 
   test('serverless mode waits for the mode restore before loading', async () => {
-    const {view} = await renderInMode('serverless');
+    const { view } = await renderInMode('serverless');
 
     await waitFor(() => {
       expect(database.getLocalDatabase).toHaveBeenCalled();
@@ -124,10 +125,10 @@ describe('SentenceTopicsScreen — mode gating', () => {
 
 describe('SentenceTopicsScreen — topic list', () => {
   test('lists topics newest first with sentence and due counts', async () => {
-    const {view, db: localDb} = await renderInMode();
-    await createSentenceTopic(localDb, {title: 'Coffee', description: 'ordering'});
+    const { view, db: localDb } = await renderInMode();
+    await createSentenceTopic(localDb, { title: 'Coffee', description: 'ordering' });
     await new Promise<void>(resolve => setTimeout(() => resolve(), 5));
-    await createSentenceTopic(localDb, {title: 'Neighbours', description: ''});
+    await createSentenceTopic(localDb, { title: 'Neighbours', description: '' });
 
     // Re-list by simulating the screen regaining focus.
     await flushFocus();
@@ -140,7 +141,7 @@ describe('SentenceTopicsScreen — topic list', () => {
   });
 
   test('shows sentence and due counts read from the repository', async () => {
-    const {view, db: localDb} = await renderInMode();
+    const { view, db: localDb } = await renderInMode();
     const topic = await createSentenceTopic(localDb, {
       title: 'Coffee',
       description: '',
@@ -163,8 +164,8 @@ describe('SentenceTopicsScreen — topic list', () => {
   });
 
   test('shows an "all done" badge when nothing is due', async () => {
-    const {view, db: localDb} = await renderInMode();
-    await createSentenceTopic(localDb, {title: 'Coffee', description: ''});
+    const { view, db: localDb } = await renderInMode();
+    await createSentenceTopic(localDb, { title: 'Coffee', description: '' });
 
     await flushFocus();
     await waitFor(() => {
@@ -176,7 +177,7 @@ describe('SentenceTopicsScreen — topic list', () => {
 
 describe('SentenceTopicsScreen — delete topic', () => {
   test('opens the in-app modal, then deletes after confirmation', async () => {
-    const {view, db: localDb} = await renderInMode();
+    const { view, db: localDb } = await renderInMode();
     const topic = await createSentenceTopic(localDb, {
       title: 'Coffee',
       description: 'ordering',
@@ -198,9 +199,7 @@ describe('SentenceTopicsScreen — delete topic', () => {
 
     // The themed dialog replaces the native Android alert.
     expect(view.getByTestId('delete-topic-modal')).toBeTruthy();
-    expect(view.getByTestId('delete-topic-title')).toHaveTextContent(
-      'Delete topic?',
-    );
+    expect(view.getByTestId('delete-topic-title')).toHaveTextContent('Delete topic?');
     expect(view.getByText(/"Coffee" and its sentence and practice history/)).toBeTruthy();
 
     // Nothing is removed until the learner confirms.
@@ -218,8 +217,8 @@ describe('SentenceTopicsScreen — delete topic', () => {
   });
 
   test('keeps the modal open with an error when deletion fails', async () => {
-    const {view, db: localDb} = await renderInMode();
-    const topic = await createSentenceTopic(localDb, {title: 'Coffee'});
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createSentenceTopic(localDb, { title: 'Coffee' });
 
     await flushFocus();
     await waitFor(() => {
@@ -231,9 +230,7 @@ describe('SentenceTopicsScreen — delete topic', () => {
     await fireEvent.press(view.getByTestId('delete-topic-confirm'));
 
     await waitFor(() => {
-      expect(view.getByTestId('delete-topic-error')).toHaveTextContent(
-        'disk full',
-      );
+      expect(view.getByTestId('delete-topic-error')).toHaveTextContent('disk full');
     });
     expect(view.getByTestId('delete-topic-modal')).toBeTruthy();
     expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
@@ -241,8 +238,8 @@ describe('SentenceTopicsScreen — delete topic', () => {
   });
 
   test('cancelling the modal keeps the topic', async () => {
-    const {view, db: localDb} = await renderInMode();
-    const topic = await createSentenceTopic(localDb, {title: 'Coffee'});
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createSentenceTopic(localDb, { title: 'Coffee' });
 
     await flushFocus();
     await waitFor(() => {
@@ -264,7 +261,7 @@ describe('SentenceTopicsScreen — delete topic', () => {
 
 describe('SentenceTopicsScreen — new topic entry point', () => {
   test('the add button opens the separate create-topic screen', async () => {
-    const {view} = await renderInMode();
+    const { view } = await renderInMode();
 
     await fireEvent.press(view.getByTestId('sentence-topics-new'));
 
@@ -272,7 +269,7 @@ describe('SentenceTopicsScreen — new topic entry point', () => {
   });
 
   test('the add button is a circle', async () => {
-    const {view} = await renderInMode();
+    const { view } = await renderInMode();
 
     expect(view.getByTestId('sentence-topics-new')).toHaveStyle({
       width: 44,

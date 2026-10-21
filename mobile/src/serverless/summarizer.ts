@@ -17,8 +17,8 @@
  * 4. Purity — no database access; callers own persistence
  */
 
-import type {LocalMessage} from '../db/types';
-import type {CompletionRequest, OpenRouterClient} from './types';
+import type { LocalMessage } from '../db/types';
+import type { CompletionRequest, OpenRouterClient } from './types';
 
 const HISTORY_ROLES = new Set(['user', 'assistant']);
 
@@ -60,8 +60,8 @@ export async function generateSummary(
 
   const request: CompletionRequest = {
     messages: [
-      {role: 'system', content: SYSTEM_PROMPT},
-      {role: 'user', content: buildUserPrompt(previousSummary, messages)},
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: buildUserPrompt(previousSummary, messages) },
     ],
   };
 
@@ -69,9 +69,7 @@ export async function generateSummary(
   return parseSummary(response.text);
 }
 
-function validateArchivedMessages(
-  messages: readonly LocalMessage[],
-): readonly LocalMessage[] {
+function validateArchivedMessages(messages: readonly LocalMessage[]): readonly LocalMessage[] {
   if (!messages.length) {
     throw new Error(
       'archivedMessages must not be empty; summarization runs only when ' +
@@ -79,9 +77,7 @@ function validateArchivedMessages(
     );
   }
 
-  const allowed = Array.from(HISTORY_ROLES)
-    .sort()
-    .join(', ');
+  const allowed = Array.from(HISTORY_ROLES).sort().join(', ');
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
     if (!HISTORY_ROLES.has(msg.role)) {
@@ -97,10 +93,7 @@ function validateArchivedMessages(
   return messages;
 }
 
-function buildUserPrompt(
-  previousSummary: string,
-  messages: readonly LocalMessage[],
-): string {
+function buildUserPrompt(previousSummary: string, messages: readonly LocalMessage[]): string {
   const parts: string[] = [];
 
   if (previousSummary) {

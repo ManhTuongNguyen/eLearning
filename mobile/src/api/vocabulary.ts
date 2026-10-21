@@ -1,7 +1,7 @@
 /** Vocabulary endpoint bindings (SPEC TASK-066/070/071/072/074/075). */
 
-import type {AuthedRequester} from '../auth/authedRequest';
-import type {Paginated} from './sessions';
+import type { AuthedRequester } from '../auth/authedRequest';
+import type { Paginated } from './sessions';
 
 /** Enrichment lifecycle of a saved expression (backend VocabularyItem.Status). */
 export type VocabularyStatus = 'pending' | 'complete' | 'failed';
@@ -40,8 +40,8 @@ export function saveVocabulary(
     method: 'POST',
     body:
       sourceMessageId === undefined
-        ? {expression}
-        : {expression, source_message_id: sourceMessageId},
+        ? { expression }
+        : { expression, source_message_id: sourceMessageId },
   });
 }
 

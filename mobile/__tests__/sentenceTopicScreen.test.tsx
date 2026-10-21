@@ -8,28 +8,27 @@
  * through an injected engine double, including one-playback-at-a-time and
  * blur silencing.
  */
-import React from 'react';
-import {act, fireEvent, render, waitFor} from '@testing-library/react-native';
 
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import type { SqlDriver } from '../src/db/driver';
+import { migrateDatabase } from '../src/db/migrations';
 import {
   createSentenceTopic,
   insertSentences,
   listSentencesByTopic,
 } from '../src/db/sentenceRepository';
-import {migrateDatabase} from '../src/db/migrations';
-import type {SqlDriver} from '../src/db/driver';
-import type {SentenceTopicScreenProps} from '../src/navigation/types';
-import {SentenceTopicScreen} from '../src/screens/SentenceTopicScreen';
-import type {LLMClientConfig} from '../src/serverless/types';
-import {ThemeProvider} from '../src/theme/ThemeContext';
-import type {TextToSpeechEngine} from '../src/tts/textToSpeech';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import type { SentenceTopicScreenProps } from '../src/navigation/types';
+import { SentenceTopicScreen } from '../src/screens/SentenceTopicScreen';
+import type { LLMClientConfig } from '../src/serverless/types';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+import type { TextToSpeechEngine } from '../src/tts/textToSpeech';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 let db: SqlDriver;
 
 jest.mock('../src/db/database', () => {
   const actualMigrations = jest.requireActual('../src/db/migrations').migrateDatabase;
-  const handle: {db: SqlDriver} = {db: undefined as never};
+  const handle: { db: SqlDriver } = { db: undefined as never };
   return {
     getLocalDatabase: jest.fn(async () => {
       await actualMigrations(handle.db);
@@ -82,27 +81,27 @@ function screenProps(topicId: number): SentenceTopicScreenProps {
     route: {
       key: 'sentence-topic-test',
       name: 'SentenceTopic',
-      params: {topicId},
+      params: { topicId },
     },
   } as unknown as SentenceTopicScreenProps;
 }
 
 function makeDeferredEngine(): {
   engine: TextToSpeechEngine;
-  spoken: {text: string; release: () => void}[];
+  spoken: { text: string; release: () => void }[];
   stopMock: jest.Mock;
 } {
-  const spoken: {text: string; release: () => void}[] = [];
+  const spoken: { text: string; release: () => void }[] = [];
   const stopMock = jest.fn();
   const engine: TextToSpeechEngine = {
     speak(text: string) {
       return new Promise<void>(resolve => {
-        spoken.push({text, release: resolve});
+        spoken.push({ text, release: resolve });
       });
     },
     stop: stopMock,
   };
-  return {engine, spoken, stopMock};
+  return { engine, spoken, stopMock };
 }
 
 let complete: jest.Mock;
@@ -121,7 +120,7 @@ async function renderScreen(topicId: number, speech?: TextToSpeechEngine) {
 
 async function createTopicWithSentences(
   count: number,
-  overrides: {title?: string; description?: string; generationPrompt?: string} = {},
+  overrides: { title?: string; description?: string; generationPrompt?: string } = {},
 ) {
   const topic = await createSentenceTopic(db, {
     title: overrides.title ?? 'Meeting someone new',
@@ -132,7 +131,7 @@ async function createTopicWithSentences(
     await insertSentences(
       db,
       topic.id,
-      Array.from({length: count}, (_, index) => ({
+      Array.from({ length: count }, (_, index) => ({
         text: `Everyday sentence number ${index + 1}`,
         meaning: `Meaning number ${index + 1}`,
         situation: `Situation number ${index + 1}`,
@@ -152,7 +151,7 @@ beforeEach(async () => {
   database.__setDriver(db);
   settings.loadServerlessConfig.mockResolvedValue(CONFIG);
   complete = jest.fn();
-  registry.createProviderClient.mockReturnValue({complete} as never);
+  registry.createProviderClient.mockReturnValue({ complete } as never);
 });
 
 afterEach(async () => {
@@ -229,7 +228,7 @@ describe('SentenceTopicScreen — practice gate', () => {
 
     expect(view.getByTestId('sentence-practice').props.accessibilityState?.disabled).toBe(false);
     await fireEvent.press(view.getByTestId('sentence-practice'));
-    expect(navigate).toHaveBeenCalledWith('SentencePractice', {topicId: topic.id});
+    expect(navigate).toHaveBeenCalledWith('SentencePractice', { topicId: topic.id });
   });
 });
 
@@ -257,7 +256,11 @@ describe('SentenceTopicScreen — generation', () => {
     const topic = await createTopicWithSentences(0);
     complete.mockResolvedValue({
       text: JSON.stringify([
-        {sentence: 'Could I get a flat white, please?', meaning: 'Order coffee politely.', situation: 'At a café.'},
+        {
+          sentence: 'Could I get a flat white, please?',
+          meaning: 'Order coffee politely.',
+          situation: 'At a café.',
+        },
       ]),
       model: 'test-model',
       finishReason: 'stop',
@@ -267,13 +270,13 @@ describe('SentenceTopicScreen — generation', () => {
     const view = await renderScreen(topic.id);
     await fireEvent.press(view.getByTestId('sentence-generate-open'));
 
-    expect(
-      view.getByTestId('sentence-generate-count-5').props.accessibilityState?.selected,
-    ).toBe(true);
+    expect(view.getByTestId('sentence-generate-count-5').props.accessibilityState?.selected).toBe(
+      true,
+    );
     await fireEvent.press(view.getByTestId('sentence-generate-count-1'));
-    expect(
-      view.getByTestId('sentence-generate-count-1').props.accessibilityState?.selected,
-    ).toBe(true);
+    expect(view.getByTestId('sentence-generate-count-1').props.accessibilityState?.selected).toBe(
+      true,
+    );
 
     await fireEvent.press(view.getByTestId('sentence-generate-run'));
 
@@ -320,8 +323,16 @@ describe('SentenceTopicScreen — generation', () => {
     const topic = await createTopicWithSentences(0);
     complete.mockResolvedValue({
       text: JSON.stringify([
-        {sentence: 'Could I get a flat white, please?', meaning: 'Order coffee politely.', situation: 'At a café.'},
-        {sentence: 'I will have the same, thanks.', meaning: 'Order what they ordered.', situation: 'At a restaurant.'},
+        {
+          sentence: 'Could I get a flat white, please?',
+          meaning: 'Order coffee politely.',
+          situation: 'At a café.',
+        },
+        {
+          sentence: 'I will have the same, thanks.',
+          meaning: 'Order what they ordered.',
+          situation: 'At a restaurant.',
+        },
       ]),
       model: 'test-model',
       finishReason: 'stop',
@@ -350,12 +361,16 @@ describe('SentenceTopicScreen — generation', () => {
   test('skips a candidate that duplicates an existing sentence', async () => {
     const topic = await createTopicWithSentences(0);
     await insertSentences(db, topic.id, [
-      {text: 'Could I get a flat white, please?', meaning: 'Order coffee politely.'},
+      { text: 'Could I get a flat white, please?', meaning: 'Order coffee politely.' },
     ]);
     complete.mockResolvedValue({
       text: JSON.stringify([
-        {sentence: 'could i get a flat white please', meaning: 'Order coffee politely.'},
-        {sentence: 'I will have the same, thanks.', meaning: 'Order what they ordered.', situation: 'At a restaurant.'},
+        { sentence: 'could i get a flat white please', meaning: 'Order coffee politely.' },
+        {
+          sentence: 'I will have the same, thanks.',
+          meaning: 'Order what they ordered.',
+          situation: 'At a restaurant.',
+        },
       ]),
       model: 'test-model',
       finishReason: 'stop',
@@ -378,8 +393,16 @@ describe('SentenceTopicScreen — generation', () => {
     const topic = await createTopicWithSentences(0);
     complete.mockResolvedValue({
       text: JSON.stringify([
-        {sentence: 'Could I get a flat white, please?', meaning: 'Order coffee politely.', situation: 'At a café.'},
-        {sentence: 'I will have the same, thanks.', meaning: 'Order what they ordered.', situation: 'At a restaurant.'},
+        {
+          sentence: 'Could I get a flat white, please?',
+          meaning: 'Order coffee politely.',
+          situation: 'At a café.',
+        },
+        {
+          sentence: 'I will have the same, thanks.',
+          meaning: 'Order what they ordered.',
+          situation: 'At a restaurant.',
+        },
       ]),
       model: 'test-model',
       finishReason: 'stop',
@@ -402,8 +425,8 @@ describe('SentenceTopicScreen — generation', () => {
     const topic = await createTopicWithSentences(0);
     complete.mockResolvedValue({
       text: JSON.stringify([
-        {sentence: 'Could I get a flat white, please?', meaning: 'Order coffee politely.'},
-        {sentence: 'I will have the same, thanks.', meaning: 'Order what they ordered.'},
+        { sentence: 'Could I get a flat white, please?', meaning: 'Order coffee politely.' },
+        { sentence: 'I will have the same, thanks.', meaning: 'Order what they ordered.' },
       ]),
       model: 'test-model',
       finishReason: 'stop',
@@ -430,8 +453,8 @@ describe('SentenceTopicScreen — generation', () => {
     // the repository so the sentence exists only once.
     complete.mockResolvedValue({
       text: JSON.stringify([
-        {sentence: "I'm happy to help.", meaning: 'Offer help.'},
-        {sentence: 'I am happy to help.', meaning: 'Say you can help.'},
+        { sentence: "I'm happy to help.", meaning: 'Offer help.' },
+        { sentence: 'I am happy to help.', meaning: 'Say you can help.' },
       ]),
       model: 'test-model',
       finishReason: 'stop',
@@ -489,12 +512,14 @@ describe('SentenceTopicScreen — generation', () => {
 describe('SentenceTopicScreen — TTS', () => {
   test('plays one sentence at a time, toggles the active row and stops on blur/unmount', async () => {
     const topic = await createTopicWithSentences(2);
-    const {engine, spoken, stopMock} = makeDeferredEngine();
+    const { engine, spoken, stopMock } = makeDeferredEngine();
     const view = await renderScreen(topic.id, engine);
 
     await fireEvent.press(view.getByTestId('sentence-speak-1'));
     expect(spoken.map(item => item.text)).toEqual(['Everyday sentence number 1']);
-    expect(view.getByTestId('sentence-speak-1').props.accessibilityLabel).toContain('Stop sentence');
+    expect(view.getByTestId('sentence-speak-1').props.accessibilityLabel).toContain(
+      'Stop sentence',
+    );
 
     await fireEvent.press(view.getByTestId('sentence-speak-2'));
     expect(stopMock).toHaveBeenCalledTimes(1);
@@ -508,7 +533,9 @@ describe('SentenceTopicScreen — TTS', () => {
 
     await fireEvent.press(view.getByTestId('sentence-speak-2'));
     await act(async () => {
-      (listeners.blur ?? []).forEach(callback => callback());
+      (listeners.blur ?? []).forEach(callback => {
+        callback();
+      });
     });
     expect(stopMock).toHaveBeenCalledTimes(3);
 
@@ -517,6 +544,8 @@ describe('SentenceTopicScreen — TTS', () => {
     expect(stopMock).toHaveBeenCalledTimes(4);
 
     // Release the parked utterances so no timer/handle outlives the test.
-    spoken.forEach(item => item.release());
+    spoken.forEach(item => {
+      item.release();
+    });
   });
 });

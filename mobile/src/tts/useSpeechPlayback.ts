@@ -16,11 +16,11 @@
  * identities across renders — screens may safely list them in effect
  * dependencies without re-triggering work.
  */
-import {useCallback, useEffect, useRef, useState} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import {toSpeechText} from './speechText';
-import type {TextToSpeechEngine} from './textToSpeech';
-import {getSpeechEngine} from './textToSpeech';
+import { toSpeechText } from './speechText';
+import type { TextToSpeechEngine } from './textToSpeech';
+import { getSpeechEngine } from './textToSpeech';
 
 /** Identifies the item being spoken (message id in chat). */
 export type SpeechItemId = string | number;
@@ -37,9 +37,7 @@ export interface SpeechPlayback {
   stop(): void;
 }
 
-export function useSpeechPlayback(
-  engine: TextToSpeechEngine = getSpeechEngine(),
-): SpeechPlayback {
+export function useSpeechPlayback(engine: TextToSpeechEngine = getSpeechEngine()): SpeechPlayback {
   const [speakingId, setSpeakingId] = useState<SpeechItemId | null>(null);
   // Latest-ref seams keep the callbacks dependency-free while reading fresh
   // values: engine follows registry swaps, activeRef mirrors whether an
@@ -101,17 +99,15 @@ export function useSpeechPlayback(
       }
     };
     try {
-      engineRef.current
-        .speak(speakable)
-        .then(clearIfCurrent, () => {
-          // Missing voice data or a provider failure only ends this item's
-          // visible playback state; it must never crash the application.
-          clearIfCurrent();
-        });
+      engineRef.current.speak(speakable).then(clearIfCurrent, () => {
+        // Missing voice data or a provider failure only ends this item's
+        // visible playback state; it must never crash the application.
+        clearIfCurrent();
+      });
     } catch {
       clearIfCurrent();
     }
   }, []);
 
-  return {speakingId, speak, stop};
+  return { speakingId, speak, stop };
 }

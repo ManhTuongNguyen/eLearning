@@ -5,18 +5,18 @@
  * theme), and proof that screens consume tokens instead of hard-coded
  * colors.
  */
-import React from 'react';
-import {Pressable, Text, View} from 'react-native';
-import {act, fireEvent, render, screen} from '@testing-library/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import {darkColors, lightColors} from '../src/theme/colors';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {ThemeProvider, useTheme} from '../src/theme/ThemeContext';
-import type {LoginScreenProps, SettingsScreenProps} from '../src/navigation/types';
-import {ChatScreen} from '../src/screens/ChatScreen';
-import {LoginScreen} from '../src/screens/LoginScreen';
-import {SettingsScreen} from '../src/screens/SettingsScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import type React from 'react';
+import { Pressable, Text, View } from 'react-native';
+import { ModeProvider } from '../src/mode/ModeContext';
+import type { LoginScreenProps, SettingsScreenProps } from '../src/navigation/types';
+import { ChatScreen } from '../src/screens/ChatScreen';
+import { LoginScreen } from '../src/screens/LoginScreen';
+import { SettingsScreen } from '../src/screens/SettingsScreen';
+import { darkColors, lightColors } from '../src/theme/colors';
+import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 
 type SystemScheme = 'light' | 'dark' | null;
 
@@ -24,7 +24,7 @@ type SystemScheme = 'light' | 'dark' | null;
 const mockSystemState: {
   current: SystemScheme;
   listeners: Array<(next: SystemScheme) => void>;
-} = {current: 'light', listeners: []};
+} = { current: 'light', listeners: [] };
 
 // Stable identity across renders: consumers may key effects on it.
 const mockGetAccessToken = async () => 'token';
@@ -58,16 +58,21 @@ jest.mock('../src/auth/AuthContext', () => ({
   // (the TASK-AUDIT-008 history lookup surfaces failures through it).
   toErrorMessage: () => 'The server is unreachable right now. Please try again later.',
   useAuth: () => ({
-    user: {id: 1, username: 'alice', email: 'alice@example.com'},
+    user: { id: 1, username: 'alice', email: 'alice@example.com' },
     busy: false,
     logout: jest.fn(),
     getAccessToken: mockGetAccessToken,
   }),
 }));
 
+/** Consumes the theme hook outside any provider, to exercise the error path. */
+function OrphanThemeConsumer() {
+  useTheme();
+  return null;
+}
 
 function ThemeProbe() {
-  const {mode, resolvedScheme, colors} = useTheme();
+  const { mode, resolvedScheme, colors } = useTheme();
   return (
     <View>
       <Text testID="probe-mode">{mode}</Text>
@@ -78,7 +83,7 @@ function ThemeProbe() {
 }
 
 function ModeControls() {
-  const {setMode} = useTheme();
+  const { setMode } = useTheme();
   return (
     <View>
       <Pressable testID="set-light" onPress={() => setMode('light')} />
@@ -106,23 +111,23 @@ function backgroundOf(testID: string): unknown {
 }
 
 function navigationStub() {
-  return {navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn()};
+  return { navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn() };
 }
 
 const settingsProps = {
   navigation: navigationStub(),
-  route: {key: 'settings-test', name: 'Settings', params: undefined},
+  route: { key: 'settings-test', name: 'Settings', params: undefined },
 } as unknown as SettingsScreenProps;
 
 const loginProps = {
   navigation: navigationStub(),
-  route: {key: 'login-test', name: 'Login', params: undefined},
+  route: { key: 'login-test', name: 'Login', params: undefined },
 } as unknown as LoginScreenProps;
 
 type ChatScreenProps = React.ComponentProps<typeof ChatScreen>;
 const chatProps = {
   navigation: navigationStub(),
-  route: {key: 'chat-test', name: 'Chat', params: undefined},
+  route: { key: 'chat-test', name: 'Chat', params: undefined },
 } as unknown as ChatScreenProps;
 
 function setSystemScheme(scheme: SystemScheme) {
@@ -241,12 +246,7 @@ describe('palettes', () => {
 
 describe('useTheme', () => {
   it('throws a helpful error outside a ThemeProvider', async () => {
-    function Orphan() {
-      useTheme();
-      return null;
-    }
-
-    await expect(render(<Orphan />)).rejects.toThrow(
+    await expect(render(<OrphanThemeConsumer />)).rejects.toThrow(
       'useTheme must be used within a ThemeProvider',
     );
   });

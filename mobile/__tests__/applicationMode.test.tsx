@@ -4,24 +4,23 @@
  * ModeContext, and proof that the runtime gate keeps serverless-local data
  * away from every backend transport (REST client and SSE streams).
  */
-import React from 'react';
-import {Pressable, Text, View} from 'react-native';
-import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import {apiRequest} from '../src/api/client';
-import {streamChatTurn} from '../src/api/chatStream';
-import {ModeProvider, useApplicationMode} from '../src/mode/ModeContext';
-import {loadApplicationMode, saveApplicationMode} from '../src/mode/modeStorage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Pressable, Text, View } from 'react-native';
+import { streamChatTurn } from '../src/api/chatStream';
+import { apiRequest } from '../src/api/client';
+import { ModeProvider, useApplicationMode } from '../src/mode/ModeContext';
+import { loadApplicationMode, saveApplicationMode } from '../src/mode/modeStorage';
 import {
-  ServerApiBlockedError,
   getRuntimeApplicationMode,
+  ServerApiBlockedError,
   setRuntimeApplicationMode,
 } from '../src/mode/runtime';
-import {DEFAULT_APPLICATION_MODE, parseApplicationMode} from '../src/mode/types';
-import type {SettingsScreenProps} from '../src/navigation/types';
-import {SettingsScreen} from '../src/screens/SettingsScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { DEFAULT_APPLICATION_MODE, parseApplicationMode } from '../src/mode/types';
+import type { SettingsScreenProps } from '../src/navigation/types';
+import { SettingsScreen } from '../src/screens/SettingsScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
   __resetAsyncStorageStore: () => void;
@@ -29,7 +28,7 @@ const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
 
 jest.mock('../src/auth/AuthContext', () => ({
   useAuth: () => ({
-    user: {id: 1, username: 'alice', email: 'alice@example.com'},
+    user: { id: 1, username: 'alice', email: 'alice@example.com' },
     busy: false,
     logout: jest.fn(),
     getAccessToken: async () => 'token',
@@ -38,8 +37,8 @@ jest.mock('../src/auth/AuthContext', () => ({
 
 function settingsPropsStub(): SettingsScreenProps {
   return {
-    navigation: {navigate: jest.fn(), goBack: jest.fn()},
-    route: {key: 'settings-test', name: 'Settings', params: undefined},
+    navigation: { navigate: jest.fn(), goBack: jest.fn() },
+    route: { key: 'settings-test', name: 'Settings', params: undefined },
   } as unknown as SettingsScreenProps;
 }
 
@@ -51,6 +50,12 @@ function checkedStateOf(testID: string): boolean | undefined {
 
 function resetStorage() {
   asyncStorage.__resetAsyncStorageStore();
+}
+
+/** Consumes the mode hook outside any provider, to exercise the error path. */
+function OrphanModeConsumer() {
+  useApplicationMode();
+  return null;
 }
 
 describe('application mode types', () => {
@@ -74,10 +79,7 @@ describe('modeStorage', () => {
   it('round-trips a saved mode through AsyncStorage', async () => {
     await saveApplicationMode('serverless');
 
-    expect(asyncStorage.setItem).toHaveBeenCalledWith(
-      'app.applicationMode',
-      'serverless',
-    );
+    expect(asyncStorage.setItem).toHaveBeenCalledWith('app.applicationMode', 'serverless');
     await expect(loadApplicationMode()).resolves.toBe('serverless');
   });
 
@@ -125,7 +127,7 @@ describe('modeStorage', () => {
 });
 
 function ModeProbe() {
-  const {status, mode} = useApplicationMode();
+  const { status, mode } = useApplicationMode();
   return (
     <View>
       <Text testID="probe-status">{status}</Text>
@@ -135,7 +137,7 @@ function ModeProbe() {
 }
 
 function ModeControls() {
-  const {setMode} = useApplicationMode();
+  const { setMode } = useApplicationMode();
   return (
     <View>
       <Pressable testID="set-serverless" onPress={() => setMode('serverless')} />
@@ -197,12 +199,7 @@ describe('ModeProvider', () => {
   });
 
   it('throws a helpful error outside a ModeProvider', async () => {
-    function Orphan() {
-      useApplicationMode();
-      return null;
-    }
-
-    await expect(render(<Orphan />)).rejects.toThrow(
+    await expect(render(<OrphanModeConsumer />)).rejects.toThrow(
       'useApplicationMode must be used within a ModeProvider',
     );
   });
@@ -229,7 +226,7 @@ describe('server API gate', () => {
   });
 
   it('lets REST requests through while in server mode', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify([]), {status: 200}));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
     setRuntimeApplicationMode('server');
 
     await expect(apiRequest('/api/v1/sessions/')).resolves.toEqual([]);
@@ -293,9 +290,7 @@ describe('Settings application-mode switcher (TASK-090)', () => {
 
     expect(await screen.findByTestId('settings-mode-section')).toBeOnTheScreen();
     expect(screen.getByText('Server mode')).toBeOnTheScreen();
-    expect(
-      screen.getByText('Your conversations are stored with your account.'),
-    ).toBeOnTheScreen();
+    expect(screen.getByText('Your conversations are stored with your account.')).toBeOnTheScreen();
     expect(screen.getByText('Serverless mode')).toBeOnTheScreen();
     expect(
       screen.getByText(

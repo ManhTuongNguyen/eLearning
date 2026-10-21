@@ -8,32 +8,27 @@
  * inline deletion confirmation; both update local state immediately on
  * success and keep their editors open with a banner on failure.
  */
-import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react-native';
-import {Pressable, Text} from 'react-native';
+
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Pressable, Text } from 'react-native';
 
 import * as authApi from '../src/api/auth';
-import {ApiError} from '../src/api/client';
+import { ApiError } from '../src/api/client';
+import type { ChatMessage, Paginated, Session } from '../src/api/sessions';
 import * as sessionsApi from '../src/api/sessions';
-import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
-import {AuthProvider} from '../src/auth/AuthContext';
-import {ModeProvider, useApplicationMode} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
-import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import type {LocalSession} from '../src/db/types';
-import type {MainStackParamList} from '../src/navigation/types';
-import {ChatScreen} from '../src/screens/ChatScreen';
-import {HistoryScreen} from '../src/screens/HistoryScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import type { LocalSession } from '../src/db/types';
+import { ModeProvider, useApplicationMode } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
+import { DEFAULT_APPLICATION_MODE } from '../src/mode/types';
+import type { MainStackParamList } from '../src/navigation/types';
+import { ChatScreen } from '../src/screens/ChatScreen';
+import { HistoryScreen } from '../src/screens/HistoryScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -68,15 +63,12 @@ function makeSession(overrides: Partial<Session> = {}): Session {
   };
 }
 
-function sessionPage(
-  results: Session[],
-  next: string | null = null,
-): Paginated<Session> {
-  return {count: results.length, next, previous: null, results};
+function sessionPage(results: Session[], next: string | null = null): Paginated<Session> {
+  return { count: results.length, next, previous: null, results };
 }
 
 function emptyMessagesPage(): Paginated<ChatMessage> {
-  return {count: 0, next: null, previous: null, results: []};
+  return { count: 0, next: null, previous: null, results: [] };
 }
 
 function renderedItemIds(): number[] {
@@ -88,13 +80,10 @@ function renderedItemIds(): number[] {
 
 /** TASK-118 harness: flips the application mode from inside the provider. */
 function ModeSwitchHarness() {
-  const {setMode} = useApplicationMode();
+  const { setMode } = useApplicationMode();
   return (
     <>
-      <Pressable
-        testID="mode-switch-serverless"
-        onPress={() => setMode('serverless')}
-      />
+      <Pressable testID="mode-switch-serverless" onPress={() => setMode('serverless')} />
       <Pressable testID="mode-switch-server" onPress={() => setMode('server')} />
     </>
   );
@@ -110,13 +99,13 @@ async function renderHistory(options?: {
     <NavigationContainer
       initialState={
         options?.withChatUnderneath
-          ? {index: 1, routes: [{name: 'Chat'}, {name: 'History'}]}
+          ? { index: 1, routes: [{ name: 'Chat' }, { name: 'History' }] }
           : undefined
       }>
-      <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="History">
+      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="History">
         {options?.withChatBackStub ? (
           <Stack.Screen name="Chat">
-            {({navigation}) => (
+            {({ navigation }) => (
               <Pressable testID="chat-stub-back" onPress={() => navigation.goBack()}>
                 <Text>back</Text>
               </Pressable>
@@ -147,8 +136,8 @@ beforeEach(async () => {
   // Server-flow journeys: pin the persisted mode because fresh installs
   // now default to serverless.
   await saveApplicationMode('server');
-  mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-  mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+  mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
   // ChatScreen (the tap destination) loads messages and the session detail.
   mockedSessions.listMessages.mockResolvedValue(emptyMessagesPage());
   mockedSessions.getSession.mockResolvedValue(makeSession());
@@ -169,9 +158,9 @@ describe('HistoryScreen', () => {
 
     resolveFirstPage(
       sessionPage([
-        makeSession({id: 302, title: 'Latest chat'}),
-        makeSession({id: 301, title: 'Middle chat'}),
-        makeSession({id: 300, title: 'Oldest chat'}),
+        makeSession({ id: 302, title: 'Latest chat' }),
+        makeSession({ id: 301, title: 'Middle chat' }),
+        makeSession({ id: 300, title: 'Oldest chat' }),
       ]),
     );
 
@@ -192,7 +181,7 @@ describe('HistoryScreen', () => {
   it('surfaces load failures and recovers through Try again', async () => {
     mockedSessions.listSessions
       .mockRejectedValueOnce(new ApiError(0, 'Network request failed.'))
-      .mockResolvedValueOnce(sessionPage([makeSession({id: 5, title: 'Recovered'})]));
+      .mockResolvedValueOnce(sessionPage([makeSession({ id: 5, title: 'Recovered' })]));
     await renderHistory();
 
     expect(await screen.findByTestId('form-error')).toHaveTextContent(
@@ -202,9 +191,7 @@ describe('HistoryScreen', () => {
 
     await fireEvent.press(screen.getByTestId('history-retry'));
 
-    await waitFor(() =>
-      expect(mockedSessions.listSessions).toHaveBeenCalledTimes(2),
-    );
+    await waitFor(() => expect(mockedSessions.listSessions).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Recovered')).toBeOnTheScreen();
     expect(screen.queryByTestId('form-error')).toBeNull();
   });
@@ -226,7 +213,7 @@ describe('HistoryScreen', () => {
 
   it('opens the tapped session in chat', async () => {
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 42}), makeSession({id: 43, title: 'Cooking'})]),
+      sessionPage([makeSession({ id: 42 }), makeSession({ id: 43, title: 'Cooking' })]),
     );
     await renderHistory();
     await screen.findByTestId('history-item-43');
@@ -244,13 +231,13 @@ describe('HistoryScreen', () => {
       .mockResolvedValueOnce(
         sessionPage(
           [
-            makeSession({id: 12, title: 'Page one A'}),
-            makeSession({id: 11, title: 'Page one B'}),
+            makeSession({ id: 12, title: 'Page one A' }),
+            makeSession({ id: 11, title: 'Page one B' }),
           ],
           'http://api.test/api/v1/sessions/?page=2',
         ),
       )
-      .mockResolvedValueOnce(sessionPage([makeSession({id: 10, title: 'Page two A'})]));
+      .mockResolvedValueOnce(sessionPage([makeSession({ id: 10, title: 'Page two A' })]));
 
     await renderHistory();
     const loadMore = await screen.findByTestId('history-load-more');
@@ -269,7 +256,7 @@ describe('HistoryScreen', () => {
     let resolveSecondPage: (page: Paginated<Session>) => void = () => {};
     mockedSessions.listSessions
       .mockResolvedValueOnce(
-        sessionPage([makeSession({id: 9})], 'http://api.test/api/v1/sessions/?page=2'),
+        sessionPage([makeSession({ id: 9 })], 'http://api.test/api/v1/sessions/?page=2'),
       )
       .mockImplementationOnce(
         () =>
@@ -290,7 +277,7 @@ describe('HistoryScreen', () => {
 
     // A further page keeps the control; it must be re-enabled after settle.
     resolveSecondPage(
-      sessionPage([makeSession({id: 8})], 'http://api.test/api/v1/sessions/?page=3'),
+      sessionPage([makeSession({ id: 8 })], 'http://api.test/api/v1/sessions/?page=3'),
     );
     await waitFor(() => expect(renderedItemIds()).toEqual([9, 8]));
     expect(screen.getByTestId('history-load-more')).toBeEnabled();
@@ -299,7 +286,7 @@ describe('HistoryScreen', () => {
   it('keeps loaded rows when loading another page fails', async () => {
     mockedSessions.listSessions
       .mockResolvedValueOnce(
-        sessionPage([makeSession({id: 6})], 'http://api.test/api/v1/sessions/?page=2'),
+        sessionPage([makeSession({ id: 6 })], 'http://api.test/api/v1/sessions/?page=2'),
       )
       .mockRejectedValueOnce(new ApiError(500, 'Boom'));
 
@@ -316,7 +303,7 @@ describe('HistoryScreen', () => {
 
   it('dismisses back to the underlying chat via the close control', async () => {
     mockedSessions.listSessions.mockResolvedValue(sessionPage([]));
-    await renderHistory({withChatUnderneath: true});
+    await renderHistory({ withChatUnderneath: true });
 
     await screen.findByTestId('history-empty');
 
@@ -328,14 +315,14 @@ describe('HistoryScreen', () => {
   it('refreshes from the authoritative source when returning to a mounted History (TASK-AUDIT-008)', async () => {
     let resolveRefresh: (page: Paginated<Session>) => void = () => {};
     mockedSessions.listSessions
-      .mockResolvedValueOnce(sessionPage([makeSession({id: 42})]))
+      .mockResolvedValueOnce(sessionPage([makeSession({ id: 42 })]))
       .mockImplementationOnce(
         () =>
           new Promise<Paginated<Session>>(resolve => {
             resolveRefresh = resolve;
           }),
       );
-    await renderHistory({withChatBackStub: true});
+    await renderHistory({ withChatBackStub: true });
 
     await screen.findByTestId('history-item-42');
 
@@ -349,7 +336,7 @@ describe('HistoryScreen', () => {
     expect(screen.queryByTestId('history-loading')).toBeNull();
 
     resolveRefresh(
-      sessionPage([makeSession({id: 43, title: 'Brand new'}), makeSession({id: 42})]),
+      sessionPage([makeSession({ id: 43, title: 'Brand new' }), makeSession({ id: 42 })]),
     );
 
     // The authoritative page replaces the visible list in place.
@@ -359,9 +346,9 @@ describe('HistoryScreen', () => {
 
   it('keeps visible rows and the empty truth when the returning refresh fails (TASK-AUDIT-008)', async () => {
     mockedSessions.listSessions
-      .mockResolvedValueOnce(sessionPage([makeSession({id: 42})]))
+      .mockResolvedValueOnce(sessionPage([makeSession({ id: 42 })]))
       .mockRejectedValueOnce(new ApiError(0, 'Network request failed.'));
-    await renderHistory({withChatBackStub: true});
+    await renderHistory({ withChatBackStub: true });
 
     await screen.findByTestId('history-item-42');
     await fireEvent.press(screen.getByTestId('history-item-42'));
@@ -378,17 +365,17 @@ describe('HistoryScreen', () => {
 describe('HistoryScreen rename (TASK-056)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-    mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+    mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+    mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
     mockedSessions.listMessages.mockResolvedValue(emptyMessagesPage());
     mockedSessions.getSession.mockResolvedValue(makeSession());
   });
 
   it('persists the new title and reflects it immediately without refetching the list', async () => {
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 42, title: 'Traveling'})]),
+      sessionPage([makeSession({ id: 42, title: 'Traveling' })]),
     );
-    mockedSessions.renameSession.mockResolvedValue(makeSession({id: 42, title: 'Trips abroad'}));
+    mockedSessions.renameSession.mockResolvedValue(makeSession({ id: 42, title: 'Trips abroad' }));
     await renderHistory();
     await screen.findByTestId('history-item-42');
 
@@ -401,7 +388,11 @@ describe('HistoryScreen rename (TASK-056)', () => {
     await fireEvent.press(screen.getByTestId('history-rename-save'));
 
     await waitFor(() =>
-      expect(mockedSessions.renameSession).toHaveBeenCalledWith(expect.any(Function), 42, 'Trips in Europe'),
+      expect(mockedSessions.renameSession).toHaveBeenCalledWith(
+        expect.any(Function),
+        42,
+        'Trips in Europe',
+      ),
     );
     // The row swaps to the authoritative response; the editor closes.
     expect(await screen.findByText('Trips abroad')).toBeOnTheScreen();
@@ -413,7 +404,7 @@ describe('HistoryScreen rename (TASK-056)', () => {
 
   it('discards the edit and keeps the original title when cancelled', async () => {
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 7, title: 'Cooking'})]),
+      sessionPage([makeSession({ id: 7, title: 'Cooking' })]),
     );
     await renderHistory();
     await screen.findByTestId('history-item-7');
@@ -432,11 +423,11 @@ describe('HistoryScreen rename (TASK-056)', () => {
 
   it('explains failures, keeps the editor open, and succeeds on retry', async () => {
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 9, title: 'Movies'})]),
+      sessionPage([makeSession({ id: 9, title: 'Movies' })]),
     );
     mockedSessions.renameSession
       .mockRejectedValueOnce(new ApiError(500, 'Boom'))
-      .mockResolvedValueOnce(makeSession({id: 9, title: 'Films'}));
+      .mockResolvedValueOnce(makeSession({ id: 9, title: 'Films' }));
     await renderHistory();
     await screen.findByTestId('history-item-9');
 
@@ -462,7 +453,7 @@ describe('HistoryScreen rename (TASK-056)', () => {
 
   it('disables Save while the name is blank and re-enables it once text exists', async () => {
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 5, title: 'Weekend plans'})]),
+      sessionPage([makeSession({ id: 5, title: 'Weekend plans' })]),
     );
     await renderHistory();
     await screen.findByTestId('history-item-5');
@@ -483,7 +474,7 @@ describe('HistoryScreen rename (TASK-056)', () => {
   it('guards Save against double-fires while a rename request is in flight', async () => {
     let resolveRename: (session: Session) => void = () => {};
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 3, title: 'Music'})]),
+      sessionPage([makeSession({ id: 3, title: 'Music' })]),
     );
     mockedSessions.renameSession.mockImplementationOnce(
       () =>
@@ -508,7 +499,7 @@ describe('HistoryScreen rename (TASK-056)', () => {
     await fireEvent.press(save);
     expect(mockedSessions.renameSession).toHaveBeenCalledTimes(1);
 
-    resolveRename(makeSession({id: 3, title: 'Concerts'}));
+    resolveRename(makeSession({ id: 3, title: 'Concerts' }));
     await waitFor(() => expect(screen.queryByTestId('history-rename-input')).toBeNull());
     expect(screen.getByText('Concerts')).toBeOnTheScreen();
   });
@@ -517,15 +508,18 @@ describe('HistoryScreen rename (TASK-056)', () => {
 describe('HistoryScreen delete (TASK-057)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-    mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+    mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+    mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
     mockedSessions.listMessages.mockResolvedValue(emptyMessagesPage());
     mockedSessions.getSession.mockResolvedValue(makeSession());
   });
 
   it('asks for confirmation, then removes the session immediately without refetching', async () => {
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 42, title: 'Traveling'}), makeSession({id: 43, title: 'Cooking'})]),
+      sessionPage([
+        makeSession({ id: 42, title: 'Traveling' }),
+        makeSession({ id: 43, title: 'Cooking' }),
+      ]),
     );
     mockedSessions.deleteSession.mockResolvedValue(undefined);
     await renderHistory();
@@ -552,7 +546,7 @@ describe('HistoryScreen delete (TASK-057)', () => {
 
   it('keeps the conversation and makes no API call when confirmation is cancelled', async () => {
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 7, title: 'Cooking'})]),
+      sessionPage([makeSession({ id: 7, title: 'Cooking' })]),
     );
     await renderHistory();
     await screen.findByTestId('history-item-7');
@@ -570,7 +564,7 @@ describe('HistoryScreen delete (TASK-057)', () => {
 
   it('explains failures, keeps the confirmation open, and succeeds on retry', async () => {
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 9, title: 'Movies'})]),
+      sessionPage([makeSession({ id: 9, title: 'Movies' })]),
     );
     mockedSessions.deleteSession
       .mockRejectedValueOnce(new ApiError(500, 'Boom'))
@@ -601,7 +595,7 @@ describe('HistoryScreen delete (TASK-057)', () => {
   it('guards Confirm against double-fires while a delete request is in flight', async () => {
     let resolveDelete: () => void = () => {};
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 3, title: 'Music'})]),
+      sessionPage([makeSession({ id: 3, title: 'Music' })]),
     );
     mockedSessions.deleteSession.mockImplementationOnce(
       () =>
@@ -634,7 +628,7 @@ describe('HistoryScreen delete (TASK-057)', () => {
 
   it('returns to the empty state when the last conversation is deleted', async () => {
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 5, title: 'Weekend plans'})]),
+      sessionPage([makeSession({ id: 5, title: 'Weekend plans' })]),
     );
     mockedSessions.deleteSession.mockResolvedValue(undefined);
     await renderHistory();
@@ -668,8 +662,8 @@ describe('HistoryScreen serverless (TASK-090)', () => {
     // Persist serverless mode BEFORE render so ModeProvider restores it —
     // the screen must not touch either backend until the mode is ready.
     await saveApplicationMode('serverless');
-    mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-    mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+    mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+    mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
   });
 
   afterEach(async () => {
@@ -679,8 +673,8 @@ describe('HistoryScreen serverless (TASK-090)', () => {
 
   it('lists on-device conversations through the local repository without any server call', async () => {
     mockLocalRepository.listSessions.mockResolvedValue([
-      makeLocalSession({id: 303, title: 'Latest local chat'}),
-      makeLocalSession({id: 301, title: 'Older local chat'}),
+      makeLocalSession({ id: 303, title: 'Latest local chat' }),
+      makeLocalSession({ id: 301, title: 'Older local chat' }),
     ]);
     await renderHistory();
 
@@ -702,12 +696,10 @@ describe('HistoryScreen serverless (TASK-090)', () => {
   it('surfaces local load failures and recovers through Try again', async () => {
     mockLocalRepository.listSessions
       .mockRejectedValueOnce(new Error('sqlite unavailable'))
-      .mockResolvedValueOnce([makeLocalSession({id: 7, title: 'Recovered locally'})]);
+      .mockResolvedValueOnce([makeLocalSession({ id: 7, title: 'Recovered locally' })]);
     await renderHistory();
 
-    expect(await screen.findByTestId('form-error')).toHaveTextContent(
-      'sqlite unavailable',
-    );
+    expect(await screen.findByTestId('form-error')).toHaveTextContent('sqlite unavailable');
 
     await fireEvent.press(screen.getByTestId('history-retry'));
 
@@ -719,7 +711,7 @@ describe('HistoryScreen serverless (TASK-090)', () => {
 
   it('persists renames through the local repository and updates the row immediately', async () => {
     mockLocalRepository.listSessions.mockResolvedValue([
-      makeLocalSession({id: 42, title: 'Traveling'}),
+      makeLocalSession({ id: 42, title: 'Traveling' }),
     ]);
     mockLocalRepository.renameSession.mockResolvedValue(undefined);
     await renderHistory();
@@ -744,8 +736,8 @@ describe('HistoryScreen serverless (TASK-090)', () => {
 
   it('deletes conversations through the local repository after confirmation', async () => {
     mockLocalRepository.listSessions.mockResolvedValue([
-      makeLocalSession({id: 42, title: 'Traveling'}),
-      makeLocalSession({id: 43, title: 'Cooking'}),
+      makeLocalSession({ id: 42, title: 'Traveling' }),
+      makeLocalSession({ id: 43, title: 'Cooking' }),
     ]);
     mockLocalRepository.deleteSession.mockResolvedValue(true);
     await renderHistory();
@@ -754,9 +746,7 @@ describe('HistoryScreen serverless (TASK-090)', () => {
     await fireEvent.press(screen.getByTestId('history-delete-42'));
     await fireEvent.press(await screen.findByTestId('history-delete-confirm'));
 
-    await waitFor(() =>
-      expect(mockLocalRepository.deleteSession).toHaveBeenCalledWith(42),
-    );
+    await waitFor(() => expect(mockLocalRepository.deleteSession).toHaveBeenCalledWith(42));
     await waitFor(() => expect(renderedItemIds()).toEqual([43]));
     expect(screen.queryByTestId('form-error')).toBeNull();
     expect(mockedSessions.deleteSession).not.toHaveBeenCalled();
@@ -770,13 +760,13 @@ describe('HistoryScreen serverless (TASK-090)', () => {
     // test overrides the stored choice before the provider restores it.
     await saveApplicationMode('server');
     mockedSessions.listSessions.mockResolvedValue(
-      sessionPage([makeSession({id: 11, title: 'Server chat'})]),
+      sessionPage([makeSession({ id: 11, title: 'Server chat' })]),
     );
     mockLocalRepository.listSessions.mockResolvedValue([
-      makeLocalSession({id: 303, title: 'Local chat'}),
+      makeLocalSession({ id: 303, title: 'Local chat' }),
     ]);
 
-    await renderHistory({withModeSwitcher: true});
+    await renderHistory({ withModeSwitcher: true });
     await screen.findByTestId('history-item-11');
     expect(mockedSessions.listSessions).toHaveBeenCalledTimes(1);
 

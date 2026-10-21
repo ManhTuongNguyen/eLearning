@@ -14,14 +14,13 @@
  */
 import * as AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
-
+import { getLocalDatabase } from '../src/db/database';
 import {
   clearServerlessApiKey,
   hasServerlessApiKey,
   loadServerlessApiKey,
   saveServerlessApiKey,
 } from '../src/serverless/secureApiKey';
-import {getLocalDatabase} from '../src/db/database';
 
 const mockedKeychain = Keychain as jest.Mocked<typeof Keychain> & {
   __resetKeychainStore: () => void;
@@ -53,7 +52,7 @@ describe('secureApiKey (TASK-093)', () => {
     expect(Keychain.setGenericPassword).toHaveBeenCalledWith(
       SERVERLESS_USERNAME,
       SECRET,
-      expect.objectContaining({service: SERVERLESS_SERVICE}),
+      expect.objectContaining({ service: SERVERLESS_SERVICE }),
     );
 
     expect(AsyncStorage.default.setItem).not.toHaveBeenCalled();
@@ -68,7 +67,7 @@ describe('secureApiKey (TASK-093)', () => {
   });
 
   it('trims surrounding whitespace before persisting', async () => {
-    await saveServerlessApiKey('   ' + SECRET + '\n');
+    await saveServerlessApiKey(`   ${SECRET}\n`);
     await expect(loadServerlessApiKey()).resolves.toBe(SECRET);
   });
 
@@ -83,11 +82,9 @@ describe('secureApiKey (TASK-093)', () => {
   });
 
   it('returns null when the stored keychain entry is empty', async () => {
-    await (Keychain.setGenericPassword as jest.Mock)(
-      SERVERLESS_USERNAME,
-      '   ',
-      {service: SERVERLESS_SERVICE},
-    );
+    await (Keychain.setGenericPassword as jest.Mock)(SERVERLESS_USERNAME, '   ', {
+      service: SERVERLESS_SERVICE,
+    });
     await expect(loadServerlessApiKey()).resolves.toBeNull();
   });
 
@@ -95,7 +92,8 @@ describe('secureApiKey (TASK-093)', () => {
     await saveServerlessApiKey(SECRET);
 
     jest.resetModules();
-    const revived = require('../src/serverless/secureApiKey') as typeof import('../src/serverless/secureApiKey');
+    const revived =
+      require('../src/serverless/secureApiKey') as typeof import('../src/serverless/secureApiKey');
 
     await expect(revived.loadServerlessApiKey()).resolves.toBe(SECRET);
   });

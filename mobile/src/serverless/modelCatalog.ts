@@ -19,17 +19,19 @@
  * only an explicit user refresh goes back to the provider, so neither a
  * screen mount nor a re-render can trigger a catalog request.
  */
-import type {SqlExecutor} from '../db/driver';
-import {nowIso} from '../db/driver';
-import {getSetting, setSetting} from '../db/settingsStore';
-import {normalizeModelInfo, type ModelInfo, type ProviderId} from './types';
+import type { SqlExecutor } from '../db/driver';
+import { nowIso } from '../db/driver';
+import { getSetting, setSetting } from '../db/settingsStore';
+import { type ModelInfo, normalizeModelInfo, type ProviderId } from './types';
 
 /** Settings key holding the serialized OpenRouter catalog snapshot (historic). */
 export const MODEL_CATALOG_SETTING_KEY = 'model_catalog';
 
 /** Settings key holding the serialized catalog snapshot for one provider. */
 export function modelCatalogSettingKey(provider: ProviderId): string {
-  return provider === 'openrouter' ? MODEL_CATALOG_SETTING_KEY : `${MODEL_CATALOG_SETTING_KEY}_${provider}`;
+  return provider === 'openrouter'
+    ? MODEL_CATALOG_SETTING_KEY
+    : `${MODEL_CATALOG_SETTING_KEY}_${provider}`;
 }
 
 /** One locally persisted catalog snapshot. */
@@ -70,7 +72,7 @@ function parseCachedCatalog(raw: string | null): CachedModelCatalog | null {
     }
     normalized.push(parsed);
   }
-  return {models: normalized, fetchedAt};
+  return { models: normalized, fetchedAt };
 }
 
 /**
@@ -85,7 +87,7 @@ export async function refreshModelCatalog(
   provider: ProviderId = 'openrouter',
 ): Promise<CachedModelCatalog> {
   const models = await listModels();
-  const snapshot: CachedModelCatalog = {models, fetchedAt: nowIso()};
+  const snapshot: CachedModelCatalog = { models, fetchedAt: nowIso() };
   await setSetting(db, modelCatalogSettingKey(provider), JSON.stringify(snapshot));
   return snapshot;
 }

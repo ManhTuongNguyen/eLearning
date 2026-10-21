@@ -9,11 +9,11 @@
  * display layer splits it into paragraphs itself, so a malformed response
  * costs only a degraded experience, and only the empty case is fatal.
  */
-import type {EnglishLevel} from '../api/profile';
-import {getLearningProfile} from '../db/profileStore';
-import type {SqlDriver} from '../db/driver';
-import {OpenRouterResponseError} from './errors';
-import type {CompletionRequest, CompletionResult} from './types';
+import type { EnglishLevel } from '../api/profile';
+import type { SqlDriver } from '../db/driver';
+import { getLearningProfile } from '../db/profileStore';
+import { OpenRouterResponseError } from './errors';
+import type { CompletionRequest, CompletionResult } from './types';
 
 /**
  * System instruction demanding the practice text itself and nothing else.
@@ -104,10 +104,7 @@ export function parseGeneratedSpeechText(text: string, model: string | null = nu
     .replace(/\n?```\s*$/, '')
     .trim();
   if (!unwrapped) {
-    throw new OpenRouterResponseError(
-      'Speaking practice response was empty.',
-      model,
-    );
+    throw new OpenRouterResponseError('Speaking practice response was empty.', model);
   }
   return unwrapped;
 }
@@ -132,7 +129,7 @@ export async function generateSpeakingText(
 ): Promise<SpeakingPracticeText> {
   const request: CompletionRequest = {
     messages: [
-      {role: 'system', content: SPEAKING_PRACTICE_SYSTEM_PROMPT},
+      { role: 'system', content: SPEAKING_PRACTICE_SYSTEM_PROMPT },
       {
         role: 'user',
         content: buildSpeakingPracticeUserPrompt(level, input.material, input.minutes),
@@ -141,7 +138,7 @@ export async function generateSpeakingText(
   };
   const result = await complete(request);
   const text = parseGeneratedSpeechText(result.text, result.model);
-  return {text, paragraphs: splitPracticeParagraphs(text)};
+  return { text, paragraphs: splitPracticeParagraphs(text) };
 }
 
 /**

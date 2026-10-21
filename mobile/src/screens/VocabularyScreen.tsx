@@ -20,30 +20,17 @@
  * notice instead of an API call that could only be rejected by the
  * server-API gate.
  */
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-
-import {exportVocabulary} from '../api/vocabulary';
-import type {VocabularyItem} from '../api/vocabulary';
-import {listVocabulary} from '../api/vocabulary';
-import {toErrorMessage, useAuth} from '../auth/AuthContext';
-import {useApplicationMode} from '../mode/ModeContext';
-import type {VocabularyScreenProps} from '../navigation/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
-import {shareAnkiCsv} from '../utils/ankiShare';
-import {
-  Screen,
-  ScreenHeader,
-  ScreenList,
-  SCREEN_GUTTER,
-} from '../components/ScreenLayout';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { VocabularyItem } from '../api/vocabulary';
+import { exportVocabulary, listVocabulary } from '../api/vocabulary';
+import { toErrorMessage, useAuth } from '../auth/AuthContext';
+import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { VocabularyScreenProps } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { shareAnkiCsv } from '../utils/ankiShare';
 
 type Props = VocabularyScreenProps;
 
@@ -117,7 +104,7 @@ function createStyles(c: ThemeColors) {
       shadowColor: '#000',
       shadowOpacity: 0.15,
       shadowRadius: 8,
-      shadowOffset: {width: 0, height: 2},
+      shadowOffset: { width: 0, height: 2 },
       elevation: 6,
     },
     toastText: {
@@ -258,7 +245,13 @@ function createStyles(c: ThemeColors) {
   });
 }
 
-function StatusBadge({item, styles}: {item: VocabularyItem; styles: ReturnType<typeof createStyles>}) {
+function StatusBadge({
+  item,
+  styles,
+}: {
+  item: VocabularyItem;
+  styles: ReturnType<typeof createStyles>;
+}) {
   if (item.status === 'pending') {
     return (
       <View style={[styles.badge, styles.badgePending]} testID="vocab-badge-pending">
@@ -276,13 +269,13 @@ function StatusBadge({item, styles}: {item: VocabularyItem; styles: ReturnType<t
   return null;
 }
 
-export function VocabularyScreen({navigation}: Props) {
-  const {authedRequest} = useAuth();
+export function VocabularyScreen({ navigation }: Props) {
+  const { authedRequest } = useAuth();
   // TASK-AUDIT-016: the vocabulary feature is server-only, so the screen
   // waits for the persisted mode to be restored and renders a server-only
   // notice in serverless mode instead of issuing a doomed API call.
-  const {status: modeStatus, mode} = useApplicationMode();
-  const {colors} = useTheme();
+  const { status: modeStatus, mode } = useApplicationMode();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [items, setItems] = useState<VocabularyItem[]>([]);
@@ -301,6 +294,7 @@ export function VocabularyScreen({navigation}: Props) {
   const authedRequestRef = useRef(authedRequest);
   authedRequestRef.current = authedRequest;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is an intentional reload trigger
   useEffect(() => {
     let cancelled = false;
 
@@ -420,14 +414,10 @@ export function VocabularyScreen({navigation}: Props) {
               disabled={exporting}
               accessibilityRole="button"
               accessibilityLabel="Export your vocabulary as an Anki-compatible CSV file"
-              accessibilityState={{disabled: exporting, busy: exporting}}
+              accessibilityState={{ disabled: exporting, busy: exporting }}
               testID="vocabulary-export">
-              {exporting ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : null}
-              <Text style={styles.actionLinkText}>
-                {exporting ? 'Exporting…' : 'Export CSV'}
-              </Text>
+              {exporting ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+              <Text style={styles.actionLinkText}>{exporting ? 'Exporting…' : 'Export CSV'}</Text>
             </Pressable>
           ) : null}
           <Pressable onPress={() => navigation.goBack()} testID="vocabulary-back">
@@ -463,8 +453,8 @@ export function VocabularyScreen({navigation}: Props) {
       {serverlessNotice ? (
         <View style={styles.centered} testID="vocabulary-mode-notice">
           <Text style={styles.stateText}>
-            Saved vocabulary lives with your server account. Switch to server
-            mode to save words and export them as Anki flashcards.
+            Saved vocabulary lives with your server account. Switch to server mode to save words and
+            export them as Anki flashcards.
           </Text>
         </View>
       ) : loading ? (
@@ -482,7 +472,7 @@ export function VocabularyScreen({navigation}: Props) {
         <ScreenList
           data={items}
           keyExtractor={item => String(item.id)}
-          renderItem={({item}) => (
+          renderItem={({ item }) => (
             <View style={styles.row} testID={`vocabulary-item-${item.id}`}>
               <View style={styles.rowHeader}>
                 <Text style={styles.rowExpression}>{item.expression}</Text>
@@ -491,9 +481,7 @@ export function VocabularyScreen({navigation}: Props) {
               {item.part_of_speech ? (
                 <Text style={styles.rowPos}>{item.part_of_speech}</Text>
               ) : null}
-              {item.definition ? (
-                <Text style={styles.rowDefinition}>{item.definition}</Text>
-              ) : null}
+              {item.definition ? <Text style={styles.rowDefinition}>{item.definition}</Text> : null}
               {item.translation ? (
                 <Text style={styles.rowTranslation}>{item.translation}</Text>
               ) : null}
@@ -518,11 +506,9 @@ export function VocabularyScreen({navigation}: Props) {
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Load more saved words"
-                accessibilityState={{disabled: loadingMore}}
+                accessibilityState={{ disabled: loadingMore }}
                 testID="vocabulary-load-more">
-                <Text style={styles.loadMoreText}>
-                  {loadingMore ? 'Loading…' : 'Load more'}
-                </Text>
+                <Text style={styles.loadMoreText}>{loadingMore ? 'Loading…' : 'Load more'}</Text>
               </Pressable>
             ) : null
           }

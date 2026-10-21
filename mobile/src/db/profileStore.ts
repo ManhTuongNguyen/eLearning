@@ -5,26 +5,24 @@
  * level deterministically, mirroring how the server mode falls back when no
  * profile exists yet (TASK-016).
  */
-import type {EnglishLevel} from '../api/profile';
+import type { EnglishLevel } from '../api/profile';
 
-import type {SqlExecutor} from './driver';
-import {nowIso} from './driver';
-import type {LocalLearningProfile} from './types';
+import type { SqlExecutor } from './driver';
+import { nowIso } from './driver';
+import type { LocalLearningProfile } from './types';
 
 export const DEFAULT_LOCAL_LEVEL: EnglishLevel = 'A1';
 const PROFILE_ROW_ID = 1;
 
 /** Read the stored profile; a fresh database yields the default level. */
-export async function getLearningProfile(
-  db: SqlExecutor,
-): Promise<LocalLearningProfile> {
+export async function getLearningProfile(db: SqlExecutor): Promise<LocalLearningProfile> {
   const result = await db.execute(
     'SELECT id, level, updated_at FROM learning_profile WHERE id = ?',
     [PROFILE_ROW_ID],
   );
   const row = result.rows[0];
   if (!row) {
-    return {level: DEFAULT_LOCAL_LEVEL, updated_at: ''};
+    return { level: DEFAULT_LOCAL_LEVEL, updated_at: '' };
   }
   return {
     level: String(row.level ?? DEFAULT_LOCAL_LEVEL) as EnglishLevel,
@@ -43,5 +41,5 @@ export async function saveLearningProfile(
     `INSERT OR REPLACE INTO learning_profile (id, level, updated_at) VALUES (?, ?, ?)`,
     [PROFILE_ROW_ID, level, timestamp],
   );
-  return {level, updated_at: timestamp};
+  return { level, updated_at: timestamp };
 }

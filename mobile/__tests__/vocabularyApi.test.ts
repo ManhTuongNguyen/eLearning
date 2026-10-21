@@ -4,12 +4,12 @@
  * normalizing failures through the shared ApiError contract.
  */
 
-import {ApiError, apiRequest} from '../src/api/client';
-import {API_BASE_URL} from '../src/config';
-import {exportVocabulary, saveVocabulary} from '../src/api/vocabulary';
-import {createAuthedRequester} from '../src/auth/authedRequest';
-import type {AuthedRequester} from '../src/auth/authedRequest';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
+import { ApiError, apiRequest } from '../src/api/client';
+import { exportVocabulary, saveVocabulary } from '../src/api/vocabulary';
+import type { AuthedRequester } from '../src/auth/authedRequest';
+import { createAuthedRequester } from '../src/auth/authedRequest';
+import { API_BASE_URL } from '../src/config';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
 
 // Server-transport tests: pin the runtime holder because fresh installs now
 // default to serverless.
@@ -19,7 +19,7 @@ beforeEach(() => {
 
 /** Fixed-token requester standing in for the provider-built authed requester. */
 const requester: AuthedRequester = (path, options) =>
-  apiRequest(path, {...options, token: 'tok'});
+  apiRequest(path, { ...options, token: 'tok' });
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -70,8 +70,8 @@ describe('vocabulary api bindings', () => {
       `${API_BASE_URL}/api/v1/vocabulary/`,
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({expression: 'the early bird', source_message_id: 810}),
-        headers: expect.objectContaining({Authorization: 'Bearer tok'}),
+        body: JSON.stringify({ expression: 'the early bird', source_message_id: 810 }),
+        headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
       }),
     );
   });
@@ -79,7 +79,7 @@ describe('vocabulary api bindings', () => {
   it('omits the source message field when none is given', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(201, {...SAVED_ITEM, source_message: null}));
+      .mockResolvedValue(jsonResponse(201, { ...SAVED_ITEM, source_message: null }));
 
     await saveVocabulary(requester, 'catch the worm');
 
@@ -90,9 +90,7 @@ describe('vocabulary api bindings', () => {
   });
 
   it('treats the duplicate 200 response as a successful save', async () => {
-    jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(200, SAVED_ITEM));
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, SAVED_ITEM));
 
     const item = await saveVocabulary(requester, 'The Early Bird', 810);
 
@@ -112,9 +110,9 @@ describe('exportVocabulary (TASK-074 binding, TASK-AUDIT-015 unification)', () =
     refresh: jest.Mock<Promise<string | null>, []>;
     currentAccess: () => string;
   } {
-    let tokens = {access: initialAccess, refresh: 'refresh-1'};
+    let tokens = { access: initialAccess, refresh: 'refresh-1' };
     const refresh = jest.fn(async (): Promise<string | null> => {
-      tokens = {access: 'fresh', refresh: 'refresh-1'};
+      tokens = { access: 'fresh', refresh: 'refresh-1' };
       return 'fresh';
     });
     const request: AuthedRequester = createAuthedRequester({
@@ -122,14 +120,12 @@ describe('exportVocabulary (TASK-074 binding, TASK-AUDIT-015 unification)', () =
       getTokens: () => tokens,
       refresh,
     });
-    return {request, refresh, currentAccess: () => tokens.access};
+    return { request, refresh, currentAccess: () => tokens.access };
   }
 
   it('fetches the export endpoint through the central wrapper and returns the raw CSV text untouched', async () => {
     const csv = 'Front,Back,Example,Pronunciation\n"set off","phrasal verb",,\n';
-    const fetchMock = jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(textResponse(200, csv));
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(textResponse(200, csv));
 
     await expect(exportVocabulary(requester)).resolves.toBe(csv);
 
@@ -137,7 +133,7 @@ describe('exportVocabulary (TASK-074 binding, TASK-AUDIT-015 unification)', () =
       `${API_BASE_URL}/api/v1/vocabulary/export/`,
       expect.objectContaining({
         method: 'GET',
-        headers: {Accept: 'text/csv', Authorization: 'Bearer tok'},
+        headers: { Accept: 'text/csv', Authorization: 'Bearer tok' },
       }),
     );
   });
@@ -146,7 +142,7 @@ describe('exportVocabulary (TASK-074 binding, TASK-AUDIT-015 unification)', () =
     const csv = 'Front,Back\n"set off","phrasal verb"\n';
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(textResponse(401, JSON.stringify({detail: 'Invalid token.'})))
+      .mockResolvedValueOnce(textResponse(401, JSON.stringify({ detail: 'Invalid token.' })))
       .mockResolvedValueOnce(textResponse(200, csv));
     const harness = makeRefreshableRequester('expired');
 
@@ -155,7 +151,7 @@ describe('exportVocabulary (TASK-074 binding, TASK-AUDIT-015 unification)', () =
     expect(harness.refresh).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
-      headers: {Authorization: 'Bearer fresh'},
+      headers: { Authorization: 'Bearer fresh' },
     });
     expect(harness.currentAccess()).toBe('fresh');
   });
@@ -163,9 +159,7 @@ describe('exportVocabulary (TASK-074 binding, TASK-AUDIT-015 unification)', () =
   it('normalizes DRF JSON error bodies through the shared ApiError contract', async () => {
     jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        textResponse(401, JSON.stringify({detail: 'Invalid token.'})),
-      );
+      .mockResolvedValue(textResponse(401, JSON.stringify({ detail: 'Invalid token.' })));
 
     const error = await exportVocabulary(requester).catch((err: unknown) => err);
 

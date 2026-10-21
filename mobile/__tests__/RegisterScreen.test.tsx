@@ -1,16 +1,14 @@
-import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
-
-import {AuthProvider} from '../src/auth/AuthContext';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as authApi from '../src/api/auth';
-import {ApiError} from '../src/api/client';
+import { ApiError } from '../src/api/client';
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import type {AuthStackParamList} from '../src/navigation/types';
-import {LoginScreen} from '../src/screens/LoginScreen';
-import {RegisterScreen} from '../src/screens/RegisterScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import type { AuthStackParamList } from '../src/navigation/types';
+import { LoginScreen } from '../src/screens/LoginScreen';
+import { RegisterScreen } from '../src/screens/RegisterScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/auth/secureStorage');
@@ -24,7 +22,7 @@ function renderScreen() {
     <ThemeProvider>
       <AuthProvider>
         <NavigationContainer>
-          <Stack.Navigator initialRouteName="Register" screenOptions={{headerShown: false}}>
+          <Stack.Navigator initialRouteName="Register" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
           </Stack.Navigator>
@@ -68,11 +66,11 @@ describe('RegisterScreen', () => {
   });
 
   it('sends registration data to the API', async () => {
-    mockedAuth.register.mockResolvedValue({id: 2, username: 'bob', email: 'bob@example.com'});
+    mockedAuth.register.mockResolvedValue({ id: 2, username: 'bob', email: 'bob@example.com' });
     mockedAuth.login.mockResolvedValue({
       access: 'a',
       refresh: 'r',
-      user: {id: 2, username: 'bob', email: 'bob@example.com'},
+      user: { id: 2, username: 'bob', email: 'bob@example.com' },
     });
     await fillValidForm();
 

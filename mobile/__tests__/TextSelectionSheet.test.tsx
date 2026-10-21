@@ -6,11 +6,11 @@
  * text against edit attempts, dismissal paths (Cancel, Close, backdrop,
  * Android back) that never capture, and clean state on reopening.
  */
-import React from 'react';
-import {act, fireEvent, render, screen} from '@testing-library/react-native';
 
-import {TextSelectionSheet} from '../src/screens/TextSelectionSheet';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+
+import { TextSelectionSheet } from '../src/screens/TextSelectionSheet';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 const MESSAGE = 'The early bird catches the worm.';
 
@@ -38,13 +38,13 @@ async function renderSheet(overrides: SheetOverrides = {}) {
 async function selectRange(start: number, end: number): Promise<void> {
   const input = screen.getByTestId('chat-selection-input');
   await fireEvent(input, 'selectionChange', {
-    nativeEvent: {selection: {start, end}},
+    nativeEvent: { selection: { start, end } },
   });
 }
 
 describe('TextSelectionSheet', () => {
   it('renders nothing while closed', async () => {
-    await renderSheet({visible: false});
+    await renderSheet({ visible: false });
 
     expect(screen.queryByTestId('chat-selection-modal')).toBeNull();
     expect(screen.queryByTestId('chat-selection')).toBeNull();
@@ -55,28 +55,20 @@ describe('TextSelectionSheet', () => {
 
     const input = screen.getByTestId('chat-selection-input');
     expect(input.props.value).toBe(MESSAGE);
-    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent(
-      'Nothing selected yet.',
-    );
-    expect(
-      (screen.getByTestId('chat-selection-save').props.accessibilityState ?? {})
-        .disabled,
-    ).toBe(true);
+    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent('Nothing selected yet.');
+    expect(screen.getByTestId('chat-selection-save').props.accessibilityState?.disabled).toBe(true);
   });
 
   it('previews and saves a single selected word exactly', async () => {
     const onSave = jest.fn();
-    await renderSheet({onSave});
+    await renderSheet({ onSave });
     // "The early bird…" — "early" spans indices 4–9.
     await selectRange(4, 9);
 
-    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent(
-      'early',
+    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent('early');
+    expect(screen.getByTestId('chat-selection-save').props.accessibilityState?.disabled).toBe(
+      false,
     );
-    expect(
-      (screen.getByTestId('chat-selection-save').props.accessibilityState ?? {})
-        .disabled,
-    ).toBe(false);
 
     await fireEvent.press(screen.getByTestId('chat-selection-save'));
 
@@ -86,13 +78,11 @@ describe('TextSelectionSheet', () => {
 
   it('trims whitespace dragged into a multi-word phrase selection', async () => {
     const onSave = jest.fn();
-    await renderSheet({onSave});
+    await renderSheet({ onSave });
     // A sloppy drag from the space before "early" through "bird".
     await selectRange(3, 14);
 
-    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent(
-      'early bird',
-    );
+    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent('early bird');
 
     await fireEvent.press(screen.getByTestId('chat-selection-save'));
 
@@ -102,7 +92,7 @@ describe('TextSelectionSheet', () => {
   it('captures multi-line expressions spanning newlines', async () => {
     const onSave = jest.fn();
     const content = 'Line one.\nA second sentence follows.';
-    await renderSheet({content, onSave});
+    await renderSheet({ content, onSave });
 
     // "Line o|ne.\nA second| sentence…" — a drag across the line break.
     const expression = 'ne.\nA second';
@@ -115,24 +105,16 @@ describe('TextSelectionSheet', () => {
 
   it('keeps Save disabled for collapsed and whitespace-only selections', async () => {
     const onSave = jest.fn();
-    await renderSheet({onSave});
+    await renderSheet({ onSave });
 
     // Collapsed caret between words.
     await selectRange(9, 9);
-    expect(
-      (screen.getByTestId('chat-selection-save').props.accessibilityState ?? {})
-        .disabled,
-    ).toBe(true);
+    expect(screen.getByTestId('chat-selection-save').props.accessibilityState?.disabled).toBe(true);
 
     // Only blanks and a newline were swept over.
     await selectRange(3, 4);
-    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent(
-      'Nothing selected yet.',
-    );
-    expect(
-      (screen.getByTestId('chat-selection-save').props.accessibilityState ?? {})
-        .disabled,
-    ).toBe(true);
+    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent('Nothing selected yet.');
+    expect(screen.getByTestId('chat-selection-save').props.accessibilityState?.disabled).toBe(true);
 
     await fireEvent.press(screen.getByTestId('chat-selection-save'));
     expect(onSave).not.toHaveBeenCalled();
@@ -150,7 +132,7 @@ describe('TextSelectionSheet', () => {
   it('dismisses through Cancel, Close, backdrop tap and Android back without saving', async () => {
     const onClose = jest.fn();
     const onSave = jest.fn();
-    await renderSheet({onClose, onSave});
+    await renderSheet({ onClose, onSave });
     await selectRange(4, 9);
 
     await fireEvent.press(screen.getByTestId('chat-selection-cancel'));
@@ -177,9 +159,7 @@ describe('TextSelectionSheet', () => {
     );
     const utils = await render(sheet(true));
     await selectRange(4, 9);
-    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent(
-      'early',
-    );
+    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent('early');
 
     // Closing unmounts the surface; reopening mounts a fresh one with no
     // inherited selection.
@@ -190,8 +170,6 @@ describe('TextSelectionSheet', () => {
       utils.rerender(sheet(true));
     });
 
-    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent(
-      'Nothing selected yet.',
-    );
+    expect(screen.getByTestId('chat-selection-preview')).toHaveTextContent('Nothing selected yet.');
   });
 });

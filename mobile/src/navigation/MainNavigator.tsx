@@ -7,27 +7,27 @@
  * configuration editor pushed from Settings (TASK-092); Practice is the
  * listening trainer and SpeakingPractice the karaoke read-aloud screen.
  */
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import {AIProviderSettingsScreen} from '../screens/AIProviderSettingsScreen';
-import {ChatScreen} from '../screens/ChatScreen';
-import {HistoryScreen} from '../screens/HistoryScreen';
-import {HomeScreen} from '../screens/HomeScreen';
-import {LevelScreen} from '../screens/LevelScreen';
-import {NewConversationScreen} from '../screens/NewConversationScreen';
-import {PracticeScreen} from '../screens/PracticeScreen';
-import {SentenceTopicsScreen} from '../screens/SentenceTopicsScreen';
-import {SentenceTopicNewScreen} from '../screens/SentenceTopicNewScreen';
-import {SentenceTopicScreen} from '../screens/SentenceTopicScreen';
-import {SentencePracticeScreen} from '../screens/SentencePracticeScreen';
-import {SettingsScreen} from '../screens/SettingsScreen';
-import {SpeakingHistoryScreen} from '../screens/SpeakingHistoryScreen';
-import {SpeakingPracticeScreen} from '../screens/SpeakingPracticeScreen';
-import {TTSSettingsScreen} from '../screens/TTSSettingsScreen';
-import {VoiceManagerScreen} from '../screens/VoiceManagerScreen';
-import {VocabularyScreen} from '../screens/VocabularyScreen';
-import {settingsScreenOptions, stackScreenOptions} from './stackScreenOptions';
-import type {MainStackParamList} from './types';
+import { AIProviderSettingsScreen } from '../screens/AIProviderSettingsScreen';
+import { ChatScreen } from '../screens/ChatScreen';
+import { HistoryScreen } from '../screens/HistoryScreen';
+import { HomeScreen } from '../screens/HomeScreen';
+import { LevelScreen } from '../screens/LevelScreen';
+import { NewConversationScreen } from '../screens/NewConversationScreen';
+import { PracticeScreen } from '../screens/PracticeScreen';
+import { SentencePracticeScreen } from '../screens/SentencePracticeScreen';
+import { SentenceTopicNewScreen } from '../screens/SentenceTopicNewScreen';
+import { SentenceTopicScreen } from '../screens/SentenceTopicScreen';
+import { SentenceTopicsScreen } from '../screens/SentenceTopicsScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
+import { SpeakingHistoryScreen } from '../screens/SpeakingHistoryScreen';
+import { SpeakingPracticeScreen } from '../screens/SpeakingPracticeScreen';
+import { TTSSettingsScreen } from '../screens/TTSSettingsScreen';
+import { VocabularyScreen } from '../screens/VocabularyScreen';
+import { VoiceManagerScreen } from '../screens/VoiceManagerScreen';
+import { settingsScreenOptions, stackScreenOptions } from './stackScreenOptions';
+import type { MainStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
@@ -38,11 +38,7 @@ export function MainNavigator() {
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="NewConversation" component={NewConversationScreen} />
       <Stack.Screen name="History" component={HistoryScreen} />
-      <Stack.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={settingsScreenOptions}
-      />
+      <Stack.Screen name="Settings" component={SettingsScreen} options={settingsScreenOptions} />
       <Stack.Screen name="Level" component={LevelScreen} />
       <Stack.Screen name="Vocabulary" component={VocabularyScreen} />
       <Stack.Screen name="AIProviderSettings" component={AIProviderSettingsScreen} />

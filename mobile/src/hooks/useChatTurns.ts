@@ -11,30 +11,28 @@
  * repository. The screen only decides when a turn starts; this hook runs
  * it and keeps the message list consistent.
  */
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import type {Dispatch, SetStateAction} from 'react';
 
-import type {ChatStreamEvent, ChatStreamHandle} from '../api/chatStream';
-import {streamChatTurn, streamRetryTurn} from '../api/chatStream';
-import type {AuthedRequester} from '../auth/authedRequest';
-import {toErrorMessage} from '../auth/AuthContext';
-import type {ChatMessage} from '../api/sessions';
-import {listMessages} from '../api/sessions';
-import {LocalConversationRepository} from '../db/conversationRepository';
-import {getLocalDatabase} from '../db/database';
-import {listMessages as listLocalMessages} from '../db/messageStore';
-import {getRuntimeApplicationMode} from '../mode/runtime';
-import type {ApplicationMode} from '../mode/types';
-import {
-  buildServerlessContext,
-  updateSummaryIfNeeded,
-} from '../serverless/conversationContext';
-import {retryServerlessTurn, streamServerlessTurn} from '../serverless/chatStreaming';
-import {createProviderClient} from '../serverless/providerRegistry';
-import {loadServerlessConfig} from '../serverless/settings';
-import type {LLMClient, ServerlessStreamEvent} from '../serverless/types';
-import {bySequence} from '../services/conversationSource';
-import {DeltaBuffer, STREAM_FLUSH_INTERVAL_MS} from '../screens/streamingUx';
+import type { Dispatch, SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import type { ChatStreamEvent, ChatStreamHandle } from '../api/chatStream';
+import { streamChatTurn, streamRetryTurn } from '../api/chatStream';
+import type { ChatMessage } from '../api/sessions';
+import { listMessages } from '../api/sessions';
+import { toErrorMessage } from '../auth/AuthContext';
+import type { AuthedRequester } from '../auth/authedRequest';
+import { LocalConversationRepository } from '../db/conversationRepository';
+import { getLocalDatabase } from '../db/database';
+import { listMessages as listLocalMessages } from '../db/messageStore';
+import { getRuntimeApplicationMode } from '../mode/runtime';
+import type { ApplicationMode } from '../mode/types';
+import { DeltaBuffer, STREAM_FLUSH_INTERVAL_MS } from '../screens/streamingUx';
+import { retryServerlessTurn, streamServerlessTurn } from '../serverless/chatStreaming';
+import { buildServerlessContext, updateSummaryIfNeeded } from '../serverless/conversationContext';
+import { createProviderClient } from '../serverless/providerRegistry';
+import { loadServerlessConfig } from '../serverless/settings';
+import type { LLMClient, ServerlessStreamEvent } from '../serverless/types';
+import { bySequence } from '../services/conversationSource';
 
 /**
  * Serverless turns (TASK-086) speak the same application event language as
@@ -43,7 +41,7 @@ import {DeltaBuffer, STREAM_FLUSH_INTERVAL_MS} from '../screens/streamingUx';
  */
 function toChatEvent(event: ServerlessStreamEvent): ChatStreamEvent {
   if (event.type === 'failed') {
-    return {type: 'error', message: event.message, retryable: event.retryable};
+    return { type: 'error', message: event.message, retryable: event.retryable };
   }
   return event;
 }
@@ -81,7 +79,7 @@ export interface UseChatTurnsResult {
 }
 
 export function useChatTurns(options: UseChatTurnsOptions): UseChatTurnsResult {
-  const {sessionId, mode, getAccessToken, authedRequest, setMessages} = options;
+  const { sessionId, mode, getAccessToken, authedRequest, setMessages } = options;
 
   const [streaming, setStreaming] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -137,9 +135,7 @@ export function useChatTurns(options: UseChatTurnsOptions): UseChatTurnsResult {
         }
         setMessages(prev =>
           prev.map(message =>
-            message.id === targetId
-              ? {...message, content: message.content + chunk}
-              : message,
+            message.id === targetId ? { ...message, content: message.content + chunk } : message,
           ),
         );
       }, STREAM_FLUSH_INTERVAL_MS),
@@ -239,9 +235,7 @@ export function useChatTurns(options: UseChatTurnsOptions): UseChatTurnsResult {
         targetId === null
           ? prev
           : prev.map(message =>
-              message.id === targetId
-                ? {...message, status: 'complete', content: text}
-                : message,
+              message.id === targetId ? { ...message, status: 'complete', content: text } : message,
             ),
       );
       streamHandleRef.current = null;
@@ -456,9 +450,7 @@ export function useChatTurns(options: UseChatTurnsOptions): UseChatTurnsResult {
       setStreamError(null);
       streamingAssistantIdRef.current = message.id;
       setMessages(prev =>
-        prev.map(row =>
-          row.id === message.id ? {...row, status: 'pending', content: ''} : row,
-        ),
+        prev.map(row => (row.id === message.id ? { ...row, status: 'pending', content: '' } : row)),
       );
       setStreaming(true);
       startRetry(sid, message.id);

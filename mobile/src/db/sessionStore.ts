@@ -4,14 +4,13 @@
  * Low-level store used by the serverless conversation repository (TASK-082);
  * listing is most-recently-updated first to mirror the server API (TASK-031).
  */
-import type {EnglishLevel} from '../api/profile';
+import type { EnglishLevel } from '../api/profile';
 
-import type {SqlExecutor} from './driver';
-import {nowIso} from './driver';
-import type {LocalSession, NewLocalSession} from './types';
+import type { SqlExecutor } from './driver';
+import { nowIso } from './driver';
+import type { LocalSession, NewLocalSession } from './types';
 
-const SESSION_COLUMNS =
-  'id, title, topic, topic_hint, learning_level, created_at, updated_at';
+const SESSION_COLUMNS = 'id, title, topic, topic_hint, learning_level, created_at, updated_at';
 
 function mapSession(row: Record<string, unknown>): LocalSession {
   return {
@@ -59,19 +58,14 @@ export async function insertSession(
 }
 
 /** Read one session by id; resolves null when it does not exist. */
-export async function getSession(
-  db: SqlExecutor,
-  sessionId: number,
-): Promise<LocalSession | null> {
+export async function getSession(db: SqlExecutor, sessionId: number): Promise<LocalSession | null> {
   const result = await db.execute(`${sessionQuery()} WHERE id = ?`, [sessionId]);
   return result.rows[0] ? mapSession(result.rows[0]) : null;
 }
 
 /** All sessions, most recently updated first. */
 export async function listSessions(db: SqlExecutor): Promise<LocalSession[]> {
-  const result = await db.execute(
-    `${sessionQuery()} ORDER BY updated_at DESC, id DESC`,
-  );
+  const result = await db.execute(`${sessionQuery()} ORDER BY updated_at DESC, id DESC`);
   return result.rows.map(mapSession);
 }
 
@@ -89,24 +83,15 @@ export async function renameSession(
 }
 
 /** Touch updated_at without changing content (e.g. after chat activity). */
-export async function touchSession(
-  db: SqlExecutor,
-  sessionId: number,
-): Promise<void> {
-  await db.execute('UPDATE sessions SET updated_at = ? WHERE id = ?', [
-    nowIso(),
-    sessionId,
-  ]);
+export async function touchSession(db: SqlExecutor, sessionId: number): Promise<void> {
+  await db.execute('UPDATE sessions SET updated_at = ? WHERE id = ?', [nowIso(), sessionId]);
 }
 
 /**
  * Delete a session. Messages and the summary are removed by the
  * ON DELETE CASCADE foreign keys.
  */
-export async function deleteSession(
-  db: SqlExecutor,
-  sessionId: number,
-): Promise<boolean> {
+export async function deleteSession(db: SqlExecutor, sessionId: number): Promise<boolean> {
   const result = await db.execute('DELETE FROM sessions WHERE id = ?', [sessionId]);
   return result.rowsAffected > 0;
 }

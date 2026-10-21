@@ -1,23 +1,22 @@
-import React from 'react';
-import {NavigationContainer, createNavigationContainerRef} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createNavigationContainerRef, NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import * as authApi from '../src/api/auth';
+import { ApiError } from '../src/api/client';
 import * as profileApi from '../src/api/profile';
-import {ApiError} from '../src/api/client';
-import {AuthProvider} from '../src/auth/AuthContext';
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import {getLocalDatabase} from '../src/db/database';
+import { getLocalDatabase } from '../src/db/database';
 import * as profileStore from '../src/db/profileStore';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
-import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
-import type {MainStackParamList} from '../src/navigation/types';
-import {LevelScreen} from '../src/screens/LevelScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
+import { DEFAULT_APPLICATION_MODE } from '../src/mode/types';
+import type { MainStackParamList } from '../src/navigation/types';
+import { LevelScreen } from '../src/screens/LevelScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/profile', () => ({
@@ -53,9 +52,9 @@ function renderScreen() {
             ref={ref}
             initialState={{
               index: 1,
-              routes: [{name: 'Chat'}, {name: 'Level'}],
+              routes: [{ name: 'Chat' }, { name: 'Level' }],
             }}>
-            <Stack.Navigator screenOptions={{headerShown: false}}>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
               <Stack.Screen name="Chat">{() => null}</Stack.Screen>
               <Stack.Screen name="History">{() => null}</Stack.Screen>
               <Stack.Screen name="Settings">{() => null}</Stack.Screen>
@@ -76,7 +75,7 @@ function renderScreen() {
 }
 
 function checkedState(testId: string): boolean | undefined {
-  const props = screen.getByTestId(testId).props as {accessibilityState?: {checked?: boolean}};
+  const props = screen.getByTestId(testId).props as { accessibilityState?: { checked?: boolean } };
   return props.accessibilityState?.checked;
 }
 
@@ -92,11 +91,11 @@ beforeEach(async () => {
   // Server-flow journeys: pin the persisted mode because fresh installs
   // now default to serverless.
   await saveApplicationMode('server');
-  mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-  mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
-  mockedProfile.getProfile.mockResolvedValue({level: 'B1'});
+  mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+  mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
+  mockedProfile.getProfile.mockResolvedValue({ level: 'B1' });
   mockedGetDb.mockResolvedValue({
-    execute: jest.fn(async () => ({rows: [], rowsAffected: 0, insertId: null})),
+    execute: jest.fn(async () => ({ rows: [], rowsAffected: 0, insertId: null })),
   } as never);
 });
 
@@ -116,7 +115,7 @@ describe('LevelScreen', () => {
   });
 
   it('preselects the level stored on the server', async () => {
-    mockedProfile.getProfile.mockResolvedValue({level: 'B2'});
+    mockedProfile.getProfile.mockResolvedValue({ level: 'B2' });
     renderScreen();
 
     await waitFor(() => expect(checkedState('level-B2')).toBe(true));
@@ -125,7 +124,7 @@ describe('LevelScreen', () => {
   });
 
   it('persists a newly selected level through the profile API', async () => {
-    mockedProfile.updateProfile.mockResolvedValue({level: 'C1'});
+    mockedProfile.updateProfile.mockResolvedValue({ level: 'C1' });
     renderScreen();
     await waitFor(() => expect(checkedState('level-B1')).toBe(true));
 
@@ -153,13 +152,11 @@ describe('LevelScreen', () => {
 
   it('still allows saving when loading the current level fails', async () => {
     mockedProfile.getProfile.mockRejectedValue(new ApiError(0, 'Network request failed.'));
-    mockedProfile.updateProfile.mockResolvedValue({level: 'A2'});
+    mockedProfile.updateProfile.mockResolvedValue({ level: 'A2' });
     renderScreen();
 
     await waitFor(() =>
-      expect(screen.getByTestId('form-error')).toHaveTextContent(
-        /server is unreachable right now/,
-      ),
+      expect(screen.getByTestId('form-error')).toHaveTextContent(/server is unreachable right now/),
     );
 
     await fireEvent.press(screen.getByTestId('level-A2'));
@@ -169,7 +166,7 @@ describe('LevelScreen', () => {
   });
 
   it('pops back to the previous route on back', async () => {
-    const {focusedRouteName} = renderScreen();
+    const { focusedRouteName } = renderScreen();
     await waitFor(() => expect(screen.getByTestId('level-A1')).toBeOnTheScreen());
     expect(focusedRouteName()).toBe('Level');
 
@@ -190,7 +187,7 @@ describe('LevelScreen in serverless mode (SPEC TASK-091)', () => {
   });
 
   it('loads the locally stored level without calling the server profile API', async () => {
-    mockedGetLocalProfile.mockResolvedValue({level: 'B2', updated_at: '2026-01-01'});
+    mockedGetLocalProfile.mockResolvedValue({ level: 'B2', updated_at: '2026-01-01' });
     await enterServerlessMode();
     renderScreen();
 
@@ -200,8 +197,8 @@ describe('LevelScreen in serverless mode (SPEC TASK-091)', () => {
   });
 
   it('persists a new selection through the local profile store only', async () => {
-    mockedGetLocalProfile.mockResolvedValue({level: 'B2', updated_at: '2026-01-01'});
-    mockedSaveLocalProfile.mockResolvedValue({level: 'C1', updated_at: '2026-01-02'});
+    mockedGetLocalProfile.mockResolvedValue({ level: 'B2', updated_at: '2026-01-01' });
+    mockedSaveLocalProfile.mockResolvedValue({ level: 'C1', updated_at: '2026-01-02' });
     await enterServerlessMode();
     renderScreen();
     await waitFor(() => expect(checkedState('level-B2')).toBe(true));
@@ -216,7 +213,7 @@ describe('LevelScreen in serverless mode (SPEC TASK-091)', () => {
   });
 
   it('keeps the confirmed selection and surfaces an error when the local write fails', async () => {
-    mockedGetLocalProfile.mockResolvedValue({level: 'B1', updated_at: ''});
+    mockedGetLocalProfile.mockResolvedValue({ level: 'B1', updated_at: '' });
     mockedSaveLocalProfile.mockRejectedValue(new Error('disk full'));
     await enterServerlessMode();
     renderScreen();
@@ -224,15 +221,13 @@ describe('LevelScreen in serverless mode (SPEC TASK-091)', () => {
 
     await fireEvent.press(screen.getByTestId('level-C1'));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('form-error')).toHaveTextContent(/disk full/i),
-    );
+    await waitFor(() => expect(screen.getByTestId('form-error')).toHaveTextContent(/disk full/i));
     expect(checkedState('level-B1')).toBe(true);
     expect(checkedState('level-C1')).toBe(false);
   });
 
   it('works while credentials are unresolved because no backend is ever contacted', async () => {
-    mockedGetLocalProfile.mockResolvedValue({level: 'AUTO', updated_at: ''});
+    mockedGetLocalProfile.mockResolvedValue({ level: 'AUTO', updated_at: '' });
     await enterServerlessMode();
     renderScreen();
 

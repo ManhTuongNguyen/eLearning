@@ -2,10 +2,10 @@
  * Tests for serverless suggested-reply generation (SPEC TASK-088).
  */
 
-import {generateSuggestions, SUGGESTION_COUNT} from '../suggestions';
-import type {LocalMessage} from '../../db/types';
-import type {OpenRouterClient, CompletionResult} from '../types';
-import {OpenRouterAvailabilityError, OpenRouterResponseError} from '../errors';
+import type { LocalMessage } from '../../db/types';
+import { OpenRouterAvailabilityError, OpenRouterResponseError } from '../errors';
+import { generateSuggestions, SUGGESTION_COUNT } from '../suggestions';
+import type { CompletionResult, OpenRouterClient } from '../types';
 
 describe('generateSuggestions', () => {
   const baseTopic = {
@@ -152,7 +152,7 @@ describe('generateSuggestions', () => {
     const client = mockClient(VALID_JSON);
 
     await expect(
-      generateSuggestions(client, {level: 'A1', topic: baseTopic, selectedMessage: '   '}),
+      generateSuggestions(client, { level: 'A1', topic: baseTopic, selectedMessage: '   ' }),
     ).rejects.toThrow('selectedMessage must be a non-empty string.');
     expect(client.complete).not.toHaveBeenCalled();
   });
@@ -165,7 +165,7 @@ describe('generateSuggestions', () => {
     };
 
     await expect(
-      generateSuggestions(client, {level: 'A1', topic: baseTopic, selectedMessage: 'Hi!'}),
+      generateSuggestions(client, { level: 'A1', topic: baseTopic, selectedMessage: 'Hi!' }),
     ).rejects.toBeInstanceOf(OpenRouterAvailabilityError);
   });
 
@@ -173,19 +173,19 @@ describe('generateSuggestions', () => {
     ['non-JSON text', 'I would suggest asking follow-up questions instead.'],
     ['a non-object payload', '"replies"'],
     ['a missing replies list', '{"answer": ["a", "b", "c"]}'],
-    ['too few replies', JSON.stringify({replies: ['Only one here.']})],
-    ['too many replies', JSON.stringify({replies: ['one', 'two', 'three', 'four']})],
-    ['a blank reply', JSON.stringify({replies: ['one', '   ', 'three']})],
-    ['a non-string reply', JSON.stringify({replies: ['one', 2, 'three']})],
+    ['too few replies', JSON.stringify({ replies: ['Only one here.'] })],
+    ['too many replies', JSON.stringify({ replies: ['one', 'two', 'three', 'four'] })],
+    ['a blank reply', JSON.stringify({ replies: ['one', '   ', 'three'] })],
+    ['a non-string reply', JSON.stringify({ replies: ['one', 2, 'three'] })],
     [
       'duplicate replies',
-      JSON.stringify({replies: ['Sounds good', 'sounds GOOD', 'Tell me more']}),
+      JSON.stringify({ replies: ['Sounds good', 'sounds GOOD', 'Tell me more'] }),
     ],
   ])('rejects %s with OpenRouterResponseError', async (_label, responseText) => {
     const client = mockClient(responseText);
 
     await expect(
-      generateSuggestions(client, {level: 'B1', topic: baseTopic, selectedMessage: 'Hi!'}),
+      generateSuggestions(client, { level: 'B1', topic: baseTopic, selectedMessage: 'Hi!' }),
     ).rejects.toBeInstanceOf(OpenRouterResponseError);
   });
 });

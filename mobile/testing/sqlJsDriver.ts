@@ -6,9 +6,9 @@
  * Never import this module from application code — sql.js is a devDependency
  * that must not reach the Metro bundle.
  */
-import initSqlJs, {type Database} from 'sql.js';
+import initSqlJs, { type Database } from 'sql.js';
 
-import type {SqlDriver, SqlExecutor, SqlParam, SqlResult} from '../src/db/driver';
+import type { SqlDriver, SqlExecutor, SqlParam, SqlResult } from '../src/db/driver';
 
 function isInsert(sql: string): boolean {
   return /^\s*(WITH[\s\S]*?)?\s*INSERT\b/i.test(sql);
@@ -42,7 +42,7 @@ class SqlJsDriver implements SqlDriver {
         }
       }
 
-      return {rows, rowsAffected, insertId};
+      return { rows, rowsAffected, insertId };
     } finally {
       statement.free();
     }
@@ -51,7 +51,7 @@ class SqlJsDriver implements SqlDriver {
   async transaction<T>(work: (tx: SqlExecutor) => Promise<T>): Promise<T> {
     await this.execute('BEGIN IMMEDIATE');
     try {
-      const outcome = await work({execute: (sql, params) => this.execute(sql, params)});
+      const outcome = await work({ execute: (sql, params) => this.execute(sql, params) });
       await this.execute('COMMIT');
       return outcome;
     } catch (error) {

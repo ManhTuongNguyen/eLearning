@@ -12,8 +12,8 @@
  * backend request keeps one wire contract.
  */
 
-import { assertServerApiAllowed } from '../mode/runtime';
 import { API_BASE_URL } from '../config';
+import { assertServerApiAllowed } from '../mode/runtime';
 
 /**
  * Request deadline for backend calls, matching the backend LLM read timeout
@@ -105,8 +105,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const timer =
     timeoutMs > 0
       ? setTimeout(() => {
-        controller.abort();
-      }, timeoutMs)
+          controller.abort();
+        }, timeoutMs)
       : null;
 
   let response: Response;
@@ -121,11 +121,17 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     // Distinguish timeout from general network failure when possible. The
     // cause is surfaced through the thrown ApiError, never logged.
     const isTimeout =
-      err instanceof Error && (err.name === 'AbortError' || err.message.toLowerCase().includes('timeout'));
+      err instanceof Error &&
+      (err.name === 'AbortError' || err.message.toLowerCase().includes('timeout'));
     if (isTimeout) {
       throw new ApiError(0, 'The request timed out. Please try again.', {}, 'timeout');
     }
-    throw new ApiError(0, 'Network request failed. Check your connection and try again.', {}, 'network');
+    throw new ApiError(
+      0,
+      'Network request failed. Check your connection and try again.',
+      {},
+      'network',
+    );
   } finally {
     if (timer !== null) {
       clearTimeout(timer);
@@ -244,7 +250,8 @@ export function normalizeApiError(status: number, payload: unknown): ApiError {
       ([field, messages]) => `${field}: ${messages.join(' ')}`,
     );
     const message =
-      detail ?? (fieldMessages.length > 0 ? fieldMessages.join('\n') : `Request failed (${status}).`);
+      detail ??
+      (fieldMessages.length > 0 ? fieldMessages.join('\n') : `Request failed (${status}).`);
 
     // Override category for LLM-specific errors
     let finalCategory = category;

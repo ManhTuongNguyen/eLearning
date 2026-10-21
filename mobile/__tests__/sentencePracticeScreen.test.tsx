@@ -8,32 +8,32 @@
  * tests cover both card shapes, the suggested-grade override, requeue-once and
  * the caught-up empty state.
  */
-import React from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {Keyboard} from 'react-native';
-import {act, fireEvent, render, waitFor} from '@testing-library/react-native';
 
-import type {SqlDriver} from '../src/db/driver';
-import {migrateDatabase} from '../src/db/migrations';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Keyboard } from 'react-native';
+
+import type { SqlDriver } from '../src/db/driver';
+import { migrateDatabase } from '../src/db/migrations';
 import {
   createSentenceTopic,
   getSentenceById,
   insertSentences,
   listReviewLogForSentence,
 } from '../src/db/sentenceRepository';
-import type {SentenceTopicRecord} from '../src/db/types';
-import type {SentencePracticeScreenProps} from '../src/navigation/types';
-import {savePracticeMode} from '../src/preferences/practiceMode';
-import {SentencePracticeScreen} from '../src/screens/SentencePracticeScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
-import type {TextToSpeechEngine} from '../src/tts/textToSpeech';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import type { SentenceTopicRecord } from '../src/db/types';
+import type { SentencePracticeScreenProps } from '../src/navigation/types';
+import { savePracticeMode } from '../src/preferences/practiceMode';
+import { SentencePracticeScreen } from '../src/screens/SentencePracticeScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+import type { TextToSpeechEngine } from '../src/tts/textToSpeech';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 let db: SqlDriver;
 
 jest.mock('../src/db/database', () => {
   const actualMigrations = jest.requireActual('../src/db/migrations').migrateDatabase;
-  const handle: {db: SqlDriver} = {db: undefined as never};
+  const handle: { db: SqlDriver } = { db: undefined as never };
   return {
     getLocalDatabase: jest.fn(async () => {
       await actualMigrations(handle.db);
@@ -72,7 +72,7 @@ function screenProps(topicId: number): SentencePracticeScreenProps {
     route: {
       key: 'sentence-practice-test',
       name: 'SentencePractice',
-      params: {topicId},
+      params: { topicId },
     },
   } as unknown as SentencePracticeScreenProps;
 }
@@ -100,12 +100,12 @@ function makeEngine(): EngineDouble {
 
 interface DeferredEngineDouble {
   engine: TextToSpeechEngine;
-  spoken: {text: string; release: () => void}[];
+  spoken: { text: string; release: () => void }[];
   stopMock: jest.Mock;
 }
 
 function makeDeferredEngine(): DeferredEngineDouble {
-  const spoken: {text: string; release: () => void}[] = [];
+  const spoken: { text: string; release: () => void }[] = [];
   const stopMock = jest.fn();
   return {
     spoken,
@@ -113,7 +113,7 @@ function makeDeferredEngine(): DeferredEngineDouble {
     engine: {
       speak(text: string) {
         return new Promise<void>(resolve => {
-          spoken.push({text, release: resolve});
+          spoken.push({ text, release: resolve });
         });
       },
       stop: stopMock,
@@ -121,10 +121,7 @@ function makeDeferredEngine(): DeferredEngineDouble {
   };
 }
 
-async function renderPractice(
-  topicId: number,
-  speech?: TextToSpeechEngine,
-) {
+async function renderPractice(topicId: number, speech?: TextToSpeechEngine) {
   const view = await render(
     <ThemeProvider>
       <SentencePracticeScreen {...screenProps(topicId)} speech={speech} />
@@ -153,7 +150,7 @@ async function seedTopic(texts: readonly string[]): Promise<{
       situation: `Situation for ${text}`,
     })),
   );
-  return {topic, ids: inserted.map(sentence => sentence.id)};
+  return { topic, ids: inserted.map(sentence => sentence.id) };
 }
 
 async function setDue(id: number, iso: string): Promise<void> {
@@ -197,7 +194,7 @@ afterEach(async () => {
 
 describe('SentencePracticeScreen — session build', () => {
   test('shows only due, non-suspended cards in due order and counts them', async () => {
-    const {topic, ids} = await seedTopic([
+    const { topic, ids } = await seedTopic([
       'First sentence',
       'Second sentence',
       'Third sentence',
@@ -213,12 +210,10 @@ describe('SentencePracticeScreen — session build', () => {
     await setDue(ids[4], minutesAgo(10));
     await setDue(ids[5], minutesAgo(4));
 
-    const {engine, spoken} = makeEngine();
+    const { engine, spoken } = makeEngine();
     const view = await renderPractice(topic.id, engine);
 
-    expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent(
-      '1 / 4',
-    );
+    expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('1 / 4');
     await waitFor(() => {
       expect(spoken).toEqual(['Oldest sentence']);
     });
@@ -227,8 +222,8 @@ describe('SentencePracticeScreen — session build', () => {
 
 describe('SentencePracticeScreen — dictation card', () => {
   test('auto-plays once, replays on demand and silences on card change', async () => {
-    const {topic} = await seedTopic(['First sentence', 'Second sentence']);
-    const {engine, spoken, stopMock} = makeDeferredEngine();
+    const { topic } = await seedTopic(['First sentence', 'Second sentence']);
+    const { engine, spoken, stopMock } = makeDeferredEngine();
     const view = await renderPractice(topic.id, engine);
     const texts = () => spoken.map(item => item.text);
     const dismissSpy = jest.spyOn(Keyboard, 'dismiss');
@@ -245,32 +240,30 @@ describe('SentencePracticeScreen — dictation card', () => {
     await fireEvent.press(view.getByTestId('sentence-grade-good'));
 
     await waitFor(() => {
-      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent(
-        '2 / 2',
-      );
+      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('2 / 2');
     });
     await waitFor(() => {
-      expect(texts()).toEqual([
-        'First sentence',
-        'First sentence',
-        'Second sentence',
-      ]);
+      expect(texts()).toEqual(['First sentence', 'First sentence', 'Second sentence']);
     });
     expect(stopMock).toHaveBeenCalled();
 
     const stopsBeforeBlur = stopMock.mock.calls.length;
     await act(async () => {
-      (listeners.blur ?? []).forEach(callback => callback());
+      (listeners.blur ?? []).forEach(callback => {
+        callback();
+      });
     });
     expect(stopMock.mock.calls.length).toBeGreaterThan(stopsBeforeBlur);
 
     await view.unmount();
-    spoken.forEach(item => item.release());
+    spoken.forEach(item => {
+      item.release();
+    });
     dismissSpy.mockRestore();
   });
 
   test('persists the schedule and a dictation review-log row', async () => {
-    const {topic, ids} = await seedTopic(['Could I get a flat white, please?']);
+    const { topic, ids } = await seedTopic(['Could I get a flat white, please?']);
     const view = await renderPractice(topic.id);
 
     await answerAndCheck(view, 'could i get a flat white please');
@@ -278,27 +271,17 @@ describe('SentencePracticeScreen — dictation card', () => {
     expect(view.getByTestId('sentence-dictation-answer')).toHaveTextContent(
       'Could I get a flat white, please?',
     );
-    expect(view.getByTestId('sentence-dictation-answer').props.selectable).toBe(
-      true,
-    );
+    expect(view.getByTestId('sentence-dictation-answer').props.selectable).toBe(true);
     expect(view.getByTestId('sentence-dictation-meaning').props.selectable).toBe(true);
     expect(view.getByTestId('sentence-dictation-situation').props.selectable).toBe(true);
-    expect(view.getByTestId('sentence-diff-summary')).toHaveTextContent(
-      '7 correct',
-    );
-    expect(view.getByTestId('sentence-suggested-grade')).toHaveTextContent(
-      'Suggested: Good',
-    );
-    expect(
-      view.getByTestId('sentence-grade-good').props.accessibilityState?.selected,
-    ).toBe(true);
+    expect(view.getByTestId('sentence-diff-summary')).toHaveTextContent('7 correct');
+    expect(view.getByTestId('sentence-suggested-grade')).toHaveTextContent('Suggested: Good');
+    expect(view.getByTestId('sentence-grade-good').props.accessibilityState?.selected).toBe(true);
 
     await fireEvent.press(view.getByTestId('sentence-grade-good'));
 
     await view.findByTestId('sentence-practice-summary');
-    expect(view.getByTestId('sentence-practice-reviewed')).toHaveTextContent(
-      '1 card reviewed',
-    );
+    expect(view.getByTestId('sentence-practice-reviewed')).toHaveTextContent('1 card reviewed');
     expect(view.getByTestId('sentence-practice-grades')).toHaveTextContent(
       'Again 0 · Good 1 · Easy 0',
     );
@@ -315,24 +298,20 @@ describe('SentencePracticeScreen — dictation card', () => {
 
     const log = await listReviewLogForSentence(db, ids[0]);
     expect(log).toHaveLength(1);
-    expect(log[0]).toMatchObject({grade: 'good', mode: 'dictation'});
+    expect(log[0]).toMatchObject({ grade: 'good', mode: 'dictation' });
 
     await fireEvent.press(view.getByTestId('sentence-practice-back-to-topic'));
     expect(goBack).toHaveBeenCalled();
   });
 
   test('pre-suggests Again for a missing word and lets the learner override with Easy', async () => {
-    const {topic, ids} = await seedTopic(['I will have the same, thanks.']);
+    const { topic, ids } = await seedTopic(['I will have the same, thanks.']);
     const view = await renderPractice(topic.id);
 
     await answerAndCheck(view, 'I will have same thanks');
 
-    expect(view.getByTestId('sentence-suggested-grade')).toHaveTextContent(
-      'Suggested: Again',
-    );
-    expect(
-      view.getByTestId('sentence-grade-again').props.accessibilityState?.selected,
-    ).toBe(true);
+    expect(view.getByTestId('sentence-suggested-grade')).toHaveTextContent('Suggested: Again');
+    expect(view.getByTestId('sentence-grade-again').props.accessibilityState?.selected).toBe(true);
 
     await fireEvent.press(view.getByTestId('sentence-grade-easy'));
 
@@ -348,17 +327,17 @@ describe('SentencePracticeScreen — dictation card', () => {
       last_grade: 'easy',
     });
     const log = await listReviewLogForSentence(db, ids[0]);
-    expect(log[0]).toMatchObject({grade: 'easy', mode: 'dictation'});
+    expect(log[0]).toMatchObject({ grade: 'easy', mode: 'dictation' });
   });
 });
 
 describe('SentencePracticeScreen — recall card', () => {
   test('reveals meaning and answer, plays TTS and logs a recall grade', async () => {
-    const {topic, ids} = await seedTopic(['It was nice meeting you.']);
+    const { topic, ids } = await seedTopic(['It was nice meeting you.']);
     await setStatus(ids[0], 'review');
     await setDue(ids[0], minutesAgo(1));
 
-    const {engine, spoken} = makeEngine();
+    const { engine, spoken } = makeEngine();
     const view = await renderPractice(topic.id, engine);
 
     expect(view.getByTestId('sentence-recall-card')).toBeTruthy();
@@ -386,7 +365,7 @@ describe('SentencePracticeScreen — recall card', () => {
     await view.findByTestId('sentence-practice-summary');
 
     const log = await listReviewLogForSentence(db, ids[0]);
-    expect(log[0]).toMatchObject({grade: 'good', mode: 'recall'});
+    expect(log[0]).toMatchObject({ grade: 'good', mode: 'recall' });
   });
 
   test('forced modes override the schedule for every card', async () => {
@@ -410,8 +389,8 @@ describe('SentencePracticeScreen — recall card', () => {
 
 describe('SentencePracticeScreen — requeue and empty state', () => {
   test('keeps an Again card in the session until it is graded Good', async () => {
-    const {topic, ids} = await seedTopic(['First sentence', 'Second sentence']);
-    const {engine, spoken} = makeEngine();
+    const { topic, ids } = await seedTopic(['First sentence', 'Second sentence']);
+    const { engine, spoken } = makeEngine();
     const view = await renderPractice(topic.id, engine);
 
     await waitFor(() => {
@@ -421,9 +400,7 @@ describe('SentencePracticeScreen — requeue and empty state', () => {
     await answerAndCheck(view, 'First sentence');
     await fireEvent.press(view.getByTestId('sentence-grade-again'));
     await waitFor(() => {
-      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent(
-        '2 / 3',
-      );
+      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('2 / 3');
     });
     await waitFor(() => {
       expect(spoken).toEqual(['First sentence', 'Second sentence']);
@@ -432,25 +409,17 @@ describe('SentencePracticeScreen — requeue and empty state', () => {
     await answerAndCheck(view, 'Second sentence');
     await fireEvent.press(view.getByTestId('sentence-grade-good'));
     await waitFor(() => {
-      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent(
-        '3 / 3',
-      );
+      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('3 / 3');
     });
     await waitFor(() => {
-      expect(spoken).toEqual([
-        'First sentence',
-        'Second sentence',
-        'First sentence',
-      ]);
+      expect(spoken).toEqual(['First sentence', 'Second sentence', 'First sentence']);
     });
 
     // A second Again keeps the same card in the session instead of ending it.
     await answerAndCheck(view, 'First sentence');
     await fireEvent.press(view.getByTestId('sentence-grade-again'));
     await waitFor(() => {
-      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent(
-        '4 / 4',
-      );
+      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('4 / 4');
     });
 
     // Only Good releases the card and finishes the session.
@@ -458,9 +427,7 @@ describe('SentencePracticeScreen — requeue and empty state', () => {
     await fireEvent.press(view.getByTestId('sentence-grade-good'));
 
     await view.findByTestId('sentence-practice-summary');
-    expect(view.getByTestId('sentence-practice-reviewed')).toHaveTextContent(
-      '4 cards reviewed',
-    );
+    expect(view.getByTestId('sentence-practice-reviewed')).toHaveTextContent('4 cards reviewed');
     expect(view.getByTestId('sentence-practice-grades')).toHaveTextContent(
       'Again 2 · Good 2 · Easy 0',
     );
@@ -472,16 +439,14 @@ describe('SentencePracticeScreen — requeue and empty state', () => {
   });
 
   test('shows "All caught up" and names the next due time when nothing is due', async () => {
-    const {topic, ids} = await seedTopic(['Not due yet.']);
+    const { topic, ids } = await seedTopic(['Not due yet.']);
     await setDue(ids[0], daysAhead(2));
 
     const view = await renderPractice(topic.id);
 
     expect(view.getByTestId('sentence-practice-empty')).toBeTruthy();
     expect(view.getByText('All caught up')).toBeTruthy();
-    expect(view.getByTestId('sentence-practice-next-due')).toHaveTextContent(
-      /Next due in 2 days/,
-    );
+    expect(view.getByTestId('sentence-practice-next-due')).toHaveTextContent(/Next due in 2 days/);
     expect(view.queryByTestId('sentence-dictation-input')).toBeFalsy();
   });
 });

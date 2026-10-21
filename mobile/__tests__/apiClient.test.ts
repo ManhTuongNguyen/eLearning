@@ -4,7 +4,7 @@ import {
   backendRequestHeaders,
   DEFAULT_REQUEST_TIMEOUT_MS,
 } from '../src/api/client';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
 
 // These tests exercise the server transport; pin the runtime holder because
 // fresh installs now default to serverless.
@@ -28,7 +28,6 @@ function textResponse(status: number, body: string): Response {
   } as unknown as Response;
 }
 
-
 async function expectApiError(promise: Promise<unknown>): Promise<ApiError> {
   try {
     await promise;
@@ -46,15 +45,15 @@ describe('api client', () => {
   it('sends JSON bodies and returns parsed payloads', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(200, {detail: 'Logged out.'}));
+      .mockResolvedValue(jsonResponse(200, { detail: 'Logged out.' }));
 
     await expect(
       apiRequest('/api/v1/auth/logout/', {
         method: 'POST',
-        body: {refresh: 'r'},
+        body: { refresh: 'r' },
         token: 'a',
       }),
-    ).resolves.toEqual({detail: 'Logged out.'});
+    ).resolves.toEqual({ detail: 'Logged out.' });
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/v1/auth/logout/'),
@@ -64,20 +63,18 @@ describe('api client', () => {
           Authorization: 'Bearer a',
           'Content-Type': 'application/json',
         }),
-        body: JSON.stringify({refresh: 'r'}),
+        body: JSON.stringify({ refresh: 'r' }),
       }),
     );
   });
 
   it('normalizes DRF field errors into an ApiError with fields', async () => {
-    jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        jsonResponse(400, {
-          username: ['A user with that username already exists.'],
-          password: ['This password is too common.', 'This password is too short.'],
-        }),
-      );
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(400, {
+        username: ['A user with that username already exists.'],
+        password: ['This password is too common.', 'This password is too short.'],
+      }),
+    );
 
     const promise = apiRequest('/api/v1/auth/register/', {
       method: 'POST',
@@ -99,9 +96,9 @@ describe('api client', () => {
   it('uses the detail field as the message when present', async () => {
     jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(401, {detail: 'No active account found.'}));
+      .mockResolvedValue(jsonResponse(401, { detail: 'No active account found.' }));
 
-    const error = await expectApiError(apiRequest('/api/v1/auth/login/', {method: 'POST'}));
+    const error = await expectApiError(apiRequest('/api/v1/auth/login/', { method: 'POST' }));
     expect(error.status).toBe(401);
     expect(error.message).toBe('No active account found.');
   });
@@ -133,9 +130,9 @@ describe('api client', () => {
   it('defaults to GET without an Authorization header when no token is given', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(200, {healthy: true}));
+      .mockResolvedValue(jsonResponse(200, { healthy: true }));
 
-    await expect(apiRequest('/api/v1/health/')).resolves.toEqual({healthy: true});
+    await expect(apiRequest('/api/v1/health/')).resolves.toEqual({ healthy: true });
 
     const [, init] = fetchMock.mock.calls[0];
     expect(init?.method).toBe('GET');
@@ -152,13 +149,13 @@ describe('api client', () => {
   it('ignores non-string error field values and still raises a consistent ApiError', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse(400, {
-        level: [{unexpected: 'shape'}, 42],
+        level: [{ unexpected: 'shape' }, 42],
         count: 3,
-        nested: {deep: true},
+        nested: { deep: true },
       }),
     );
 
-    const error = await expectApiError(apiRequest('/api/v1/profile/', {method: 'PATCH'}));
+    const error = await expectApiError(apiRequest('/api/v1/profile/', { method: 'PATCH' }));
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(400);
     expect(error.fields).toEqual({});
@@ -168,7 +165,7 @@ describe('api client', () => {
   it('normalizes an empty JSON error object to a generic message', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(409, {}));
 
-    const error = await expectApiError(apiRequest('/api/v1/sessions/', {method: 'POST'}));
+    const error = await expectApiError(apiRequest('/api/v1/sessions/', { method: 'POST' }));
     expect(error.status).toBe(409);
     expect(error.fields).toEqual({});
     expect(error.message).toBe('Request failed (409).');
@@ -182,116 +179,132 @@ describe('api client', () => {
       expect(error.category).toBe('network');
     });
 
-it('categorizes timeout error (AbortError) as timeout', async () => {
-    const abortError = new Error('Aborted');
-    abortError.name = 'AbortError';
-    jest.spyOn(globalThis, 'fetch').mockRejectedValue(abortError);
+    it('categorizes timeout error (AbortError) as timeout', async () => {
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      jest.spyOn(globalThis, 'fetch').mockRejectedValue(abortError);
 
-    const error = await expectApiError(apiRequest('/api/v1/health/'));
-    expect(error.category).toBe('timeout');
-  });
+      const error = await expectApiError(apiRequest('/api/v1/health/'));
+      expect(error.category).toBe('timeout');
+    });
 
     it('categorizes 401 as authentication', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(401, {detail: 'Unauthorized'}));
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(401, { detail: 'Unauthorized' }));
 
       const error = await expectApiError(apiRequest('/api/v1/auth/me/'));
       expect(error.category).toBe('authentication');
     });
 
     it('categorizes 403 as authentication', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(403, {detail: 'Forbidden'}));
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(403, { detail: 'Forbidden' }));
 
       const error = await expectApiError(apiRequest('/api/v1/auth/me/'));
       expect(error.category).toBe('authentication');
     });
 
     it('categorizes 400 as validation', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(400, {detail: 'Bad request'}));
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(400, { detail: 'Bad request' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('validation');
     });
 
     it('categorizes 422 as validation', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(422, {detail: 'Unprocessable'}));
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(422, { detail: 'Unprocessable' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('validation');
     });
 
     it('categorizes 408 as timeout', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(408, {detail: 'Request timeout'}));
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(408, { detail: 'Request timeout' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('timeout');
     });
 
     it('categorizes 504 as timeout', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(504, {detail: 'Gateway timeout'}));
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(504, { detail: 'Gateway timeout' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('timeout');
     });
 
     it('categorizes 500 as server', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(500, {detail: 'Server error'}));
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(500, { detail: 'Server error' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('server');
     });
 
     it('categorizes 502 as server', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(502, {detail: 'Bad gateway'}));
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(502, { detail: 'Bad gateway' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('server');
     });
 
     it('categorizes 503 as server', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(503, {detail: 'Service unavailable'}));
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(503, { detail: 'Service unavailable' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('server');
     });
 
     it('categorizes LLM provider error (openrouter in detail) as llm', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-        jsonResponse(502, {detail: 'OpenRouter provider unavailable'}),
-      );
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(502, { detail: 'OpenRouter provider unavailable' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('llm');
     });
 
     it('categorizes LLM provider error (model in detail) as llm', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-        jsonResponse(502, {detail: 'Model not found'}),
-      );
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(502, { detail: 'Model not found' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('llm');
     });
 
     it('categorizes LLM provider error (streaming in detail) as llm', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-        jsonResponse(502, {detail: 'Streaming failed'}),
-      );
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(502, { detail: 'Streaming failed' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('llm');
     });
 
     it('categorizes LLM provider error (provider field) as llm', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-        jsonResponse(502, {provider: 'OpenRouter unavailable'}),
-      );
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(jsonResponse(502, { provider: 'OpenRouter unavailable' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/'));
       expect(error.category).toBe('llm');
     });
 
     it('categorizes 404 as validation', async () => {
-      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(404, {detail: 'Not found'}));
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(404, { detail: 'Not found' }));
 
       const error = await expectApiError(apiRequest('/api/v1/sessions/999/'));
       expect(error.category).toBe('validation');
@@ -305,9 +318,7 @@ it('categorizes timeout error (AbortError) as timeout', async () => {
 
     it('returns text bodies untouched and omits the JSON content type for text requests', async () => {
       const csv = 'Front,Back,Example,Pronunciation\n"set off","phrasal verb",,\n';
-      const fetchMock = jest
-        .spyOn(globalThis, 'fetch')
-        .mockResolvedValue(textResponse(200, csv));
+      const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(textResponse(200, csv));
 
       await expect(
         apiRequest<string>('/api/v1/vocabulary/export/', {
@@ -318,7 +329,7 @@ it('categorizes timeout error (AbortError) as timeout', async () => {
       ).resolves.toBe(csv);
 
       const [, init] = fetchMock.mock.calls[0];
-      expect(init?.headers).toEqual({Accept: 'text/csv', Authorization: 'Bearer t'});
+      expect(init?.headers).toEqual({ Accept: 'text/csv', Authorization: 'Bearer t' });
       // Every JSON/text request carries the shared deadline signal.
       expect(init?.signal).toBeInstanceOf(AbortSignal);
     });
@@ -326,10 +337,10 @@ it('categorizes timeout error (AbortError) as timeout', async () => {
     it('normalizes JSON error bodies on text responses through the shared contract', async () => {
       jest
         .spyOn(globalThis, 'fetch')
-        .mockResolvedValue(textResponse(401, JSON.stringify({detail: 'Invalid token.'})));
+        .mockResolvedValue(textResponse(401, JSON.stringify({ detail: 'Invalid token.' })));
 
       const error = await expectApiError(
-        apiRequest('/api/v1/vocabulary/export/', {accept: 'text/csv', responseType: 'text'}),
+        apiRequest('/api/v1/vocabulary/export/', { accept: 'text/csv', responseType: 'text' }),
       );
 
       expect(error).toBeInstanceOf(ApiError);
@@ -344,7 +355,7 @@ it('categorizes timeout error (AbortError) as timeout', async () => {
         .mockResolvedValue(textResponse(503, '<html>gateway down</html>'));
 
       const error = await expectApiError(
-        apiRequest('/api/v1/vocabulary/export/', {accept: 'text/csv', responseType: 'text'}),
+        apiRequest('/api/v1/vocabulary/export/', { accept: 'text/csv', responseType: 'text' }),
       );
 
       expect(error.status).toBe(503);
@@ -363,9 +374,7 @@ it('categorizes timeout error (AbortError) as timeout', async () => {
           }),
       );
 
-      await expect(
-        apiRequest('/api/v1/sessions/', {timeoutMs: 10}),
-      ).rejects.toMatchObject({
+      await expect(apiRequest('/api/v1/sessions/', { timeoutMs: 10 })).rejects.toMatchObject({
         name: 'ApiError',
         status: 0,
         category: 'timeout',
@@ -375,15 +384,13 @@ it('categorizes timeout error (AbortError) as timeout', async () => {
 
     it('exposes the shared deadline constant and single header builder', () => {
       expect(DEFAULT_REQUEST_TIMEOUT_MS).toBe(60000);
-      expect(
-        backendRequestHeaders('tok', 'text/event-stream', 'application/json'),
-      ).toEqual({
+      expect(backendRequestHeaders('tok', 'text/event-stream', 'application/json')).toEqual({
         Accept: 'text/event-stream',
         'Content-Type': 'application/json',
         Authorization: 'Bearer tok',
       });
       // No token → no Authorization header; no content type → no header.
-      expect(backendRequestHeaders(null, 'text/csv')).toEqual({Accept: 'text/csv'});
+      expect(backendRequestHeaders(null, 'text/csv')).toEqual({ Accept: 'text/csv' });
       expect(backendRequestHeaders(undefined, 'application/json')).toEqual({
         Accept: 'application/json',
       });

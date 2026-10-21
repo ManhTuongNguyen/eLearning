@@ -7,7 +7,7 @@
  * rejections rather than crashes. When the native module is absent the stub
  * stays active.
  */
-import {NativeModules} from 'react-native';
+import { NativeModules } from 'react-native';
 
 import {
   androidSpeechEngine,
@@ -17,15 +17,11 @@ import {
   listSystemEngines,
   listSystemVoices,
 } from '../src/tts/androidSpeech';
-import {
-  getSpeechEngine,
-  setSpeechEngine,
-  stubSpeechEngine,
-} from '../src/tts/textToSpeech';
-import {DEFAULT_SPEECH_PREFERENCES} from '../src/tts/types';
-import type {SpeechPreferences} from '../src/tts/types';
+import { getSpeechEngine, setSpeechEngine, stubSpeechEngine } from '../src/tts/textToSpeech';
+import type { SpeechPreferences } from '../src/tts/types';
+import { DEFAULT_SPEECH_PREFERENCES } from '../src/tts/types';
 
-type SpeakOptions = {voiceId: string | null; rate: number; pitch: number} | null;
+type SpeakOptions = { voiceId: string | null; rate: number; pitch: number } | null;
 
 type SpeechMock = {
   speak: jest.Mock<Promise<void>, [string]>;
@@ -65,13 +61,11 @@ describe('androidSpeech adapter', () => {
     expect(installAndroidSpeechEngine()).toBe(false);
     // Registry keeps the stub so existing UI controls stay wired.
     expect(getSpeechEngine()).toBe(stubSpeechEngine);
-    expect(() => androidSpeechEngine()).toThrow(
-      'Android speech module is not available',
-    );
+    expect(() => androidSpeechEngine()).toThrow('Android speech module is not available');
   });
 
   it('ignores native modules lacking the expected play/stop surface', () => {
-    installNative({speak: 'not-a-function'} as unknown as SpeechMock);
+    installNative({ speak: 'not-a-function' } as unknown as SpeechMock);
     expect(isAndroidSpeechAvailable()).toBe(false);
     expect(installAndroidSpeechEngine()).toBe(false);
   });
@@ -96,7 +90,7 @@ describe('androidSpeech adapter', () => {
     expect(mock.speakWith).toHaveBeenCalledTimes(1);
     const [text, options] = mock.speakWith.mock.calls[0];
     expect(text).toBe('Good morning');
-    expect(options).toEqual({voiceId: null, rate: 1, pitch: 1});
+    expect(options).toEqual({ voiceId: null, rate: 1, pitch: 1 });
   });
 
   it('applies applied preferences (voice, rate, pitch) to utterances', async () => {
@@ -139,9 +133,7 @@ describe('androidSpeech adapter', () => {
     installNative(mock);
     const engine = androidSpeechEngine();
 
-    await expect(engine.speak('Hello')).rejects.toThrow(
-      'E_TTS_LANGUAGE_UNAVAILABLE',
-    );
+    await expect(engine.speak('Hello')).rejects.toThrow('E_TTS_LANGUAGE_UNAVAILABLE');
     expect(mock.speakWith).toHaveBeenCalledWith('Hello', {
       voiceId: null,
       rate: 1,
@@ -161,7 +153,7 @@ describe('androidSpeech adapter', () => {
         network: false,
         gender: 'female',
       },
-      {broken: true},
+      { broken: true },
     ]);
     installNative(mock);
 
@@ -179,11 +171,7 @@ describe('androidSpeech adapter', () => {
   });
 
   it('rejects listSystemVoices when the native module is absent', async () => {
-    await expect(listSystemVoices()).rejects.toThrow(
-      'Android speech module is not available',
-    );
-    await expect(listSystemEngines()).rejects.toThrow(
-      'Android speech module is not available',
-    );
+    await expect(listSystemVoices()).rejects.toThrow('Android speech module is not available');
+    await expect(listSystemEngines()).rejects.toThrow('Android speech module is not available');
   });
 });

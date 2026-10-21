@@ -16,18 +16,17 @@
  * serverless mode and carries a due-today badge read from the local review
  * schedule. Server mode never shows the row or touches the local database.
  */
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
-
-import {Icon} from '../components/Icon';
-import type {IconName} from '../components/Icon';
-import {Screen, ScreenScrollView} from '../components/ScreenLayout';
-import {getLocalDatabase} from '../db/database';
-import {countDueSentences} from '../db/sentenceRepository';
-import {useApplicationMode} from '../mode/ModeContext';
-import type {HomeScreenProps} from '../navigation/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { IconName } from '../components/Icon';
+import { Icon } from '../components/Icon';
+import { Screen, ScreenScrollView } from '../components/ScreenLayout';
+import { getLocalDatabase } from '../db/database';
+import { countDueSentences } from '../db/sentenceRepository';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { HomeScreenProps } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 interface HomeRow {
   title: string;
@@ -145,9 +144,9 @@ function createStyles(c: ThemeColors) {
   });
 }
 
-export function HomeScreen({navigation}: HomeScreenProps) {
-  const {status: modeStatus, mode} = useApplicationMode();
-  const {colors} = useTheme();
+export function HomeScreen({ navigation }: HomeScreenProps) {
+  const { status: modeStatus, mode } = useApplicationMode();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   // Real-life sentences are on-device only; the row appears once the
@@ -233,8 +232,7 @@ export function HomeScreen({navigation}: HomeScreenProps) {
           },
           {
             title: 'Real-life sentences',
-            description:
-              'Collect everyday English and drill it with spaced repetition.',
+            description: 'Collect everyday English and drill it with spaced repetition.',
             icon: 'sentences',
             onPress: () => navigation.navigate('SentenceTopics'),
             testID: 'home-open-sentences',
@@ -288,7 +286,7 @@ export function HomeScreen({navigation}: HomeScreenProps) {
                       accessibilityLabel={`${row.title} — ${row.description}`}
                       hitSlop={6}
                       onPress={row.onPress}
-                      style={({pressed}) => [
+                      style={({ pressed }) => [
                         styles.row,
                         index > 0 && styles.rowDivider,
                         pressed && styles.rowPressed,

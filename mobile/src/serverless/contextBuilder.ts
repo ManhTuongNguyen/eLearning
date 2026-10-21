@@ -28,12 +28,12 @@ const HISTORY_ROLES = new Set(['user', 'assistant']);
 const IDENTITY_SECTION =
   'You are an AI English tutor chatting with a learner who practises ' +
   'conversational English with you.\n' +
-  'Keep your replies natural, friendly and appropriate for the learner\'s ' +
+  "Keep your replies natural, friendly and appropriate for the learner's " +
   'level. Respond to what the learner means, as a real conversation partner ' +
   'would.\n' +
   'Your reply must be ONLY the chat message itself: one natural, ' +
   'conversational turn, as if spoken aloud in the conversation.\n' +
-  'NEVER correct, quote, rephrase or comment on the learner\'s wording, ' +
+  "NEVER correct, quote, rephrase or comment on the learner's wording, " +
   'spelling or grammar in your reply. Corrections are handled separately, ' +
   'so do not point out any mistake, even a small one.\n' +
   'NEVER add notes, explanations or commentary about your teaching choices, ' +
@@ -43,13 +43,13 @@ const IDENTITY_SECTION =
   'character or talk about your role as a tutor inside the reply.';
 
 const LEVEL_LINES: Record<EnglishLevel, string> = {
-  A1: 'The learner\'s English level is A1 (CEFR); keep vocabulary, grammar and explanations at that level.',
-  A2: 'The learner\'s English level is A2 (CEFR); keep vocabulary, grammar and explanations at that level.',
-  B1: 'The learner\'s English level is B1 (CEFR); keep vocabulary, grammar and explanations at that level.',
-  B2: 'The learner\'s English level is B2 (CEFR); keep vocabulary, grammar and explanations at that level.',
-  C1: 'The learner\'s English level is C1 (CEFR); keep vocabulary, grammar and explanations at that level.',
-  C2: 'The learner\'s English level is C2 (CEFR); keep vocabulary, grammar and explanations at that level.',
-  AUTO: 'The learner\'s English level is unknown; infer an appropriate level from how they write and adjust your language accordingly.',
+  A1: "The learner's English level is A1 (CEFR); keep vocabulary, grammar and explanations at that level.",
+  A2: "The learner's English level is A2 (CEFR); keep vocabulary, grammar and explanations at that level.",
+  B1: "The learner's English level is B1 (CEFR); keep vocabulary, grammar and explanations at that level.",
+  B2: "The learner's English level is B2 (CEFR); keep vocabulary, grammar and explanations at that level.",
+  C1: "The learner's English level is C1 (CEFR); keep vocabulary, grammar and explanations at that level.",
+  C2: "The learner's English level is C2 (CEFR); keep vocabulary, grammar and explanations at that level.",
+  AUTO: "The learner's English level is unknown; infer an appropriate level from how they write and adjust your language accordingly.",
 };
 
 const TOPIC_TITLE_LINE = 'Conversation topic: "{title}".';
@@ -73,7 +73,7 @@ function formatHint(hint: string): string {
     // A single topic idea: pass it through verbatim so the model decides.
     return hint.trim();
   }
-  return 'Questions the learner wants to cover:\n' + lines.join('\n');
+  return `Questions the learner wants to cover:\n${lines.join('\n')}`;
 }
 
 const SUMMARY_HEADER = 'Summary of the earlier conversation:';
@@ -110,9 +110,7 @@ export function buildContext(input: ContextInput): CompletionRequest {
 
   if (!LEVEL_LINES[level]) {
     const allowed = Object.keys(LEVEL_LINES).join(', ');
-    throw new Error(
-      `Unknown learning level "${level}"; expected one of: ${allowed}.`,
-    );
+    throw new Error(`Unknown learning level "${level}"; expected one of: ${allowed}.`);
   }
 
   const stripped = currentMessage.trim();
@@ -157,16 +155,12 @@ function buildSystemPrompt(
   return blocks.join('\n\n');
 }
 
-function historyTurns(
-  recentMessages: readonly LocalMessage[],
-): CompletionMessage[] {
+function historyTurns(recentMessages: readonly LocalMessage[]): CompletionMessage[] {
   const turns: CompletionMessage[] = [];
   for (let i = 0; i < recentMessages.length; i++) {
     const msg = recentMessages[i];
     if (!HISTORY_ROLES.has(msg.role)) {
-      const allowed = Array.from(HISTORY_ROLES)
-        .sort()
-        .join(', ');
+      const allowed = Array.from(HISTORY_ROLES).sort().join(', ');
       throw new Error(
         `History turn ${i} has invalid role "${msg.role}"; expected one of: ${allowed}.`,
       );

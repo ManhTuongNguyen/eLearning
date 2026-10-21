@@ -18,17 +18,17 @@
  * a completed turn, never blocking the user-facing chat request.
  */
 
-import type {LocalConversationRepository} from '../db/conversationRepository';
-import type {LocalMessage} from '../db/types';
-import {getSummary} from '../db/summaryStore';
-import {getLocalDatabase} from '../db/database';
-import type {PreparedTurn} from './chatStreaming';
-import {buildContext} from './contextBuilder';
-import type {CompletionRequest, OpenRouterClient} from './types';
-import {selectRecentMessages} from './windowSelector';
-import {archiveRange} from './summaryTrigger';
-import {generateSummary} from './summarizer';
-import {splitHintQuestions} from './topicGeneration';
+import type { LocalConversationRepository } from '../db/conversationRepository';
+import { getLocalDatabase } from '../db/database';
+import { getSummary } from '../db/summaryStore';
+import type { LocalMessage } from '../db/types';
+import type { PreparedTurn } from './chatStreaming';
+import { buildContext } from './contextBuilder';
+import { generateSummary } from './summarizer';
+import { archiveRange } from './summaryTrigger';
+import { splitHintQuestions } from './topicGeneration';
+import type { CompletionRequest, OpenRouterClient } from './types';
+import { selectRecentMessages } from './windowSelector';
 
 /**
  * Build the LLM context for one serverless chat turn (the TurnRequestBuilder
@@ -38,9 +38,7 @@ import {splitHintQuestions} from './topicGeneration';
  * window, and assembles the full context exactly as the backend does. Pure
  * operation — no writes, no provider calls, only deterministic assembly.
  */
-export async function buildServerlessContext(
-  turn: PreparedTurn,
-): Promise<CompletionRequest> {
+export async function buildServerlessContext(turn: PreparedTurn): Promise<CompletionRequest> {
   const db = await getLocalDatabase();
   const summary = await getSummary(db, turn.session.id);
   const allMessages = await db.execute(
@@ -89,7 +87,7 @@ function normalizeHint(hint: string): string {
   if (questions.length < 2) {
     return '';
   }
-  return 'Questions the learner wants to cover:\n' + questions.join('\n');
+  return `Questions the learner wants to cover:\n${questions.join('\n')}`;
 }
 
 /**
@@ -123,14 +121,13 @@ export async function updateSummaryIfNeeded(
   }
 
   // Select only complete, non-blank messages in the archive range
-  const archived = messages
-    .filter(
-      msg =>
-        msg.sequence >= range.start &&
-        msg.sequence <= range.end &&
-        msg.status === 'complete' &&
-        msg.content.trim(),
-    );
+  const archived = messages.filter(
+    msg =>
+      msg.sequence >= range.start &&
+      msg.sequence <= range.end &&
+      msg.status === 'complete' &&
+      msg.content.trim(),
+  );
 
   if (!archived.length) {
     // No content to summarize; advance boundary without LLM call

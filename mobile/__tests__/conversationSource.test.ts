@@ -7,12 +7,13 @@
  * so real store semantics (ordering, detail lookup, unknown ids) are
  * exercised.
  */
-import type {AuthedRequester} from '../src/auth/authedRequest';
-import type {ChatMessage, Paginated, Session} from '../src/api/sessions';
-import {getLocalDatabase, resetLocalDatabase} from '../src/db/database';
+
+import type { ChatMessage, Paginated, Session } from '../src/api/sessions';
+import type { AuthedRequester } from '../src/auth/authedRequest';
+import { getLocalDatabase, resetLocalDatabase } from '../src/db/database';
+import { insertMessage } from '../src/db/messageStore';
 import * as nativeDriver from '../src/db/nativeDriver';
-import {insertMessage} from '../src/db/messageStore';
-import {insertSession} from '../src/db/sessionStore';
+import { insertSession } from '../src/db/sessionStore';
 import {
   bySequence,
   listFirstSessionPage,
@@ -20,7 +21,7 @@ import {
 } from '../src/services/conversationSource';
 
 jest.mock('../src/db/nativeDriver', () => {
-  const {openSqlJsDriver} = require('../testing/sqlJsDriver');
+  const { openSqlJsDriver } = require('../testing/sqlJsDriver');
   let mockDbPromise: Promise<unknown> | null = null;
   return {
     LOCAL_DB_NAME: 'elearning-serverless.db',
@@ -65,7 +66,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
 }
 
 function pageOf(results: ChatMessage[]): Paginated<ChatMessage> {
-  return {count: results.length, next: null, previous: null, results};
+  return { count: results.length, next: null, previous: null, results };
 }
 
 /**
@@ -73,7 +74,7 @@ function pageOf(results: ChatMessage[]): Paginated<ChatMessage> {
  * stored Error instance fails that path's request.
  */
 function makeRequester(handlers: Record<string, unknown>): AuthedRequester {
-  const request = jest.fn(async <T,>(path: string): Promise<T> => {
+  const request = jest.fn(async <T>(path: string): Promise<T> => {
     const base = path.replace(/\?.*$/, '');
     const handler = handlers[base];
     if (handler === undefined) {
@@ -102,9 +103,9 @@ async function freshLocalDatabase() {
 describe('bySequence', () => {
   test('orders conversation rows chronologically', () => {
     const rows = [
-      makeMessage({id: 3, sequence: 3}),
-      makeMessage({id: 1, sequence: 1}),
-      makeMessage({id: 2, sequence: 2}),
+      makeMessage({ id: 3, sequence: 3 }),
+      makeMessage({ id: 1, sequence: 1 }),
+      makeMessage({ id: 2, sequence: 2 }),
     ];
     expect([...rows].sort(bySequence).map(row => row.id)).toEqual([1, 2, 3]);
   });
@@ -117,7 +118,7 @@ describe('listFirstSessionPage (server mode)', () => {
         count: 2,
         next: null,
         previous: null,
-        results: [makeSession({id: 9}), makeSession({id: 7})],
+        results: [makeSession({ id: 9 }), makeSession({ id: 7 })],
       },
     });
 
@@ -131,9 +132,9 @@ describe('listFirstSessionPage (server mode)', () => {
 describe('listFirstSessionPage (serverless mode)', () => {
   test('reads the on-device sessions most recently active first', async () => {
     await freshLocalDatabase();
-    const first = await insertSession(await getLocalDatabase(), {title: 'Older'});
+    const first = await insertSession(await getLocalDatabase(), { title: 'Older' });
     await tick();
-    await insertSession(await getLocalDatabase(), {title: 'Newer'});
+    await insertSession(await getLocalDatabase(), { title: 'Newer' });
 
     expect(first.id).toBe(1);
 
@@ -147,10 +148,10 @@ describe('loadConversation (server mode)', () => {
   test('returns the sorted messages plus the session detail', async () => {
     const request = makeRequester({
       '/api/v1/sessions/9/messages/': pageOf([
-        makeMessage({id: 12, sequence: 2}),
-        makeMessage({id: 11, sequence: 1}),
+        makeMessage({ id: 12, sequence: 2 }),
+        makeMessage({ id: 11, sequence: 1 }),
       ]),
-      '/api/v1/sessions/9/': makeSession({id: 9}),
+      '/api/v1/sessions/9/': makeSession({ id: 9 }),
     });
 
     const snapshot = await loadConversation('server', 9, request);
@@ -161,7 +162,7 @@ describe('loadConversation (server mode)', () => {
 
   test('a failed detail lookup keeps the conversation and drops the session', async () => {
     const request = makeRequester({
-      '/api/v1/sessions/9/messages/': pageOf([makeMessage({id: 11, sequence: 1})]),
+      '/api/v1/sessions/9/messages/': pageOf([makeMessage({ id: 11, sequence: 1 })]),
       '/api/v1/sessions/9/': new Error('detail lookup failed'),
     });
 
@@ -175,7 +176,7 @@ describe('loadConversation (server mode)', () => {
 describe('loadConversation (serverless mode)', () => {
   test('reads the local messages sorted plus the local session detail', async () => {
     const db = await freshLocalDatabase();
-    const session = await insertSession(db, {title: 'Weekend plans'});
+    const session = await insertSession(db, { title: 'Weekend plans' });
     await insertMessage(db, {
       session_id: session.id,
       role: 'assistant',

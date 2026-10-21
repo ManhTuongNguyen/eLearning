@@ -12,15 +12,14 @@
  * The native Speech module is exercised through jest doubles (no native
  * side in the test environment).
  */
-import React from 'react';
-import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react-native';
 
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import type { VoiceManagerScreenProps } from '../src/navigation/types';
+import { VoiceManagerScreen } from '../src/screens/VoiceManagerScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 import * as androidSpeech from '../src/tts/androidSpeech';
-import {loadSpeechPreferences, saveSpeechPreferences} from '../src/tts/speechSettings';
-import {DEFAULT_SPEECH_PREFERENCES} from '../src/tts/types';
-import type {VoiceManagerScreenProps} from '../src/navigation/types';
-import {VoiceManagerScreen} from '../src/screens/VoiceManagerScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { loadSpeechPreferences, saveSpeechPreferences } from '../src/tts/speechSettings';
+import { DEFAULT_SPEECH_PREFERENCES } from '../src/tts/types';
 
 jest.mock('../src/tts/androidSpeech', () => {
   const actual = jest.requireActual('../src/tts/androidSpeech');
@@ -87,7 +86,7 @@ function managerProps(): VoiceManagerScreenProps {
       goBack: jest.fn(),
       addListener: jest.fn(() => jest.fn()),
     },
-    route: {key: 'manager-test', name: 'VoiceManager', params: undefined},
+    route: { key: 'manager-test', name: 'VoiceManager', params: undefined },
   } as unknown as VoiceManagerScreenProps;
 }
 
@@ -109,7 +108,7 @@ function stubCatalog() {
     SYSTEM_EN_NETWORK,
   ] as never);
   mockedListSystemEngines.mockResolvedValue([
-    {id: 'com.google.android.tts', label: 'Google TTS', isDefault: true},
+    { id: 'com.google.android.tts', label: 'Google TTS', isDefault: true },
   ] as never);
   mockedGetSystemEngineId.mockResolvedValue('com.google.android.tts');
   mockedSelectSystemEngine.mockResolvedValue(undefined);
@@ -195,23 +194,25 @@ describe('VoiceManagerScreen', () => {
 
     fireEvent.press(await screen.findByTestId(`voice-system-preview-${SYSTEM_EN_FEMALE.id}`));
 
-    await waitFor(() => expect(mockedPreview).toHaveBeenCalledWith(
-      SYSTEM_EN_FEMALE.id,
-      'Hello! This is how this voice sounds.',
-    ));
+    await waitFor(() =>
+      expect(mockedPreview).toHaveBeenCalledWith(
+        SYSTEM_EN_FEMALE.id,
+        'Hello! This is how this voice sounds.',
+      ),
+    );
     // No selection happened.
     expect((await loadSpeechPreferences()).systemVoiceId).toBeNull();
   });
 
   it('hides network voices while instant-only is on and shows them when toggled off', async () => {
-    await saveSpeechPreferences({...DEFAULT_SPEECH_PREFERENCES, instantOnly: true});
+    await saveSpeechPreferences({ ...DEFAULT_SPEECH_PREFERENCES, instantOnly: true });
     await renderManager();
 
     await screen.findByTestId(`voice-system-${SYSTEM_EN_FEMALE.id}`);
     expect(screen.queryByTestId(`voice-system-${SYSTEM_EN_NETWORK.id}`)).toBeNull();
-    expect(
-      screen.getByTestId('tts-instant-only').props.accessibilityState,
-    ).toEqual(expect.objectContaining({checked: true}));
+    expect(screen.getByTestId('tts-instant-only').props.accessibilityState).toEqual(
+      expect.objectContaining({ checked: true }),
+    );
 
     // Toggle instant-only off directly on this screen (the switch moved
     // here from the settings screen) — no focus reload needed.
@@ -232,27 +233,21 @@ describe('VoiceManagerScreen', () => {
 
   it('switches the system TTS engine when several are installed', async () => {
     mockedListSystemEngines.mockResolvedValue([
-      {id: 'com.google.android.tts', label: 'Google TTS', isDefault: true},
-      {id: 'com.samsung.tts', label: 'Samsung TTS', isDefault: false},
+      { id: 'com.google.android.tts', label: 'Google TTS', isDefault: true },
+      { id: 'com.samsung.tts', label: 'Samsung TTS', isDefault: false },
     ] as never);
     await renderManager();
 
     fireEvent.press(await screen.findByTestId('voice-manager-engine-com.samsung.tts'));
 
-    await waitFor(() => expect(mockedSelectSystemEngine).toHaveBeenCalledWith(
-      'com.samsung.tts',
-    ));
+    await waitFor(() => expect(mockedSelectSystemEngine).toHaveBeenCalledWith('com.samsung.tts'));
   });
 
   it('renders the unavailable degradation when no native module exists', async () => {
-    mockedListSystemVoices.mockRejectedValue(
-      new Error('Android speech module is not available'),
-    );
+    mockedListSystemVoices.mockRejectedValue(new Error('Android speech module is not available'));
     await renderManager();
 
-    expect(
-      await screen.findByText(/System voice options are not available/),
-    ).toBeOnTheScreen();
+    expect(await screen.findByText(/System voice options are not available/)).toBeOnTheScreen();
   });
 
   it('navigates back with the back affordance', async () => {

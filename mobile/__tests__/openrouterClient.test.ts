@@ -7,23 +7,24 @@
  * requests only ever target openrouter.ai (the API key never reaches the
  * eLearning backend). All external OpenRouter HTTP calls are mocked.
  */
-import type {ServerlessStreamEvent} from '../src/serverless/types';
+
 import {
-  DEFAULT_BASE_URL,
-  DEFAULT_TIMEOUT_MS,
-  buildModelChain,
-  createOpenRouterClient,
-  listOpenRouterModels,
-} from '../src/serverless/openrouterClient';
-import {
+  normalizeHttpFailure,
   OpenRouterAuthenticationError,
   OpenRouterAvailabilityError,
   OpenRouterBadRequestError,
   OpenRouterRequestError,
   OpenRouterResponseError,
   OpenRouterTimeoutError,
-  normalizeHttpFailure,
 } from '../src/serverless/errors';
+import {
+  buildModelChain,
+  createOpenRouterClient,
+  DEFAULT_BASE_URL,
+  DEFAULT_TIMEOUT_MS,
+  listOpenRouterModels,
+} from '../src/serverless/openrouterClient';
+import type { ServerlessStreamEvent } from '../src/serverless/types';
 
 type Listener = (() => void) | null;
 
@@ -37,7 +38,7 @@ function jsonResponse(
     ok: status >= 200 && status < 300,
     status,
     text: async () => text,
-    headers: {get: (name: string) => headers[name.toLowerCase()] ?? null},
+    headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
   } as unknown as Response;
 }
 
@@ -53,7 +54,7 @@ function completionBody(model: string, content = 'Hello there.'): unknown {
   return {
     id: 'gen-1',
     model,
-    choices: [{message: {role: 'assistant', content}, finish_reason: 'stop'}],
+    choices: [{ message: { role: 'assistant', content }, finish_reason: 'stop' }],
   };
 }
 
@@ -63,8 +64,8 @@ function openRouterSse(chunk: object): string {
 
 function deltaChunk(text: string, model?: string): object {
   return {
-    ...(model ? {model} : {}),
-    choices: [{delta: {content: text}, finish_reason: null}],
+    ...(model ? { model } : {}),
+    choices: [{ delta: { content: text }, finish_reason: null }],
   };
 }
 
@@ -129,7 +130,7 @@ class FakeXHR {
 
 interface ActiveStream {
   events: ServerlessStreamEvent[];
-  handle: {abort(): void};
+  handle: { abort(): void };
   /** The most recent attempt's XHR. */
   xhr(): FakeXHR;
 }
@@ -146,7 +147,7 @@ function beginStream(
     xhr: () => FakeXHR.sent[FakeXHR.sent.length - 1],
   };
   state.handle = client.streamCompletion({
-    request: request ?? {messages: [{role: 'user', content: 'Hi'}]},
+    request: request ?? { messages: [{ role: 'user', content: 'Hi' }] },
     onEvent: event => {
       state.events.push(event);
     },
@@ -173,14 +174,14 @@ describe('buildModelChain', () => {
 
 describe('createOpenRouterClient configuration', () => {
   it('rejects a blank API key or primary model', () => {
-    expect(() => createOpenRouterClient({apiKey: '   ', primaryModel: 'm'})).toThrow();
-    expect(() => createOpenRouterClient({apiKey: 'k', primaryModel: '  '})).toThrow();
+    expect(() => createOpenRouterClient({ apiKey: '   ', primaryModel: 'm' })).toThrow();
+    expect(() => createOpenRouterClient({ apiKey: 'k', primaryModel: '  ' })).toThrow();
   });
 
   it('rejects a non-positive timeout', () => {
-    expect(() =>
-      createOpenRouterClient({apiKey: 'k', primaryModel: 'm', timeoutMs: 0}),
-    ).toThrow(/timeout/i);
+    expect(() => createOpenRouterClient({ apiKey: 'k', primaryModel: 'm', timeoutMs: 0 })).toThrow(
+      /timeout/i,
+    );
   });
 });
 
@@ -192,8 +193,8 @@ describe('complete', () => {
 
     const result = await makeClient().complete({
       messages: [
-        {role: 'system', content: 'Be helpful.'},
-        {role: 'user', content: 'Hi'},
+        { role: 'system', content: 'Be helpful.' },
+        { role: 'user', content: 'Hi' },
       ],
       temperature: 0.5,
     });
@@ -209,8 +210,8 @@ describe('complete', () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       model: 'vendor/primary',
       messages: [
-        {role: 'system', content: 'Be helpful.'},
-        {role: 'user', content: 'Hi'},
+        { role: 'system', content: 'Be helpful.' },
+        { role: 'user', content: 'Hi' },
       ],
       stream: false,
       temperature: 0.5,
@@ -226,20 +227,20 @@ describe('complete', () => {
   it('prefers the x-request-id response header over the body id', async () => {
     jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(200, completionBody('m'), {'x-request-id': 'req-9'}));
+      .mockResolvedValue(jsonResponse(200, completionBody('m'), { 'x-request-id': 'req-9' }));
 
-    const result = await makeClient().complete({messages: [{role: 'user', content: 'Hi'}]});
+    const result = await makeClient().complete({ messages: [{ role: 'user', content: 'Hi' }] });
     expect(result.requestId).toBe('req-9');
   });
 
   it('advances through retryable failures onto the configured fallbacks', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(jsonResponse(503, {error: {message: 'upstream busy'}}))
+      .mockResolvedValueOnce(jsonResponse(503, { error: { message: 'upstream busy' } }))
       .mockResolvedValueOnce(jsonResponse(200, completionBody('vendor/fallback')));
 
     const result = await makeClient(['vendor/fallback']).complete({
-      messages: [{role: 'user', content: 'Hi'}],
+      messages: [{ role: 'user', content: 'Hi' }],
     });
 
     expect(result.model).toBe('vendor/fallback');
@@ -254,18 +255,18 @@ describe('complete', () => {
       .mockResolvedValueOnce(jsonResponse(200, completionBody('vendor/fallback')));
 
     await expect(
-      makeClient(['vendor/fallback']).complete({messages: [{role: 'user', content: 'Hi'}]}),
-    ).resolves.toMatchObject({model: 'vendor/fallback'});
+      makeClient(['vendor/fallback']).complete({ messages: [{ role: 'user', content: 'Hi' }] }),
+    ).resolves.toMatchObject({ model: 'vendor/fallback' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('stops at the first non-retryable HTTP failure without advancing', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(401, {error: {message: 'problem 401'}}));
+      .mockResolvedValue(jsonResponse(401, { error: { message: 'problem 401' } }));
 
     await expect(
-      makeClient(['vendor/fallback']).complete({messages: [{role: 'user', content: 'Hi'}]}),
+      makeClient(['vendor/fallback']).complete({ messages: [{ role: 'user', content: 'Hi' }] }),
     ).rejects.toBeInstanceOf(OpenRouterAuthenticationError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -279,12 +280,12 @@ describe('complete', () => {
   ])('normalizes HTTP %i onto %j', async (status, expected) => {
     jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(status, {error: {message: `problem ${status}`}}));
+      .mockResolvedValue(jsonResponse(status, { error: { message: `problem ${status}` } }));
 
     // Without fallbacks the normalized attempt error escapes directly when
     // non-retryable, or as a one-entry aggregate when retryable.
     await expect(
-      makeClient().complete({messages: [{role: 'user', content: 'Hi'}]}),
+      makeClient().complete({ messages: [{ role: 'user', content: 'Hi' }] }),
     ).rejects.toThrow(
       expected === OpenRouterTimeoutError || status === 408
         ? 'all 1 configured model(s) failed: vendor/primary: problem 408'
@@ -313,10 +314,10 @@ describe('complete', () => {
   it('advances through every retryable status before aggregating', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(408, {error: {message: 'slow upstream'}}));
+      .mockResolvedValue(jsonResponse(408, { error: { message: 'slow upstream' } }));
 
     await expect(
-      makeClient(['vendor/fallback']).complete({messages: [{role: 'user', content: 'Hi'}]}),
+      makeClient(['vendor/fallback']).complete({ messages: [{ role: 'user', content: 'Hi' }] }),
     ).rejects.toThrow(
       'all 2 configured model(s) failed: vendor/primary: slow upstream; vendor/fallback: slow upstream',
     );
@@ -326,18 +327,19 @@ describe('complete', () => {
   it('extracts nested error payloads and top-level messages', async () => {
     jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(401, {error: {message: 'Invalid OpenRouter key.'}}));
-    await expect(makeClient().complete({messages: [{role: 'user', content: 'Hi'}]}))
-      .rejects.toThrow('Invalid OpenRouter key.');
+      .mockResolvedValue(jsonResponse(401, { error: { message: 'Invalid OpenRouter key.' } }));
+    await expect(
+      makeClient().complete({ messages: [{ role: 'user', content: 'Hi' }] }),
+    ).rejects.toThrow('Invalid OpenRouter key.');
   });
 
   it('aggregates every attempt when the whole chain fails retryably', async () => {
     jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(429, {error: {message: 'rate limited'}}));
+      .mockResolvedValue(jsonResponse(429, { error: { message: 'rate limited' } }));
 
     await expect(
-      makeClient(['vendor/fallback']).complete({messages: [{role: 'user', content: 'Hi'}]}),
+      makeClient(['vendor/fallback']).complete({ messages: [{ role: 'user', content: 'Hi' }] }),
     ).rejects.toThrow(
       'all 2 configured model(s) failed: vendor/primary: rate limited; vendor/fallback: rate limited',
     );
@@ -346,21 +348,24 @@ describe('complete', () => {
   it('treats malformed success payloads as non-retryable response errors', async () => {
     const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, '{oops'));
 
-    await expect(makeClient(['f']).complete({messages: [{role: 'user', content: 'Hi'}]}))
-      .rejects.toBeInstanceOf(OpenRouterResponseError);
+    await expect(
+      makeClient(['f']).complete({ messages: [{ role: 'user', content: 'Hi' }] }),
+    ).rejects.toBeInstanceOf(OpenRouterResponseError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('treats an empty choices list as retryable so the fallback chain advances', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(200, {choices: []}));
+      .mockResolvedValue(jsonResponse(200, { choices: [] }));
 
-    await expect(makeClient(['f']).complete({messages: [{role: 'user', content: 'Hi'}]}))
-      .rejects.toBeInstanceOf(OpenRouterAvailabilityError);
+    await expect(
+      makeClient(['f']).complete({ messages: [{ role: 'user', content: 'Hi' }] }),
+    ).rejects.toBeInstanceOf(OpenRouterAvailabilityError);
 
-    await expect(makeClient(['f', 'g']).complete({messages: [{role: 'user', content: 'Hi'}]}))
-      .rejects.toBeInstanceOf(OpenRouterAvailabilityError);
+    await expect(
+      makeClient(['f', 'g']).complete({ messages: [{ role: 'user', content: 'Hi' }] }),
+    ).rejects.toBeInstanceOf(OpenRouterAvailabilityError);
     // makeClient always includes vendor/primary: ['f'] → 2 attempts, ['f','g'] → 3.
     expect(fetchMock).toHaveBeenCalledTimes(5);
   });
@@ -368,11 +373,11 @@ describe('complete', () => {
   it('an explicit model pin replaces the whole chain', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(503, {error: {message: 'down'}}));
+      .mockResolvedValue(jsonResponse(503, { error: { message: 'down' } }));
 
     await expect(
       makeClient(['vendor/fallback']).complete({
-        messages: [{role: 'user', content: 'Hi'}],
+        messages: [{ role: 'user', content: 'Hi' }],
         model: 'vendor/pinned',
       }),
     ).rejects.toBeInstanceOf(OpenRouterAvailabilityError);
@@ -392,7 +397,7 @@ describe('complete', () => {
         }),
     );
     try {
-      const promise = makeClient().complete({messages: [{role: 'user', content: 'Hi'}]});
+      const promise = makeClient().complete({ messages: [{ role: 'user', content: 'Hi' }] });
       jest.advanceTimersByTime(DEFAULT_TIMEOUT_MS + 1);
       await expect(promise).rejects.toThrow(
         'all 1 configured model(s) failed: vendor/primary: request exceeded timeout of 60000ms',
@@ -415,10 +420,10 @@ describe('listModels', () => {
             context_length: 8192,
             created: 1700000000,
           },
-          {id: '', name: 'Broken'},
+          { id: '', name: 'Broken' },
           'not-an-object',
-          {id: 'vendor/model-b'},
-          {id: 'vendor/model-c', context_length: 'bogus'},
+          { id: 'vendor/model-b' },
+          { id: 'vendor/model-c', context_length: 'bogus' },
         ],
       }),
     );
@@ -473,12 +478,10 @@ describe('listModels', () => {
   it('normalizes catalog failures like any other HTTP error', async () => {
     jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(500, {error: {message: 'catalog down'}}));
-    await expect(makeClient().listModels()).rejects.toBeInstanceOf(
-      OpenRouterAvailabilityError,
-    );
+      .mockResolvedValue(jsonResponse(500, { error: { message: 'catalog down' } }));
+    await expect(makeClient().listModels()).rejects.toBeInstanceOf(OpenRouterAvailabilityError);
 
-    jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, {nope: true}));
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, { nope: true }));
     await expect(makeClient().listModels()).rejects.toBeInstanceOf(OpenRouterResponseError);
   });
 
@@ -585,8 +588,8 @@ describe('listOpenRouterModels (TASK-AUDIT-004 keyless discovery)', () => {
           {
             id: 'vendor/minimal',
             architecture: 'garbage',
-            pricing: {prompt: 42},
-            top_provider: {context_length: 'nope'},
+            pricing: { prompt: 42 },
+            top_provider: { context_length: 'nope' },
             supported_parameters: ['temperature', 7, null],
           },
         ],
@@ -602,17 +605,15 @@ describe('listOpenRouterModels (TASK-AUDIT-004 keyless discovery)', () => {
         contextLength: null,
         created: null,
         architecture: null,
-        pricing: {prompt: null, completion: null, inputCacheRead: null},
-        topProvider: {contextLength: null, maxCompletionTokens: null},
+        pricing: { prompt: null, completion: null, inputCacheRead: null },
+        topProvider: { contextLength: null, maxCompletionTokens: null },
         supportedParameters: ['temperature'],
       },
     ]);
   });
 
   it('still normalizes HTTP and transport failures onto the shared error hierarchy', async () => {
-    jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(200, {nope: true}));
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, { nope: true }));
     await expect(listOpenRouterModels()).rejects.toBeInstanceOf(OpenRouterResponseError);
 
     jest.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('down'));
@@ -620,15 +621,15 @@ describe('listOpenRouterModels (TASK-AUDIT-004 keyless discovery)', () => {
   });
 
   it('rejects invalid listing options synchronously', async () => {
-    await expect(listOpenRouterModels({baseUrl: '   '})).rejects.toThrow(/base url/i);
-    await expect(listOpenRouterModels({timeoutMs: 0})).rejects.toThrow(/timeout/i);
+    await expect(listOpenRouterModels({ baseUrl: '   ' })).rejects.toThrow(/base url/i);
+    await expect(listOpenRouterModels({ timeoutMs: 0 })).rejects.toThrow(/timeout/i);
   });
 });
 
 describe('streamCompletion transport', () => {
   it('issues a streaming POST carrying the model, messages and Bearer auth', () => {
     beginStream(makeClient(['vendor/fallback']), {
-      messages: [{role: 'user', content: 'Hi'}],
+      messages: [{ role: 'user', content: 'Hi' }],
       temperature: 0.2,
     });
 
@@ -639,7 +640,7 @@ describe('streamCompletion transport', () => {
     expect(xhr.headers.Authorization).toBe('Bearer sk-or-user-key');
     expect(JSON.parse(xhr.body ?? 'null')).toEqual({
       model: 'vendor/primary',
-      messages: [{role: 'user', content: 'Hi'}],
+      messages: [{ role: 'user', content: 'Hi' }],
       stream: true,
       temperature: 0.2,
     });
@@ -652,19 +653,19 @@ describe('streamCompletion transport', () => {
     // mirroring backend llm/openrouter.py.
     stream.xhr().emit(openRouterSse(deltaChunk('Hello', 'vendor/resolved')));
     expect(stream.events).toEqual([
-      {type: 'start', model: 'vendor/resolved'},
-      {type: 'delta', text: 'Hello'},
+      { type: 'start', model: 'vendor/resolved' },
+      { type: 'delta', text: 'Hello' },
     ]);
 
     stream.xhr().emit(openRouterSse(deltaChunk(' world')));
     stream.xhr().emit(`data: ${JSON.stringify(deltaChunk('!'))}\n\ndata: [DONE]\n\n`);
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'vendor/resolved'},
-      {type: 'delta', text: 'Hello'},
-      {type: 'delta', text: ' world'},
-      {type: 'delta', text: '!'},
-      {type: 'completed', text: 'Hello world!', model: 'vendor/resolved', deltaCount: 3},
+      { type: 'start', model: 'vendor/resolved' },
+      { type: 'delta', text: 'Hello' },
+      { type: 'delta', text: ' world' },
+      { type: 'delta', text: '!' },
+      { type: 'completed', text: 'Hello world!', model: 'vendor/resolved', deltaCount: 3 },
     ]);
 
     // The terminal event already fired; onload must not double-complete.
@@ -674,9 +675,7 @@ describe('streamCompletion transport', () => {
 
   it('reassembles frames split across arbitrary chunk boundaries', () => {
     const stream = beginStream(makeClient());
-    const wire =
-      openRouterSse(deltaChunk('Split', 'vendor/m')) +
-      `data: [DONE]\n\n`;
+    const wire = `${openRouterSse(deltaChunk('Split', 'vendor/m'))}data: [DONE]\n\n`;
 
     stream.xhr().emit(wire.slice(0, 10));
     stream.xhr().emit(wire.slice(10, 34));
@@ -684,9 +683,9 @@ describe('streamCompletion transport', () => {
     stream.xhr().respond(200);
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'vendor/m'},
-      {type: 'delta', text: 'Split'},
-      {type: 'completed', text: 'Split', model: 'vendor/m', deltaCount: 1},
+      { type: 'start', model: 'vendor/m' },
+      { type: 'delta', text: 'Split' },
+      { type: 'completed', text: 'Split', model: 'vendor/m', deltaCount: 1 },
     ]);
   });
 
@@ -697,16 +696,16 @@ describe('streamCompletion transport', () => {
     stream.xhr().respond(200);
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'vendor/m'},
-      {type: 'delta', text: 'partial'},
-      {type: 'completed', text: 'partial', model: 'vendor/m', deltaCount: 1},
+      { type: 'start', model: 'vendor/m' },
+      { type: 'delta', text: 'partial' },
+      { type: 'completed', text: 'partial', model: 'vendor/m', deltaCount: 1 },
     ]);
   });
 
   it('silently falls back when the probe fails with a retryable HTTP status', () => {
     const stream = beginStream(makeClient(['vendor/fallback']));
 
-    FakeXHR.sent[0].responseText = JSON.stringify({error: {message: 'capacity'}});
+    FakeXHR.sent[0].responseText = JSON.stringify({ error: { message: 'capacity' } });
     FakeXHR.sent[0].respond(503);
 
     // Nothing reached the consumer yet; a fresh attempt started.
@@ -718,9 +717,9 @@ describe('streamCompletion transport', () => {
     stream.xhr().respond(200);
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'vendor/fallback'},
-      {type: 'delta', text: 'Recovered'},
-      {type: 'completed', text: 'Recovered', model: 'vendor/fallback', deltaCount: 1},
+      { type: 'start', model: 'vendor/fallback' },
+      { type: 'delta', text: 'Recovered' },
+      { type: 'completed', text: 'Recovered', model: 'vendor/fallback', deltaCount: 1 },
     ]);
   });
 
@@ -738,12 +737,12 @@ describe('streamCompletion transport', () => {
   it('stops immediately on a non-retryable authentication failure', () => {
     const stream = beginStream(makeClient(['vendor/fallback']));
 
-    FakeXHR.sent[0].responseText = JSON.stringify({error: {message: 'bad key'}});
+    FakeXHR.sent[0].responseText = JSON.stringify({ error: { message: 'bad key' } });
     FakeXHR.sent[0].respond(401);
 
     expect(FakeXHR.sent).toHaveLength(1);
     expect(stream.events).toEqual([
-      {type: 'failed', message: 'bad key', retryable: false, text: ''},
+      { type: 'failed', message: 'bad key', retryable: false, text: '' },
     ]);
   });
 
@@ -755,8 +754,8 @@ describe('streamCompletion transport', () => {
 
     expect(FakeXHR.sent).toHaveLength(1);
     expect(stream.events).toEqual([
-      {type: 'start', model: 'vendor/primary'},
-      {type: 'delta', text: 'partial '},
+      { type: 'start', model: 'vendor/primary' },
+      { type: 'delta', text: 'partial ' },
       {
         type: 'failed',
         message: 'Network request failed. Check your connection and try again.',
@@ -769,17 +768,16 @@ describe('streamCompletion transport', () => {
   it('emits an aggregate failure when every chain entry fails before committing', () => {
     const stream = beginStream(makeClient(['vendor/fallback']));
 
-    FakeXHR.sent[0].responseText = JSON.stringify({error: {message: 'one'}});
+    FakeXHR.sent[0].responseText = JSON.stringify({ error: { message: 'one' } });
     FakeXHR.sent[0].respond(500);
-    FakeXHR.sent[1].responseText = JSON.stringify({error: {message: 'two'}});
+    FakeXHR.sent[1].responseText = JSON.stringify({ error: { message: 'two' } });
     FakeXHR.sent[1].respond(429);
 
     expect(FakeXHR.sent).toHaveLength(2);
     expect(stream.events).toEqual([
       {
         type: 'failed',
-        message:
-          'all 2 configured model(s) failed: vendor/primary: one; vendor/fallback: two',
+        message: 'all 2 configured model(s) failed: vendor/primary: one; vendor/fallback: two',
         retryable: true,
         text: '',
       },
@@ -790,13 +788,11 @@ describe('streamCompletion transport', () => {
     const stream = beginStream(makeClient());
 
     stream.xhr().emit(openRouterSse(deltaChunk('so far', 'vendor/m')));
-    stream.xhr().emit(
-      openRouterSse({error: {message: 'quota exhausted', code: 402}}),
-    );
+    stream.xhr().emit(openRouterSse({ error: { message: 'quota exhausted', code: 402 } }));
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'vendor/m'},
-      {type: 'delta', text: 'so far'},
+      { type: 'start', model: 'vendor/m' },
+      { type: 'delta', text: 'so far' },
       {
         type: 'failed',
         message: 'Unexpected HTTP 402: quota exhausted',
@@ -846,8 +842,8 @@ describe('streamCompletion transport', () => {
     stream.xhr().respond(200);
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'vendor/m'},
-      {type: 'delta', text: 'first'},
+      { type: 'start', model: 'vendor/m' },
+      { type: 'delta', text: 'first' },
     ]);
   });
 
@@ -864,9 +860,9 @@ describe('streamCompletion transport', () => {
     stream.xhr().respond(200);
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'vendor/m'},
-      {type: 'delta', text: 'Done'},
-      {type: 'completed', text: 'Done', model: 'vendor/m', deltaCount: 1},
+      { type: 'start', model: 'vendor/m' },
+      { type: 'delta', text: 'Done' },
+      { type: 'completed', text: 'Done', model: 'vendor/m', deltaCount: 1 },
     ]);
   });
 

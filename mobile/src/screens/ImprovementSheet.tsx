@@ -10,13 +10,13 @@
  * result body (with a Copy action for the improved text through the
  * clipboard seam) once the provider answers.
  */
-import React, {useCallback, useMemo} from 'react';
-import {ActivityIndicator, Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import { useCallback, useMemo } from 'react';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type {MessageImprovement} from '../api/sessions';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
-import {copyText} from '../utils/clipboard';
+import type { MessageImprovement } from '../api/sessions';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { copyText } from '../utils/clipboard';
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -140,7 +140,7 @@ export function ImprovementSheet({
   result,
   onClose,
 }: ImprovementSheetProps) {
-  const {colors} = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const copyImproved = useCallback(() => {
@@ -154,7 +154,9 @@ export function ImprovementSheet({
   // correct message can be extended into a fuller version.
   const isCorrect = result?.severity === 'none';
   const hasSuggestion =
-    result !== null && result.improved.trim().length > 0 && result.improved.trim() !== result.original.trim();
+    result !== null &&
+    result.improved.trim().length > 0 &&
+    result.improved.trim() !== result.original.trim();
 
   if (!visible) {
     return null;

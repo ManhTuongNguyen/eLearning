@@ -19,7 +19,7 @@
  * Ease is clamped to [1.3, 3.0] and intervals never shrink and never exceed a
  * year.
  */
-import type {ReviewGrade, SentenceReviewState, SentenceStatus} from '../db/types';
+import type { ReviewGrade, SentenceReviewState, SentenceStatus } from '../db/types';
 
 /** Minutes a forgotten sentence waits before it is shown again. */
 export const LEARNING_STEP_MINUTES = 10;

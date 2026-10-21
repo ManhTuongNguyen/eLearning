@@ -10,12 +10,12 @@
  * normalized error as an alert toast (same auto-dismiss contract). Stale
  * responses (a session switched mid-flight) are dropped.
  */
-import {useCallback, useEffect, useRef, useState} from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import {saveVocabulary} from '../api/vocabulary';
-import type {AuthedRequester} from '../auth/authedRequest';
-import {toErrorMessage} from '../auth/AuthContext';
-import {getRuntimeApplicationMode} from '../mode/runtime';
+import { saveVocabulary } from '../api/vocabulary';
+import { toErrorMessage } from '../auth/AuthContext';
+import type { AuthedRequester } from '../auth/authedRequest';
+import { getRuntimeApplicationMode } from '../mode/runtime';
 
 /** How long the vocabulary save toast stays visible (TASK-070). */
 export const VOCAB_TOAST_DURATION_MS = 2500;
@@ -25,10 +25,10 @@ export const VOCAB_TOAST_DURATION_MS = 2500;
  * alert) and the text color (TASK-AUDIT-007 made it carry failure
  * feedback too, since the confirmation popup is gone).
  */
-export type VocabToast = {text: string; kind: 'success' | 'error'};
+export type VocabToast = { text: string; kind: 'success' | 'error' };
 
-export function useVocabularySave(options: {authedRequest: AuthedRequester}) {
-  const {authedRequest} = options;
+export function useVocabularySave(options: { authedRequest: AuthedRequester }) {
+  const { authedRequest } = options;
   const [toast, setToast] = useState<VocabToast | null>(null);
   // Stale-response guard: switching sessions invalidates any in-flight save.
   const vocabSaveRequestRef = useRef(0);
@@ -48,33 +48,30 @@ export function useVocabularySave(options: {authedRequest: AuthedRequester}) {
    * before any transport work, so nothing is ever transmitted. Both modes
    * call through the central authed requester (TASK-AUDIT-005).
    */
-  const saveVocabularySelection = useCallback(
-    (selectedText: string, messageId: number) => {
-      const requestId = ++vocabSaveRequestRef.current;
-      (async () => {
-        try {
-          const serverless = getRuntimeApplicationMode() === 'serverless';
-          if (!serverless && vocabSaveRequestRef.current !== requestId) {
-            return;
-          }
-          await saveVocabulary(
-            authedRequestRef.current,
-            selectedText,
-            messageId > 0 ? messageId : undefined,
-          );
-          if (vocabSaveRequestRef.current !== requestId) {
-            return;
-          }
-          setToast({text: 'Saved to vocabulary', kind: 'success'});
-        } catch (err) {
-          if (vocabSaveRequestRef.current === requestId) {
-            setToast({text: toErrorMessage(err), kind: 'error'});
-          }
+  const saveVocabularySelection = useCallback((selectedText: string, messageId: number) => {
+    const requestId = ++vocabSaveRequestRef.current;
+    (async () => {
+      try {
+        const serverless = getRuntimeApplicationMode() === 'serverless';
+        if (!serverless && vocabSaveRequestRef.current !== requestId) {
+          return;
         }
-      })();
-    },
-    [],
-  );
+        await saveVocabulary(
+          authedRequestRef.current,
+          selectedText,
+          messageId > 0 ? messageId : undefined,
+        );
+        if (vocabSaveRequestRef.current !== requestId) {
+          return;
+        }
+        setToast({ text: 'Saved to vocabulary', kind: 'success' });
+      } catch (err) {
+        if (vocabSaveRequestRef.current === requestId) {
+          setToast({ text: toErrorMessage(err), kind: 'error' });
+        }
+      }
+    })();
+  }, []);
 
   /** Session switch: invalidate any in-flight save and drop the toast. */
   const invalidateVocabSave = useCallback(() => {
@@ -92,5 +89,5 @@ export function useVocabularySave(options: {authedRequest: AuthedRequester}) {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  return {toast, saveVocabularySelection, invalidateVocabSave};
+  return { toast, saveVocabularySelection, invalidateVocabSave };
 }

@@ -44,8 +44,5 @@ export async function loadSpeakingScrollSpeed(): Promise<number> {
 
 /** Persist the speed (clamped into range). */
 export async function saveSpeakingScrollSpeed(speed: number): Promise<void> {
-  await AsyncStorage.setItem(
-    SCROLL_SPEED_STORAGE_KEY,
-    String(clampScrollSpeed(speed)),
-  );
+  await AsyncStorage.setItem(SCROLL_SPEED_STORAGE_KEY, String(clampScrollSpeed(speed)));
 }

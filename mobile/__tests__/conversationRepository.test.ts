@@ -6,13 +6,14 @@
  * constructed with an injected driver factory; the default getLocalDatabase()
  * wiring is covered separately through the mocked native driver.
  */
-import {openLocalDatabase, resetLocalDatabase} from '../src/db/database';
+
 import {
   LocalConversationRepository,
   type NewRepositoryMessage,
 } from '../src/db/conversationRepository';
-import type {SqlDriver} from '../src/db/driver';
-import {openSqlJsDriver} from '../testing/sqlJsDriver';
+import { openLocalDatabase, resetLocalDatabase } from '../src/db/database';
+import type { SqlDriver } from '../src/db/driver';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 /** Yield so successive mutations get distinct updated_at timestamps. */
 function tick(ms = 5): Promise<void> {
@@ -33,7 +34,7 @@ describe('LocalConversationRepository (TASK-082)', () => {
   });
 
   test('createSession applies defaults and readSession reads it back', async () => {
-    const created = await repo.createSession({topic_hint: 'travel'});
+    const created = await repo.createSession({ topic_hint: 'travel' });
 
     expect(created.id).toBeGreaterThan(0);
     expect(created.title).toBe('New conversation');
@@ -88,10 +89,7 @@ describe('LocalConversationRepository (TASK-082)', () => {
     expect(otherMessage.sequence).toBe(1);
 
     const messages = await repo.listMessages(session.id);
-    expect(messages.map(message => message.content)).toEqual([
-      'Hi! Ready to practice?',
-      'Yes!',
-    ]);
+    expect(messages.map(message => message.content)).toEqual(['Hi! Ready to practice?', 'Yes!']);
   });
 
   test('addMessage stores pending status for streaming generations', async () => {
@@ -105,19 +103,16 @@ describe('LocalConversationRepository (TASK-082)', () => {
     });
 
     const [stored] = await repo.listMessages(session.id);
-    expect(stored).toMatchObject({id: pending.id, status: 'pending'});
+    expect(stored).toMatchObject({ id: pending.id, status: 'pending' });
   });
 
   test('addMessage keeps the active session first in listings', async () => {
-    const older = await repo.createSession({title: 'older'});
+    const older = await repo.createSession({ title: 'older' });
     await tick();
-    await repo.createSession({title: 'newer'});
+    await repo.createSession({ title: 'newer' });
 
     // Creation order puts the newest session on top.
-    expect((await repo.listSessions()).map(session => session.title)).toEqual([
-      'newer',
-      'older',
-    ]);
+    expect((await repo.listSessions()).map(session => session.title)).toEqual(['newer', 'older']);
 
     // Chat activity promotes the older session back to the top.
     await tick();
@@ -127,10 +122,7 @@ describe('LocalConversationRepository (TASK-082)', () => {
       content: 'hello again',
     });
 
-    expect((await repo.listSessions()).map(session => session.title)).toEqual([
-      'older',
-      'newer',
-    ]);
+    expect((await repo.listSessions()).map(session => session.title)).toEqual(['older', 'newer']);
   });
 
   test('addMessage rejects messages for unknown sessions', async () => {
@@ -143,7 +135,7 @@ describe('LocalConversationRepository (TASK-082)', () => {
   });
 
   test('renameSession persists the title without touching other fields', async () => {
-    const created = await repo.createSession({topic_hint: 'movies'});
+    const created = await repo.createSession({ topic_hint: 'movies' });
 
     await tick();
     await repo.renameSession(created.id, 'Movie night');
@@ -218,7 +210,7 @@ describe('LocalConversationRepository (TASK-082)', () => {
 
   test('saveSummary rejects summaries for unknown sessions', async () => {
     await expect(
-      repo.saveSummary({session_id: 555555, content: 'orphan', message_boundary: 1}),
+      repo.saveSummary({ session_id: 555555, content: 'orphan', message_boundary: 1 }),
     ).rejects.toThrow();
   });
 });

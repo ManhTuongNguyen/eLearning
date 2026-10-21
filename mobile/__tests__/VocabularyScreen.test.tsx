@@ -9,33 +9,28 @@
  * share seam behind busy-state guarding, confirms through a toast and
  * surfaces failures as a retryable alert without disturbing the list.
  */
-import React from 'react';
-import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import * as authApi from '../src/api/auth';
-import {ApiError} from '../src/api/client';
+import { ApiError } from '../src/api/client';
+import type { Paginated } from '../src/api/sessions';
 import * as sessionsApi from '../src/api/sessions';
-import type {Paginated} from '../src/api/sessions';
+import type { VocabularyItem } from '../src/api/vocabulary';
 import * as vocabularyApi from '../src/api/vocabulary';
-import type {VocabularyItem} from '../src/api/vocabulary';
-import {AuthProvider} from '../src/auth/AuthContext';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
-import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import type {MainStackParamList} from '../src/navigation/types';
-import {ChatScreen} from '../src/screens/ChatScreen';
-import {VocabularyScreen} from '../src/screens/VocabularyScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
+import { DEFAULT_APPLICATION_MODE } from '../src/mode/types';
+import type { MainStackParamList } from '../src/navigation/types';
+import { ChatScreen } from '../src/screens/ChatScreen';
+import { VocabularyScreen } from '../src/screens/VocabularyScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 import * as ankiShare from '../src/utils/ankiShare';
 
 jest.mock('../src/api/auth');
@@ -75,7 +70,7 @@ function itemPage(
   results: VocabularyItem[],
   next: string | null = null,
 ): Paginated<VocabularyItem> {
-  return {count: results.length, next, previous: null, results};
+  return { count: results.length, next, previous: null, results };
 }
 
 function renderedItemIds(): number[] {
@@ -85,16 +80,16 @@ function renderedItemIds(): number[] {
     .map(testId => Number(testId.replace('vocabulary-item-', '')));
 }
 
-async function renderVocabulary(options?: {withChatUnderneath?: boolean}) {
+async function renderVocabulary(options?: { withChatUnderneath?: boolean }) {
   const Stack = createNativeStackNavigator<MainStackParamList>();
   const navigator = (
     <NavigationContainer
       initialState={
         options?.withChatUnderneath
-          ? {index: 1, routes: [{name: 'Chat'}, {name: 'Vocabulary'}]}
+          ? { index: 1, routes: [{ name: 'Chat' }, { name: 'Vocabulary' }] }
           : undefined
       }>
-      <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="Vocabulary">
+      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Vocabulary">
         <Stack.Screen name="Chat" component={ChatScreen} />
         <Stack.Screen name="Vocabulary" component={VocabularyScreen} />
       </Stack.Navigator>
@@ -116,8 +111,8 @@ beforeEach(async () => {
   // Server-flow journeys: pin the persisted mode because fresh installs
   // now default to serverless.
   await saveApplicationMode('server');
-  mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-  mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+  mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
   // The Chat underneath checks the authoritative history on the no-session
   // landing route (TASK-AUDIT-008); default to an empty one.
   mockedSessions.listSessions.mockResolvedValue({
@@ -147,8 +142,8 @@ describe('VocabularyScreen', () => {
 
     resolveFirstPage(
       itemPage([
-        makeItem({id: 302, expression: 'wanderlust'}),
-        makeItem({id: 301, expression: 'gobsmacked'}),
+        makeItem({ id: 302, expression: 'wanderlust' }),
+        makeItem({ id: 301, expression: 'gobsmacked' }),
       ]),
     );
 
@@ -169,7 +164,7 @@ describe('VocabularyScreen', () => {
   it('surfaces load failures and recovers through Try again', async () => {
     mockedVocabulary.listVocabulary
       .mockRejectedValueOnce(new ApiError(0, 'Network request failed.'))
-      .mockResolvedValueOnce(itemPage([makeItem({id: 5, expression: 'serendipity'})]));
+      .mockResolvedValueOnce(itemPage([makeItem({ id: 5, expression: 'serendipity' })]));
     await renderVocabulary();
 
     expect(await screen.findByTestId('form-error')).toHaveTextContent(
@@ -179,9 +174,7 @@ describe('VocabularyScreen', () => {
 
     await fireEvent.press(screen.getByTestId('vocabulary-retry'));
 
-    await waitFor(() =>
-      expect(mockedVocabulary.listVocabulary).toHaveBeenCalledTimes(2),
-    );
+    await waitFor(() => expect(mockedVocabulary.listVocabulary).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('serendipity')).toBeOnTheScreen();
     expect(screen.queryByTestId('form-error')).toBeNull();
   });
@@ -214,9 +207,7 @@ describe('VocabularyScreen', () => {
     );
     await renderVocabulary();
 
-    expect(await screen.findByTestId('vocab-badge-pending')).toHaveTextContent(
-      'Enriching…',
-    );
+    expect(await screen.findByTestId('vocab-badge-pending')).toHaveTextContent('Enriching…');
     expect(screen.queryByText(/definition/i)).toBeNull();
   });
 
@@ -272,13 +263,13 @@ describe('VocabularyScreen', () => {
       .mockResolvedValueOnce(
         itemPage(
           [
-            makeItem({id: 12, expression: 'phrase twelve'}),
-            makeItem({id: 11, expression: 'phrase eleven'}),
+            makeItem({ id: 12, expression: 'phrase twelve' }),
+            makeItem({ id: 11, expression: 'phrase eleven' }),
           ],
           'http://api.test/api/v1/vocabulary/?page=2',
         ),
       )
-      .mockResolvedValueOnce(itemPage([makeItem({id: 10, expression: 'phrase ten'})]));
+      .mockResolvedValueOnce(itemPage([makeItem({ id: 10, expression: 'phrase ten' })]));
 
     await renderVocabulary();
     const loadMore = await screen.findByTestId('vocabulary-load-more');
@@ -297,10 +288,7 @@ describe('VocabularyScreen', () => {
     let resolveSecondPage: (page: Paginated<VocabularyItem>) => void = () => {};
     mockedVocabulary.listVocabulary
       .mockResolvedValueOnce(
-        itemPage(
-          [makeItem({id: 9})],
-          'http://api.test/api/v1/vocabulary/?page=2',
-        ),
+        itemPage([makeItem({ id: 9 })], 'http://api.test/api/v1/vocabulary/?page=2'),
       )
       .mockImplementationOnce(
         () =>
@@ -320,9 +308,7 @@ describe('VocabularyScreen', () => {
     expect(mockedVocabulary.listVocabulary).toHaveBeenCalledTimes(2);
 
     // A further page keeps the control; it must be re-enabled after settle.
-    resolveSecondPage(
-      itemPage([makeItem({id: 8})], 'http://api.test/api/v1/vocabulary/?page=3'),
-    );
+    resolveSecondPage(itemPage([makeItem({ id: 8 })], 'http://api.test/api/v1/vocabulary/?page=3'));
     await waitFor(() => expect(renderedItemIds()).toEqual([9, 8]));
     expect(screen.getByTestId('vocabulary-load-more')).toBeEnabled();
   });
@@ -330,7 +316,7 @@ describe('VocabularyScreen', () => {
   it('keeps loaded rows when loading another page fails', async () => {
     mockedVocabulary.listVocabulary
       .mockResolvedValueOnce(
-        itemPage([makeItem({id: 6})], 'http://api.test/api/v1/vocabulary/?page=2'),
+        itemPage([makeItem({ id: 6 })], 'http://api.test/api/v1/vocabulary/?page=2'),
       )
       .mockRejectedValueOnce(new ApiError(500, 'Boom'));
 
@@ -348,7 +334,7 @@ describe('VocabularyScreen', () => {
 
   it('dismisses back to the underlying chat via the close control', async () => {
     mockedVocabulary.listVocabulary.mockResolvedValue(itemPage([]));
-    await renderVocabulary({withChatUnderneath: true});
+    await renderVocabulary({ withChatUnderneath: true });
 
     await screen.findByTestId('vocabulary-empty');
 
@@ -409,7 +395,7 @@ describe('VocabularyScreen', () => {
 
     it('shows a retryable alert when the export fails and keeps the list intact', async () => {
       mockedVocabulary.listVocabulary.mockResolvedValue(
-        itemPage([makeItem({id: 4, expression: 'serendipity'})]),
+        itemPage([makeItem({ id: 4, expression: 'serendipity' })]),
       );
       mockedVocabulary.exportVocabulary
         .mockRejectedValueOnce(new ApiError(0, 'Network request failed.'))
@@ -444,9 +430,7 @@ describe('VocabularyScreen in serverless mode (TASK-AUDIT-016)', () => {
 
     await renderVocabulary();
 
-    await waitFor(() =>
-      expect(screen.getByTestId('vocabulary-mode-notice')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('vocabulary-mode-notice')).toBeOnTheScreen());
     expect(screen.getByText(/Saved vocabulary lives with your server account/)).toBeOnTheScreen();
     expect(screen.queryByTestId('vocabulary-export')).toBeNull();
     expect(screen.queryByTestId('vocabulary-loading')).toBeNull();
@@ -459,9 +443,7 @@ describe('VocabularyScreen in serverless mode (TASK-AUDIT-016)', () => {
     setRuntimeApplicationMode('serverless');
 
     await renderVocabulary();
-    await waitFor(() =>
-      expect(screen.getByTestId('vocabulary-mode-notice')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('vocabulary-mode-notice')).toBeOnTheScreen());
 
     expect(mockedVocabulary.listVocabulary).not.toHaveBeenCalled();
     expect(mockedVocabulary.exportVocabulary).not.toHaveBeenCalled();
@@ -470,15 +452,13 @@ describe('VocabularyScreen in serverless mode (TASK-AUDIT-016)', () => {
 
   it('keeps the server vocabulary flow intact after switching back to server mode', async () => {
     mockedVocabulary.listVocabulary.mockResolvedValue(
-      itemPage([makeItem({id: 9, expression: 'run into'})]),
+      itemPage([makeItem({ id: 9, expression: 'run into' })]),
     );
 
     await saveApplicationMode('serverless');
     setRuntimeApplicationMode('serverless');
-    const {unmount} = await renderVocabulary();
-    await waitFor(() =>
-      expect(screen.getByTestId('vocabulary-mode-notice')).toBeOnTheScreen(),
-    );
+    const { unmount } = await renderVocabulary();
+    await waitFor(() => expect(screen.getByTestId('vocabulary-mode-notice')).toBeOnTheScreen());
     unmount();
 
     await saveApplicationMode('server');

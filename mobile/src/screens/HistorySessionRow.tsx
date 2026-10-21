@@ -5,12 +5,12 @@
  * and their persistence; this component renders whichever variant is active
  * for its session and reports intents back through callbacks.
  */
-import React, {useMemo} from 'react';
-import {Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
+import { useMemo } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import type {Session} from '../api/sessions';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import type { Session } from '../api/sessions';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 function createRowStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -149,7 +149,7 @@ export function HistorySessionRow({
   onStartDelete,
   onOpen,
 }: HistorySessionRowProps) {
-  const {colors} = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createRowStyles(colors), [colors]);
 
   if (renaming) {
@@ -176,11 +176,9 @@ export function HistorySessionRow({
             }}
             accessibilityRole="button"
             accessibilityLabel="Save conversation name"
-            accessibilityState={{disabled: savingRename || draftTitle.trim() === ''}}
+            accessibilityState={{ disabled: savingRename || draftTitle.trim() === '' }}
             testID="history-rename-save">
-            <Text style={styles.saveButtonText}>
-              {savingRename ? 'Saving…' : 'Save'}
-            </Text>
+            <Text style={styles.saveButtonText}>{savingRename ? 'Saving…' : 'Save'}</Text>
           </Pressable>
           <Pressable
             style={[styles.cancelButton, savingRename && styles.buttonDisabled]}
@@ -190,7 +188,7 @@ export function HistorySessionRow({
             }}
             accessibilityRole="button"
             accessibilityLabel="Cancel renaming"
-            accessibilityState={{disabled: savingRename}}
+            accessibilityState={{ disabled: savingRename }}
             testID="history-rename-cancel">
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </Pressable>
@@ -202,9 +200,7 @@ export function HistorySessionRow({
   if (confirmingDelete) {
     return (
       <View style={styles.row} testID={`history-confirm-${session.id}`}>
-        <Text style={styles.confirmText}>
-          Delete “{session.title}”? This cannot be undone.
-        </Text>
+        <Text style={styles.confirmText}>Delete “{session.title}”? This cannot be undone.</Text>
         <View style={styles.editorActions}>
           <Pressable
             style={[styles.deleteButton, deleting && styles.buttonDisabled]}
@@ -214,11 +210,9 @@ export function HistorySessionRow({
             }}
             accessibilityRole="button"
             accessibilityLabel={`Confirm deleting ${session.title}`}
-            accessibilityState={{disabled: deleting}}
+            accessibilityState={{ disabled: deleting }}
             testID="history-delete-confirm">
-            <Text style={styles.deleteButtonText}>
-              {deleting ? 'Deleting…' : 'Delete'}
-            </Text>
+            <Text style={styles.deleteButtonText}>{deleting ? 'Deleting…' : 'Delete'}</Text>
           </Pressable>
           <Pressable
             style={[styles.cancelButton, deleting && styles.buttonDisabled]}
@@ -228,7 +222,7 @@ export function HistorySessionRow({
             }}
             accessibilityRole="button"
             accessibilityLabel="Keep this conversation"
-            accessibilityState={{disabled: deleting}}
+            accessibilityState={{ disabled: deleting }}
             testID="history-delete-cancel">
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </Pressable>

@@ -3,7 +3,7 @@
  * the serverless entry point (TASK-AUDIT-003): users can enable serverless
  * mode directly here, without any account.
  */
-import React, {useCallback, useMemo, useState} from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,12 +15,12 @@ import {
   View,
 } from 'react-native';
 
-import {useAuth} from '../auth/AuthContext';
-import {useApplicationMode} from '../mode/ModeContext';
-import {SecretInput} from '../components/SecretInput';
-import type {LoginScreenProps} from '../navigation/types';
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import { useAuth } from '../auth/AuthContext';
+import { SecretInput } from '../components/SecretInput';
+import { useApplicationMode } from '../mode/ModeContext';
+import type { LoginScreenProps } from '../navigation/types';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -109,10 +109,10 @@ function createStyles(c: ThemeColors) {
   });
 }
 
-export function LoginScreen({navigation}: LoginScreenProps) {
-  const {login, busy, error} = useAuth();
-  const {setMode} = useApplicationMode();
-  const {colors} = useTheme();
+export function LoginScreen({ navigation }: LoginScreenProps) {
+  const { login, busy, error } = useAuth();
+  const { setMode } = useApplicationMode();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -162,7 +162,9 @@ export function LoginScreen({navigation}: LoginScreenProps) {
         <Pressable
           style={[styles.button, !canSubmit && styles.buttonDisabled]}
           disabled={!canSubmit}
-          onPress={() => {login(identifier.trim(), password);}}
+          onPress={() => {
+            login(identifier.trim(), password);
+          }}
           testID="login-submit">
           {busy ? (
             <ActivityIndicator color={colors.onPrimary} />
@@ -171,9 +173,7 @@ export function LoginScreen({navigation}: LoginScreenProps) {
           )}
         </Pressable>
 
-        <Pressable
-          onPress={() => navigation.replace('Register')}
-          testID="login-switch-register">
+        <Pressable onPress={() => navigation.replace('Register')} testID="login-switch-register">
           <Text style={styles.switchText}>
             No account yet? <Text style={styles.switchLink}>Register</Text>
           </Text>
@@ -187,8 +187,8 @@ export function LoginScreen({navigation}: LoginScreenProps) {
           testID="login-serverless">
           <Text style={styles.serverlessTitle}>Continue without an account</Text>
           <Text style={styles.serverlessDescription}>
-            Serverless mode keeps your conversations on this device and sends
-            AI requests directly to your configured provider.
+            Serverless mode keeps your conversations on this device and sends AI requests directly
+            to your configured provider.
           </Text>
         </Pressable>
       </View>

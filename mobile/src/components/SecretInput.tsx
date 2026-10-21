@@ -12,20 +12,19 @@
  *   string) and only the trailing character is in view. The
  *   `selection` prop re-syncs in the same paint as the value change.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
+  type StyleProp,
   StyleSheet,
   Text,
   TextInput,
-  View,
-  type StyleProp,
   type TextStyle,
+  View,
   type ViewStyle,
 } from 'react-native';
-
-import { useTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 export interface SecretInputProps {
   value: string;
@@ -104,18 +103,11 @@ function createStyles(c: ThemeColors) {
  */
 function EyeIcon({ hidden, color }: { hidden: boolean; color: string }) {
   return (
-    <View
-      style={eyeStyles.container}
-      accessibilityElementsHidden
-      importantForAccessibility="no"
-    >
+    <View style={eyeStyles.container} accessibilityElementsHidden importantForAccessibility="no">
       <View style={[eyeStyles.outer, { borderColor: color }]} />
       <View style={[eyeStyles.pupil, { backgroundColor: color }]} />
       {hidden ? (
-        <View
-          pointerEvents="none"
-          style={[eyeStyles.slash, { backgroundColor: color }]}
-        />
+        <View pointerEvents="none" style={[eyeStyles.slash, { backgroundColor: color }]} />
       ) : null}
     </View>
   );
@@ -202,9 +194,7 @@ export function SecretInput({
   return (
     <View style={[styles.wrapper, containerStyle]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <View
-        style={[styles.fieldRow, !showBorder && styles.borderlessField]}
-      >
+      <View style={[styles.fieldRow, !showBorder && styles.borderlessField]}>
         <TextInput
           style={[styles.input, inputStyle]}
           placeholder={placeholder}
@@ -234,8 +224,7 @@ export function SecretInput({
           accessibilityLabel={visible ? 'Hide value' : 'Show value'}
           hitSlop={8}
           style={styles.eyeButton}
-          testID={testID ? `${testID}-toggle` : undefined}
-        >
+          testID={testID ? `${testID}-toggle` : undefined}>
           <EyeIcon hidden={!visible} color={toggleColor} />
         </Pressable>
       </View>

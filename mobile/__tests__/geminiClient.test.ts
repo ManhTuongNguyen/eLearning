@@ -7,7 +7,14 @@
  * [DONE] terminator, authenticated model discovery, the ordered fallback
  * chain, and normalized errors. All external HTTP calls are mocked.
  */
-import type {ServerlessStreamEvent} from '../src/serverless/types';
+
+import {
+  LLMAuthenticationError,
+  LLMAvailabilityError,
+  LLMBadRequestError,
+  type LLMError,
+  LLMResponseError,
+} from '../src/serverless/errors';
 import {
   buildGeminiPayload,
   createGeminiClient,
@@ -15,13 +22,7 @@ import {
   listGeminiModels,
   normalizeGeminiModelEntry,
 } from '../src/serverless/geminiClient';
-import {
-  LLMAuthenticationError,
-  LLMAvailabilityError,
-  LLMBadRequestError,
-  LLMError,
-  LLMResponseError,
-} from '../src/serverless/errors';
+import type { ServerlessStreamEvent } from '../src/serverless/types';
 
 type Listener = (() => void) | null;
 
@@ -31,7 +32,7 @@ function jsonResponse(status: number, body: unknown): Response {
     ok: status >= 200 && status < 300,
     status,
     text: async () => text,
-    headers: {get: () => null},
+    headers: { get: () => null },
   } as unknown as Response;
 }
 
@@ -41,7 +42,7 @@ function generateContentBody(text: string, modelVersion = 'gemini-2.0-flash'): u
     modelVersion,
     candidates: [
       {
-        content: {parts: [{text}], role: 'model'},
+        content: { parts: [{ text }], role: 'model' },
         finishReason: 'STOP',
       },
     ],
@@ -121,19 +122,19 @@ function makeClient(fallbacks?: string[]) {
 
 function beginStream(
   client: ReturnType<typeof makeClient>,
-  request?: {messages: {role: 'user'; content: string}[]},
+  request?: { messages: { role: 'user'; content: string }[] },
 ): {
   events: ServerlessStreamEvent[];
-  handle: {abort(): void};
+  handle: { abort(): void };
   xhr: () => FakeXHR;
 } {
   const state = {
     events: [] as ServerlessStreamEvent[],
-    handle: null as unknown as {abort(): void},
+    handle: null as unknown as { abort(): void },
     xhr: () => FakeXHR.sent[FakeXHR.sent.length - 1],
   };
   state.handle = client.streamCompletion({
-    request: request ?? {messages: [{role: 'user', content: 'Hi'}]},
+    request: request ?? { messages: [{ role: 'user', content: 'Hi' }] },
     onEvent: event => state.events.push(event),
   });
   return state;
@@ -143,37 +144,37 @@ describe('payload construction', () => {
   test('maps roles onto the Gemini wire format', () => {
     const payload = buildGeminiPayload({
       messages: [
-        {role: 'system', content: 'Be concise.'},
-        {role: 'user', content: 'Hello'},
-        {role: 'assistant', content: 'Hi there'},
-        {role: 'user', content: 'Bye'},
+        { role: 'system', content: 'Be concise.' },
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there' },
+        { role: 'user', content: 'Bye' },
       ],
     });
 
     expect(payload).toEqual({
       contents: [
-        {role: 'user', parts: [{text: 'Hello'}]},
-        {role: 'model', parts: [{text: 'Hi there'}]},
-        {role: 'user', parts: [{text: 'Bye'}]},
+        { role: 'user', parts: [{ text: 'Hello' }] },
+        { role: 'model', parts: [{ text: 'Hi there' }] },
+        { role: 'user', parts: [{ text: 'Bye' }] },
       ],
-      systemInstruction: {parts: [{text: 'Be concise.'}]},
+      systemInstruction: { parts: [{ text: 'Be concise.' }] },
     });
   });
 
   test('omits systemInstruction and temperature when unused', () => {
-    const payload = buildGeminiPayload({messages: [{role: 'user', content: 'Hi'}]});
+    const payload = buildGeminiPayload({ messages: [{ role: 'user', content: 'Hi' }] });
     expect(payload).toEqual({
-      contents: [{role: 'user', parts: [{text: 'Hi'}]}],
+      contents: [{ role: 'user', parts: [{ text: 'Hi' }] }],
     });
     expect(payload.generationConfig).toBeUndefined();
   });
 
   test('temperature is carried in generationConfig', () => {
     const payload = buildGeminiPayload({
-      messages: [{role: 'user', content: 'Hi'}],
+      messages: [{ role: 'user', content: 'Hi' }],
       temperature: 0.2,
     });
-    expect(payload.generationConfig).toEqual({temperature: 0.2});
+    expect(payload.generationConfig).toEqual({ temperature: 0.2 });
   });
 });
 
@@ -203,23 +204,23 @@ describe('model entry normalization', () => {
 
   test('rejects unusable entries', () => {
     expect(normalizeGeminiModelEntry('nope')).toBeNull();
-    expect(normalizeGeminiModelEntry({displayName: 'no name'})).toBeNull();
-    expect(normalizeGeminiModelEntry({name: 'models/'})).toBeNull();
+    expect(normalizeGeminiModelEntry({ displayName: 'no name' })).toBeNull();
+    expect(normalizeGeminiModelEntry({ name: 'models/' })).toBeNull();
   });
 });
 
 describe('configuration validation', () => {
   test('missing key, model, base URL or timeout throws synchronously', () => {
-    expect(() => createGeminiClient({apiKey: '', primaryModel: 'm'})).toThrow(
+    expect(() => createGeminiClient({ apiKey: '', primaryModel: 'm' })).toThrow(
       /Gemini API key is required/,
     );
-    expect(() => createGeminiClient({apiKey: 'k', primaryModel: ' '})).toThrow(
+    expect(() => createGeminiClient({ apiKey: 'k', primaryModel: ' ' })).toThrow(
       /primary Gemini model is required/,
     );
-    expect(() => createGeminiClient({apiKey: 'k', primaryModel: 'm', baseUrl: ' '})).toThrow(
+    expect(() => createGeminiClient({ apiKey: 'k', primaryModel: 'm', baseUrl: ' ' })).toThrow(
       /Gemini base URL must be a non-empty string/,
     );
-    expect(() => createGeminiClient({apiKey: 'k', primaryModel: 'm', timeoutMs: -1})).toThrow(
+    expect(() => createGeminiClient({ apiKey: 'k', primaryModel: 'm', timeoutMs: -1 })).toThrow(
       /timeout must be greater than zero/,
     );
   });
@@ -227,10 +228,12 @@ describe('configuration validation', () => {
 
 describe('complete', () => {
   test('POSTs to :generateContent with the key header and maps the result', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(200, generateContentBody('Hello!')));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(200, generateContentBody('Hello!')));
     try {
       const result = await makeClient().complete({
-        messages: [{role: 'user', content: 'Hi'}],
+        messages: [{ role: 'user', content: 'Hi' }],
       });
 
       const [url, init] = fetchMock.mock.calls[0];
@@ -241,7 +244,7 @@ describe('complete', () => {
         'Content-Type': 'application/json',
       });
       expect(JSON.parse(String(init?.body))).toEqual({
-        contents: [{role: 'user', parts: [{text: 'Hi'}]}],
+        contents: [{ role: 'user', parts: [{ text: 'Hi' }] }],
       });
       expect(result).toEqual({
         text: 'Hello!',
@@ -257,12 +260,13 @@ describe('complete', () => {
   test('the fallback chain advances only on retryable failures', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(async () => jsonResponse(503, {error: {message: 'overloaded'}}))
-      .mockImplementationOnce(async () => jsonResponse(200, generateContentBody('Ok', 'gemini-1.5-pro')));
-      ;
+      .mockImplementationOnce(async () => jsonResponse(503, { error: { message: 'overloaded' } }))
+      .mockImplementationOnce(async () =>
+        jsonResponse(200, generateContentBody('Ok', 'gemini-1.5-pro')),
+      );
     try {
       const result = await makeClient(['gemini-1.5-pro']).complete({
-        messages: [{role: 'user', content: 'Hi'}],
+        messages: [{ role: 'user', content: 'Hi' }],
       });
       expect(result.model).toBe('gemini-1.5-pro');
       expect(fetchMock.mock.calls[1][0]).toBe(
@@ -274,11 +278,15 @@ describe('complete', () => {
   });
 
   test('authentication failures stop the chain immediately', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(401, {error: {message: 'bad key'}}));
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(401, { error: { message: 'bad key' } }));
     try {
-      const error = (await makeClient(['gemini-1.5-pro']).complete({
-        messages: [{role: 'user', content: 'Hi'}],
-      }).catch(caught => caught)) as LLMError;
+      const error = (await makeClient(['gemini-1.5-pro'])
+        .complete({
+          messages: [{ role: 'user', content: 'Hi' }],
+        })
+        .catch(caught => caught)) as LLMError;
       expect(error).toBeInstanceOf(LLMAuthenticationError);
       expect(error.model).toBe('gemini-2.0-flash');
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -288,11 +296,15 @@ describe('complete', () => {
   });
 
   test('an exhausted chain aggregates into one availability error', async () => {
-    jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(500, {error: {message: 'down'}}));
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(500, { error: { message: 'down' } }));
     try {
-      const error = (await makeClient(['gemini-1.5-pro']).complete({
-        messages: [{role: 'user', content: 'Hi'}],
-      }).catch(caught => caught)) as LLMError;
+      const error = (await makeClient(['gemini-1.5-pro'])
+        .complete({
+          messages: [{ role: 'user', content: 'Hi' }],
+        })
+        .catch(caught => caught)) as LLMError;
       expect(error).toBeInstanceOf(LLMAvailabilityError);
       expect(error.message).toContain('all 2 configured model(s) failed');
     } finally {
@@ -301,11 +313,15 @@ describe('complete', () => {
   });
 
   test('responses without text parts are response errors', async () => {
-    jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(200, {candidates: []}));
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(200, { candidates: [] }));
     try {
-      const error = (await makeClient().complete({
-        messages: [{role: 'user', content: 'Hi'}],
-      }).catch(caught => caught)) as LLMError;
+      const error = (await makeClient()
+        .complete({
+          messages: [{ role: 'user', content: 'Hi' }],
+        })
+        .catch(caught => caught)) as LLMError;
       expect(error).toBeInstanceOf(LLMResponseError);
     } finally {
       (globalThis.fetch as unknown as jest.SpyInstance).mockRestore();
@@ -313,11 +329,15 @@ describe('complete', () => {
   });
 
   test('HTTP bad requests are normalized as non-retryable', async () => {
-    jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(400, {error: {message: 'bad role'}}));
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(400, { error: { message: 'bad role' } }));
     try {
-      const error = (await makeClient().complete({
-        messages: [{role: 'user', content: 'Hi'}],
-      }).catch(caught => caught)) as LLMError;
+      const error = (await makeClient()
+        .complete({
+          messages: [{ role: 'user', content: 'Hi' }],
+        })
+        .catch(caught => caught)) as LLMError;
       expect(error).toBeInstanceOf(LLMBadRequestError);
       expect(error.retryable).toBe(false);
     } finally {
@@ -337,28 +357,28 @@ describe('streamCompletion', () => {
     );
     expect(xhr.headers['x-goog-api-key']).toBe('AIza-user-key');
     expect(JSON.parse(String(xhr.body)).contents).toEqual([
-      {role: 'user', parts: [{text: 'Hi'}]},
+      { role: 'user', parts: [{ text: 'Hi' }] },
     ]);
 
     xhr.emit(
       `data: ${JSON.stringify({
         modelVersion: 'gemini-2.0-flash',
-        candidates: [{content: {parts: [{text: 'Hello'}], role: 'model'}}],
+        candidates: [{ content: { parts: [{ text: 'Hello' }], role: 'model' } }],
       })}\n\n`,
     );
     xhr.emit(
       `data: ${JSON.stringify({
         modelVersion: 'gemini-2.0-flash',
-        candidates: [{content: {parts: [{text: ' there'}], role: 'model'}}],
+        candidates: [{ content: { parts: [{ text: ' there' }], role: 'model' } }],
       })}\n\n`,
     );
     xhr.respond();
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'gemini-2.0-flash'},
-      {type: 'delta', text: 'Hello'},
-      {type: 'delta', text: ' there'},
-      {type: 'completed', text: 'Hello there', model: 'gemini-2.0-flash', deltaCount: 2},
+      { type: 'start', model: 'gemini-2.0-flash' },
+      { type: 'delta', text: 'Hello' },
+      { type: 'delta', text: ' there' },
+      { type: 'completed', text: 'Hello there', model: 'gemini-2.0-flash', deltaCount: 2 },
     ]);
   });
 
@@ -372,7 +392,7 @@ describe('streamCompletion', () => {
     const frame = (text: string) =>
       `data: ${JSON.stringify({
         modelVersion: 'gemini-2.0-flash',
-        candidates: [{content: {parts: [{text}], role: 'model'}}],
+        candidates: [{ content: { parts: [{ text }], role: 'model' } }],
       })}\r\n\r\n`;
 
     const xhr = stream.xhr();
@@ -380,10 +400,10 @@ describe('streamCompletion', () => {
     xhr.respond();
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'gemini-2.0-flash'},
-      {type: 'delta', text: 'Hello'},
-      {type: 'delta', text: ' there'},
-      {type: 'completed', text: 'Hello there', model: 'gemini-2.0-flash', deltaCount: 2},
+      { type: 'start', model: 'gemini-2.0-flash' },
+      { type: 'delta', text: 'Hello' },
+      { type: 'delta', text: ' there' },
+      { type: 'completed', text: 'Hello there', model: 'gemini-2.0-flash', deltaCount: 2 },
     ]);
   });
 
@@ -396,11 +416,11 @@ describe('streamCompletion', () => {
 
     const firstJson = JSON.stringify({
       modelVersion: 'gemini-2.0-flash',
-      candidates: [{content: {parts: [{text: 'Hel'}], role: 'model'}}],
+      candidates: [{ content: { parts: [{ text: 'Hel' }], role: 'model' } }],
     });
     const secondJson = JSON.stringify({
       modelVersion: 'gemini-2.0-flash',
-      candidates: [{content: {parts: [{text: 'lo'}], role: 'model'}}],
+      candidates: [{ content: { parts: [{ text: 'lo' }], role: 'model' } }],
     });
     const firstFrame = `data: ${firstJson}\r\n\r\n`;
     const secondFrame = `data: ${secondJson}\r\n\r\n`;
@@ -416,10 +436,10 @@ describe('streamCompletion', () => {
     xhr.respond();
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'gemini-2.0-flash'},
-      {type: 'delta', text: 'Hel'},
-      {type: 'delta', text: 'lo'},
-      {type: 'completed', text: 'Hello', model: 'gemini-2.0-flash', deltaCount: 2},
+      { type: 'start', model: 'gemini-2.0-flash' },
+      { type: 'delta', text: 'Hel' },
+      { type: 'delta', text: 'lo' },
+      { type: 'completed', text: 'Hello', model: 'gemini-2.0-flash', deltaCount: 2 },
     ]);
   });
 
@@ -430,7 +450,7 @@ describe('streamCompletion', () => {
     const xhr = stream.xhr();
     xhr.emit(
       `data: ${JSON.stringify({
-        candidates: [{content: {parts: [{text: 'A'}, {text: 'B'}]}}],
+        candidates: [{ content: { parts: [{ text: 'A' }, { text: 'B' }] } }],
       })}\n\n`,
     );
     xhr.emit('data: NOT_JSON\n\n');
@@ -438,9 +458,14 @@ describe('streamCompletion', () => {
 
     // The malformed chunk terminates the stream with the normalized error.
     expect(stream.events).toEqual([
-      {type: 'start', model: 'gemini-2.0-flash'},
-      {type: 'delta', text: 'AB'},
-      {type: 'failed', message: 'Malformed JSON chunk from provider.', retryable: false, text: 'AB'},
+      { type: 'start', model: 'gemini-2.0-flash' },
+      { type: 'delta', text: 'AB' },
+      {
+        type: 'failed',
+        message: 'Malformed JSON chunk from provider.',
+        retryable: false,
+        text: 'AB',
+      },
     ]);
   });
 
@@ -450,15 +475,15 @@ describe('streamCompletion', () => {
 
     const xhr = stream.xhr();
     xhr.emit(
-      `data: ${JSON.stringify({candidates: [{content: {parts: [{text: 'Par'}]}}]})}\n\n`,
+      `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Par' }] } }] })}\n\n`,
     );
-    xhr.emit(`data: ${JSON.stringify({error: {code: 500, message: 'dropped'}})}\n\n`);
+    xhr.emit(`data: ${JSON.stringify({ error: { code: 500, message: 'dropped' } })}\n\n`);
     xhr.respond();
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'gemini-2.0-flash'},
-      {type: 'delta', text: 'Par'},
-      {type: 'failed', message: 'dropped', retryable: true, text: 'Par'},
+      { type: 'start', model: 'gemini-2.0-flash' },
+      { type: 'delta', text: 'Par' },
+      { type: 'failed', message: 'dropped', retryable: true, text: 'Par' },
     ]);
     expect(FakeXHR.sent).toHaveLength(1);
   });
@@ -475,15 +500,15 @@ describe('streamCompletion', () => {
     fallbackXhr.emit(
       `data: ${JSON.stringify({
         modelVersion: 'gemini-1.5-pro',
-        candidates: [{content: {parts: [{text: 'Ok'}]}}],
+        candidates: [{ content: { parts: [{ text: 'Ok' }] } }],
       })}\n\n`,
     );
     fallbackXhr.respond();
 
     expect(stream.events).toEqual([
-      {type: 'start', model: 'gemini-1.5-pro'},
-      {type: 'delta', text: 'Ok'},
-      {type: 'completed', text: 'Ok', model: 'gemini-1.5-pro', deltaCount: 1},
+      { type: 'start', model: 'gemini-1.5-pro' },
+      { type: 'delta', text: 'Ok' },
+      { type: 'completed', text: 'Ok', model: 'gemini-1.5-pro', deltaCount: 1 },
     ]);
   });
 
@@ -493,11 +518,11 @@ describe('streamCompletion', () => {
 
     const xhr = stream.xhr();
     xhr.emit(
-      `data: ${JSON.stringify({candidates: [{content: {parts: [{text: 'Hi'}]}}]})}\n\n`,
+      `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Hi' }] } }] })}\n\n`,
     );
     stream.handle.abort();
     xhr.emit(
-      `data: ${JSON.stringify({candidates: [{content: {parts: [{text: 'again'}]}}]})}\n\n`,
+      `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'again' }] } }] })}\n\n`,
     );
     xhr.respond();
 
@@ -536,18 +561,18 @@ describe('listGeminiModels', () => {
     const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       jsonResponse(200, {
         models: [
-          {name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash'},
+          { name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash' },
           'not-an-object',
-          {name: 'models/gemini-1.5-pro', displayName: 'Gemini 1.5 Pro'},
+          { name: 'models/gemini-1.5-pro', displayName: 'Gemini 1.5 Pro' },
         ],
       }),
     );
     try {
-      const models = await listGeminiModels({apiKey: 'AIza-user-key'});
+      const models = await listGeminiModels({ apiKey: 'AIza-user-key' });
 
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toBe(`${DEFAULT_GEMINI_BASE_URL}/models`);
-      expect(init?.headers).toEqual({'x-goog-api-key': 'AIza-user-key'});
+      expect(init?.headers).toEqual({ 'x-goog-api-key': 'AIza-user-key' });
       expect(models.map(model => model.id)).toEqual(['gemini-2.0-flash', 'gemini-1.5-pro']);
     } finally {
       (globalThis.fetch as unknown as jest.SpyInstance).mockRestore();
@@ -561,9 +586,13 @@ describe('listGeminiModels', () => {
   });
 
   test('HTTP failures are normalized', async () => {
-    jest.spyOn(globalThis, 'fetch').mockImplementation(async () => jsonResponse(403, {error: {message: 'denied'}}));
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => jsonResponse(403, { error: { message: 'denied' } }));
     try {
-      const error = (await listGeminiModels({apiKey: 'AIza-user-key'}).catch(caught => caught)) as LLMError;
+      const error = (await listGeminiModels({ apiKey: 'AIza-user-key' }).catch(
+        caught => caught,
+      )) as LLMError;
       expect(error).toBeInstanceOf(LLMAuthenticationError);
       expect(error.message).toBe('denied');
     } finally {
@@ -572,12 +601,14 @@ describe('listGeminiModels', () => {
   });
 
   test('client-bound listModels reuses the configured key', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async () =>
-      jsonResponse(200, {models: [{name: 'models/gemini-2.0-flash'}]}),
-    );
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () =>
+        jsonResponse(200, { models: [{ name: 'models/gemini-2.0-flash' }] }),
+      );
     try {
       const models = await makeClient().listModels();
-      expect(fetchMock.mock.calls[0][1]?.headers).toEqual({'x-goog-api-key': 'AIza-user-key'});
+      expect(fetchMock.mock.calls[0][1]?.headers).toEqual({ 'x-goog-api-key': 'AIza-user-key' });
       expect(models.map(model => model.id)).toEqual(['gemini-2.0-flash']);
     } finally {
       (globalThis.fetch as unknown as jest.SpyInstance).mockRestore();

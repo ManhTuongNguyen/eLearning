@@ -8,7 +8,7 @@
  */
 import SQLite from 'react-native-sqlite-storage';
 
-import type {SqlDriver, SqlExecutor, SqlParam, SqlResult} from './driver';
+import type { SqlDriver, SqlExecutor, SqlParam, SqlResult } from './driver';
 
 /** On-device database file name inside the app's default storage location. */
 export const LOCAL_DB_NAME = 'elearning-serverless.db';
@@ -17,16 +17,13 @@ export const LOCAL_DB_NAME = 'elearning-serverless.db';
 SQLite.enablePromise(true);
 
 type NativeResultSet = {
-  rows: {raw: () => Array<Record<string, unknown>>};
+  rows: { raw: () => Array<Record<string, unknown>> };
   rowsAffected: number;
   insertId?: number;
 };
 
 type NativeDatabase = {
-  executeSql: (
-    sql: string,
-    params?: unknown[],
-  ) => Promise<[NativeResultSet]>;
+  executeSql: (sql: string, params?: unknown[]) => Promise<[NativeResultSet]>;
   close: () => Promise<void>;
 };
 
@@ -62,7 +59,7 @@ class NativeSqliteDriver implements SqlDriver {
   async transaction<T>(work: (tx: SqlExecutor) => Promise<T>): Promise<T> {
     await this.execute('BEGIN IMMEDIATE');
     try {
-      const outcome = await work({execute: (sql, params) => this.execute(sql, params)});
+      const outcome = await work({ execute: (sql, params) => this.execute(sql, params) });
       await this.execute('COMMIT');
       return outcome;
     } catch (error) {
@@ -78,7 +75,7 @@ class NativeSqliteDriver implements SqlDriver {
 
 /** Open (creating if needed) the on-device database and enable foreign keys. */
 export async function openNativeDriver(name: string = LOCAL_DB_NAME): Promise<SqlDriver> {
-  const db: NativeDatabase = await SQLite.openDatabase({name, location: 'default'});
+  const db: NativeDatabase = await SQLite.openDatabase({ name, location: 'default' });
   await db.executeSql('PRAGMA foreign_keys = ON');
   return new NativeSqliteDriver(db);
 }

@@ -7,48 +7,41 @@
  * speaking-state transitions, overlap prevention between lines, failure
  * clearing without crashes, and halting playback on close/unmount.
  */
-import React from 'react';
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react-native';
 
-import type {SampleTurn} from '../src/api/sessions';
-import {SampleConversationModal} from '../src/screens/SampleConversationModal';
-import {ThemeProvider} from '../src/theme/ThemeContext';
-import type {TextToSpeechEngine} from '../src/tts/textToSpeech';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+
+import type { SampleTurn } from '../src/api/sessions';
+import { SampleConversationModal } from '../src/screens/SampleConversationModal';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+import type { TextToSpeechEngine } from '../src/tts/textToSpeech';
 
 /** Engine double whose speak() calls park on manually released promises. */
 function makeDeferredEngine(): {
   engine: TextToSpeechEngine;
-  spoken: {text: string; release: () => void}[];
+  spoken: { text: string; release: () => void }[];
   stopMock: jest.Mock;
 } {
-  const spoken: {text: string; release: () => void}[] = [];
+  const spoken: { text: string; release: () => void }[] = [];
   const stopMock = jest.fn();
   const engine: TextToSpeechEngine = {
     speak(text: string) {
       return new Promise<void>(resolve => {
-        spoken.push({text, release: resolve});
+        spoken.push({ text, release: resolve });
       });
     },
     stop: stopMock,
   };
-  return {engine, spoken, stopMock};
+  return { engine, spoken, stopMock };
 }
 
 function makeTurn(overrides: Partial<SampleTurn> = {}): SampleTurn {
-  return {role: 'assistant', content: 'Example line', ...overrides};
+  return { role: 'assistant', content: 'Example line', ...overrides };
 }
 
 const TURNS: SampleTurn[] = [
-  makeTurn({role: 'assistant', content: 'Hello! Ready to practice English?'}),
-  makeTurn({role: 'user', content: 'Yes, let us talk about food.'}),
-  makeTurn({role: 'assistant', content: 'Great topic. What did you eat today?'}),
+  makeTurn({ role: 'assistant', content: 'Hello! Ready to practice English?' }),
+  makeTurn({ role: 'user', content: 'Yes, let us talk about food.' }),
+  makeTurn({ role: 'assistant', content: 'Great topic. What did you eat today?' }),
 ];
 
 interface ModalOverrides {
@@ -78,13 +71,9 @@ describe('SampleConversationModal', () => {
     expect(screen.getByTestId('sample-modal')).toBeOnTheScreen();
     expect(screen.getAllByTestId(/^sample-turn-/)).toHaveLength(TURNS.length);
     const overlay = screen.getByTestId('sample-modal');
-    expect(
-      within(overlay).getByText('Hello! Ready to practice English?'),
-    ).toBeOnTheScreen();
+    expect(within(overlay).getByText('Hello! Ready to practice English?')).toBeOnTheScreen();
     expect(within(overlay).getByText('Yes, let us talk about food.')).toBeOnTheScreen();
-    expect(
-      within(overlay).getByText('Great topic. What did you eat today?'),
-    ).toBeOnTheScreen();
+    expect(within(overlay).getByText('Great topic. What did you eat today?')).toBeOnTheScreen();
 
     // Roles surface as captions next to each line.
     expect(within(screen.getByTestId('sample-turn-0')).getByText('AI')).toBeOnTheScreen();
@@ -96,7 +85,7 @@ describe('SampleConversationModal', () => {
   });
 
   it('renders nothing while closed', async () => {
-    await renderModal({visible: false});
+    await renderModal({ visible: false });
 
     expect(screen.queryByTestId('sample-modal')).toBeNull();
     expect(screen.queryAllByTestId(/^sample-turn-/)).toHaveLength(0);
@@ -104,7 +93,7 @@ describe('SampleConversationModal', () => {
 
   it('dismisses through the Close button', async () => {
     const onClose = jest.fn();
-    await renderModal({onClose});
+    await renderModal({ onClose });
 
     await fireEvent.press(screen.getByTestId('sample-close'));
 
@@ -113,7 +102,7 @@ describe('SampleConversationModal', () => {
 
   it('dismisses through the Android back button', async () => {
     const onClose = jest.fn();
-    await renderModal({onClose});
+    await renderModal({ onClose });
 
     const modal = screen.getByTestId('sample-modal');
     await act(async () => {
@@ -124,19 +113,15 @@ describe('SampleConversationModal', () => {
   });
 
   it('plays a line through the speech seam and returns to idle when it ends', async () => {
-    const {engine, spoken} = makeDeferredEngine();
-    await renderModal({speech: engine});
+    const { engine, spoken } = makeDeferredEngine();
+    await renderModal({ speech: engine });
 
     await fireEvent.press(screen.getByTestId('sample-tts-0'));
 
     expect(spoken).toHaveLength(1);
     expect(spoken[0]?.text).toBe('Hello! Ready to practice English?');
-    expect(screen.getByTestId('sample-tts-0').props.accessibilityLabel).toBe(
-      'Stop example line 1',
-    );
-    expect(
-      (screen.getByTestId('sample-tts-0').props.accessibilityState ?? {}).busy,
-    ).toBe(true);
+    expect(screen.getByTestId('sample-tts-0').props.accessibilityLabel).toBe('Stop example line 1');
+    expect(screen.getByTestId('sample-tts-0').props.accessibilityState?.busy).toBe(true);
 
     await act(async () => {
       spoken[0]?.release();
@@ -146,14 +131,12 @@ describe('SampleConversationModal', () => {
         'Play example line 1',
       ),
     );
-    expect(
-      (screen.getByTestId('sample-tts-0').props.accessibilityState ?? {}).busy,
-    ).toBe(false);
+    expect(screen.getByTestId('sample-tts-0').props.accessibilityState?.busy).toBe(false);
   });
 
   it('stops a playing line when its control is pressed again', async () => {
-    const {engine, spoken, stopMock} = makeDeferredEngine();
-    await renderModal({speech: engine});
+    const { engine, spoken, stopMock } = makeDeferredEngine();
+    await renderModal({ speech: engine });
 
     await fireEvent.press(screen.getByTestId('sample-tts-0'));
     expect(stopMock).not.toHaveBeenCalled();
@@ -161,22 +144,18 @@ describe('SampleConversationModal', () => {
     await fireEvent.press(screen.getByTestId('sample-tts-0'));
 
     expect(stopMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('sample-tts-0').props.accessibilityLabel).toBe(
-      'Play example line 1',
-    );
+    expect(screen.getByTestId('sample-tts-0').props.accessibilityLabel).toBe('Play example line 1');
 
     // A late natural end after an explicit stop does not resurrect state.
     await act(async () => {
       spoken[0]?.release();
     });
-    expect(screen.getByTestId('sample-tts-0').props.accessibilityLabel).toBe(
-      'Play example line 1',
-    );
+    expect(screen.getByTestId('sample-tts-0').props.accessibilityLabel).toBe('Play example line 1');
   });
 
   it('stops the previous line when another one starts', async () => {
-    const {engine, spoken, stopMock} = makeDeferredEngine();
-    await renderModal({speech: engine});
+    const { engine, spoken, stopMock } = makeDeferredEngine();
+    await renderModal({ speech: engine });
 
     await fireEvent.press(screen.getByTestId('sample-tts-0'));
     await fireEvent.press(screen.getByTestId('sample-tts-2'));
@@ -186,17 +165,13 @@ describe('SampleConversationModal', () => {
       'Great topic. What did you eat today?',
     ]);
     expect(stopMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('sample-tts-0').props.accessibilityLabel).toBe(
-      'Play example line 1',
-    );
-    expect(screen.getByTestId('sample-tts-2').props.accessibilityLabel).toBe(
-      'Stop example line 3',
-    );
+    expect(screen.getByTestId('sample-tts-0').props.accessibilityLabel).toBe('Play example line 1');
+    expect(screen.getByTestId('sample-tts-2').props.accessibilityLabel).toBe('Stop example line 3');
   });
 
   it('halts playback when the overlay closes while speaking', async () => {
-    const {engine, spoken, stopMock} = makeDeferredEngine();
-    const utils = await renderModal({speech: engine});
+    const { engine, spoken, stopMock } = makeDeferredEngine();
+    const utils = await renderModal({ speech: engine });
 
     await fireEvent.press(screen.getByTestId('sample-tts-1'));
     expect(stopMock).not.toHaveBeenCalled();
@@ -229,7 +204,7 @@ describe('SampleConversationModal', () => {
       speak: () => Promise.reject(new Error('E_TTS_LANGUAGE_UNAVAILABLE')),
       stop: stopMock,
     };
-    const utils = await renderModal({speech: failingEngine});
+    const utils = await renderModal({ speech: failingEngine });
 
     await fireEvent.press(screen.getByTestId('sample-tts-1'));
 
@@ -240,7 +215,7 @@ describe('SampleConversationModal', () => {
     );
 
     // The failure is contained: other lines still play normally afterwards.
-    const {engine, spoken} = makeDeferredEngine();
+    const { engine, spoken } = makeDeferredEngine();
     await act(async () => {
       utils.rerender(
         <ThemeProvider>
@@ -254,14 +229,12 @@ describe('SampleConversationModal', () => {
       );
     });
     await fireEvent.press(screen.getByTestId('sample-tts-0'));
-    expect(spoken.map(call => call.text)).toEqual([
-      'Hello! Ready to practice English?',
-    ]);
+    expect(spoken.map(call => call.text)).toEqual(['Hello! Ready to practice English?']);
   });
 
   it('halts playback when unmounted mid-line', async () => {
-    const {engine, stopMock} = makeDeferredEngine();
-    const utils = await renderModal({speech: engine});
+    const { engine, stopMock } = makeDeferredEngine();
+    const utils = await renderModal({ speech: engine });
 
     await fireEvent.press(screen.getByTestId('sample-tts-1'));
     expect(stopMock).not.toHaveBeenCalled();

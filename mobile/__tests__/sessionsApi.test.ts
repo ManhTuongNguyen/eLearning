@@ -1,3 +1,4 @@
+import { apiRequest } from '../src/api/client';
 import {
   createSession,
   deleteSession,
@@ -8,10 +9,9 @@ import {
   listSessions,
   renameSession,
 } from '../src/api/sessions';
-import {apiRequest} from '../src/api/client';
-import {API_BASE_URL} from '../src/config';
-import type {AuthedRequester} from '../src/auth/authedRequest';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
+import type { AuthedRequester } from '../src/auth/authedRequest';
+import { API_BASE_URL } from '../src/config';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
 
 // Server-transport tests: pin the runtime holder because fresh installs now
 // default to serverless.
@@ -20,7 +20,8 @@ beforeEach(() => {
 });
 
 /** Fixed-token requester standing in for the provider-built authed requester. */
-const requester: AuthedRequester = (path, options) => apiRequest(path, {...options, token: 'tok'});
+const requester: AuthedRequester = (path, options) =>
+  apiRequest(path, { ...options, token: 'tok' });
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -65,7 +66,7 @@ describe('sessions api bindings', () => {
     await listSessions(requester, 3);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${API_BASE_URL}/api/v1/sessions/?page=3`);
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
-      headers: {Authorization: 'Bearer tok'},
+      headers: { Authorization: 'Bearer tok' },
     });
   });
 
@@ -73,7 +74,7 @@ describe('sessions api bindings', () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(
-        jsonResponse(201, {id: 1, title: 'Travel', topic_hint: '', learning_level: 'AUTO'}),
+        jsonResponse(201, { id: 1, title: 'Travel', topic_hint: '', learning_level: 'AUTO' }),
       );
 
     await createSession(requester);
@@ -83,7 +84,7 @@ describe('sessions api bindings', () => {
       expect.objectContaining({
         method: 'POST',
         body: '{}',
-        headers: expect.objectContaining({Authorization: 'Bearer tok'}),
+        headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
       }),
     );
   });
@@ -91,7 +92,7 @@ describe('sessions api bindings', () => {
   it('sends the topic hint on creation when provided', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(201, {id: 2}));
+      .mockResolvedValue(jsonResponse(201, { id: 2 }));
 
     await createSession(requester, 'Traveling');
 
@@ -99,7 +100,7 @@ describe('sessions api bindings', () => {
       `${API_BASE_URL}/api/v1/sessions/`,
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({topic_hint: 'Traveling'}),
+        body: JSON.stringify({ topic_hint: 'Traveling' }),
       }),
     );
   });
@@ -115,8 +116,8 @@ describe('sessions api bindings', () => {
         created_at: '2026-08-26T10:00:00Z',
         sample_conversation: {
           turns: [
-            {role: 'assistant', content: 'Where would you like to go?'},
-            {role: 'user', content: 'Somewhere sunny.'},
+            { role: 'assistant', content: 'Where would you like to go?' },
+            { role: 'user', content: 'Somewhere sunny.' },
           ],
         },
       }),
@@ -135,20 +136,20 @@ describe('sessions api bindings', () => {
   it('fetches a single session by id', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(200, {id: 42, title: 'Interview prep'}));
+      .mockResolvedValue(jsonResponse(200, { id: 42, title: 'Interview prep' }));
 
     const session = await getSession(requester, 42);
     expect(session.title).toBe('Interview prep');
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE_URL}/api/v1/sessions/42/`,
-      expect.objectContaining({method: 'GET'}),
+      expect.objectContaining({ method: 'GET' }),
     );
   });
 
   it('renames a session through PATCH with only the title', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(200, {id: 42, title: 'Renamed'}));
+      .mockResolvedValue(jsonResponse(200, { id: 42, title: 'Renamed' }));
 
     await renameSession(requester, 42, 'Renamed');
 
@@ -156,22 +157,20 @@ describe('sessions api bindings', () => {
       `${API_BASE_URL}/api/v1/sessions/42/`,
       expect.objectContaining({
         method: 'PATCH',
-        body: JSON.stringify({title: 'Renamed'}),
+        body: JSON.stringify({ title: 'Renamed' }),
       }),
     );
   });
 
   it('deletes a session and resolves void', async () => {
-    const fetchMock = jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse(204, null));
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(204, null));
 
     await expect(deleteSession(requester, 42)).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE_URL}/api/v1/sessions/42/`,
       expect.objectContaining({
         method: 'DELETE',
-        headers: expect.objectContaining({Authorization: 'Bearer tok'}),
+        headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
       }),
     );
   });
@@ -183,7 +182,7 @@ describe('sessions api bindings', () => {
         next: null,
         previous: null,
         results: [
-          {id: 1, role: 'user', status: 'complete', content: 'Hi', sequence: 1, created_at: 'x'},
+          { id: 1, role: 'user', status: 'complete', content: 'Hi', sequence: 1, created_at: 'x' },
           {
             id: 2,
             role: 'assistant',
@@ -198,17 +197,19 @@ describe('sessions api bindings', () => {
 
     const page = await listMessages(requester, 9);
     expect(page.results.map(m => m.sequence)).toEqual([1, 2]);
-    expect(page.results[1]).toMatchObject({role: 'assistant', status: 'failed'});
+    expect(page.results[1]).toMatchObject({ role: 'assistant', status: 'failed' });
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_BASE_URL}/api/v1/sessions/9/messages/`,
-      expect.objectContaining({method: 'GET'}),
+      expect.objectContaining({ method: 'GET' }),
     );
   });
 
   it('requests suggestions for a message with an empty POST body (TASK-061)', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse(200, {replies: ['First reply', 'Second reply', 'Third reply']}),
-    );
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        jsonResponse(200, { replies: ['First reply', 'Second reply', 'Third reply'] }),
+      );
 
     const result = await getMessageSuggestions(requester, 9, 44);
 
@@ -218,15 +219,17 @@ describe('sessions api bindings', () => {
       expect.objectContaining({
         method: 'POST',
         body: '{}',
-        headers: expect.objectContaining({Authorization: 'Bearer tok'}),
+        headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
       }),
     );
   });
 
   it('normalizes suggestion endpoint failures into ApiError with the DRF detail', async () => {
-    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse(409, {detail: 'Suggestions require a completed, non-empty message.'}),
-    );
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        jsonResponse(409, { detail: 'Suggestions require a completed, non-empty message.' }),
+      );
 
     await expect(getMessageSuggestions(requester, 9, 44)).rejects.toMatchObject({
       name: 'ApiError',
@@ -258,15 +261,17 @@ describe('sessions api bindings', () => {
       expect.objectContaining({
         method: 'POST',
         body: '{}',
-        headers: expect.objectContaining({Authorization: 'Bearer tok'}),
+        headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
       }),
     );
   });
 
   it('normalizes improvement endpoint failures into ApiError with the DRF detail', async () => {
-    jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse(409, {detail: 'Improvement requires a non-empty user message.'}),
-    );
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        jsonResponse(409, { detail: 'Improvement requires a non-empty user message.' }),
+      );
 
     await expect(improveMessage(requester, 9, 44)).rejects.toMatchObject({
       name: 'ApiError',

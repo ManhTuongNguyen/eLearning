@@ -1,7 +1,7 @@
 /** Conversation session and message endpoint bindings (SPEC TASK-030..034 APIs). */
 
-import type {AuthedRequester} from '../auth/authedRequest';
-import type {EnglishLevel} from './profile';
+import type { AuthedRequester } from '../auth/authedRequest';
+import type { EnglishLevel } from './profile';
 
 /** Read representation of a conversation session (backend SessionSerializer). */
 export interface Session {
@@ -72,20 +72,14 @@ function pageQuery(page?: number): string {
  * once — transparently and in one place.
  */
 
-export function listSessions(
-  request: AuthedRequester,
-  page?: number,
-): Promise<Paginated<Session>> {
+export function listSessions(request: AuthedRequester, page?: number): Promise<Paginated<Session>> {
   return request<Paginated<Session>>(`/api/v1/sessions/${pageQuery(page)}`);
 }
 
-export function createSession(
-  request: AuthedRequester,
-  topicHint = '',
-): Promise<CreatedSession> {
+export function createSession(request: AuthedRequester, topicHint = ''): Promise<CreatedSession> {
   return request<CreatedSession>('/api/v1/sessions/', {
     method: 'POST',
-    body: topicHint ? {topic_hint: topicHint} : {},
+    body: topicHint ? { topic_hint: topicHint } : {},
   });
 }
 
@@ -100,7 +94,7 @@ export function renameSession(
 ): Promise<Session> {
   return request<Session>(`/api/v1/sessions/${sessionId}/`, {
     method: 'PATCH',
-    body: {title},
+    body: { title },
   });
 }
 
@@ -139,7 +133,7 @@ export function getMessageSuggestions(
 ): Promise<MessageSuggestions> {
   return request<MessageSuggestions>(
     `/api/v1/sessions/${sessionId}/messages/${messageId}/suggestions/`,
-    {method: 'POST', body: {}},
+    { method: 'POST', body: {} },
   );
 }
 
@@ -175,6 +169,6 @@ export function improveMessage(
 ): Promise<MessageImprovement> {
   return request<MessageImprovement>(
     `/api/v1/sessions/${sessionId}/messages/${messageId}/improve/`,
-    {method: 'POST', body: {}},
+    { method: 'POST', body: {} },
   );
 }

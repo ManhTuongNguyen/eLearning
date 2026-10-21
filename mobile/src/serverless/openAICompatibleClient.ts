@@ -29,21 +29,21 @@
  * stalled connection eventually fails through onerror/ontimeout instead.
  */
 import {
-  LLMError,
   LLMAvailabilityError,
+  LLMError,
   LLMRequestError,
   LLMResponseError,
   LLMTimeoutError,
   normalizeHttpFailure,
 } from './errors';
 import {
-  failedEvent,
-  normalizeModelEntry,
   type CompletionRequest,
   type CompletionResult,
+  failedEvent,
   type LLMClient,
   type LLMClientConfig,
   type ModelInfo,
+  normalizeModelEntry,
   type ProviderId,
   type ServerlessStreamEvent,
   type StreamCompletionOptions,
@@ -118,7 +118,7 @@ export async function requestModelCatalog(
     // must never carry credentials (TASK-AUDIT-004 contract).
     const response = await fetch(`${baseUrl}/models`, {
       method: 'GET',
-      ...(apiKey ? {headers: {Authorization: `Bearer ${apiKey}`}} : {}),
+      ...(apiKey ? { headers: { Authorization: `Bearer ${apiKey}` } } : {}),
       signal: controller.signal,
     });
     const bodyText = await response.text();
@@ -221,9 +221,7 @@ export function createOpenAICompatibleClient(
     return pin ? [pin] : models;
   }
 
-  function aggregateFailure(
-    errors: readonly (readonly [string, string])[],
-  ): LLMAvailabilityError {
+  function aggregateFailure(errors: readonly (readonly [string, string])[]): LLMAvailabilityError {
     const detail = errors.map(([model, message]) => `${model}: ${message}`).join('; ');
     return new LLMAvailabilityError(`all ${errors.length} configured model(s) failed: ${detail}`);
   }
@@ -276,11 +274,9 @@ export function createOpenAICompatibleClient(
               ? errorRecord.message
               : 'The AI provider reported an error with no details.';
           const code = typeof errorRecord.code === 'number' ? errorRecord.code : null;
-          throw (
-            code !== null
-              ? normalizeHttpFailure(code, errorMessage, model, spec.label)
-              : new LLMResponseError(errorMessage, model, true)
-          );
+          throw code !== null
+            ? normalizeHttpFailure(code, errorMessage, model, spec.label)
+            : new LLMResponseError(errorMessage, model, true);
         }
         throw new LLMResponseError(String(inlineError), model, true);
       }
@@ -369,7 +365,7 @@ export function createOpenAICompatibleClient(
    * the next model, mirroring backend FallbackProvider probing.
    */
   function streamCompletion(options: StreamCompletionOptions): StreamHandle {
-    const {request, onEvent} = options;
+    const { request, onEvent } = options;
     const chain = chainFor(request);
     const failures: [string, string][] = [];
 
@@ -510,7 +506,7 @@ export function createOpenAICompatibleClient(
       }
       if (!started) {
         started = true;
-        emit({type: 'start', model: effectiveModel});
+        emit({ type: 'start', model: effectiveModel });
       }
 
       const choices = record.choices;
@@ -530,7 +526,7 @@ export function createOpenAICompatibleClient(
       if (piece) {
         pieces.push(piece);
         deltaCount += 1;
-        emit({type: 'delta', text: piece});
+        emit({ type: 'delta', text: piece });
       }
     }
 
@@ -640,5 +636,5 @@ export function createOpenAICompatibleClient(
   const listModels = (): Promise<ModelInfo[]> =>
     requestModelCatalog(baseUrl, timeoutMs, spec.modelDiscoveryRequiresAuth ? apiKey : undefined);
 
-  return {complete, streamCompletion, listModels};
+  return { complete, streamCompletion, listModels };
 }

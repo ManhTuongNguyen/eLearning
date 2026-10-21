@@ -19,22 +19,10 @@ export function isSpeechEngineId(value: unknown): value is SpeechEngineId {
 export type SpeechGender = 'female' | 'male' | 'unknown';
 
 /** Google-style quality bucket reported by the Android voice metadata. */
-export type SpeechVoiceQuality =
-  | 'very_low'
-  | 'low'
-  | 'normal'
-  | 'high'
-  | 'very_high'
-  | 'unknown';
+export type SpeechVoiceQuality = 'very_low' | 'low' | 'normal' | 'high' | 'very_high' | 'unknown';
 
 /** Google-style latency bucket reported by the Android voice metadata. */
-export type SpeechVoiceLatency =
-  | 'very_low'
-  | 'low'
-  | 'normal'
-  | 'high'
-  | 'very_high'
-  | 'unknown';
+export type SpeechVoiceLatency = 'very_low' | 'low' | 'normal' | 'high' | 'very_high' | 'unknown';
 
 /** One installed system-engine voice (Android Speech.getVoices row). */
 export interface SpeechVoiceInfo {
@@ -129,9 +117,7 @@ export function parseSpeechEngineId(value: unknown): SpeechEngineId | null {
 
 /** Parses an unknown value into a gender bucket, or null when invalid. */
 export function parseSpeechGender(value: unknown): SpeechGender | null {
-  return value === 'female' || value === 'male' || value === 'unknown'
-    ? value
-    : null;
+  return value === 'female' || value === 'male' || value === 'unknown' ? value : null;
 }
 
 /**
@@ -140,8 +126,7 @@ export function parseSpeechGender(value: unknown): SpeechGender | null {
  * instead of failing, mirroring the app's other preference stores.
  */
 export function normalizeSpeechPreferences(raw: unknown): SpeechPreferences {
-  const source =
-    typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   const gender = parseSpeechGender(source.gender);
   const engine = parseSpeechEngineId(source.engine);
   const rate = isFiniteNumber(source.rate)
@@ -166,8 +151,7 @@ export function normalizeSpeechPreferences(raw: unknown): SpeechPreferences {
       typeof source.systemEngineId === 'string' && source.systemEngineId
         ? source.systemEngineId
         : null,
-    gender:
-      gender === 'unknown' ? 'any' : (gender ?? DEFAULT_SPEECH_PREFERENCES.gender),
+    gender: gender === 'unknown' ? 'any' : (gender ?? DEFAULT_SPEECH_PREFERENCES.gender),
     rate,
     pitch,
     instantOnly:

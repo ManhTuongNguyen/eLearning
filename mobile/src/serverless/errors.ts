@@ -19,7 +19,7 @@ export class LLMError extends Error {
   readonly model: string | null;
   readonly retryable: boolean;
 
-  constructor(message: string, options?: {model?: string | null; retryable?: boolean}) {
+  constructor(message: string, options?: { model?: string | null; retryable?: boolean }) {
     super(message);
     this.name = 'LLMError';
     this.model = options?.model ?? null;
@@ -30,7 +30,7 @@ export class LLMError extends Error {
 /** Transport-level failure while contacting the provider (retryable). */
 export class LLMRequestError extends LLMError {
   constructor(message: string, model: string | null = null) {
-    super(message, {model, retryable: true});
+    super(message, { model, retryable: true });
     this.name = 'LLMRequestError';
   }
 }
@@ -46,7 +46,7 @@ export class LLMTimeoutError extends LLMRequestError {
 /** The provider rejected the user's API key (not retryable). */
 export class LLMAuthenticationError extends LLMError {
   constructor(message: string, model: string | null = null) {
-    super(message, {model, retryable: false});
+    super(message, { model, retryable: false });
     this.name = 'LLMAuthenticationError';
   }
 }
@@ -54,7 +54,7 @@ export class LLMAuthenticationError extends LLMError {
 /** The provider rejected the request payload as invalid (not retryable). */
 export class LLMBadRequestError extends LLMError {
   constructor(message: string, model: string | null = null) {
-    super(message, {model, retryable: false});
+    super(message, { model, retryable: false });
     this.name = 'LLMBadRequestError';
   }
 }
@@ -62,7 +62,7 @@ export class LLMBadRequestError extends LLMError {
 /** Provider-side capacity or availability problem (retryable). */
 export class LLMAvailabilityError extends LLMError {
   constructor(message: string, model: string | null = null) {
-    super(message, {model, retryable: true});
+    super(message, { model, retryable: true });
     this.name = 'LLMAvailabilityError';
   }
 }
@@ -76,19 +76,21 @@ export class LLMAvailabilityError extends LLMError {
  */
 export class LLMResponseError extends LLMError {
   constructor(message: string, model: string | null = null, retryable = false) {
-    super(message, {model, retryable});
+    super(message, { model, retryable });
     this.name = 'LLMResponseError';
   }
 }
 
 /** Historic OpenRouter-branded aliases — the exact same classes. */
-export {LLMError as OpenRouterError};
-export {LLMRequestError as OpenRouterRequestError};
-export {LLMTimeoutError as OpenRouterTimeoutError};
-export {LLMAuthenticationError as OpenRouterAuthenticationError};
-export {LLMBadRequestError as OpenRouterBadRequestError};
-export {LLMAvailabilityError as OpenRouterAvailabilityError};
-export {LLMResponseError as OpenRouterResponseError};
+export {
+  LLMAuthenticationError as OpenRouterAuthenticationError,
+  LLMAvailabilityError as OpenRouterAvailabilityError,
+  LLMBadRequestError as OpenRouterBadRequestError,
+  LLMError as OpenRouterError,
+  LLMRequestError as OpenRouterRequestError,
+  LLMResponseError as OpenRouterResponseError,
+  LLMTimeoutError as OpenRouterTimeoutError,
+};
 
 /** Same status → failure mapping as backend llm/provider_errors.py. */
 export function normalizeHttpFailure(

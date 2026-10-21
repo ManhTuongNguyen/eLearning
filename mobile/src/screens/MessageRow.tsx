@@ -15,12 +15,12 @@
  * per-row long-press closure is created inside renderItem today and is the
  * remaining (measured) render amplifier until it is hoisted.
  */
-import React, {memo} from 'react';
-import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native';
+import { memo } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type {ChatMessage, ImprovementSeverity} from '../api/sessions';
-import type {ThemeColors} from '../theme/colors';
-import {createCodeStyle, MarkdownText} from './MarkdownText';
+import type { ChatMessage, ImprovementSeverity } from '../api/sessions';
+import type { ThemeColors } from '../theme/colors';
+import { createCodeStyle, MarkdownText } from './MarkdownText';
 
 /** Row-scoped styles, created once per theme by the owning screen. */
 export function createRowStyles(c: ThemeColors) {
@@ -306,7 +306,7 @@ function MessageRowImpl({
             }}
             accessibilityRole="button"
             accessibilityLabel="Retry failed response"
-            accessibilityState={{disabled: streaming}}
+            accessibilityState={{ disabled: streaming }}
             testID={`chat-retry-${item.id}`}>
             <Text style={styles.messageRetryText}>Retry</Text>
           </Pressable>
@@ -318,7 +318,7 @@ function MessageRowImpl({
             testID={`chat-speech-stop-${item.id}`}
             accessibilityRole="button"
             accessibilityLabel="Stop reading aloud"
-            accessibilityState={{busy: true}}>
+            accessibilityState={{ busy: true }}>
             <Text style={styles.speechStopText}>⏹ Speaking… tap to stop</Text>
           </Pressable>
         ) : null}

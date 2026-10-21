@@ -392,11 +392,12 @@ function followingWordsAfter(
   pattern.lastIndex = from;
   const words: FollowingWord[] = [];
   let previousEnd = from;
-  let match: RegExpExecArray | null;
-  while (words.length < limit && (match = pattern.exec(text)) !== null) {
+  let match = pattern.exec(text);
+  while (words.length < limit && match !== null) {
     const gap = text.slice(previousEnd, match.index);
-    words.push({word: match[0], precededByPunctuation: /\S/.test(gap)});
+    words.push({ word: match[0], precededByPunctuation: /\S/.test(gap) });
     previousEnd = pattern.lastIndex;
+    match = pattern.exec(text);
   }
   return words;
 }
@@ -429,10 +430,7 @@ export function expandTokenForComparison(
   }
 
   let index = 0;
-  while (
-    index < followingWords.length &&
-    COMPARISON_ADVERBS.has(followingWords[index].word)
-  ) {
+  while (index < followingWords.length && COMPARISON_ADVERBS.has(followingWords[index].word)) {
     index += 1;
   }
   if (index >= followingWords.length) {
@@ -451,11 +449,7 @@ export function expandTokenForComparison(
   }
 
   const after = followingWords[index + 1];
-  if (
-    !after ||
-    after.precededByPunctuation ||
-    CLAUSE_DELIMITERS.has(after.word)
-  ) {
+  if (!after || after.precededByPunctuation || CLAUSE_DELIMITERS.has(after.word)) {
     return contraction;
   }
   return word;
@@ -471,10 +465,7 @@ export function normalizeSentenceText(text: string): string {
   const expanded = lowered.replace(
     /[a-z]+(?:'[a-z]+)?/g,
     (word: string, offset: number, full: string) =>
-      expandTokenForComparison(
-        word,
-        followingWordsAfter(full, offset + word.length),
-      ),
+      expandTokenForComparison(word, followingWordsAfter(full, offset + word.length)),
   );
   return expanded.replace(/[^a-z0-9]+/g, ' ').trim();
 }

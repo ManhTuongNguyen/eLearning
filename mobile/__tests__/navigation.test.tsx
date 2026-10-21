@@ -5,22 +5,22 @@
  * (TASK-AUDIT-003): a restored serverless selection mounts the main
  * application without ever routing through login.
  */
-import React from 'react';
-import {NavigationContainer, createNavigationContainerRef} from '@react-navigation/native';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {fireEvent, render, screen, waitFor} from '@testing-library/react-native';
+import { createNavigationContainerRef, NavigationContainer } from '@react-navigation/native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import * as authApi from '../src/api/auth';
-import {AuthProvider} from '../src/auth/AuthContext';
-import * as secureStorage from '../src/auth/secureStorage';
-import type {AuthTokens} from '../src/auth/tokens';
 import * as sessionsApi from '../src/api/sessions';
 import * as vocabularyApi from '../src/api/vocabulary';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {RootNavigator} from '../src/navigation/RootNavigator';
-import type {AuthStackParamList, MainStackParamList} from '../src/navigation/types';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { AuthProvider } from '../src/auth/AuthContext';
+import * as secureStorage from '../src/auth/secureStorage';
+import type { AuthTokens } from '../src/auth/tokens';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { RootNavigator } from '../src/navigation/RootNavigator';
+import type { AuthStackParamList, MainStackParamList } from '../src/navigation/types';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/api/auth');
 jest.mock('../src/api/sessions');
@@ -81,14 +81,12 @@ async function renderRoot() {
     </ModeProvider>,
   );
 
-  return {focusedRouteName, stackRouteNames, stackRoutes};
+  return { focusedRouteName, stackRouteNames, stackRoutes };
 }
 
 async function renderAuthenticated(tokens?: AuthTokens) {
-  mockedStorage.loadTokens.mockResolvedValue(
-    tokens ?? {access: 'token-a', refresh: 'token-r'},
-  );
-  mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
+  mockedStorage.loadTokens.mockResolvedValue(tokens ?? { access: 'token-a', refresh: 'token-r' });
+  mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
   return renderRoot();
 }
 
@@ -138,14 +136,12 @@ describe('root switch', () => {
   it('unauthenticated users see the auth screens', async () => {
     await renderRoot();
 
-    await waitFor(() =>
-      expect(screen.getByTestId('login-identifier')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());
     expect(screen.queryByTestId('chat-screen')).toBeNull();
   });
 
   it('authenticated users see the homepage hub as the entry', async () => {
-    const {focusedRouteName} = await renderAuthenticated();
+    const { focusedRouteName } = await renderAuthenticated();
 
     await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('login-identifier')).toBeNull();
@@ -154,7 +150,7 @@ describe('root switch', () => {
 
   it('a restored serverless mode mounts the main application without authentication (TASK-AUDIT-003)', async () => {
     await saveApplicationMode('serverless');
-    const {focusedRouteName} = await renderRoot();
+    const { focusedRouteName } = await renderRoot();
 
     // Cold start lands directly in the main application: no login screen is
     // ever shown and no authentication request is made.
@@ -167,9 +163,9 @@ describe('root switch', () => {
 
   it('a serverless user with stored credentials still bypasses the auth stack (TASK-AUDIT-003)', async () => {
     await saveApplicationMode('serverless');
-    mockedStorage.loadTokens.mockResolvedValue({access: 'token-a', refresh: 'token-r'});
-    mockedAuth.getMe.mockResolvedValue({id: 1, username: 'alice', email: 'alice@example.com'});
-    const {focusedRouteName} = await renderRoot();
+    mockedStorage.loadTokens.mockResolvedValue({ access: 'token-a', refresh: 'token-r' });
+    mockedAuth.getMe.mockResolvedValue({ id: 1, username: 'alice', email: 'alice@example.com' });
+    const { focusedRouteName } = await renderRoot();
 
     await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('login-identifier')).toBeNull();
@@ -182,7 +178,7 @@ describe('root switch', () => {
 
 describe('main stack navigation', () => {
   it('navigates Home -> Chat -> History and back through the stack state', async () => {
-    const {focusedRouteName} = await openChatAndTrack();
+    const { focusedRouteName } = await openChatAndTrack();
 
     await fireEvent.press(screen.getByTestId('chat-open-history'));
     expect(await screen.findByTestId('history-screen')).toBeOnTheScreen();
@@ -194,15 +190,15 @@ describe('main stack navigation', () => {
   });
 
   it('returns from Settings to Chat through the header back affordance without duplicating stack entries (TASK-AUDIT-006)', async () => {
-    const {focusedRouteName, stackRouteNames, stackRoutes} = await openChatAndTrack();
+    const { focusedRouteName, stackRouteNames, stackRoutes } = await openChatAndTrack();
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
-    expect(focusedRouteName()).toBe('Settings');    // Exactly one Settings entry sits on top of Chat below the hub.
+    expect(focusedRouteName()).toBe('Settings'); // Exactly one Settings entry sits on top of Chat below the hub.
     expect(stackRouteNames()).toEqual(['Home', 'Chat', 'Settings']);
     // The Chat entry opts into the top-drop transition; other entry points
     // to Settings keep the shared push (see navigationAnimations.test.ts).
-    expect(stackRoutes()[2]?.params).toEqual({slideFromTop: true});
+    expect(stackRoutes()[2]?.params).toEqual({ slideFromTop: true });
 
     await fireEvent.press(screen.getByTestId('settings-back'));
 
@@ -215,7 +211,7 @@ describe('main stack navigation', () => {
   });
 
   it('reaches Settings and returns to it after editing the learning level', async () => {
-    const {focusedRouteName} = await openChatAndTrack();
+    const { focusedRouteName } = await openChatAndTrack();
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
@@ -231,7 +227,7 @@ describe('main stack navigation', () => {
   });
 
   it('opens the saved vocabulary list from Settings and returns after closing (TASK-072)', async () => {
-    const {focusedRouteName} = await openChatAndTrack();
+    const { focusedRouteName } = await openChatAndTrack();
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
@@ -251,16 +247,14 @@ describe('main stack navigation', () => {
   });
 
   it('logging out from Settings returns the user to the auth stack', async () => {
-    const tokens = {access: 'token-a', refresh: 'token-r'};
-    const {focusedRouteName} = await renderAuthenticated(tokens);
+    const tokens = { access: 'token-a', refresh: 'token-r' };
+    const { focusedRouteName } = await renderAuthenticated(tokens);
     await openChatFromHome();
 
     await fireEvent.press(screen.getByTestId('chat-open-settings'));
     await fireEvent.press(await screen.findByTestId('settings-logout'));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('login-identifier')).toBeOnTheScreen(),
-    );
+    await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());
     expect(mockedAuth.logout).toHaveBeenCalledWith(tokens);
     expect(mockedStorage.clearTokens).toHaveBeenCalled();
     expect(focusedRouteName()).toBe('Login');

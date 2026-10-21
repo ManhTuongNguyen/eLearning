@@ -6,15 +6,16 @@
  * and the screen uses the shared 16px header spacing (bug #1). Voice
  * browsing AND the instant-voices-only switch live on the VoiceManagerScreen.
  */
-import React from 'react';
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import {applySpeechPreferences} from '../src/tts/androidSpeech';
-import {
-  loadSpeechPreferences,
-  saveSpeechPreferences,
-} from '../src/tts/speechSettings';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { TTSSettingsScreenProps } from '../src/navigation/types';
+import { createStyles, TTSSettingsScreen } from '../src/screens/TTSSettingsScreen';
+import { lightColors } from '../src/theme/colors';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+import { applySpeechPreferences } from '../src/tts/androidSpeech';
+import { loadSpeechPreferences, saveSpeechPreferences } from '../src/tts/speechSettings';
+import type { SpeechPreferences } from '../src/tts/types';
 import {
   DEFAULT_SPEECH_PREFERENCES,
   SPEECH_PITCH_MAX,
@@ -22,11 +23,6 @@ import {
   SPEECH_RATE_MAX,
   SPEECH_RATE_MIN,
 } from '../src/tts/types';
-import type {SpeechPreferences} from '../src/tts/types';
-import type {TTSSettingsScreenProps} from '../src/navigation/types';
-import {TTSSettingsScreen, createStyles} from '../src/screens/TTSSettingsScreen';
-import {lightColors} from '../src/theme/colors';
-import {ThemeProvider} from '../src/theme/ThemeContext';
 
 const asyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage> & {
   __resetAsyncStorageStore: () => void;
@@ -39,7 +35,7 @@ function ttsProps(): TTSSettingsScreenProps {
       goBack: jest.fn(),
       addListener: jest.fn(() => jest.fn()),
     },
-    route: {key: 'tts-test', name: 'TTSSettings', params: undefined},
+    route: { key: 'tts-test', name: 'TTSSettings', params: undefined },
   } as unknown as TTSSettingsScreenProps;
 }
 
@@ -204,7 +200,7 @@ describe('TTSSettingsScreen', () => {
   });
 
   it('reset restores the defaults and clears the stored entry', async () => {
-    await saveSpeechPreferences({...DEFAULT_SPEECH_PREFERENCES, rate: 1.8});
+    await saveSpeechPreferences({ ...DEFAULT_SPEECH_PREFERENCES, rate: 1.8 });
     await renderTts();
     await waitForReady();
 
@@ -213,9 +209,7 @@ describe('TTSSettingsScreen', () => {
       fireEvent.press(screen.getByTestId('tts-reset'));
     });
 
-    await waitFor(() =>
-      expect(screen.getByTestId('tts-rate-value')).toHaveTextContent('1.00×'),
-    );
+    await waitFor(() => expect(screen.getByTestId('tts-rate-value')).toHaveTextContent('1.00×'));
     expect(await loadSpeechPreferences()).toEqual(DEFAULT_SPEECH_PREFERENCES);
     const toast = await screen.findByTestId('tts-reset-toast');
     expect(toast).toBeOnTheScreen();

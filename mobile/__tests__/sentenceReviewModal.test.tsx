@@ -7,12 +7,12 @@
  * Keep selected persists exactly the toggled rows, the action is unavailable
  * when nothing is selected, and Discard all closes without writing.
  */
-import React from 'react';
-import {fireEvent, render, waitFor} from '@testing-library/react-native';
 
-import {SentenceReviewModal} from '../src/screens/SentenceReviewModal';
-import type {SentenceCandidate} from '../src/serverless/sentenceGeneration';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+
+import { SentenceReviewModal } from '../src/screens/SentenceReviewModal';
+import type { SentenceCandidate } from '../src/serverless/sentenceGeneration';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 const CANDIDATES: SentenceCandidate[] = [
   {
@@ -32,10 +32,7 @@ interface RenderOptions {
   visible?: boolean;
 }
 
-async function renderModal({
-  candidates = CANDIDATES,
-  visible = true,
-}: RenderOptions = {}) {
+async function renderModal({ candidates = CANDIDATES, visible = true }: RenderOptions = {}) {
   const onKeep = jest.fn(async () => {});
   const onClose = jest.fn();
   const view = await render(
@@ -48,32 +45,28 @@ async function renderModal({
       />
     </ThemeProvider>,
   );
-  return {view, onKeep, onClose};
+  return { view, onKeep, onClose };
 }
 
 describe('SentenceReviewModal', () => {
   test('shows every candidate field and keeps everything by default', async () => {
-    const {view} = await renderModal();
+    const { view } = await renderModal();
 
-    expect(view.getByTestId('sentence-review-title')).toHaveTextContent(
-      'Review sentences',
-    );
-    expect(view.getByTestId('sentence-review-count')).toHaveTextContent(
-      '2 of 2 kept',
-    );
+    expect(view.getByTestId('sentence-review-title')).toHaveTextContent('Review sentences');
+    expect(view.getByTestId('sentence-review-count')).toHaveTextContent('2 of 2 kept');
     CANDIDATES.forEach((candidate, index) => {
       expect(view.getByTestId(`sentence-candidate-${index}`)).toBeTruthy();
       expect(view.getByText(candidate.sentence)).toBeTruthy();
       expect(view.getByText(candidate.meaning)).toBeTruthy();
       expect(view.getByText(candidate.situation)).toBeTruthy();
-      expect(
-        view.getByTestId(`sentence-toggle-${index}`).props.accessibilityState,
-      ).toEqual({checked: true});
+      expect(view.getByTestId(`sentence-toggle-${index}`).props.accessibilityState).toEqual({
+        checked: true,
+      });
     });
   });
 
   test('Keep all passes every candidate and closes', async () => {
-    const {view, onKeep, onClose} = await renderModal();
+    const { view, onKeep, onClose } = await renderModal();
 
     await fireEvent.press(view.getByTestId('sentence-keep-all'));
 
@@ -85,12 +78,10 @@ describe('SentenceReviewModal', () => {
   });
 
   test('Keep selected passes exactly the toggled rows and closes', async () => {
-    const {view, onKeep, onClose} = await renderModal();
+    const { view, onKeep, onClose } = await renderModal();
 
     await fireEvent.press(view.getByTestId('sentence-toggle-0'));
-    expect(view.getByTestId('sentence-review-count')).toHaveTextContent(
-      '1 of 2 kept',
-    );
+    expect(view.getByTestId('sentence-review-count')).toHaveTextContent('1 of 2 kept');
 
     await fireEvent.press(view.getByTestId('sentence-keep-selected'));
 
@@ -102,13 +93,11 @@ describe('SentenceReviewModal', () => {
   });
 
   test('Keep selected is disabled when nothing is selected', async () => {
-    const {view, onKeep, onClose} = await renderModal();
+    const { view, onKeep, onClose } = await renderModal();
 
     await fireEvent.press(view.getByTestId('sentence-toggle-0'));
     await fireEvent.press(view.getByTestId('sentence-toggle-1'));
-    expect(view.getByTestId('sentence-review-count')).toHaveTextContent(
-      '0 of 2 kept',
-    );
+    expect(view.getByTestId('sentence-review-count')).toHaveTextContent('0 of 2 kept');
 
     const keepSelected = view.getByTestId('sentence-keep-selected');
     expect(keepSelected.props.accessibilityState?.disabled).toBe(true);
@@ -119,7 +108,7 @@ describe('SentenceReviewModal', () => {
   });
 
   test('Discard all closes without persisting anything', async () => {
-    const {view, onKeep, onClose} = await renderModal();
+    const { view, onKeep, onClose } = await renderModal();
 
     await fireEvent.press(view.getByTestId('sentence-discard-all'));
 
@@ -128,12 +117,10 @@ describe('SentenceReviewModal', () => {
   });
 
   test('resets every toggle to kept when reopened for a new batch', async () => {
-    const {view} = await renderModal();
+    const { view } = await renderModal();
 
     await fireEvent.press(view.getByTestId('sentence-toggle-0'));
-    expect(view.getByTestId('sentence-review-count')).toHaveTextContent(
-      '1 of 2 kept',
-    );
+    expect(view.getByTestId('sentence-review-count')).toHaveTextContent('1 of 2 kept');
 
     // Closing unmounts the modal contents (visible=false renders null).
     await view.rerender(
@@ -158,8 +145,6 @@ describe('SentenceReviewModal', () => {
         />
       </ThemeProvider>,
     );
-    expect(view.getByTestId('sentence-review-count')).toHaveTextContent(
-      '2 of 2 kept',
-    );
+    expect(view.getByTestId('sentence-review-count')).toHaveTextContent('2 of 2 kept');
   });
 });

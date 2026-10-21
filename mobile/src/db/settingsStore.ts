@@ -5,39 +5,30 @@
  * OpenRouter API key must NOT be stored here — it belongs in secure device
  * storage (TASK-093), mirroring the auth token policy.
  */
-import type {SqlExecutor} from './driver';
-import {nowIso} from './driver';
+import type { SqlExecutor } from './driver';
+import { nowIso } from './driver';
 
 /** Read one setting; resolves null when the key was never stored. */
-export async function getSetting(
-  db: SqlExecutor,
-  key: string,
-): Promise<string | null> {
+export async function getSetting(db: SqlExecutor, key: string): Promise<string | null> {
   const result = await db.execute('SELECT value FROM settings WHERE key = ?', [key]);
   const row = result.rows[0];
   return row && row.value !== null ? String(row.value) : null;
 }
 
 /** Upsert one setting. */
-export async function setSetting(
-  db: SqlExecutor,
-  key: string,
-  value: string,
-): Promise<void> {
+export async function setSetting(db: SqlExecutor, key: string, value: string): Promise<void> {
   // INSERT OR REPLACE instead of ON CONFLICT DO UPDATE: the UPSERT syntax
   // requires SQLite >= 3.24 while many Android devices (e.g. Android 9)
   // ship older engines.
-  await db.execute(
-    `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)`,
-    [key, value, nowIso()],
-  );
+  await db.execute(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)`, [
+    key,
+    value,
+    nowIso(),
+  ]);
 }
 
 /** Remove one setting; deleting an absent key is not an error. */
-export async function deleteSetting(
-  db: SqlExecutor,
-  key: string,
-): Promise<void> {
+export async function deleteSetting(db: SqlExecutor, key: string): Promise<void> {
   await db.execute('DELETE FROM settings WHERE key = ?', [key]);
 }
 

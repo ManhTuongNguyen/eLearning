@@ -1,9 +1,9 @@
 /** Full-screen loading state shown while restoring the session. */
-import React, {useMemo} from 'react';
-import {ActivityIndicator, StyleSheet, View} from 'react-native';
+import { useMemo } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import type {ThemeColors} from '../theme/colors';
-import {useTheme} from '../theme/ThemeContext';
+import type { ThemeColors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -17,7 +17,7 @@ function createStyles(c: ThemeColors) {
 }
 
 export function SplashScreen() {
-  const {colors} = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   return (

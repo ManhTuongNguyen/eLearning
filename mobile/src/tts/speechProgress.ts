@@ -12,7 +12,7 @@
  * silence rather than errors. Payloads are validated defensively because
  * bridge records arrive as untyped plain objects.
  */
-import {DeviceEventEmitter, type EmitterSubscription} from 'react-native';
+import { DeviceEventEmitter, type EmitterSubscription } from 'react-native';
 
 /** Name of the native progress event (mirrors SpeechModule.EVENT_PROGRESS). */
 export const SPEECH_PROGRESS_EVENT = 'SpeechProgress';
@@ -38,11 +38,11 @@ export function parseSpeechProgress(raw: unknown): SpeechProgress | null {
     return null;
   }
   const record = raw as Record<string, unknown>;
-  const {charStart, charEnd} = record;
+  const { charStart, charEnd } = record;
   if (!isCharOffset(charStart) || !isCharOffset(charEnd)) {
     return null;
   }
-  return {charStart, charEnd};
+  return { charStart, charEnd };
 }
 
 /**
@@ -50,9 +50,7 @@ export function parseSpeechProgress(raw: unknown): SpeechProgress | null {
  * unsubscribe function; listeners must tolerate gaps (events only flow
  * while a native utterance is actually speaking).
  */
-export function addSpeechProgressListener(
-  listener: SpeechProgressListener,
-): () => void {
+export function addSpeechProgressListener(listener: SpeechProgressListener): () => void {
   const subscription: EmitterSubscription = DeviceEventEmitter.addListener(
     SPEECH_PROGRESS_EVENT,
     (raw: unknown) => {

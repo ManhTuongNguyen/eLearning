@@ -14,22 +14,22 @@
  * exercised end-to-end; the serverless provider layer is stubbed at its
  * storage/catalog seams (no network, no keychain).
  */
-import React from 'react';
-import {BackHandler} from 'react-native';
-import {NavigationContainer} from '@react-navigation/native';
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import {AuthProvider} from '../src/auth/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NavigationContainer } from '@react-navigation/native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { BackHandler } from 'react-native';
+
+import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
-import {ModeProvider} from '../src/mode/ModeContext';
-import {saveApplicationMode} from '../src/mode/modeStorage';
-import {setRuntimeApplicationMode} from '../src/mode/runtime';
-import {DEFAULT_APPLICATION_MODE} from '../src/mode/types';
-import {MainNavigator} from '../src/navigation/MainNavigator';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
+import { setRuntimeApplicationMode } from '../src/mode/runtime';
+import { DEFAULT_APPLICATION_MODE } from '../src/mode/types';
+import { MainNavigator } from '../src/navigation/MainNavigator';
 import * as modelCatalog from '../src/serverless/modelCatalog';
 import * as serverlessSettings from '../src/serverless/settings';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 jest.mock('../src/auth/secureStorage');
 jest.mock('../src/serverless/settings');
@@ -51,7 +51,7 @@ beforeAll(() => {
     handler: () => boolean,
   ) => {
     hardwareBackHandlers.push(handler);
-    return {remove: jest.fn()};
+    return { remove: jest.fn() };
   }) as never);
 });
 
@@ -103,9 +103,7 @@ async function openEditorAndSave() {
 
   fireEvent.press(await screen.findByTestId('settings-ai-provider-card'));
   expect(await screen.findByTestId('ai-provider-settings-screen')).toBeOnTheScreen();
-  await waitFor(() =>
-    expect(screen.getByTestId('ai-provider-save').props.disabled).toBeFalsy(),
-  );
+  await waitFor(() => expect(screen.getByTestId('ai-provider-save').props.disabled).toBeFalsy());
 
   fireEvent.press(screen.getByTestId('ai-provider-save'));
   await waitFor(() => expect(screen.getByTestId('settings-screen')).toBeOnTheScreen());

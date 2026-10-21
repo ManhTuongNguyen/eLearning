@@ -24,10 +24,7 @@ const PRACTICE_MODES: readonly PracticeMode[] = ['auto', 'dictation', 'recall'];
 
 /** Narrow an arbitrary stored value to a supported practice mode. */
 export function isPracticeMode(value: unknown): value is PracticeMode {
-  return (
-    typeof value === 'string' &&
-    (PRACTICE_MODES as readonly string[]).includes(value)
-  );
+  return typeof value === 'string' && (PRACTICE_MODES as readonly string[]).includes(value);
 }
 
 /** Read the persisted mode; missing or invalid values mean `auto`. */

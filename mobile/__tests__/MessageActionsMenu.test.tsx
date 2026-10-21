@@ -7,12 +7,11 @@
  * the accessibility surface (labeled buttons per action, accessibility modal
  * container).
  */
-import React from 'react';
-import {act, fireEvent, render, screen, within} from '@testing-library/react-native';
 
-import {MessageActionsMenu} from '../src/screens/MessageActionsMenu';
-import type {MessageAction} from '../src/screens/MessageActionsMenu';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
+import type { MessageAction } from '../src/screens/MessageActionsMenu';
+import { MessageActionsMenu } from '../src/screens/MessageActionsMenu';
+import { ThemeProvider } from '../src/theme/ThemeContext';
 
 interface MenuOverrides {
   visible?: boolean;
@@ -41,25 +40,24 @@ async function renderMenu(overrides: MenuOverrides = {}) {
 function visibleActionLabels(): string[] {
   return screen
     .getAllByTestId(/^chat-menu-/)
-    .filter(
-      element =>
-        /^chat-menu-(suggest-replies|improve-english|select-text|copy|speak)$/.test(
-          element.props.testID as string,
-        ),
+    .filter(element =>
+      /^chat-menu-(suggest-replies|improve-english|select-text|copy|speak)$/.test(
+        element.props.testID as string,
+      ),
     )
     .map(element => element.props.accessibilityLabel as string);
 }
 
 describe('MessageActionsMenu', () => {
   it('renders nothing while closed', async () => {
-    await renderMenu({visible: false});
+    await renderMenu({ visible: false });
 
     expect(screen.queryByTestId('chat-menu-modal')).toBeNull();
     expect(screen.queryByTestId('chat-menu')).toBeNull();
   });
 
   it('shows assistant-message actions without the learner-only entries', async () => {
-    await renderMenu({role: 'assistant'});
+    await renderMenu({ role: 'assistant' });
 
     expect(visibleActionLabels()).toEqual(['Select text', 'Copy', 'Read aloud']);
     expect(screen.queryByTestId('chat-menu-suggest-replies')).toBeNull();
@@ -67,24 +65,19 @@ describe('MessageActionsMenu', () => {
   });
 
   it('offers Suggest replies on an assistant message only when it is the latest reply', async () => {
-    await renderMenu({role: 'assistant', suggestRepliesAvailable: true});
+    await renderMenu({ role: 'assistant', suggestRepliesAvailable: true });
 
-    expect(visibleActionLabels()).toEqual([
-      'Suggest replies',
-      'Select text',
-      'Copy',
-      'Read aloud',
-    ]);
+    expect(visibleActionLabels()).toEqual(['Suggest replies', 'Select text', 'Copy', 'Read aloud']);
   });
 
   it('never offers Suggest replies on a user message, even when flagged', async () => {
-    await renderMenu({role: 'user', suggestRepliesAvailable: true});
+    await renderMenu({ role: 'user', suggestRepliesAvailable: true });
 
     expect(screen.queryByTestId('chat-menu-suggest-replies')).toBeNull();
   });
 
   it('shows user-message actions including Improve my English', async () => {
-    await renderMenu({role: 'user'});
+    await renderMenu({ role: 'user' });
 
     expect(visibleActionLabels()).toEqual([
       'Improve my English',
@@ -97,7 +90,7 @@ describe('MessageActionsMenu', () => {
   // TASK-AUDIT-016: serverless mode has no server vocabulary flow, so the
   // Select text entry disappears for both roles while the rest stay put.
   it('hides Select text when the vocabulary flow is unavailable (serverless)', async () => {
-    await renderMenu({role: 'user', vocabularyEnabled: false});
+    await renderMenu({ role: 'user', vocabularyEnabled: false });
     expect(visibleActionLabels()).toEqual(['Improve my English', 'Copy', 'Read aloud']);
     expect(screen.queryByTestId('chat-menu-select-text')).toBeNull();
 
@@ -111,7 +104,7 @@ describe('MessageActionsMenu', () => {
   });
 
   it('exposes every action as a labeled button inside an accessibility modal', async () => {
-    await renderMenu({role: 'user'});
+    await renderMenu({ role: 'user' });
 
     for (const testId of [
       'chat-menu-improve-english',
@@ -124,14 +117,12 @@ describe('MessageActionsMenu', () => {
       expect(item.props.accessibilityLabel).toBeTruthy();
     }
     expect(screen.getByTestId('chat-menu-close').props.accessibilityRole).toBe('button');
-    expect(screen.getByTestId('chat-menu-content').props.accessibilityViewIsModal).toBe(
-      true,
-    );
+    expect(screen.getByTestId('chat-menu-content').props.accessibilityViewIsModal).toBe(true);
   });
 
   it('reports the selected action to the parent', async () => {
     const onSelect = jest.fn();
-    await renderMenu({role: 'user', onSelect});
+    await renderMenu({ role: 'user', onSelect });
 
     await fireEvent.press(screen.getByTestId('chat-menu-copy'));
     await fireEvent.press(screen.getByTestId('chat-menu-improve-english'));
@@ -142,7 +133,7 @@ describe('MessageActionsMenu', () => {
 
   it('dismisses through the Close control and the backdrop tap', async () => {
     const onClose = jest.fn();
-    await renderMenu({onClose});
+    await renderMenu({ onClose });
 
     await fireEvent.press(screen.getByTestId('chat-menu-backdrop'));
     await fireEvent.press(screen.getByTestId('chat-menu-close'));
@@ -154,7 +145,7 @@ describe('MessageActionsMenu', () => {
 
   it('dismisses through the Android back button', async () => {
     const onClose = jest.fn();
-    await renderMenu({onClose});
+    await renderMenu({ onClose });
 
     const modal = screen.getByTestId('chat-menu-modal');
     await act(async () => {
@@ -165,7 +156,7 @@ describe('MessageActionsMenu', () => {
   });
 
   it('keeps every action inside the sheet when open', async () => {
-    await renderMenu({role: 'user'});
+    await renderMenu({ role: 'user' });
 
     const sheet = screen.getByTestId('chat-menu');
     expect(within(sheet).getByText('Improve my English')).toBeOnTheScreen();

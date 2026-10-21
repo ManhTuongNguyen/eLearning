@@ -11,8 +11,8 @@ import {
   saveSpeechPreferences,
 } from '../src/tts/speechSettings';
 import {
-  DEFAULT_SPEECH_PREFERENCES,
   clampWithStep,
+  DEFAULT_SPEECH_PREFERENCES,
   normalizeSpeechPreferences,
 } from '../src/tts/types';
 
@@ -26,9 +26,7 @@ describe('speechSettings persistence', () => {
   });
 
   it('resolves defaults when nothing was stored', async () => {
-    await expect(loadSpeechPreferences()).resolves.toEqual(
-      DEFAULT_SPEECH_PREFERENCES,
-    );
+    await expect(loadSpeechPreferences()).resolves.toEqual(DEFAULT_SPEECH_PREFERENCES);
   });
 
   it('round-trips a saved preference set', async () => {
@@ -46,9 +44,7 @@ describe('speechSettings persistence', () => {
 
   it('falls back to defaults for corrupted JSON', async () => {
     await AsyncStorage.setItem('app.speechPreferences', '{not json');
-    await expect(loadSpeechPreferences()).resolves.toEqual(
-      DEFAULT_SPEECH_PREFERENCES,
-    );
+    await expect(loadSpeechPreferences()).resolves.toEqual(DEFAULT_SPEECH_PREFERENCES);
   });
 
   it('normalizes corrupt fields of a stored record field by field', async () => {
@@ -77,9 +73,7 @@ describe('speechSettings persistence', () => {
       rate: 0.5,
     });
     await clearSpeechPreferences();
-    await expect(loadSpeechPreferences()).resolves.toEqual(
-      DEFAULT_SPEECH_PREFERENCES,
-    );
+    await expect(loadSpeechPreferences()).resolves.toEqual(DEFAULT_SPEECH_PREFERENCES);
   });
 });
 
@@ -91,8 +85,8 @@ describe('speech preference normalization helpers', () => {
   });
 
   it('keeps unknown gender as any in normalized preferences', () => {
-    expect(normalizeSpeechPreferences({gender: 'unknown'}).gender).toBe('any');
-    expect(normalizeSpeechPreferences({gender: 'male'}).gender).toBe('male');
+    expect(normalizeSpeechPreferences({ gender: 'unknown' }).gender).toBe('any');
+    expect(normalizeSpeechPreferences({ gender: 'male' }).gender).toBe('male');
   });
 
   it('treats non-objects as defaults', () => {

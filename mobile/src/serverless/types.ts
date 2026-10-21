@@ -9,7 +9,7 @@
  * normalized data structures below; the concrete provider (OpenRouter,
  * Gemini, OpenAI, …) is selected via `createProviderClient`.
  */
-import type {LLMError} from './errors';
+import type { LLMError } from './errors';
 
 /** Chat roles accepted by the OpenRouter chat API. */
 export type ChatRole = 'system' | 'user' | 'assistant';
@@ -76,9 +76,7 @@ const toIntOrNull = (value: unknown): number | null =>
 const toStringOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value.trim() ? value : null;
 const toStringList = (value: unknown): string[] =>
-  Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : [];
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 const toBlockOrNull = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
 
@@ -223,10 +221,10 @@ export type OpenRouterClientConfig = LLMClientConfig;
  * and `failed` reports the normalized error plus any partial text received.
  */
 export type ServerlessStreamEvent =
-  | {type: 'start'; model: string}
-  | {type: 'delta'; text: string}
-  | {type: 'completed'; text: string; model: string; deltaCount: number}
-  | {type: 'failed'; message: string; retryable: boolean; text: string};
+  | { type: 'start'; model: string }
+  | { type: 'delta'; text: string }
+  | { type: 'completed'; text: string; model: string; deltaCount: number }
+  | { type: 'failed'; message: string; retryable: boolean; text: string };
 
 export interface StreamCompletionOptions {
   request: CompletionRequest;

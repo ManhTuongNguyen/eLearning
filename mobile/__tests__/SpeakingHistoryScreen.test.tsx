@@ -8,16 +8,15 @@
  * (mode: 'listen'). Records without text expose neither affordance. The
  * nested Delete button keeps its own tap target on every row.
  */
-import React from 'react';
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react-native';
 
-import type {LocalPracticeHistoryRecord} from '../src/db/types';
-import type {SpeakingHistoryScreenProps} from '../src/navigation/types';
-import {SpeakingHistoryScreen} from '../src/screens/SpeakingHistoryScreen';
-import {ThemeProvider} from '../src/theme/ThemeContext';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
-(globalThis as {IS_REACT_ACT_ENVIRONMENT?: boolean}).IS_REACT_ACT_ENVIRONMENT =
-  true;
+import type { LocalPracticeHistoryRecord } from '../src/db/types';
+import type { SpeakingHistoryScreenProps } from '../src/navigation/types';
+import { SpeakingHistoryScreen } from '../src/screens/SpeakingHistoryScreen';
+import { ThemeProvider } from '../src/theme/ThemeContext';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 jest.mock('../src/db/database', () => ({
   getLocalDatabase: jest.fn(async () => ({})),
@@ -52,8 +51,8 @@ function makeRecord(overrides: Partial<LocalPracticeHistoryRecord>): LocalPracti
 
 function historyProps(): SpeakingHistoryScreenProps {
   return {
-    navigation: {navigate: mockNavigate, goBack: mockGoBack},
-    route: {key: 'speaking-history-test', name: 'SpeakingHistory', params: undefined},
+    navigation: { navigate: mockNavigate, goBack: mockGoBack },
+    route: { key: 'speaking-history-test', name: 'SpeakingHistory', params: undefined },
   } as unknown as SpeakingHistoryScreenProps;
 }
 
@@ -75,7 +74,7 @@ beforeEach(() => {
 
 describe('SpeakingHistoryScreen', () => {
   it('renders saved records from the local repository', async () => {
-    await renderHistory([makeRecord({}), makeRecord({id: 2, title: 'At the market'})]);
+    await renderHistory([makeRecord({}), makeRecord({ id: 2, title: 'At the market' })]);
 
     expect(screen.getByText('Morning routine')).toBeOnTheScreen();
     expect(screen.getByText('At the market')).toBeOnTheScreen();
@@ -83,7 +82,7 @@ describe('SpeakingHistoryScreen', () => {
   });
 
   it('opens the practice screen when anywhere on the row is pressed', async () => {
-    await renderHistory([makeRecord({minutes: 5, title: 'Travel stories'})]);
+    await renderHistory([makeRecord({ minutes: 5, title: 'Travel stories' })]);
 
     // The whole row is the press target — no separate button in the UI.
     fireEvent.press(screen.getByTestId('history-practice-again'));
@@ -96,7 +95,7 @@ describe('SpeakingHistoryScreen', () => {
   });
 
   it('offers no practice affordance for a record without text', async () => {
-    await renderHistory([makeRecord({text: ''})]);
+    await renderHistory([makeRecord({ text: '' })]);
 
     expect(screen.queryByTestId('history-practice-again')).toBeNull();
     // The TTS listen button is text-bound as well.
@@ -106,7 +105,7 @@ describe('SpeakingHistoryScreen', () => {
   });
 
   it('opens the practice screen in TTS listen mode when the Listen button is pressed', async () => {
-    await renderHistory([makeRecord({minutes: 2, title: 'Airport check-in'})]);
+    await renderHistory([makeRecord({ minutes: 2, title: 'Airport check-in' })]);
 
     fireEvent.press(screen.getByTestId('history-listen'));
 

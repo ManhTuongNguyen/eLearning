@@ -10,14 +10,12 @@ import { toSpeechText } from '../src/tts/speechText';
 describe('toSpeechText', () => {
   it('leaves plain prose untouched', () => {
     expect(toSpeechText('Nice! What did you buy?')).toBe('Nice! What did you buy?');
-    expect(toSpeechText('I went to the store yesterday.')).toBe(
-      'I went to the store yesterday.',
-    );
+    expect(toSpeechText('I went to the store yesterday.')).toBe('I went to the store yesterday.');
   });
 
   it('strips markdown emphasis delimiters while keeping the words', () => {
     expect(toSpeechText('**Great** *progress*!')).toBe('Great progress!');
-    expect(toSpeechText("***wow*** was ~~wrong~~")).toBe('wow was wrong');
+    expect(toSpeechText('***wow*** was ~~wrong~~')).toBe('wow was wrong');
   });
 
   it('keeps inline code content and drops the backticks', () => {
@@ -35,9 +33,7 @@ describe('toSpeechText', () => {
   });
 
   it('drops structural line prefixes (headings, quotes, bullets)', () => {
-    expect(toSpeechText('# Title\n> quoted\n- item\n* bullet')).toBe(
-      'Title quoted item bullet',
-    );
+    expect(toSpeechText('# Title\n> quoted\n- item\n* bullet')).toBe('Title quoted item bullet');
   });
 
   it('keeps intraword punctuation meaningful', () => {
