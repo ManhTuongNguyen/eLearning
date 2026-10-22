@@ -13,10 +13,15 @@
 import type { LucideIcon } from 'lucide-react-native';
 
 import {
+  ArrowLeft,
+  ArrowRight,
+  AudioLines,
   Check,
   Headphones,
   History,
+  Keyboard,
   ListChecks,
+  List as ListIcon,
   MessageSquare,
   MicVocal,
   Play,
@@ -27,6 +32,7 @@ import {
   Sparkles,
   Speech,
   SquarePen,
+  Target,
   Trash2,
   Volume2,
   X,
@@ -51,6 +57,12 @@ export const ICON_NAMES = [
   'refresh',
   'regenerate',
   'generate',
+  'arrowLeft',
+  'arrowRight',
+  'audioLines',
+  'keyboard',
+  'list',
+  'target',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -74,6 +86,12 @@ export const ICON_COMPONENTS: Record<IconName, LucideIcon> = {
   refresh: RefreshCw,
   regenerate: RotateCcw,
   generate: Sparkles,
+  arrowLeft: ArrowLeft,
+  arrowRight: ArrowRight,
+  audioLines: AudioLines,
+  keyboard: Keyboard,
+  list: ListIcon,
+  target: Target,
 };
 
 export interface IconProps {

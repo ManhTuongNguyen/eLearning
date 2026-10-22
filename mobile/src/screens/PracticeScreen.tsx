@@ -2,11 +2,19 @@
  * Listening-practice trainer (numbers and letters, no backend, no AI).
  *
  * Reflex loop: the app speaks a word form through the device TTS engine
- * ("nineteen ninety-seven", "b"), the user picks the matching digits or
- * letter from four engineered, acoustically confusable options (13 ↔ 30,
- * 1997 ↔ 9719, B/D/P/T) and sees instant feedback with a live running
- * score. The flow is endless — the next question is always ready — and an
- * explicit button ends the practice and reveals the session summary.
+ * ("nineteen ninety-seven", "b"), the learner either picks the matching
+ * digits/letter from four engineered, acoustically confusable options or
+ * types what was heard, and sees instant feedback with a live running score.
+ * The flow is endless — the next question is always ready — and an explicit
+ * button ends the practice and reveals the session summary.
+ *
+ * The screen is deliberately built around one focal listening card: a large
+ * replay control with a soft halo, a stable answer/reveal area, and the answer
+ * affordances directly underneath. Typed mode collapses that card into a slim
+ * replay row and keeps Next/End immediately below the answer controls, so the
+ * learner can check and advance without reaching for the screen footer. Score
+ * and round-mode controls stay compact so the ear-training loop gets the
+ * visual weight.
  *
  * Questions come from the pure, deterministic generator in
  * ../practice/questionBank. Speech goes through the shared getSpeechEngine()
@@ -14,8 +22,19 @@
  * swaps in behind it without this screen knowing.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
+import { Icon } from '../components/Icon';
 import { Screen, ScreenContent, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
 import type { PracticeScreenProps } from '../navigation/types';
 import {
@@ -24,6 +43,12 @@ import {
   type PracticeMode,
   type PracticeQuestion,
 } from '../practice/questionBank';
+import {
+  type AnswerInputMode,
+  isTypedAnswerCorrect,
+  keyboardTypeForMode,
+  typedAnswerPlaceholder,
+} from '../practice/typedAnswer';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import { getSpeechEngine } from '../tts/textToSpeech';
@@ -39,11 +64,26 @@ const MODE_OPTIONS: Array<{
   { value: 'mixed', label: 'Mixed', testID: 'practice-mode-mixed' },
 ];
 
+const MODE_LABELS: Record<PracticeMode, string> = {
+  numbers: 'Numbers',
+  letters: 'Letters',
+  phones: 'Phone numbers',
+  mixed: 'Mixed',
+};
+
 const QUESTION_PROMPT: Record<PracticeMode, string> = {
   numbers: 'Tap play, then choose the digits you heard.',
   letters: 'Tap play, then choose the letter you heard.',
-  mixed: 'Tap play, then choose the number, letter or phone number you heard.',
+  mixed: 'Tap play, then choose what you heard.',
   phones: 'Tap play, then choose the phone number you heard.',
+};
+
+/** Short typed-mode hint for the minimal listening card. */
+const TYPED_CARD_HINTS: Record<PracticeMode, string> = {
+  numbers: 'Then type the digits',
+  letters: 'Then type the letter',
+  phones: 'Then type the phone number',
+  mixed: 'Then type what you hear',
 };
 
 export function createStyles(c: ThemeColors) {
@@ -51,176 +91,434 @@ export function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      // Horizontal padding lives on the shared header/content/scroll
-      // containers so the scroll indicator binds to the right screen edge.
-      // Same 16px header spacing as the other pushed screens.
+      // Horizontal padding lives on the shared header/scroll containers so
+      // the scroll indicator binds to the right screen edge. Same 16px
+      // header spacing as the other pushed screens.
       paddingTop: 16,
+    },
+    keyboardShell: {
+      flex: 1,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingBottom: 8,
+      paddingBottom: 6,
+    },
+    headerSide: {
+      width: 64,
+      alignItems: 'flex-start',
+    },
+    headerSideRight: {
+      alignItems: 'flex-end',
+    },
+    backButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      minHeight: 36,
+      paddingRight: 4,
     },
     backText: {
-      fontSize: 16,
+      fontSize: 15,
       color: c.accent,
       fontWeight: '600',
     },
-    headerSpacer: {
-      width: 48,
-    },
     title: {
-      fontSize: 20,
+      flex: 1,
+      textAlign: 'center',
+      fontSize: 18,
       fontWeight: '700',
       color: c.textPrimary,
     },
-    subtitle: {
-      marginTop: 8,
-      marginBottom: 12,
-      fontSize: 14,
-      color: c.textSecondary,
-    },
-    scoreRow: {
+    modeToggle: {
       flexDirection: 'row',
-      gap: 12,
-      marginBottom: 12,
-    },
-    scoreCard: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.surface,
-      borderRadius: 12,
-      paddingVertical: 10,
       alignItems: 'center',
-    },
-    scoreValue: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    scoreLabel: {
-      fontSize: 12,
-      color: c.textMuted,
-      marginTop: 2,
-    },
-    segmentRow: {
-      flexDirection: 'row',
-      gap: 8,
-      marginBottom: 12,
-    },
-    segment: {
-      flex: 1,
+      justifyContent: 'center',
+      gap: 5,
+      minHeight: 30,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.borderStrong,
       backgroundColor: c.surface,
-      borderRadius: 10,
-      paddingVertical: 10,
-      alignItems: 'center',
+      borderRadius: 999,
+      paddingHorizontal: 8,
     },
-    segmentSelected: {
+    modeToggleActive: {
       borderColor: c.primary,
       backgroundColor: c.accentSoft,
     },
-    segmentText: {
-      fontSize: 14,
+    modeToggleText: {
+      fontSize: 12,
       fontWeight: '600',
       color: c.textPrimary,
     },
-    questionCard: {
+    modeToggleTextActive: {
+      color: c.accent,
+    },
+    pressed: {
+      opacity: 0.72,
+    },
+    scrollContent: {
+      paddingTop: 6,
+      paddingBottom: 12,
+      gap: 9,
+    },
+    scroll: {
+      flex: 1,
+    },
+    footer: {
+      paddingTop: 8,
+      paddingBottom: 12,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      backgroundColor: c.background,
+    },
+    // One quiet score strip instead of three separate cards: the numbers stay
+    // glanceable without competing with the listening card for attention.
+    statsBar: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
       borderWidth: 1,
       borderColor: c.border,
       backgroundColor: c.surface,
       borderRadius: 14,
-      padding: 20,
-      alignItems: 'center',
-      gap: 12,
-      marginBottom: 12,
+      paddingVertical: 7,
     },
-    playButton: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: c.primary,
+    stat: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 1,
+      paddingHorizontal: 6,
+    },
+    statDivider: {
+      width: 1,
+      backgroundColor: c.border,
+      marginVertical: 1,
+    },
+    statValueRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    statValue: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    statLabel: {
+      fontSize: 10,
+      fontWeight: '500',
+      color: c.textMuted,
+    },
+    modeTrack: {
+      flexDirection: 'row',
+      gap: 3,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      padding: 3,
+    },
+    segment: {
+      flex: 1,
+      minHeight: 32,
       alignItems: 'center',
       justifyContent: 'center',
+      borderRadius: 8,
     },
-    // A drawn triangle instead of the ▶ glyph: the glyph carries
-    // font-dependent whitespace that left it sitting off-center inside the
-    // circle. The small left margin shifts the visual mass onto the
-    // circle's optical center.
-    playTriangle: {
-      width: 0,
-      height: 0,
-      borderLeftWidth: 16,
-      borderTopWidth: 10,
-      borderBottomWidth: 10,
-      borderLeftColor: c.onPrimary,
-      borderTopColor: 'transparent',
-      borderBottomColor: 'transparent',
-      marginLeft: 4,
-    },
-    restartButton: {
-      width: 84,
-      height: 84,
-      borderRadius: 42,
+    segmentSelected: {
       backgroundColor: c.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
-    restartIcon: {
-      fontSize: 32,
+    segmentText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: c.textSecondary,
+    },
+    segmentTextSelected: {
       color: c.onPrimary,
     },
-    replayHint: {
-      fontSize: 13,
-      color: c.textMuted,
-      textAlign: 'center',
+    // The listening card is the screen's focal surface: soft layered halo,
+    // big replay target, and a fixed answer/reveal slot that never resizes
+    // the card when a result appears.
+    listeningCard: {
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      borderRadius: 16,
+      padding: 12,
     },
-    scrollContent: {
-      paddingBottom: 8,
+    cardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    listenPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      minWidth: 80,
+      backgroundColor: c.accentSoft,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+    },
+    listenPillText: {
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+      color: c.accent,
+    },
+    cardMode: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: c.textMuted,
+    },
+    playStage: {
+      height: 82,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 2,
+    },
+    playHalo: {
+      position: 'absolute',
+      width: 78,
+      height: 78,
+      borderRadius: 39,
+      backgroundColor: c.accentSoft,
+    },
+    playHaloActive: {
+      borderWidth: 1,
+      borderColor: c.primary,
+    },
+    playButton: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    playButtonPressed: {
+      opacity: 0.88,
+    },
+    playHint: {
+      fontSize: 11,
+      lineHeight: 14,
+      textAlign: 'center',
+      color: c.textMuted,
+    },
+    minimalCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      borderRadius: 14,
+      padding: 10,
+    },
+    minimalPlayButton: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    minimalCopy: {
+      flex: 1,
+      minWidth: 0,
+      gap: 1,
+    },
+    minimalTitle: {
+      fontSize: 13,
+      lineHeight: 17,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    minimalHint: {
+      fontSize: 11,
+      lineHeight: 14,
+      color: c.textMuted,
+    },
+    resultArea: {
+      marginTop: 8,
+      minHeight: 92,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.background,
+      borderRadius: 12,
+      padding: 10,
+      justifyContent: 'center',
+      gap: 3,
+    },
+    resultAreaCorrect: {
+      borderColor: c.success,
+    },
+    resultAreaWrong: {
+      borderColor: c.danger,
+    },
+    typedFeedback: {
+      minHeight: 64,
+      justifyContent: 'center',
+      gap: 2,
+      backgroundColor: c.background,
+      borderRadius: 12,
+      paddingHorizontal: 2,
+      paddingVertical: 2,
+    },
+    typedFeedbackHint: {
+      fontSize: 11,
+      lineHeight: 15,
+      color: c.textMuted,
+    },
+    typedReveal: {
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    typedSpokenReveal: {
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    typedFeedbackText: {
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    inlineActions: {
+      marginTop: 2,
     },
     prompt: {
-      fontSize: 14,
-      color: c.textSecondary,
+      fontSize: 13,
+      lineHeight: 18,
       textAlign: 'center',
+      color: c.textSecondary,
     },
-    optionsRow: {
+    reveal: {
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '600',
+      textAlign: 'left',
+      color: c.textPrimary,
+    },
+    spokenReveal: {
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: '400',
+      color: c.textMuted,
+    },
+    feedbackRow: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-      justifyContent: 'center',
-      marginBottom: 16,
+      alignItems: 'flex-start',
+      gap: 4,
     },
-    option: {
-      flexGrow: 1,
-      flexBasis: '45%',
+    feedbackText: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: 15,
+      fontWeight: '600',
+      textAlign: 'left',
+    },
+    errorText: {
+      fontSize: 12,
+      lineHeight: 17,
+      textAlign: 'center',
+      color: c.errorText,
+    },
+    answerBlock: {
+      gap: 6,
+    },
+    fieldHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+      paddingHorizontal: 2,
+    },
+    fieldHeaderText: {
+      flex: 1,
+      gap: 1,
+    },
+    fieldLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    fieldHint: {
+      fontSize: 10,
+      color: c.textMuted,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    input: {
+      flex: 1,
+      minHeight: 46,
       borderWidth: 1,
       borderColor: c.borderStrong,
       backgroundColor: c.surface,
       borderRadius: 12,
-      paddingVertical: 18,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      fontSize: 16,
+      fontWeight: '600',
+      color: c.textPrimary,
+    },
+    checkButton: {
+      minHeight: 46,
+      borderRadius: 12,
+      backgroundColor: c.primary,
+      paddingHorizontal: 16,
       alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkButtonDisabled: {
+      opacity: 0.4,
+    },
+    checkButtonText: {
+      color: c.onPrimary,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    optionsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    option: {
+      flexGrow: 1,
+      flexBasis: '46%',
+      minHeight: 50,
+      borderWidth: 1.5,
+      borderColor: c.borderStrong,
+      backgroundColor: c.surface,
+      borderRadius: 13,
+      paddingVertical: 9,
+      paddingHorizontal: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     optionSelected: {
       borderColor: c.primary,
       backgroundColor: c.accentSoft,
     },
+    optionCorrect: {
+      borderColor: c.success,
+      backgroundColor: c.surface,
+    },
+    optionWrong: {
+      borderColor: c.danger,
+      backgroundColor: c.surface,
+    },
     optionText: {
-      fontSize: 20,
+      fontSize: 18,
       fontWeight: '700',
+      textAlign: 'center',
       color: c.textPrimary,
     },
     optionTextSelected: {
       color: c.accent,
-    },
-    optionCorrect: {
-      borderColor: c.success,
-      backgroundColor: c.accentSoft,
-    },
-    optionWrong: {
-      borderColor: c.danger,
     },
     optionTextCorrect: {
       color: c.success,
@@ -228,61 +526,131 @@ export function createStyles(c: ThemeColors) {
     optionTextWrong: {
       color: c.danger,
     },
-    // Fixed-height slot for the prompt / reveal + feedback lines: the card
-    // keeps the same height before and after an answer instead of growing
-    // by a line when the result appears. Sized for one reveal line plus a
-    // two-line feedback; overflow-hidden guarantees the budget holds.
-    resultArea: {
-      height: 64,
+    actions: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      gap: 8,
+    },
+    primaryButton: {
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 2,
-      overflow: 'hidden',
+      gap: 6,
+      minHeight: 48,
+      borderRadius: 12,
+      backgroundColor: c.primary,
+      paddingHorizontal: 8,
     },
-    reveal: {
+    primaryButtonPressed: {
+      opacity: 0.9,
+    },
+    primaryButtonText: {
+      color: c.onPrimary,
       fontSize: 14,
-      fontWeight: '600',
-      color: c.textPrimary,
-      textAlign: 'center',
+      fontWeight: '700',
+    },
+    nextButton: {
+      flex: 1,
+    },
+    nextButtonDisabled: {
+      opacity: 0.42,
     },
     endButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 5,
+      minHeight: 48,
       borderWidth: 1,
       borderColor: c.borderStrong,
       backgroundColor: c.surface,
-      borderRadius: 10,
-      paddingVertical: 12,
-      alignItems: 'center',
-      marginBottom: 24,
+      borderRadius: 12,
+      paddingHorizontal: 8,
     },
     endButtonText: {
-      color: c.textPrimary,
-      fontSize: 15,
+      fontSize: 12,
       fontWeight: '600',
+      color: c.textSecondary,
+    },
+    summaryScroll: {
+      paddingTop: 12,
+      paddingBottom: 24,
     },
     summary: {
+      alignItems: 'center',
+      gap: 8,
       borderWidth: 1,
       borderColor: c.border,
       backgroundColor: c.surface,
-      borderRadius: 14,
-      padding: 20,
+      borderRadius: 22,
+      padding: 24,
+    },
+    summaryIcon: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
       alignItems: 'center',
-      gap: 8,
+      justifyContent: 'center',
+      backgroundColor: c.accentSoft,
+      marginBottom: 4,
+    },
+    summaryEyebrow: {
+      fontSize: 10,
+      fontWeight: '800',
+      letterSpacing: 1.2,
+      color: c.accent,
     },
     summaryTitle: {
-      fontSize: 18,
+      fontSize: 24,
       fontWeight: '700',
+      textAlign: 'center',
       color: c.textPrimary,
     },
     summaryScore: {
       fontSize: 15,
+      fontWeight: '600',
+      textAlign: 'center',
       color: c.textSecondary,
+    },
+    summaryHint: {
+      maxWidth: 260,
+      marginTop: 2,
+      fontSize: 12,
+      lineHeight: 18,
+      textAlign: 'center',
+      color: c.textMuted,
+    },
+    summaryPrimary: {
+      alignSelf: 'stretch',
+      marginTop: 10,
+    },
+    secondaryButton: {
+      alignSelf: 'stretch',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 48,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      backgroundColor: c.surface,
+      borderRadius: 14,
+    },
+    secondaryButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.textPrimary,
     },
   });
 }
 
 /** Feedback line shown after an answer (kept short to stay on one line). */
-function feedbackText(correct: boolean): string {
-  return correct ? 'Correct!' : 'Not quite — see the highlighted option.';
+function feedbackText(correct: boolean, answerMode: AnswerInputMode): string {
+  if (correct) {
+    return 'Correct!';
+  }
+  return answerMode === 'type'
+    ? 'Not quite — check the answer above.'
+    : 'Not quite — see the highlighted option.';
 }
 
 export function PracticeScreen({ navigation }: PracticeScreenProps) {
@@ -290,8 +658,11 @@ export function PracticeScreen({ navigation }: PracticeScreenProps) {
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [mode, setMode] = useState<PracticeMode>('numbers');
+  const [answerMode, setAnswerMode] = useState<AnswerInputMode>('choose');
   const [question, setQuestion] = useState<PracticeQuestion | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [typedAnswer, setTypedAnswer] = useState('');
+  const [wasCorrect, setWasCorrect] = useState(false);
   const [answered, setAnswered] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const [attemptedCount, setAttemptedCount] = useState(0);
@@ -301,6 +672,7 @@ export function PracticeScreen({ navigation }: PracticeScreenProps) {
   // Sliding window of recent answers, handed back to the generator so the
   // same number/letter never shows up twice in a row.
   const [recentAnswers, setRecentAnswers] = useState<string[]>([]);
+  const answerInputRef = useRef<TextInput>(null);
 
   // Latest-ref seams (the app's TASK-048 gotcha pattern): speak/stop and the
   // current question read fresh values from stable callbacks, so screens and
@@ -314,12 +686,6 @@ export function PracticeScreen({ navigation }: PracticeScreenProps) {
   const answeredRef = useRef(answered);
   answeredRef.current = answered;
 
-  /**
-   * speakQuestion resolves when playback finishes and never rejects:
-   * engine failures clear the visible state instead of crashing, mirroring
-   * the useSpeechPlayback contract the chat screen uses. The `alive` guard
-   * stops a settled utterance of an unmounted screen from setting state.
-   */
   /**
    * speakQuestion resolves when playback finishes and never rejects:
    * engine failures clear the visible state instead of crashing, mirroring
@@ -367,7 +733,10 @@ export function PracticeScreen({ navigation }: PracticeScreenProps) {
     }
     setQuestion(createPracticeQuestion(modeRef.current, Math.random, recentAnswersRef.current));
     setSelected(null);
+    setTypedAnswer('');
+    setWasCorrect(false);
     setAnswered(false);
+    answeredRef.current = false;
     setSpeechError(null);
   }, []);
 
@@ -399,13 +768,67 @@ export function PracticeScreen({ navigation }: PracticeScreenProps) {
       return;
     }
     answeredRef.current = true;
+    const correct = value === current.answer;
     setSelected(value);
+    setWasCorrect(correct);
     setAnswered(true);
     setAttemptedCount(prev => prev + 1);
-    if (value === current.answer) {
+    if (correct) {
       setCorrectCount(prev => prev + 1);
     }
   }, []);
+
+  /**
+   * Grades a typed answer exactly like a tapped option: one attempt, one
+   * correctness flag, no keyboard dismissal. Keeping the input focused is
+   * what lets the learner replay the audio and keep typing without the
+   * keyboard closing under their hands.
+   */
+  const handleCheck = useCallback(() => {
+    const current = questionRef.current;
+    if (!current || answeredRef.current || typedAnswer.trim().length === 0) {
+      return;
+    }
+    answeredRef.current = true;
+    const correct = isTypedAnswerCorrect(current.answer, typedAnswer);
+    setSelected(null);
+    setWasCorrect(correct);
+    setAnswered(true);
+    setAttemptedCount(prev => prev + 1);
+    if (correct) {
+      setCorrectCount(prev => prev + 1);
+    }
+  }, [typedAnswer]);
+
+  /**
+   * The top-right toggle switches the whole round between tapping an option
+   * and typing the answer. A fresh question keeps the old mode's answer from
+   * leaking into the new one; the running score is untouched.
+   */
+  const handleToggleAnswerMode = useCallback(() => {
+    setAnswerMode(prev => (prev === 'choose' ? 'type' : 'choose'));
+    Keyboard.dismiss();
+    advance();
+  }, [advance]);
+
+  const handleModeChange = useCallback((nextMode: PracticeMode) => {
+    // The keyboard type follows the practice mode, so close the old keyboard
+    // before the letter/number switch instead of leaving the wrong one open.
+    Keyboard.dismiss();
+    setMode(nextMode);
+  }, []);
+
+  const handlePlay = useCallback(() => {
+    if (questionRef.current) {
+      speakQuestion(questionRef.current);
+    }
+    // Keep the cursor in the answer box while the replay starts. On Android
+    // the ScrollView's `keyboardShouldPersistTaps="handled"` already keeps
+    // the keyboard up; focusing again covers engines that blur on tap.
+    if (answerMode === 'type') {
+      answerInputRef.current?.focus();
+    }
+  }, [answerMode, speakQuestion]);
 
   const handleEndPractice = useCallback(() => {
     setEnded(true);
@@ -434,195 +857,435 @@ export function PracticeScreen({ navigation }: PracticeScreenProps) {
 
   const accuracy = attemptedCount === 0 ? null : Math.round((correctCount / attemptedCount) * 100);
 
-  const isCorrect = question !== null && selected !== null && selected === question.answer;
+  const isCorrect = answered && wasCorrect;
+  const checkDisabled = answered || typedAnswer.trim().length === 0;
+  const nextDisabled = !answered;
+
+  // The answer-mode switch sits with the answer controls rather than in the
+  // header: it changes how the learner answers, not where the screen goes.
+  // Moving it here keeps the header calm and makes the choice discoverable
+  // exactly where its effect appears.
+  const answerModeToggle = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={
+        answerMode === 'choose'
+          ? 'Switch to typing the answer'
+          : 'Switch to choosing from four options'
+      }
+      accessibilityState={{ selected: answerMode === 'type' }}
+      onPress={handleToggleAnswerMode}
+      style={({ pressed }) => [
+        styles.modeToggle,
+        answerMode === 'type' && styles.modeToggleActive,
+        pressed && styles.pressed,
+      ]}
+      testID="practice-answer-mode-toggle">
+      <Icon
+        name={answerMode === 'choose' ? 'keyboard' : 'list'}
+        size={13}
+        color={answerMode === 'type' ? colors.accent : colors.textSecondary}
+      />
+      <Text style={[styles.modeToggleText, answerMode === 'type' && styles.modeToggleTextActive]}>
+        {answerMode === 'type' ? 'Choose' : 'Type answer'}
+      </Text>
+    </Pressable>
+  );
 
   if (ended) {
     return (
-      <View style={styles.container} testID="practice-screen">
-        <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Go back"
-            hitSlop={8}
-            onPress={() => navigation.goBack()}
-            testID="practice-back">
-            <Text style={styles.backText}>‹ Back</Text>
-          </Pressable>
+      <Screen style={styles.container} testID="practice-screen">
+        <ScreenHeader style={styles.header}>
+          <View style={styles.headerSide}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={8}
+              onPress={() => navigation.goBack()}
+              style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+              testID="practice-back">
+              <Icon name="arrowLeft" size={18} color={colors.accent} />
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
+          </View>
           <Text style={styles.title}>Listening practice</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.summary} testID="practice-summary">
-          <Text style={styles.summaryTitle}>Practice ended</Text>
-          <Text style={styles.summaryScore} testID="practice-summary-score">
-            {correctCount} of {attemptedCount} correct
-            {accuracy !== null ? ` · ${accuracy}%` : ''}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={handleRestart}
-            style={styles.restartButton}
-            testID="practice-restart">
-            <Text style={styles.restartIcon}>↻</Text>
-          </Pressable>
-          <Text style={styles.replayHint}>Practice again anytime — every round is different.</Text>
-        </View>
-      </View>
+          <View style={[styles.headerSide, styles.headerSideRight]} />
+        </ScreenHeader>
+        <ScreenScrollView contentContainerStyle={styles.summaryScroll}>
+          <View style={styles.summary} testID="practice-summary">
+            <View style={styles.summaryIcon}>
+              <Icon name="listening" size={32} color={colors.primary} />
+            </View>
+            <Text style={styles.summaryEyebrow}>SESSION COMPLETE</Text>
+            <Text style={styles.summaryTitle}>Practice ended</Text>
+            <Text style={styles.summaryScore} testID="practice-summary-score">
+              {correctCount} of {attemptedCount} correct
+              {accuracy !== null ? ` · ${accuracy}%` : ''}
+            </Text>
+            <Text style={styles.summaryHint}>
+              Every replay sharpens your ear. Ready for another round?
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleRestart}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                styles.summaryPrimary,
+                pressed && styles.primaryButtonPressed,
+              ]}
+              testID="practice-restart">
+              <Icon name="refresh" size={18} color={colors.onPrimary} />
+              <Text style={styles.primaryButtonText}>Practice again</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.goBack()}
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+              testID="practice-summary-done">
+              <Text style={styles.secondaryButtonText}>Done</Text>
+            </Pressable>
+          </View>
+        </ScreenScrollView>
+      </Screen>
     );
   }
 
+  const isTyping = answerMode === 'type';
+
+  // Both answer modes share the same reveal/feedback treatment; only where it
+  // appears changes. Typed mode keeps it under the input, choose mode keeps it
+  // inside the listening card.
+  const answerFeedback =
+    answered && question ? (
+      <>
+        <Text style={[styles.reveal, isTyping && styles.typedReveal]} testID="practice-reveal">
+          {`It was ${question.answer} —`}
+          {'\n'}
+          <Text style={[styles.spokenReveal, isTyping && styles.typedSpokenReveal]}>
+            {`"${question.spoken}"`}
+          </Text>
+        </Text>
+        <View style={styles.feedbackRow}>
+          <Icon
+            name={isCorrect ? 'check' : 'close'}
+            size={isTyping ? 14 : 15}
+            color={isCorrect ? colors.success : colors.danger}
+          />
+          <Text
+            style={[
+              styles.feedbackText,
+              isTyping && styles.typedFeedbackText,
+              { color: isCorrect ? colors.success : colors.danger },
+            ]}
+            testID="practice-feedback">
+            {feedbackText(isCorrect, answerMode)}
+          </Text>
+        </View>
+      </>
+    ) : speechError ? (
+      <Text role="alert" style={styles.errorText} testID="practice-speech-error">
+        {speechError}
+      </Text>
+    ) : null;
+
+  const actionButtons = (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="End practice"
+        onPress={handleEndPractice}
+        style={({ pressed }) => [styles.endButton, pressed && styles.pressed]}
+        testID="practice-end">
+        <Icon name="close" size={13} color={colors.textSecondary} />
+        <Text style={styles.endButtonText}>End practice</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityHint={nextDisabled ? 'Answer the current question first' : undefined}
+        accessibilityState={{ disabled: nextDisabled }}
+        disabled={nextDisabled}
+        onPress={advance}
+        style={({ pressed }) => [
+          styles.primaryButton,
+          styles.nextButton,
+          nextDisabled && styles.nextButtonDisabled,
+          !nextDisabled && pressed && styles.primaryButtonPressed,
+        ]}
+        testID="practice-next">
+        <Text style={styles.primaryButtonText}>Next question</Text>
+        <Icon name="arrowRight" size={16} color={colors.onPrimary} />
+      </Pressable>
+    </>
+  );
+
   return (
-    <Screen style={styles.container} testID="practice-screen">
-      <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={() => navigation.goBack()}
-          testID="practice-back">
-          <Text style={styles.backText}>‹ Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Listening practice</Text>
-        <View style={styles.headerSpacer} />
-      </ScreenHeader>
-
-      <ScreenContent>
-        <View style={styles.scoreRow}>
-          <View style={styles.scoreCard} testID="practice-correct-card">
-            <Text style={styles.scoreValue} testID="practice-correct-count">
-              {correctCount}
-            </Text>
-            <Text style={styles.scoreLabel}>Correct</Text>
+    <KeyboardAvoidingView
+      style={styles.keyboardShell}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Screen style={styles.container} testID="practice-screen">
+        <ScreenHeader style={styles.header}>
+          <View style={styles.headerSide}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={8}
+              onPress={() => navigation.goBack()}
+              style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+              testID="practice-back">
+              <Icon name="arrowLeft" size={18} color={colors.accent} />
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
           </View>
-          <View style={styles.scoreCard} testID="practice-attempted-card">
-            <Text style={styles.scoreValue} testID="practice-attempted-count">
-              {attemptedCount}
-            </Text>
-            <Text style={styles.scoreLabel}>Answered</Text>
-          </View>
-          <View style={styles.scoreCard} testID="practice-accuracy-card">
-            <Text style={styles.scoreValue} testID="practice-accuracy">
-              {accuracy === null ? '–' : `${accuracy}%`}
-            </Text>
-            <Text style={styles.scoreLabel}>Accuracy</Text>
-          </View>
-        </View>
+          <Text style={styles.title}>Listening practice</Text>
+          <View style={[styles.headerSide, styles.headerSideRight]} />
+        </ScreenHeader>
 
-        <View style={styles.segmentRow}>
-          {MODE_OPTIONS.map(option => {
-            const isSelected = option.value === mode;
-            return (
-              <Pressable
-                key={option.value}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: isSelected }}
-                onPress={() => setMode(option.value)}
-                style={[styles.segment, isSelected && styles.segmentSelected]}
-                testID={option.testID}>
-                <Text style={styles.segmentText}>{option.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </ScreenContent>
-
-      <ScreenScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.questionCard}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={speaking ? 'Speaking' : 'Play the number or letter'}
-            accessibilityState={{ busy: speaking }}
-            onPress={() => {
-              if (question) {
-                speakQuestion(question);
-              }
-            }}
-            disabled={speaking}
-            style={styles.playButton}
-            testID="practice-play">
-            {speaking ? (
-              <ActivityIndicator size="small" color={colors.onPrimary} />
-            ) : (
-              <View style={styles.playTriangle} />
-            )}
-          </Pressable>
-          <Text style={styles.replayHint}>Replay as many times as you need.</Text>
-          {/* Fixed-height result slot: answering swaps the prompt for the
-              reveal + feedback lines inside the same box, so the card never
-              changes height after an answer. The error line lives in the
-              same slot and yields to the reveal once answered — the result
-              is the info that matters then. */}
-          <View style={styles.resultArea}>
-            {answered && question ? (
-              <>
-                <Text numberOfLines={1} style={styles.reveal} testID="practice-reveal">
-                  {`It was ${question.answer} — "${question.spoken}"`}
+        <ScreenScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+          testID="practice-scroll">
+          <View style={styles.statsBar}>
+            <View style={styles.stat} testID="practice-correct-card">
+              <View style={styles.statValueRow}>
+                <Icon name="check" size={12} color={colors.success} />
+                <Text style={styles.statValue} testID="practice-correct-count">
+                  {correctCount}
                 </Text>
-                <Text
-                  numberOfLines={2}
-                  style={[styles.reveal, { color: isCorrect ? colors.success : colors.danger }]}
-                  testID="practice-feedback">
-                  {feedbackText(isCorrect)}
+              </View>
+              <Text style={styles.statLabel}>Correct</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.stat} testID="practice-attempted-card">
+              <View style={styles.statValueRow}>
+                <Icon name="speakingHistory" size={12} color={colors.accent} />
+                <Text style={styles.statValue} testID="practice-attempted-count">
+                  {attemptedCount}
                 </Text>
-              </>
-            ) : speechError ? (
-              <Text role="alert" style={styles.reveal} testID="practice-speech-error">
-                {speechError}
-              </Text>
-            ) : (
-              <Text numberOfLines={2} style={styles.prompt}>
-                {QUESTION_PROMPT[mode]}
-              </Text>
-            )}
+              </View>
+              <Text style={styles.statLabel}>Answered</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.stat} testID="practice-accuracy-card">
+              <View style={styles.statValueRow}>
+                <Icon name="target" size={12} color={colors.textSecondary} />
+                <Text style={styles.statValue} testID="practice-accuracy">
+                  {accuracy === null ? '–' : `${accuracy}%`}
+                </Text>
+              </View>
+              <Text style={styles.statLabel}>Accuracy</Text>
+            </View>
           </View>
-        </View>
 
-        <View style={styles.optionsRow}>
-          {(question?.options ?? []).map(option => {
-            const isSelected = option === selected;
-            const isAnswer = question !== null && option === question.answer;
-            return (
+          <View style={styles.modeTrack}>
+            {MODE_OPTIONS.map(option => {
+              const isSelected = option.value === mode;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: isSelected }}
+                  onPress={() => handleModeChange(option.value)}
+                  style={({ pressed }) => [
+                    styles.segment,
+                    isSelected && styles.segmentSelected,
+                    pressed && styles.pressed,
+                  ]}
+                  testID={option.testID}>
+                  <Text style={[styles.segmentText, isSelected && styles.segmentTextSelected]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {isTyping ? (
+            <View style={styles.minimalCard} testID="practice-minimal-card">
               <Pressable
-                key={option}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: isSelected }}
-                disabled={answered}
-                onPress={() => handleSelect(option)}
-                style={[
-                  styles.option,
-                  isSelected && styles.optionSelected,
-                  answered && isAnswer && styles.optionCorrect,
-                  answered && isSelected && !isAnswer && styles.optionWrong,
+                accessibilityRole="button"
+                accessibilityLabel={speaking ? 'Playing audio' : 'Play the number or letter again'}
+                accessibilityState={{ busy: speaking, disabled: speaking }}
+                onPress={handlePlay}
+                disabled={speaking}
+                style={({ pressed }) => [
+                  styles.minimalPlayButton,
+                  pressed && styles.playButtonPressed,
                 ]}
-                testID={`practice-option-${option}`}>
-                <Text
-                  style={[
-                    styles.optionText,
-                    isSelected && styles.optionTextSelected,
-                    answered && isAnswer && styles.optionTextCorrect,
-                    answered && isSelected && !isAnswer && styles.optionTextWrong,
-                  ]}>
-                  {option}
-                </Text>
+                testID="practice-play">
+                {speaking ? (
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
+                ) : (
+                  <Icon name="play" size={20} color={colors.onPrimary} />
+                )}
               </Pressable>
-            );
-          })}
-        </View>
+              <View style={styles.minimalCopy}>
+                <Text style={styles.minimalTitle} numberOfLines={1}>
+                  {speaking ? 'Playing…' : answered ? 'Replay the prompt' : 'Tap to listen'}
+                </Text>
+                <Text style={styles.minimalHint} numberOfLines={1}>
+                  {speaking
+                    ? 'Hear it again anytime'
+                    : answered
+                      ? 'Compare with the answer below'
+                      : TYPED_CARD_HINTS[mode]}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.listeningCard} testID="practice-listening-card">
+              <View style={styles.cardHeader}>
+                <View style={styles.listenPill}>
+                  <Icon name="audioLines" size={11} color={colors.accent} />
+                  <Text style={styles.listenPillText}>{speaking ? 'PLAYING' : 'LISTENING'}</Text>
+                </View>
+                <Text style={styles.cardMode}>{MODE_LABELS[mode]}</Text>
+              </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={advance}
-          style={styles.endButton}
-          testID="practice-next">
-          <Text style={styles.endButtonText}>Next question</Text>
-        </Pressable>
+              <View style={styles.playStage}>
+                <View style={[styles.playHalo, speaking && styles.playHaloActive]} />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    speaking ? 'Playing audio' : 'Play the number or letter again'
+                  }
+                  accessibilityState={{ busy: speaking, disabled: speaking }}
+                  onPress={handlePlay}
+                  disabled={speaking}
+                  style={({ pressed }) => [styles.playButton, pressed && styles.playButtonPressed]}
+                  testID="practice-play">
+                  {speaking ? (
+                    <ActivityIndicator size="small" color={colors.onPrimary} />
+                  ) : (
+                    <Icon name="play" size={22} color={colors.onPrimary} />
+                  )}
+                </Pressable>
+              </View>
+              <Text style={styles.playHint}>{speaking ? 'Playing…' : 'Tap to hear it again'}</Text>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="End practice"
-          onPress={handleEndPractice}
-          style={styles.endButton}
-          testID="practice-end">
-          <Text style={styles.endButtonText}>End practice</Text>
-        </Pressable>
-      </ScreenScrollView>
-    </Screen>
+              {/* The reveal lives in its own reserved slot under the replay
+                  control, so long phone numbers wrap onto extra lines without
+                  the card changing height when the answer appears. */}
+              <View
+                style={[
+                  styles.resultArea,
+                  answered && (isCorrect ? styles.resultAreaCorrect : styles.resultAreaWrong),
+                ]}
+                testID="practice-result-area">
+                {answerFeedback ?? <Text style={styles.prompt}>{QUESTION_PROMPT[mode]}</Text>}
+              </View>
+            </View>
+          )}
+
+          {answerMode === 'type' ? (
+            <View style={styles.answerBlock}>
+              <View style={styles.fieldHeader}>
+                <View style={styles.fieldHeaderText}>
+                  <Text style={styles.fieldLabel}>Type the answer</Text>
+                  <Text style={styles.fieldHint}>
+                    {answered ? 'Round checked' : 'Spaces are optional'}
+                  </Text>
+                </View>
+                {answerModeToggle}
+              </View>
+              <View style={styles.inputRow}>
+                <TextInput
+                  ref={answerInputRef}
+                  accessibilityLabel="Type the answer you heard"
+                  placeholder={typedAnswerPlaceholder(mode)}
+                  placeholderTextColor={colors.textMuted}
+                  value={typedAnswer}
+                  onChangeText={setTypedAnswer}
+                  keyboardType={keyboardTypeForMode(mode)}
+                  autoCapitalize={mode === 'letters' ? 'characters' : 'none'}
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  submitBehavior="submit"
+                  onSubmitEditing={handleCheck}
+                  style={styles.input}
+                  testID="practice-answer-input"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Check answer"
+                  accessibilityState={{ disabled: checkDisabled }}
+                  disabled={checkDisabled}
+                  onPress={handleCheck}
+                  style={({ pressed }) => [
+                    styles.checkButton,
+                    checkDisabled && styles.checkButtonDisabled,
+                    pressed && !checkDisabled && styles.primaryButtonPressed,
+                  ]}
+                  testID="practice-check">
+                  <Text style={styles.checkButtonText}>Check</Text>
+                </Pressable>
+              </View>
+              <View
+                style={styles.typedFeedback}
+                accessibilityLiveRegion="polite"
+                testID="practice-result-area">
+                {answerFeedback ?? (
+                  <Text style={styles.typedFeedbackHint}>
+                    Check to reveal the answer and spoken form.
+                  </Text>
+                )}
+              </View>
+              <View style={[styles.actions, styles.inlineActions]}>{actionButtons}</View>
+            </View>
+          ) : (
+            <View style={styles.answerBlock}>
+              <View style={styles.fieldHeader}>
+                <View style={styles.fieldHeaderText}>
+                  <Text style={styles.fieldLabel}>Choose the answer</Text>
+                  <Text style={styles.fieldHint}>{answered ? 'Round locked' : 'One tap'}</Text>
+                </View>
+                {answerModeToggle}
+              </View>
+              <View style={styles.optionsGrid}>
+                {(question?.options ?? []).map(option => {
+                  const isSelected = option === selected;
+                  const isAnswer = question !== null && option === question.answer;
+                  return (
+                    <Pressable
+                      key={option}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: isSelected, disabled: answered }}
+                      disabled={answered}
+                      onPress={() => handleSelect(option)}
+                      style={({ pressed }) => [
+                        styles.option,
+                        isSelected && styles.optionSelected,
+                        answered && isAnswer && styles.optionCorrect,
+                        answered && isSelected && !isAnswer && styles.optionWrong,
+                        pressed && styles.pressed,
+                      ]}
+                      testID={`practice-option-${option}`}>
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                        style={[
+                          styles.optionText,
+                          isSelected && styles.optionTextSelected,
+                          answered && isAnswer && styles.optionTextCorrect,
+                          answered && isSelected && !isAnswer && styles.optionTextWrong,
+                        ]}>
+                        {option}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+        </ScreenScrollView>
+        {!isTyping && (
+          <ScreenContent style={styles.footer}>
+            <View style={styles.actions}>{actionButtons}</View>
+          </ScreenContent>
+        )}
+      </Screen>
+    </KeyboardAvoidingView>
   );
 }

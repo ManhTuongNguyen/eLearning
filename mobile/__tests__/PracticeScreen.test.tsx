@@ -14,7 +14,7 @@
  * practiceQuestionBank.test.ts against the real implementation.
  */
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 
 import type { PracticeScreenProps } from '../src/navigation/types';
 import {
@@ -51,6 +51,21 @@ function numberQuestion(answer: string, distractors: [string, string, string]): 
     spoken: `spoken-${answer}`,
     options: [answer, ...distractors],
   };
+}
+
+function letterQuestion(answer: string, distractors: [string, string, string]): PracticeQuestion {
+  return {
+    kind: 'letter',
+    answer,
+    spoken: answer.toLowerCase(),
+    options: [answer, ...distractors],
+  };
+}
+
+/** Switches the answer-mode toggle into typed-answer mode and waits for the input. */
+async function switchToTyping() {
+  await fireEvent.press(screen.getByTestId('practice-answer-mode-toggle'));
+  await waitFor(() => expect(screen.getByTestId('practice-answer-input')).toBeOnTheScreen());
 }
 
 function practiceProps(): PracticeScreenProps {
@@ -102,6 +117,30 @@ describe('PracticeScreen', () => {
     await waitFor(() => expect(fakeEngine.speak).toHaveBeenCalledTimes(1));
     expect(fakeEngine.speak).toHaveBeenCalledWith('spoken-1997');
     expect(screen.getAllByTestId(/^practice-option-/)).toHaveLength(4);
+  });
+
+  it('keeps the choose-mode actions outside the scrollable content', async () => {
+    await renderPractice();
+    await waitForOptions();
+
+    const scroll = screen.getByTestId('practice-scroll');
+    expect(within(scroll).queryByTestId('practice-next')).toBeNull();
+    expect(within(scroll).queryByTestId('practice-end')).toBeNull();
+    expect(screen.getByTestId('practice-next')).toBeOnTheScreen();
+    expect(screen.getByTestId('practice-end')).toBeOnTheScreen();
+    expect(screen.getByTestId('practice-next')).toHaveStyle({ flex: 1 });
+    expect(screen.getByTestId('practice-end')).toHaveStyle({ flex: 1 });
+  });
+
+  it('disables Next until the choose-mode question is answered', async () => {
+    await renderPractice();
+    await waitForOptions();
+
+    expect(screen.getByTestId('practice-next')).toBeDisabled();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('practice-option-1997'));
+    });
+    expect(screen.getByTestId('practice-next')).not.toBeDisabled();
   });
 
   it('allows unlimited replays of the same question', async () => {
@@ -157,6 +196,23 @@ describe('PracticeScreen', () => {
     expect(screen.getByTestId('practice-accuracy')).toHaveTextContent('50%');
   });
 
+  it('keeps the answer slot the same size before and after an answer', async () => {
+    await renderPractice();
+    await waitForOptions();
+
+    // The prompt lives in a reserved slot, so swapping it for the reveal and
+    // feedback never changes the listening card's height.
+    expect(screen.getByTestId('practice-result-area')).toHaveStyle({ minHeight: 92 });
+    expect(screen.queryByTestId('practice-reveal')).toBeNull();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('practice-option-1997'));
+    });
+
+    expect(screen.getByTestId('practice-result-area')).toHaveStyle({ minHeight: 92 });
+    expect(screen.getByTestId('practice-reveal')).toBeOnTheScreen();
+  });
+
   it('hands the recent answers back so items never repeat', async () => {
     const seenRecent: string[][] = [];
     const queue: PracticeQuestion[] = [
@@ -176,16 +232,22 @@ describe('PracticeScreen', () => {
     await renderPractice();
     await waitForOptions();
     await act(async () => {
-      fireEvent.press(screen.getByTestId('practice-next'));
+      fireEvent.press(screen.getByTestId('practice-option-1997'));
     });
-    await waitForOptions();
     await act(async () => {
       fireEvent.press(screen.getByTestId('practice-next'));
     });
-    await waitForOptions();
+    await waitFor(() => expect(screen.getByTestId('practice-option-2005')).toBeOnTheScreen());
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('practice-option-2005'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('practice-next'));
+    });
+    await waitFor(() => expect(screen.getByTestId('practice-option-42')).toBeOnTheScreen());
 
-    // The window starts empty and grows with every answered or skipped
-    // question — exactly what keeps consecutive answers different.
+    // The window starts empty and grows with every completed question — exactly
+    // what keeps consecutive answers different.
     expect(seenRecent[0]).toEqual([]);
     expect(seenRecent[1]).toEqual(['1997']);
     expect(seenRecent[2]).toEqual(['1997', '2005']);
@@ -307,5 +369,153 @@ describe('PracticeScreen', () => {
     await instance.unmount();
 
     expect(fakeEngine.stop).toHaveBeenCalled();
+  });
+
+  it('switches to typed answers from the answer controls and uses the digits keyboard', async () => {
+    await renderPractice();
+    await waitForOptions();
+
+    await switchToTyping();
+
+    // The four-choice grid is replaced by the answer box.
+    expect(screen.queryAllByTestId(/^practice-option-/)).toHaveLength(0);
+    expect(screen.getByTestId('practice-answer-input').props.keyboardType).toBe('number-pad');
+  });
+
+  it('uses a minimal listening card and inline actions while typing', async () => {
+    await renderPractice();
+    await waitForOptions();
+    await switchToTyping();
+
+    expect(screen.getByTestId('practice-minimal-card')).toBeOnTheScreen();
+    expect(screen.queryByTestId('practice-listening-card')).toBeNull();
+
+    // Typed mode keeps Next/End directly under the answer controls instead of
+    // parking them in the screen-level footer.
+    const scroll = screen.getByTestId('practice-scroll');
+    expect(within(scroll).getByTestId('practice-next')).toBeOnTheScreen();
+    expect(within(scroll).getByTestId('practice-end')).toBeOnTheScreen();
+    expect(within(scroll).getByTestId('practice-next')).toBeDisabled();
+    expect(screen.getByTestId('practice-result-area')).toHaveStyle({ minHeight: 64 });
+  });
+
+  it('scores a typed answer, forgiving spaces and letter case', async () => {
+    await renderPractice();
+    await waitForOptions();
+    await switchToTyping();
+
+    const input = screen.getByTestId('practice-answer-input');
+    await fireEvent.changeText(input, '1 997');
+    await fireEvent.press(screen.getByTestId('practice-check'));
+
+    expect(screen.getByTestId('practice-feedback')).toHaveTextContent('Correct!');
+    expect(screen.getByTestId('practice-reveal')).toHaveTextContent('It was 1997 — "spoken-1997"');
+    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent('1');
+  });
+
+  it('keeps the typed feedback slot stable and advances from the inline actions', async () => {
+    await renderPractice();
+    await waitForOptions();
+    await switchToTyping();
+
+    expect(screen.getByTestId('practice-result-area')).toHaveStyle({ minHeight: 64 });
+    expect(
+      within(screen.getByTestId('practice-scroll')).getByTestId('practice-next'),
+    ).toBeDisabled();
+    await fireEvent.changeText(screen.getByTestId('practice-answer-input'), '1997');
+    await fireEvent.press(screen.getByTestId('practice-check'));
+
+    expect(screen.getByTestId('practice-result-area')).toHaveStyle({ minHeight: 64 });
+    expect(
+      within(screen.getByTestId('practice-scroll')).getByTestId('practice-next'),
+    ).not.toBeDisabled();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('practice-next'));
+    });
+
+    expect(screen.getByTestId('practice-answer-input').props.value).toBe('');
+    expect(screen.queryByTestId('practice-reveal')).toBeNull();
+  });
+
+  it('marks a wrong typed answer without highlighting options', async () => {
+    await renderPractice();
+    await waitForOptions();
+    await switchToTyping();
+
+    await fireEvent.changeText(screen.getByTestId('practice-answer-input'), '9719');
+    await fireEvent.press(screen.getByTestId('practice-check'));
+
+    expect(screen.getByTestId('practice-feedback')).toHaveTextContent(
+      'Not quite — check the answer above.',
+    );
+    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent('0');
+  });
+
+  it('accepts a phone number typed without its grouping spaces', async () => {
+    mockedCreate.mockReturnValue({
+      kind: 'phone',
+      answer: '07942 153 860',
+      spoken: 'oh seven nine four two, one five three, eight six oh',
+      options: ['07942 153 860', '07942 503 860', '07942 153 869', '07942 153 806'],
+    });
+    await renderPractice();
+    await waitForOptions();
+    await fireEvent.press(screen.getByTestId('practice-mode-phones'));
+    await waitFor(() =>
+      expect(screen.getByTestId('practice-option-07942 153 860')).toBeOnTheScreen(),
+    );
+    await switchToTyping();
+    expect(screen.getByTestId('practice-answer-input').props.keyboardType).toBe('number-pad');
+
+    await fireEvent.changeText(screen.getByTestId('practice-answer-input'), '07942153860');
+    await fireEvent.press(screen.getByTestId('practice-check'));
+
+    expect(screen.getByTestId('practice-feedback')).toHaveTextContent('Correct!');
+    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent('1');
+  });
+
+  it('uses the normal keyboard and case-insensitive matching for letters', async () => {
+    mockedCreate.mockReturnValue(letterQuestion('B', ['D', 'P', 'T']));
+    await renderPractice();
+    await waitForOptions();
+    await fireEvent.press(screen.getByTestId('practice-mode-letters'));
+    await waitFor(() => expect(screen.getByTestId('practice-option-B')).toBeOnTheScreen());
+    await switchToTyping();
+
+    expect(screen.getByTestId('practice-answer-input').props.keyboardType).toBe('default');
+    await fireEvent.changeText(screen.getByTestId('practice-answer-input'), 'b');
+    await fireEvent.press(screen.getByTestId('practice-check'));
+
+    expect(screen.getByTestId('practice-feedback')).toHaveTextContent('Correct!');
+    expect(screen.getByTestId('practice-correct-count')).toHaveTextContent('1');
+  });
+
+  it('keeps taps on the play button from dismissing the keyboard', async () => {
+    await renderPractice();
+    await waitForOptions();
+    await switchToTyping();
+
+    // The scroll view must let handled taps (play, check, next) through
+    // without the keyboard closing, so the answer box keeps its cursor.
+    expect(screen.getByTestId('practice-scroll').props.keyboardShouldPersistTaps).toBe('handled');
+
+    await fireEvent.press(screen.getByTestId('practice-play'));
+    expect(screen.getByTestId('practice-answer-input')).toBeOnTheScreen();
+  });
+
+  it('switching answer mode starts a fresh round and keeps the score', async () => {
+    await renderPractice();
+    await waitForOptions();
+    await fireEvent.press(screen.getByTestId('practice-option-9719'));
+    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent('1');
+
+    await switchToTyping();
+
+    expect(screen.queryByTestId('practice-reveal')).toBeNull();
+    expect(screen.queryByTestId('practice-feedback')).toBeNull();
+    expect(screen.getByTestId('practice-attempted-count')).toHaveTextContent('1');
   });
 });
