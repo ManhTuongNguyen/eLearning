@@ -119,9 +119,7 @@ async function seedSentences(
       ]);
     }
     if (option.suspended) {
-      await localDb.execute("UPDATE sentences SET status = 'suspended' WHERE text = ?", [
-        option.text,
-      ]);
+      await localDb.execute('UPDATE sentences SET suspended = 1 WHERE text = ?', [option.text]);
     }
   }
 }
@@ -162,7 +160,7 @@ describe('Home Real-life sentences row', () => {
     ]);
     // Only the first sentence should count: one is suspended and one is due
     // in the future.
-    await localDb.execute("UPDATE sentences SET status = 'suspended' WHERE text = ?", [
+    await localDb.execute('UPDATE sentences SET suspended = 1 WHERE text = ?', [
       'Is this seat taken?',
     ]);
     await localDb.execute('UPDATE sentences SET due_at = ? WHERE text = ?', [

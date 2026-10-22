@@ -70,10 +70,11 @@ These decisions were confirmed by the product owner and are binding for this tas
 
 | Decision | Choice |
 | --- | --- |
-| Grading buttons | **Again / Good / Easy**, true spaced repetition (intervals grow on repeated success) |
-| Card mix | **Automatic**: dictation for `new`/`learning` sentences, situation-recall for `review` sentences; a Settings toggle can force one mode |
+| Grading buttons | **Again / Hard / Good / Easy** (FSRS ratings 1–4), true spaced repetition powered by [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs) |
+| Card mix | **Automatic**: dictation for `new`/`learning`/`relearning` sentences, situation-recall for `review` sentences; a Settings toggle can force one mode |
 | Typing check | Word-level, case- and punctuation-insensitive, word-level diff shown, grade **pre-suggested** (Good for a clean answer, Again for missing words) and **overridable** by the learner |
-| Session | **Due cards only**, maximum 20 per session, `Again` requeues the card once within the same session |
+| Session | **Due cards only**, maximum 20 per session; a card stays in the session until FSRS graduates it to `review` |
+| Study day | A new day starts at **4 a.m. local time** (Anki's rollover), for both `elapsed_days` and review due dates |
 | Practice unlock | Topic needs **5 or more sentences** |
 | Sentence fields | English `text` + English `meaning` + short real-life `situation` |
 | Generation | Count chosen by the user (1 / 5 / 10), existing topic sentences passed to the model, normalized exact-match filter locally, then a keep/discard review modal |
@@ -85,59 +86,38 @@ These decisions were confirmed by the product owner and are binding for this tas
 
 # 2. Technical specification
 
-## 2.1 Local schema (migration version 4)
+## 2.1 Local schema (migration version 6)
 
-Append a new migration to `mobile/src/db/migrations.ts` — never edit shipped ones.
+The sentence tables were introduced in v4/v5. **v6** (`MIGRATION_006` in
+`mobile/src/db/migrations.ts`, never edit shipped migrations) rebuilds them for
+FSRS and adds the collection config. Legacy rows are preserved; the old
+`suspended` state becomes Anki's flag.
 
-```sql
-CREATE TABLE sentence_topics (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    english_level TEXT NOT NULL DEFAULT 'AUTO'
-      CHECK (english_level IN ('A1','A2','B1','B2','C1','C2','AUTO')),
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
+`sentences` (v6):
 
-CREATE TABLE sentences (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    topic_id INTEGER NOT NULL REFERENCES sentence_topics (id) ON DELETE CASCADE,
-    text TEXT NOT NULL,
-    normalized_text TEXT NOT NULL,
-    meaning TEXT NOT NULL DEFAULT '',
-    situation TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'new'
-      CHECK (status IN ('new','learning','review','suspended')),
-    reps INTEGER NOT NULL DEFAULT 0,
-    lapses INTEGER NOT NULL DEFAULT 0,
-    ease REAL NOT NULL DEFAULT 2.5,
-    interval_days REAL NOT NULL DEFAULT 0,
-    due_at TEXT NOT NULL,
-    last_grade TEXT NOT NULL DEFAULT ''
-      CHECK (last_grade IN ('','again','good','easy')),
-    last_reviewed_at TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
+| Column | Meaning |
+| --- | --- |
+| `state` | FSRS card state: `new` / `learning` / `review` / `relearning` |
+| `suspended` | Anki flag (0/1); excluded from sessions but keeps its memory state |
+| `stability`, `difficulty` | FSRS memory state (days / 1–10) |
+| `elapsed_days`, `scheduled_days`, `learning_steps` | remaining `ts-fsrs` `Card` fields |
+| `reps`, `lapses` | review counters |
+| `due_at` | ISO instant; review cards are due at the start of the target study day |
+| `last_grade`, `last_reviewed_at` | last review |
 
-CREATE UNIQUE INDEX idx_sentences_topic_normalized
-    ON sentences (topic_id, normalized_text);
-CREATE INDEX idx_sentences_topic ON sentences (topic_id, due_at);
-CREATE INDEX idx_sentences_due ON sentences (due_at);
+`sentence_review_log` mirrors Anki's `revlog` so the history can train the FSRS
+optimizer: `grade`, `rating` (1–4), `state` **before** the review, `mode`,
+`due_at`, `stability`, `difficulty`, `elapsed_days`, `last_elapsed_days`,
+`scheduled_days`, `learning_steps`, `review_duration_ms`, `reviewed_at`.
 
-CREATE TABLE sentence_review_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sentence_id INTEGER NOT NULL REFERENCES sentences (id) ON DELETE CASCADE,
-    topic_id INTEGER NOT NULL,
-    grade TEXT NOT NULL CHECK (grade IN ('again','good','easy')),
-    mode TEXT NOT NULL CHECK (mode IN ('dictation','recall')),
-    reviewed_at TEXT NOT NULL
-);
+`srs_config` is a single row (`id = 1`): `model_version`, `weights`
+(space-separated, empty = package default), `desired_retention`,
+`maximum_interval`, `enable_fuzz`, `enable_short_term`, `learning_steps`,
+`relearning_steps`, `rollover_hour`, `updated_at`.
 
-CREATE INDEX idx_sentence_review_log_sentence
-    ON sentence_review_log (sentence_id, reviewed_at);
-```
+Indexes: `idx_sentences_topic_normalized` (unique duplicate key),
+`idx_sentences_topic`, `idx_sentences_due`, `idx_sentences_topic_state`,
+`idx_sentence_review_log_sentence`, `idx_sentence_review_log_reviewed`.
 
 Notes:
 
@@ -145,58 +125,75 @@ Notes:
 - A newly generated sentence is immediately due (`due_at` = now) so a fresh topic can
   be practiced at once.
 - `suspended` sentences are excluded from every practice session. Nothing in this
-  version suspends a sentence, but the state exists so a future "stop showing me this"
+  version suspends a sentence, but the flag exists so a future "stop showing me this"
   does not need another migration.
 
 ## 2.2 Spaced repetition (pure module: `mobile/src/srs/scheduler.ts`)
 
-Constants:
+Scheduling is delegated to `ts-fsrs` (FSRS-6, the model Anki ships). The adapter
+is pure: `reviewSentence(state, grade, now, config)` and
+`previewSchedule(state, now, config)` receive the clock and the collection config
+and never read storage.
+
+Buttons and ratings:
+
+| Button | `Rating` | Store grade |
+| --- | --- | --- |
+| Again | `Rating.Again` = 1 | `'again'` |
+| Hard | `Rating.Hard` = 2 | `'hard'` |
+| Good | `Rating.Good` = 3 | `'good'` |
+| Easy | `Rating.Easy` = 4 | `'easy'` |
+
+Defaults (Anki's), stored in `srs_config` and described by `src/srs/config.ts`:
 
 ```text
-LEARNING_STEP_MINUTES    = 10
-GRADUATING_INTERVAL_DAYS = 1
-EASY_INTERVAL_DAYS       = 4
-EASY_BONUS               = 1.3
-EASE_DEFAULT             = 2.5
-EASE_MIN                 = 1.3
-EASE_MAX                 = 3.0
-EASE_AGAIN_DELTA         = -0.20
-EASE_EASY_DELTA          = +0.15
-INTERVAL_MAX_DAYS        = 365
+desired_retention    = 0.9
+maximum_interval     = 36500 days
+enable_fuzz          = true
+enable_short_term    = true
+learning_steps       = '1m 10m'
+relearning_steps     = '10m'
+rollover_hour        = 4          (local time)
+weights              = package FSRS-6 default; replaced by optimizer output
 ```
 
-Transition table (`scheduleNext(state, grade, now)`):
+Behaviour with the default steps:
 
-| Current status | Again | Good | Easy |
-| --- | --- | --- | --- |
-| `new` | → `learning`, interval 0, due `now + 10 min`, lapses +1, ease −0.20 | → `review`, interval 1 day, reps +1 | → `review`, interval 4 days, reps +1, ease +0.15 |
-| `learning` | → `learning`, interval 0, due `now + 10 min`, lapses +1, ease −0.20 | → `review`, interval 1 day, reps +1 | → `review`, interval 4 days, reps +1, ease +0.15 |
-| `review` | → `learning`, interval 0, due `now + 10 min`, lapses +1, ease −0.20 | interval = `interval × ease`, due `now + interval`, reps +1 | interval = `interval × ease × 1.3`, due `now + interval`, reps +1, ease +0.15 |
+- A new card answered **Again / Hard / Good** enters `learning` due in 1 / 6 / 10
+  minutes. A second **Good** graduates it to `review`.
+- **Easy** on a new card graduates immediately (about 8 days with default weights;
+  fuzz is seeded per card, so the interval shown on the button is the one saved).
+- A **review** card is rescheduled by FSRS stability: Again → `relearning` at 10
+  minutes and `lapses + 1`; Hard/Good/Easy → `review` with increasing intervals.
+- Review intervals are capped by `maximum_interval`; the package keeps
+  Hard ≤ Good ≤ Easy, so the cap may be exceeded by the 1-day ordering steps.
 
-Rules:
+Study-day rules (`src/srs/dayBoundary.ts`):
 
-- `ease` is clamped to `[EASE_MIN, EASE_MAX]` after every transition.
-- `review` intervals are capped at `INTERVAL_MAX_DAYS`.
-- A `review` interval never decreases on Good or Easy: `max(previous, computed)`.
-- Every transition sets `last_grade`, `last_reviewed_at` and `updated_at`.
-- The module is pure and deterministic: no clock reads, no I/O, `now` is a parameter.
-- The module never touches SQLite; the repository persists the returned state.
+- `elapsed_days` is the number of **local study days** between reviews, where a
+  study day starts at `rollover_hour` (4 a.m.). A 2 a.m. review is still the
+  previous day; 4:30 a.m. is a new one.
+- `ts-fsrs` derives elapsed time from a plain date difference, so the adapter hands
+  it a synthetic `last_review` exactly `elapsed_days` days before `now`.
+- A graduated card becomes due at the **start** of its target study day (4 a.m.),
+  matching Anki's day-number queue; learning/relearning cards keep minute
+  timestamps.
 
-Example of the intended behaviour (same sentence, `Good` every time):
-
-```text
-new → 1 day → 2.5 days → 6.25 days → 15.6 days → 39 days → ...
-```
+The module never touches SQLite; the repository persists the returned state and
+log row. Collection helpers (`getSrsConfig`, `saveSrsConfig`,
+`listReviewHistoryForOptimization`) live in `src/db/srsConfigStore.ts`.
 
 ## 2.3 Practice session (`mobile/src/srs/session.ts`)
 
 `buildPracticeSession(sentences, now, limit = 20)`:
 
-- Include only sentences with `status != 'suspended'` and `due_at <= now`.
+- Include only sentences with `suspended = 0` and `due_at <= now`.
 - Order by `due_at` ascending, then `id` ascending.
 - Cap at `limit` (20).
-- `Again` requeues the card **once** at the end of the in-session queue; a sentence
-  graded Again twice in one session is not requeued again.
+- A card leaves the queue only when FSRS graduates it to `review`. While it is
+  `learning` or `relearning` it is appended to the end of the session (Anki's
+  learn-ahead behaviour), so Again — and the first Good on a new card — brings it
+  back until it graduates.
 
 `canPractice(sentenceCount)`:
 
@@ -289,7 +286,7 @@ exactly like `preferences/grammarCheck.ts`.
   substituted), and pre-selects the suggested grade.
 - Suggested grade: an exact normalized match, or a single token that differs by one
   typo-sized edit, → `Good`; anything else → `Again`.
-- The learner may tap any of Again / Good / Easy regardless of the suggestion.
+- The learner may tap any of Again / Hard / Good / Easy regardless of the suggestion.
 
 **Recall card**
 
@@ -481,6 +478,10 @@ Status: `[x]`
 
 Priority: `P1`
 
+> Superseded by **TASK-SENT-015** (FSRS via `ts-fsrs`). The ease/interval
+> transition table below describes the original v1 scheduler and is kept for
+> history; section 2.2 is the current specification.
+
 ### Requirements
 
 - Create `mobile/src/srs/scheduler.ts` implementing section 2.2 exactly, plus
@@ -663,12 +664,12 @@ Priority: `P2`
 - Add the `practiceMode` preference next to `mobile/src/preferences/grammarCheck.ts`
   (`'auto' | 'dictation' | 'recall'`, default `auto`), with load/save helpers and
   AsyncStorage persistence.
-- Create the pure `selectCardMode(sentenceStatus, practiceMode)` helper.
+- Create the pure `selectCardMode(sentenceState, practiceMode)` helper.
 
 ### Acceptance criteria
 
-- `auto` maps `new`/`learning` → dictation and `review` → recall.
-- Forced modes override the status for every card.
+- `auto` maps `new`/`learning`/`relearning` → dictation and `review` → recall.
+- Forced modes override the state for every card.
 - Invalid persisted values fall back to `auto`.
 - Tests cover load, save and the mapping table.
 - `pnpm lint`, `pnpm typecheck`, `pnpm test` pass.
@@ -688,25 +689,28 @@ Create `mobile/src/screens/SentencePracticeScreen.tsx`:
 - Build the session with `buildPracticeSession` (due only, max 20) and show progress
   (`3 / 12`), plus an "All caught up" empty state naming the next due time.
 - Dictation card per section 2.6: auto-play once, replay, `TextInput`, `Check` showing
-  the word-level diff and the pre-suggested grade, then Again / Good / Easy.
+  the word-level diff and the pre-suggested grade, then Again / Hard / Good / Easy with
+  the interval each would schedule.
 - Recall card per section 2.6: situation, "Show meaning" hint, reveal answer + TTS, then
-  Again / Good / Easy.
-- On grade: persist through the scheduler and the repository, log the review, requeue an
-  `Again` card once at the end of the session, then advance.
-- Session summary at the end: cards reviewed and grades breakdown, with actions to
-  review again (if still due) or go back to the topic.
+  Again / Hard / Good / Easy.
+- On grade: persist through the FSRS scheduler and the repository, log the Anki-shaped
+  review row, requeue the card while it is still `learning`/`relearning`, then advance.
+- Session summary at the end: cards reviewed and the Again/Hard/Good/Easy breakdown,
+  with actions to review again (if still due) or go back to the topic.
 
 ### Acceptance criteria
 
 - Only due, non-suspended sentences enter the session, ordered by due date, capped at 20.
-- Grading writes the new schedule and appends a review-log row with the correct mode.
-- An `Again` card reappears once, later in the same session; a second `Again` does not
-  requeue it again.
+- Grading writes the new FSRS schedule and appends a review-log row with the correct
+  mode, rating and memory state.
+- A learning/relearning card reappears later in the same session; it leaves the queue
+  once FSRS graduates it to `review`.
 - The pre-suggested grade reflects `suggestGrade` and the learner's override wins.
-- Dictation is shown for `new`/`learning` and recall for `review` in `auto` mode.
+- Dictation is shown for `new`/`learning`/`relearning` and recall for `review` in
+  `auto` mode.
 - TTS: one playback at a time, silenced on unmount/card change, replay works.
-- Tests cover the session build, both card types, grading persistence, requeue-once and
-  the empty state.
+- Tests cover the session build, both card types, grading persistence, requeue-until-
+  review and the empty state.
 - `pnpm lint`, `pnpm typecheck`, `pnpm test` pass.
 
 ---
@@ -769,8 +773,8 @@ Priority: `P2`
 ### Requirements
 
 - `mobile/README.md`: a "Real-life sentences" section (topics, generation, the
-  Again/Good/Easy schedule, the practice modes, serverless-only note) and the icon
-  dependency/rebuild note.
+  FSRS/Anki schedule with the four buttons and 4 a.m. study day, the practice modes,
+  serverless-only note) and the icon dependency/rebuild note.
 - `docs/ARCHITECTURE.md`: a new subsection covering the sentence store, the pure
   scheduler, the generation service and the mode gating.
 - Root `README.md`: add the feature to the Features list and to the mode table where
@@ -784,6 +788,42 @@ Priority: `P2`
 - Every new file path referenced exists.
 - `pnpm lint`, `pnpm typecheck`, `pnpm test` pass (docs-only changes still run the gates
   to prove nothing else broke).
+
+---
+
+## TASK-SENT-015 — FSRS / Anki scheduling upgrade
+
+Status: `[x]`
+
+Priority: `P1`
+
+### Requirements
+
+- Replace the hand-written ease/interval scheduler with
+  [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs) (FSRS-6).
+- Use Anki's four ratings (Again / Hard / Good / Easy); the practice screen shows the
+  interval each button would schedule.
+- Make a new study day start at **4 a.m. local time** for both `elapsed_days` and
+  review due dates (`mobile/src/srs/dayBoundary.ts`).
+- Migration v6: rebuild `sentences` for the FSRS card fields and Anki's `suspended`
+  flag, reshape `sentence_review_log` into an Anki-style revlog, and add the single-row
+  `srs_config` table for the optimized weights and deck-preset knobs.
+- Keep Anki's defaults: 90% retention, 36500-day cap, fuzz, learning steps `1m 10m`
+  and relearning `10m`.
+- Update every dependent module: repository, config store, session rules, card-mode
+  mapping, practice/topic screens, data clearing, tests and docs.
+
+### Acceptance criteria
+
+- A fresh card answered Again/Hard/Good enters the matching minute step; Easy graduates
+  to review. A new card needs two Good presses to graduate, as in Anki.
+- A review card lapses to relearning on Again and grows on the other ratings.
+- `elapsed_days` uses the local 4 a.m. boundary and review cards become due at the start
+  of their target study day.
+- A card stays in the practice queue until FSRS graduates it to `review`.
+- The review log stores the rating, pre-review state, elapsed/scheduled days, stability,
+  difficulty and duration; `srs_config` round-trips an optimized weight vector.
+- `pnpm lint`, `pnpm typecheck`, `pnpm test` pass.
 
 ---
 
@@ -822,7 +862,7 @@ The feature is complete when a learner can:
 4. Play any sentence with TTS and delete sentences that are not useful.
 5. Open Practice once the topic holds 5 sentences and get only the due cards.
 6. Type a dictated new sentence and be graded (with an overridable suggestion).
-7. Recall a review sentence from its situation and grade it Again / Good / Easy.
+7. Recall a review sentence from its situation and grade it Again / Hard / Good / Easy.
 8. See the same sentence come back later each time it is answered well, and come back
    in ten minutes when it is forgotten.
 9. Close and reopen the app and keep every topic, sentence and schedule.

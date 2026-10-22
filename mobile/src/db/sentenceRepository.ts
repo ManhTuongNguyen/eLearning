@@ -18,6 +18,7 @@ import type {
   ReviewCardMode,
   ReviewGrade,
   SentenceRecord,
+  SentenceReviewLogInput,
   SentenceReviewLogRecord,
   SentenceReviewState,
   SentenceTopicRecord,
@@ -27,9 +28,13 @@ import type {
 const TOPIC_COLUMNS =
   'id, title, description, generation_prompt, english_level, created_at, updated_at';
 const SENTENCE_COLUMNS =
-  'id, topic_id, text, normalized_text, meaning, situation, status, reps, lapses, ' +
-  'ease, interval_days, due_at, last_grade, last_reviewed_at, created_at, updated_at';
-const REVIEW_LOG_COLUMNS = 'id, sentence_id, topic_id, grade, mode, reviewed_at';
+  'id, topic_id, text, normalized_text, meaning, situation, state, suspended, reps, lapses, ' +
+  'stability, difficulty, elapsed_days, scheduled_days, learning_steps, due_at, last_grade, ' +
+  'last_reviewed_at, created_at, updated_at';
+const REVIEW_LOG_COLUMNS =
+  'id, sentence_id, topic_id, grade, rating, state, mode, due_at, stability, difficulty, ' +
+  'elapsed_days, last_elapsed_days, scheduled_days, learning_steps, review_duration_ms, ' +
+  'reviewed_at';
 
 function mapTopicRow(row: SqlRow): SentenceTopicRecord {
   return {
@@ -51,11 +56,15 @@ function mapSentenceRow(row: SqlRow): SentenceRecord {
     normalized_text: String(row.normalized_text ?? ''),
     meaning: String(row.meaning ?? ''),
     situation: String(row.situation ?? ''),
-    status: String(row.status ?? 'new') as SentenceRecord['status'],
+    state: String(row.state ?? 'new') as SentenceRecord['state'],
+    suspended: Number(row.suspended ?? 0) === 1,
     reps: Number(row.reps ?? 0),
     lapses: Number(row.lapses ?? 0),
-    ease: Number(row.ease ?? 2.5),
-    interval_days: Number(row.interval_days ?? 0),
+    stability: Number(row.stability ?? 0),
+    difficulty: Number(row.difficulty ?? 0),
+    elapsed_days: Number(row.elapsed_days ?? 0),
+    scheduled_days: Number(row.scheduled_days ?? 0),
+    learning_steps: Number(row.learning_steps ?? 0),
     due_at: String(row.due_at ?? ''),
     last_grade: String(row.last_grade ?? '') as SentenceRecord['last_grade'],
     last_reviewed_at: String(row.last_reviewed_at ?? ''),
@@ -70,7 +79,17 @@ function mapReviewLogRow(row: SqlRow): SentenceReviewLogRecord {
     sentence_id: Number(row.sentence_id),
     topic_id: Number(row.topic_id),
     grade: String(row.grade) as ReviewGrade,
+    rating: Number(row.rating ?? 0),
+    state: String(row.state ?? 'new') as SentenceReviewLogRecord['state'],
     mode: String(row.mode) as ReviewCardMode,
+    due_at: String(row.due_at ?? ''),
+    stability: Number(row.stability ?? 0),
+    difficulty: Number(row.difficulty ?? 0),
+    elapsed_days: Number(row.elapsed_days ?? 0),
+    last_elapsed_days: Number(row.last_elapsed_days ?? 0),
+    scheduled_days: Number(row.scheduled_days ?? 0),
+    learning_steps: Number(row.learning_steps ?? 0),
+    review_duration_ms: Number(row.review_duration_ms ?? 0),
     reviewed_at: String(row.reviewed_at ?? ''),
   };
 }
@@ -124,7 +143,7 @@ export async function listSentenceTopics(
             t.created_at, t.updated_at,
             (SELECT COUNT(*) FROM sentences s WHERE s.topic_id = t.id) AS sentence_count,
             (SELECT COUNT(*) FROM sentences s
-              WHERE s.topic_id = t.id AND s.status != 'suspended' AND s.due_at <= ?) AS due_count
+              WHERE s.topic_id = t.id AND s.suspended = 0 AND s.due_at <= ?) AS due_count
        FROM sentence_topics t
       ORDER BY t.created_at DESC, t.id DESC`,
     [now],
@@ -237,9 +256,10 @@ export async function insertSentencesWith(
     const situation = candidate.situation?.trim() ?? '';
     const result = await tx.execute(
       `INSERT INTO sentences
-         (topic_id, text, normalized_text, meaning, situation, status, reps, lapses, ease,
-          interval_days, due_at, last_grade, last_reviewed_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'new', 0, 0, 2.5, 0, ?, '', '', ?, ?)`,
+         (topic_id, text, normalized_text, meaning, situation, state, suspended,
+          reps, lapses, stability, difficulty, elapsed_days, scheduled_days,
+          learning_steps, due_at, last_grade, last_reviewed_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'new', 0, 0, 0, 0, 0, 0, 0, 0, ?, '', '', ?, ?)`,
       [topicId, text, normalized, meaning, situation, timestamp, timestamp, timestamp],
     );
     const id = result.insertId;
@@ -253,11 +273,15 @@ export async function insertSentencesWith(
       normalized_text: normalized,
       meaning,
       situation,
-      status: 'new',
+      state: 'new',
+      suspended: false,
       reps: 0,
       lapses: 0,
-      ease: 2.5,
-      interval_days: 0,
+      stability: 0,
+      difficulty: 0,
+      elapsed_days: 0,
+      scheduled_days: 0,
+      learning_steps: 0,
       due_at: timestamp,
       last_grade: '',
       last_reviewed_at: '',
@@ -302,7 +326,7 @@ export async function listDueSentences(
 ): Promise<SentenceRecord[]> {
   const result = await db.execute(
     `SELECT ${SENTENCE_COLUMNS} FROM sentences
-      WHERE status != 'suspended' AND due_at <= ?
+      WHERE suspended = 0 AND due_at <= ?
       ORDER BY due_at ASC, id ASC
       LIMIT ?`,
     [now, limit],
@@ -312,7 +336,7 @@ export async function listDueSentences(
 
 export async function countDueSentences(db: SqlExecutor, now: string = nowIso()): Promise<number> {
   const result = await db.execute(
-    "SELECT COUNT(*) AS total FROM sentences WHERE status != 'suspended' AND due_at <= ?",
+    'SELECT COUNT(*) AS total FROM sentences WHERE suspended = 0 AND due_at <= ?',
     [now],
   );
   return Number(result.rows[0]?.total ?? 0);
@@ -325,7 +349,7 @@ export async function countDueSentencesForTopic(
 ): Promise<number> {
   const result = await db.execute(
     `SELECT COUNT(*) AS total FROM sentences
-      WHERE topic_id = ? AND status != 'suspended' AND due_at <= ?`,
+      WHERE topic_id = ? AND suspended = 0 AND due_at <= ?`,
     [topicId, now],
   );
   return Number(result.rows[0]?.total ?? 0);
@@ -341,15 +365,19 @@ export async function applyReviewState(
 ): Promise<void> {
   await executor.execute(
     `UPDATE sentences
-        SET status = ?, reps = ?, lapses = ?, ease = ?, interval_days = ?, due_at = ?,
+        SET state = ?, reps = ?, lapses = ?, stability = ?, difficulty = ?,
+            elapsed_days = ?, scheduled_days = ?, learning_steps = ?, due_at = ?,
             last_grade = ?, last_reviewed_at = ?, updated_at = ?
       WHERE id = ?`,
     [
-      state.status,
+      state.state,
       state.reps,
       state.lapses,
-      state.ease,
-      state.interval_days,
+      state.stability,
+      state.difficulty,
+      state.elapsed_days,
+      state.scheduled_days,
+      state.learning_steps,
       state.due_at,
       state.last_grade,
       state.last_reviewed_at,
@@ -359,7 +387,7 @@ export async function applyReviewState(
   );
 }
 
-/** Append one review event to the log. */
+/** Append one review event to the log (Anki's `revlog` row). */
 export async function logSentenceReview(
   executor: SqlExecutor,
   input: {
@@ -367,14 +395,36 @@ export async function logSentenceReview(
     topic_id: number;
     grade: ReviewGrade;
     mode: ReviewCardMode;
+    log?: SentenceReviewLogInput;
+    review_duration_ms?: number;
     reviewed_at?: string;
   },
 ): Promise<SentenceReviewLogRecord> {
-  const reviewedAt = input.reviewed_at ?? nowIso();
+  const log = input.log;
+  const reviewedAt = log?.reviewed_at ?? input.reviewed_at ?? nowIso();
   const result = await executor.execute(
-    `INSERT INTO sentence_review_log (sentence_id, topic_id, grade, mode, reviewed_at)
-     VALUES (?, ?, ?, ?, ?)`,
-    [input.sentence_id, input.topic_id, input.grade, input.mode, reviewedAt],
+    `INSERT INTO sentence_review_log
+       (sentence_id, topic_id, grade, rating, state, mode, due_at, stability,
+        difficulty, elapsed_days, last_elapsed_days, scheduled_days,
+        learning_steps, review_duration_ms, reviewed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.sentence_id,
+      input.topic_id,
+      input.grade,
+      log?.rating ?? 0,
+      log?.state ?? 'new',
+      input.mode,
+      log?.due_at ?? '',
+      log?.stability ?? 0,
+      log?.difficulty ?? 0,
+      log?.elapsed_days ?? 0,
+      log?.last_elapsed_days ?? 0,
+      log?.scheduled_days ?? 0,
+      log?.learning_steps ?? 0,
+      input.review_duration_ms ?? 0,
+      reviewedAt,
+    ],
   );
   const id = result.insertId;
   if (id === null || id === undefined) {
@@ -385,7 +435,17 @@ export async function logSentenceReview(
     sentence_id: input.sentence_id,
     topic_id: input.topic_id,
     grade: input.grade,
+    rating: log?.rating ?? 0,
+    state: log?.state ?? 'new',
     mode: input.mode,
+    due_at: log?.due_at ?? '',
+    stability: log?.stability ?? 0,
+    difficulty: log?.difficulty ?? 0,
+    elapsed_days: log?.elapsed_days ?? 0,
+    last_elapsed_days: log?.last_elapsed_days ?? 0,
+    scheduled_days: log?.scheduled_days ?? 0,
+    learning_steps: log?.learning_steps ?? 0,
+    review_duration_ms: input.review_duration_ms ?? 0,
     reviewed_at: reviewedAt,
   };
 }
@@ -402,6 +462,8 @@ export async function recordSentenceReview(
     grade: ReviewGrade;
     mode: ReviewCardMode;
     state: SentenceReviewState;
+    log?: SentenceReviewLogInput;
+    review_duration_ms?: number;
   },
 ): Promise<void> {
   await db.transaction(async tx => {
@@ -411,6 +473,8 @@ export async function recordSentenceReview(
       topic_id: input.topic_id,
       grade: input.grade,
       mode: input.mode,
+      log: input.log,
+      review_duration_ms: input.review_duration_ms,
     });
   });
 }

@@ -42,16 +42,24 @@ async function freshDb(): Promise<SqlDriver> {
 /** A review state that graduates a sentence into the day-scale schedule. */
 function reviewState(overrides: Partial<SentenceReviewState> = {}): SentenceReviewState {
   return {
-    status: 'review',
+    state: 'review',
     reps: 1,
     lapses: 0,
-    ease: 2.5,
-    interval_days: 1,
+    stability: 3.5,
+    difficulty: 5.1,
+    elapsed_days: 1,
+    scheduled_days: 1,
+    learning_steps: 0,
     due_at: LATER,
     last_grade: 'good',
     last_reviewed_at: EARLIER,
     ...overrides,
   };
+}
+
+/** Anki suspends a card without touching its FSRS memory state. */
+async function suspend(db: SqlDriver, sentenceId: number): Promise<void> {
+  await db.execute('UPDATE sentences SET suspended = 1 WHERE id = ?', [sentenceId]);
 }
 
 const CANDIDATES = [
@@ -171,11 +179,13 @@ describe('sentences', () => {
     expect(inserted[0]).toMatchObject({
       text: 'Nice to meet you.',
       normalized_text: 'nice to meet you',
-      status: 'new',
+      state: 'new',
+      suspended: false,
       reps: 0,
       lapses: 0,
-      ease: 2.5,
-      interval_days: 0,
+      stability: 0,
+      difficulty: 0,
+      scheduled_days: 0,
       last_grade: '',
     });
     expect(inserted[0].due_at).toBe(inserted[0].created_at);
@@ -253,8 +263,9 @@ describe('due queries', () => {
     ]);
 
     await applyReviewState(db, first.id, reviewState({ due_at: LATER }));
-    await applyReviewState(db, second.id, reviewState({ due_at: EARLIER, status: 'review' }));
-    await applyReviewState(db, third.id, reviewState({ due_at: NOW, status: 'suspended' }));
+    await applyReviewState(db, second.id, reviewState({ due_at: EARLIER, state: 'review' }));
+    await applyReviewState(db, third.id, reviewState({ due_at: NOW }));
+    await suspend(db, third.id);
 
     const due = await listDueSentences(db, NOW, 10);
     expect(due.map(row => row.text)).toEqual(['Can I get a flat white?']);
@@ -282,11 +293,8 @@ describe('due queries', () => {
     const [neighbourSentence] = await insertSentences(db, neighbours.id, [CANDIDATES[0]]);
 
     await applyReviewState(db, coffeeSentence.id, reviewState({ due_at: LATER }));
-    await applyReviewState(
-      db,
-      neighbourSentence.id,
-      reviewState({ due_at: EARLIER, status: 'suspended' }),
-    );
+    await applyReviewState(db, neighbourSentence.id, reviewState({ due_at: EARLIER }));
+    await suspend(db, neighbourSentence.id);
 
     expect(await countDueSentences(db, NOW)).toBe(0);
     expect(await countDueSentencesForTopic(db, coffee.id, NOW)).toBe(0);
@@ -307,16 +315,18 @@ describe('review state and log', () => {
     await applyReviewState(
       db,
       sentence.id,
-      reviewState({ reps: 2, interval_days: 2.5, ease: 2.65 }),
+      reviewState({ reps: 2, scheduled_days: 2, difficulty: 5.4, stability: 4.2 }),
     );
 
     const reloaded = await getSentenceById(db, sentence.id);
     expect(reloaded).toMatchObject({
-      status: 'review',
+      state: 'review',
+      suspended: false,
       reps: 2,
       lapses: 0,
-      ease: 2.65,
-      interval_days: 2.5,
+      difficulty: 5.4,
+      stability: 4.2,
+      scheduled_days: 2,
       due_at: LATER,
       last_grade: 'good',
       last_reviewed_at: EARLIER,
@@ -358,7 +368,7 @@ describe('review state and log', () => {
     await db.close();
   });
 
-  test('records a graded review atomically (schedule + log)', async () => {
+  test('records a graded review atomically (schedule + Anki-shaped log)', async () => {
     const db = await freshDb();
     const topic = await createSentenceTopic(db, { title: 'Coffee' });
     const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[0]]);
@@ -368,14 +378,41 @@ describe('review state and log', () => {
       topic_id: topic.id,
       grade: 'easy',
       mode: 'recall',
-      state: reviewState({ status: 'review', interval_days: 4, due_at: LATER, last_grade: 'easy' }),
+      state: reviewState({ state: 'review', scheduled_days: 4, due_at: LATER, last_grade: 'easy' }),
+      log: {
+        grade: 'easy',
+        rating: 4,
+        state: 'review',
+        due_at: LATER,
+        stability: 9.4,
+        difficulty: 4.2,
+        elapsed_days: 6,
+        last_elapsed_days: 3,
+        scheduled_days: 4,
+        learning_steps: 0,
+        reviewed_at: EARLIER,
+      },
+      review_duration_ms: 4_800,
     });
 
     const reloaded = await getSentenceById(db, sentence.id);
-    expect(reloaded).toMatchObject({ status: 'review', interval_days: 4, last_grade: 'easy' });
+    expect(reloaded).toMatchObject({ state: 'review', scheduled_days: 4, last_grade: 'easy' });
     const log = await listReviewLogForSentence(db, sentence.id);
     expect(log).toHaveLength(1);
-    expect(log[0]).toMatchObject({ grade: 'easy', mode: 'recall' });
+    expect(log[0]).toMatchObject({
+      grade: 'easy',
+      rating: 4,
+      state: 'review',
+      mode: 'recall',
+      due_at: LATER,
+      stability: 9.4,
+      difficulty: 4.2,
+      elapsed_days: 6,
+      last_elapsed_days: 3,
+      scheduled_days: 4,
+      review_duration_ms: 4_800,
+      reviewed_at: EARLIER,
+    });
 
     await db.close();
   });

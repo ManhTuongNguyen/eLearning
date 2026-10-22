@@ -1,18 +1,21 @@
 /**
  * Spaced-repetition practice for one real-life sentence topic (TASK-SENT-012,
- * SENTENCE_LIVE_V1 §2.3/§2.6).
+ * TASK-SENT-015, SENTENCE_LIVE_V1 §2.3/§2.6).
  *
  * The screen turns the topic's due sentences into a finite session (at most 20
- * cards, oldest due first) and picks each card's shape from the schedule:
- * `new`/`learning` sentences are dictated, `review` sentences are recalled from
- * their situation. A forced practice mode from Settings overrides that mix.
+ * cards, oldest due first) and picks each card's shape from the FSRS state:
+ * `new`/`learning`/`relearning` sentences are dictated, `review` sentences are
+ * recalled from their situation. A forced practice mode from Settings overrides
+ * that mix.
  *
- * Every grade goes through the pure scheduler and is persisted with its review
- * log row in one repository transaction. An `Again` card is appended to the end
- * of the same session every time it is graded, so it keeps returning until the
- * learner grades it Good or Easy (Anki's learning-step behaviour). TTS follows
- * the shared one-playback contract: one utterance at a time, stopped when the
- * card changes, the screen blurs or it unmounts.
+ * Every grade goes through the FSRS scheduler and is persisted with its
+ * Anki-shaped review-log row (memory state, elapsed days, duration) in one
+ * repository transaction. The four buttons carry the interval each one would
+ * schedule, like Anki. A card that is still in a learning/relearning step stays
+ * in the session queue, so `Again` (and the first `Good` of a new card) brings
+ * it back until FSRS graduates it to `review`. TTS follows the shared
+ * one-playback contract: one utterance at a time, stopped when the card
+ * changes, the screen blurs or it unmounts.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TextStyle } from 'react-native';
@@ -34,6 +37,7 @@ import {
   listSentencesByTopic,
   recordSentenceReview,
 } from '../db/sentenceRepository';
+import { getSrsConfig } from '../db/srsConfigStore';
 import type { ReviewCardMode, ReviewGrade, SentenceRecord, SentenceTopicRecord } from '../db/types';
 import type { SentencePracticeScreenProps } from '../navigation/types';
 import { loadPracticeMode, type PracticeMode } from '../preferences/practiceMode';
@@ -46,7 +50,8 @@ import {
   summarizeDiff,
 } from '../srs/answerCheck';
 import { selectCardMode } from '../srs/cardMode';
-import { scheduleNext, schedulerStateFrom } from '../srs/scheduler';
+import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from '../srs/config';
+import { previewSchedule, reviewSentence, schedulerStateFrom } from '../srs/scheduler';
 import {
   applyPracticeGrade,
   createPracticeSessionState,
@@ -60,6 +65,7 @@ import { useSpeechPlayback } from '../tts/useSpeechPlayback';
 
 const GRADE_OPTIONS: Array<{ grade: ReviewGrade; label: string }> = [
   { grade: 'again', label: 'Again' },
+  { grade: 'hard', label: 'Hard' },
   { grade: 'good', label: 'Good' },
   { grade: 'easy', label: 'Easy' },
 ];
@@ -67,7 +73,7 @@ const GRADE_OPTIONS: Array<{ grade: ReviewGrade; label: string }> = [
 type GradeCounts = Record<ReviewGrade, number>;
 
 function emptyGradeCounts(): GradeCounts {
-  return { again: 0, good: 0, easy: 0 };
+  return { again: 0, hard: 0, good: 0, easy: 0 };
 }
 
 export function createStyles(c: ThemeColors) {
@@ -283,6 +289,12 @@ export function createStyles(c: ThemeColors) {
       fontWeight: '700',
       color: c.textPrimary,
     },
+    gradeIntervalText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: c.textMuted,
+      marginTop: 2,
+    },
     error: {
       color: c.errorText,
       fontSize: 13,
@@ -358,7 +370,7 @@ function describeError(err: unknown): string {
  */
 export function formatNextDueLabel(sentences: readonly SentenceRecord[], now: Date): string | null {
   const pending = sentences
-    .filter(sentence => sentence.status !== 'suspended')
+    .filter(sentence => !sentence.suspended)
     .map(sentence => Date.parse(sentence.due_at))
     .filter(dueMs => Number.isFinite(dueMs));
   if (pending.length === 0) {
@@ -429,17 +441,27 @@ function diffSummary(segments: readonly DiffSegment[]): string {
 
 interface GradeButtonsProps {
   suggested: ReviewGrade | null;
+  /** Anki-style next-interval hint per button (`10m`, `3d`, …). */
+  intervals: Partial<Record<ReviewGrade, string>>;
   saving: boolean;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
   onGrade: (grade: ReviewGrade) => void;
 }
 
-function GradeButtons({ suggested, saving, colors, styles, onGrade }: GradeButtonsProps) {
+function GradeButtons({
+  suggested,
+  intervals,
+  saving,
+  colors,
+  styles,
+  onGrade,
+}: GradeButtonsProps) {
   return (
     <View style={styles.gradeRow}>
       {GRADE_OPTIONS.map(option => {
         const isSuggested = suggested === option.grade;
+        const interval = intervals[option.grade];
         return (
           <Pressable
             key={option.grade}
@@ -461,6 +483,13 @@ function GradeButtons({ suggested, saving, colors, styles, onGrade }: GradeButto
               ]}>
               {option.label}
             </Text>
+            {interval ? (
+              <Text
+                style={styles.gradeIntervalText}
+                testID={`sentence-grade-interval-${option.grade}`}>
+                {interval}
+              </Text>
+            ) : null}
           </Pressable>
         );
       })}
@@ -488,6 +517,7 @@ export function SentencePracticeScreen({
     queue: [],
   });
   const [practiceMode, setPracticeMode] = useState<PracticeMode>('auto');
+  const [config, setConfig] = useState<FsrsConfig>(DEFAULT_FSRS_CONFIG);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -504,6 +534,7 @@ export function SentencePracticeScreen({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const gradingRef = useRef(false);
+  const cardShownAtRef = useRef(Date.now());
   const { speakingId, speak, stop } = useSpeechPlayback(speech);
 
   const loadSession = useCallback(async () => {
@@ -512,16 +543,18 @@ export function SentencePracticeScreen({
     setActionError(null);
     try {
       const db = await getLocalDatabase();
-      const [mode, record, sentences] = await Promise.all([
+      const [mode, record, sentences, srsConfig] = await Promise.all([
         loadPracticeMode(),
         getSentenceTopicById(db, topicId),
         listSentencesByTopic(db, topicId),
+        getSrsConfig(db),
       ]);
       if (!record) {
         throw new Error('This topic no longer exists.');
       }
       setTopic(record);
       setPracticeMode(mode);
+      setConfig(srsConfig);
       setAllSentences(sentences);
       setSession(createPracticeSessionState(sentences, new Date()));
       setReviewedCount(0);
@@ -556,14 +589,28 @@ export function SentencePracticeScreen({
 
   const currentCard = session.queue[0] ?? null;
   const currentMode: ReviewCardMode | null = currentCard
-    ? selectCardMode(currentCard.status, practiceMode)
+    ? selectCardMode(currentCard.state, practiceMode)
     : null;
+
+  // Anki shows what each button will do before the answer is committed. The
+  // preview is computed at render time from the same pure scheduler used to
+  // save the review, so the labels can never disagree with the stored result.
+  const previews = useMemo(() => {
+    if (!currentCard) {
+      return {} as Partial<Record<ReviewGrade, string>>;
+    }
+    const labels: Partial<Record<ReviewGrade, string>> = {};
+    for (const preview of previewSchedule(schedulerStateFrom(currentCard), new Date(), config)) {
+      labels[preview.grade] = preview.label;
+    }
+    return labels;
+  }, [currentCard, config]);
 
   // Dictation cards speak once when they appear. `presentationKey` makes a
   // requeued card re-play even when it is the only card in the session.
   // biome-ignore lint/correctness/useExhaustiveDependencies: presentationKey is an intentional re-play trigger
   useEffect(() => {
-    if (!currentCard || selectCardMode(currentCard.status, practiceMode) !== 'dictation') {
+    if (!currentCard || selectCardMode(currentCard.state, practiceMode) !== 'dictation') {
       return;
     }
     speak(currentCard.id, currentCard.text);
@@ -579,6 +626,12 @@ export function SentencePracticeScreen({
     },
     [currentCard, presentationKey, stop],
   );
+
+  // Measure how long the learner spends on a card (Anki's `revlog.time`).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: presentationKey is an intentional card-change trigger
+  useEffect(() => {
+    cardShownAtRef.current = Date.now();
+  }, [currentCard?.id, presentationKey]);
 
   const handleReplay = useCallback(() => {
     if (currentCard) {
@@ -616,20 +669,23 @@ export function SentencePracticeScreen({
       setActionError(null);
       try {
         const now = new Date();
-        const nextState = scheduleNext(schedulerStateFrom(currentCard), grade, now);
-        const cardMode = selectCardMode(currentCard.status, practiceMode);
+        const outcome = reviewSentence(schedulerStateFrom(currentCard), grade, now, config);
+        const cardMode = selectCardMode(currentCard.state, practiceMode);
+        const duration = Math.max(0, Math.min(3_600_000, Date.now() - cardShownAtRef.current));
         const db = await getLocalDatabase();
         await recordSentenceReview(db, {
           sentence_id: currentCard.id,
           topic_id: currentCard.topic_id,
           grade,
           mode: cardMode,
-          state: nextState,
+          state: outcome.state,
+          log: outcome.log,
+          review_duration_ms: duration,
         });
         const updated: SentenceRecord = {
           ...currentCard,
-          ...nextState,
-          updated_at: nextState.last_reviewed_at,
+          ...outcome.state,
+          updated_at: now.toISOString(),
         };
         setAllSentences(previous =>
           previous.map(sentence => (sentence.id === updated.id ? updated : sentence)),
@@ -650,7 +706,7 @@ export function SentencePracticeScreen({
         setSaving(false);
       }
     },
-    [currentCard, practiceMode],
+    [currentCard, practiceMode, config],
   );
 
   const handleReviewAgain = useCallback(() => {
@@ -714,7 +770,8 @@ export function SentencePracticeScreen({
               {reviewedCount} card{reviewedCount === 1 ? '' : 's'} reviewed
             </Text>
             <Text style={styles.summaryValue} testID="sentence-practice-grades">
-              Again {gradeCounts.again} · Good {gradeCounts.good} · Easy {gradeCounts.easy}
+              Again {gradeCounts.again} · Hard {gradeCounts.hard} · Good {gradeCounts.good} · Easy{' '}
+              {gradeCounts.easy}
             </Text>
             {hasRemainingDue ? (
               <Text style={styles.summaryValue} testID="sentence-practice-more-due">
@@ -933,6 +990,7 @@ export function SentencePracticeScreen({
           {showGradeButtons ? (
             <GradeButtons
               suggested={currentMode === 'dictation' ? suggested : null}
+              intervals={previews}
               saving={saving}
               colors={colors}
               styles={styles}

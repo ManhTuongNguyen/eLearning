@@ -118,32 +118,49 @@ well.
   selection, or discards the batch; kept candidates are written in one
   transaction and normalized duplicates are skipped.
 - **Practice** unlocks at 5 sentences. A session contains only due, non-suspended
-  cards, oldest due first, capped at 20. A sentence graded `Again` returns once
-  later in the same session; a second `Again` does not requeue it.
+  cards, oldest due first, capped at 20. A card stays in the session while it is
+  in an FSRS learning/relearning step, so the first `Good` on a new card and any
+  `Again` bring it back; it leaves once FSRS graduates it to review.
 
-### Again / Good / Easy schedule
+### FSRS schedule (Anki-compatible, 4 a.m. day)
 
-| Grade | New / learning card | Review card |
-| --- | --- | --- |
-| **Again** | learning step, due in 10 minutes; lapses +1, ease −0.20 | same 10-minute learning step |
-| **Good** | review, due in 1 day | due in `interval × ease` (never shorter) |
-| **Easy** | review, due in 4 days; ease +0.15 | due in `interval × ease × 1.3`; ease +0.15 |
+Scheduling is delegated to [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs),
+the TypeScript port of the FSRS-6 model Anki ships. The practice screen has Anki's
+four buttons, each labelled with the interval it would schedule:
 
-Ease starts at 2.5, is clamped to `[1.3, 3.0]`, and intervals are capped at 365
-days. Repeated `Good` on a fresh sentence grows the gap 1 day → 2.5 days → 6.25
-days → about 15.6 days → about 39 days. The schedule is computed by the pure
-`src/srs/scheduler.ts` and persisted by `src/db/sentenceRepository.ts`.
+| Button | Rating | New card (default steps `1m 10m`) | Review card |
+| --- | --- | --- | --- |
+| **Again** | 1 | 1-minute step; card stays in learning | lapse → relearning at `10m`, lapses +1 |
+| **Hard** | 2 | 6-minute step | shorter review interval from FSRS stability |
+| **Good** | 3 | 10-minute step (a second Good graduates) | next review interval from FSRS stability |
+| **Easy** | 4 | graduates straight to review (~8 days) | longest review interval |
+
+Defaults mirror Anki: 90% desired retention, a 36500-day interval cap, fuzz on
+(seeded per card so the button preview matches the saved schedule), and a new
+study day starting at **4 a.m. local time**. `elapsed_days` counts local study
+days, and a graduated card becomes due at the start of its target study day, so
+reviewing at 1 a.m. still belongs to the previous day. The pure adapter lives in
+`src/srs/scheduler.ts`, the rollover math in `src/srs/dayBoundary.ts`, the
+defaults in `src/srs/config.ts`, and the persisted result in
+`src/db/sentenceRepository.ts`.
+
+Collection settings — optimized weights, desired retention, interval cap, fuzz,
+learning steps and rollover hour — live in the single-row `srs_config` table
+(`src/db/srsConfigStore.ts`). The same store exports the Anki-shaped revlog rows
+(`card_id`, `review_time`, `rating`, state, elapsed/scheduled days, stability,
+difficulty, duration) that the offline FSRS optimizer trains on; write the
+optimized vector back with `saveSrsConfig({ weights })`.
 
 ### Practice modes
 
 Settings → **Sentence practice mode** (serverless only, persisted in AsyncStorage,
 default `auto`):
 
-- **Auto** — `new` / `learning` sentences are dictation cards; `review` sentences
-  are situation-recall cards.
+- **Auto** — `new` / `learning` / `relearning` sentences are dictation cards;
+  `review` sentences are situation-recall cards.
 - **Dictation** — every card is a dictation: the sentence is spoken once, the
   learner types it, and a word-level diff pre-selects `Good` or `Again`. The
-  learner can always override with Again / Good / Easy.
+  learner can always override with Again / Hard / Good / Easy.
 - **Recall** — every card shows the situation and an optional English meaning
   hint; revealing the answer plays TTS, then the grade buttons appear.
 
@@ -152,10 +169,10 @@ unmount.
 
 ### Storage and icons
 
-The bank lives in schema version 4 of the local SQLite database
-(`sentence_topics`, `sentences`, `sentence_review_log`).
+The bank lives in schema version 6 of the local SQLite database
+(`sentence_topics`, `sentences`, `sentence_review_log`, `srs_config`).
 `src/db/sentenceRepository.ts` owns every statement, and **Clear local data**
-empties all three tables in the same transaction. The screens use the shared
+empties all four tables in the same transaction. The screens use the shared
 `src/components/Icon.tsx` seam, so the native dependency and rebuild requirement
 in [Native dependencies (icons)](#native-dependencies-icons) applies.
 
@@ -194,7 +211,7 @@ Serverless mode persists conversations on-device in SQLite (`src/db/`, SPEC TASK
 - `nativeDriver.ts` — adapter over `react-native-sqlite-storage`; enables foreign keys so deleting a session cascades to its messages and summary.
 - `migrations.ts` — append-only, ordered migration list; the applied version is stored in SQLite's `user_version`. Each migration runs in a transaction and a failure leaves the recorded version untouched.
 - `database.ts` — `getLocalDatabase()` opens and migrates the database automatically on first use.
-- Entity stores (`sessionStore`, `messageStore`, `summaryStore`, `profileStore`, `settingsStore`, `sentenceRepository`) expose typed CRUD mirroring the backend serializers. The OpenRouter API key must not be stored here (secure storage only).
+- Entity stores (`sessionStore`, `messageStore`, `summaryStore`, `profileStore`, `settingsStore`, `sentenceRepository`, `srsConfigStore`) expose typed CRUD mirroring the backend serializers. The OpenRouter API key must not be stored here (secure storage only).
 
 Tests run against real SQL via a sql.js-backed driver (`testing/sqlJsDriver.ts`, dev-only, never bundled); `react-native-sqlite-storage` is mocked globally in `jest.setup.js`.
 

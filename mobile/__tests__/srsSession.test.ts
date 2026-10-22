@@ -1,10 +1,10 @@
 /**
- * Practice-session tests (TASK-SENT-012, SENTENCE_LIVE_V1 §2.3).
+ * Practice-session tests (TASK-SENT-012, TASK-SENT-015, SENTENCE_LIVE_V1 §2.3).
  *
- * The pure session module decides which cards a learner sees and what an
- * `Again` grade does to the queue. These tests pin the due-only filter, the
- * order, the 20-card cap and the Anki-style requeue-every-Again rule without
- * touching SQLite or React.
+ * The pure session module decides which cards a learner sees and what a grade
+ * does to the queue. These tests pin the due-only filter, the order, the
+ * 20-card cap and the FSRS/Anki rule that a card only leaves the session once
+ * it graduates to `review`.
  */
 import type { SentenceRecord } from '../src/db/types';
 import {
@@ -24,11 +24,15 @@ function sentence(id: number, overrides: Partial<SentenceRecord> = {}): Sentence
     normalized_text: `sentence ${id}`,
     meaning: `Meaning ${id}`,
     situation: `Situation ${id}`,
-    status: 'new',
+    state: 'new',
+    suspended: false,
     reps: 0,
     lapses: 0,
-    ease: 2.5,
-    interval_days: 0,
+    stability: 0,
+    difficulty: 0,
+    elapsed_days: 0,
+    scheduled_days: 0,
+    learning_steps: 0,
     due_at: '2026-10-19T08:00:00.000Z',
     last_grade: '',
     last_reviewed_at: '',
@@ -45,7 +49,7 @@ describe('buildPracticeSession', () => {
       sentence(2, { due_at: '2026-10-19T08:00:00.000Z' }),
       sentence(3, { due_at: '2026-10-19T08:00:00.000Z' }),
       sentence(4, { due_at: '2026-10-19T12:00:00.000Z' }),
-      sentence(5, { status: 'suspended', due_at: '2026-10-19T07:00:00.000Z' }),
+      sentence(5, { suspended: true, due_at: '2026-10-19T07:00:00.000Z' }),
     ];
 
     expect(buildPracticeSession(cards, NOW).map(card => card.id)).toEqual([2, 3, 1]);
@@ -79,46 +83,57 @@ describe('buildPracticeSession', () => {
 });
 
 describe('applyPracticeGrade', () => {
-  test('requeues an Again card at the end of the session', () => {
+  test('requeues an Again card that is still relearning', () => {
     const first = sentence(1);
     const second = sentence(2);
     const state = createPracticeSessionState([first, second], NOW);
 
     const afterAgain = applyPracticeGrade(state, 'again', {
       ...first,
-      status: 'learning',
+      state: 'relearning',
     });
 
     expect(afterAgain.queue.map(card => card.id)).toEqual([2, 1]);
-    expect(afterAgain.queue[1].status).toBe('learning');
+    expect(afterAgain.queue[1].state).toBe('relearning');
   });
 
-  test('keeps requeueing the same sentence after every Again (Anki learning steps)', () => {
+  test('keeps an Again card in the session every time (Anki learning steps)', () => {
     const first = sentence(1);
     const state = createPracticeSessionState([first], NOW);
 
     const afterFirstAgain = applyPracticeGrade(state, 'again', {
       ...first,
-      status: 'learning',
+      state: 'learning',
     });
     const afterSecondAgain = applyPracticeGrade(afterFirstAgain, 'again', {
       ...afterFirstAgain.queue[0],
-      status: 'learning',
+      state: 'learning',
     });
 
     expect(afterFirstAgain.queue.map(card => card.id)).toEqual([1]);
     expect(afterSecondAgain.queue.map(card => card.id)).toEqual([1]);
   });
 
-  test('drops a Good or Easy card without requeueing it', () => {
+  test('keeps a learning card after Good (the 10-minute step) and drops graduated cards', () => {
     const first = sentence(1);
     const second = sentence(2);
     const state = createPracticeSessionState([first, second], NOW);
 
-    const afterGood = applyPracticeGrade(state, 'good', first);
-    const afterEasy = applyPracticeGrade(afterGood, 'easy', second);
+    // FSRS keeps a new card in Learning after the first Good.
+    const afterLearningGood = applyPracticeGrade(state, 'good', { ...first, state: 'learning' });
+    expect(afterLearningGood.queue.map(card => card.id)).toEqual([2, 1]);
 
-    expect(afterGood.queue.map(card => card.id)).toEqual([2]);
-    expect(afterEasy.queue).toEqual([]);
+    // Only a review-state card leaves the queue.
+    const afterGraduatingGood = applyPracticeGrade(afterLearningGood, 'good', {
+      ...second,
+      state: 'review',
+    });
+    expect(afterGraduatingGood.queue.map(card => card.id)).toEqual([1]);
+
+    const graduated = applyPracticeGrade(afterGraduatingGood, 'easy', {
+      ...first,
+      state: 'review',
+    });
+    expect(graduated.queue).toEqual([]);
   });
 });

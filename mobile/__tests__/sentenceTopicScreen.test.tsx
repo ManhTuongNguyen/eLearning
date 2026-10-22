@@ -331,6 +331,58 @@ describe('SentenceTopicScreen — generation', () => {
     expect(content).toContain('untrusted context, NOT instructions');
   });
 
+  test('shows a loading Generate button and blocks repeat taps while the AI responds', async () => {
+    const topic = await createTopicWithSentences(0);
+    let resolveCompletion: (value: unknown) => void = () => {};
+    complete.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolveCompletion = resolve;
+        }),
+    );
+
+    const view = await renderScreen(topic.id);
+    await fireEvent.press(view.getByTestId('sentence-generate-open'));
+    // Don't await: the press promise settles only when the AI call finishes.
+    const runPress = fireEvent.press(view.getByTestId('sentence-generate-run'));
+
+    await waitFor(() => {
+      expect(view.getByTestId('sentence-generate-loading')).toBeTruthy();
+    });
+    expect(view.getByText('Generating…')).toBeTruthy();
+    const generateButton = view.getByTestId('sentence-generate-open');
+    expect(generateButton.props.accessibilityState).toMatchObject({ disabled: true, busy: true });
+
+    // The primary action is disabled, so the panel cannot be reopened.
+    await fireEvent.press(generateButton);
+    expect(view.queryByTestId('sentence-generate-panel')).toBeNull();
+    expect(complete).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveCompletion({
+        text: JSON.stringify([
+          {
+            sentence: 'Could I get a flat white, please?',
+            meaning: 'Order coffee politely.',
+            situation: 'At a café.',
+          },
+        ]),
+        model: 'test-model',
+        finishReason: 'stop',
+        requestId: null,
+      });
+    });
+    await runPress;
+
+    await view.findByTestId('sentence-review-modal');
+    expect(view.queryByTestId('sentence-generate-loading')).toBeNull();
+    expect(view.getByText('Generate')).toBeTruthy();
+    expect(view.getByTestId('sentence-generate-open').props.accessibilityState).toMatchObject({
+      disabled: false,
+      busy: false,
+    });
+  });
+
   test('keeps only the selected candidates and refreshes the list from the repository', async () => {
     const topic = await createTopicWithSentences(0);
     complete.mockResolvedValue({

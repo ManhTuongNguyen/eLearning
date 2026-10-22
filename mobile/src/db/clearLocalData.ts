@@ -18,6 +18,8 @@ import type { SqlDriver, SqlExecutor } from './driver';
  * Deletes:
  * - All conversation sessions, messages, and summaries (cascade via FKs)
  * - All sentence topics, sentences and their review log (TASK-SENT-014)
+ * - The FSRS collection config: weights, retention, steps, rollover hour
+ *   (TASK-SENT-015)
  * - Learning profile row
  * - Serverless settings (model selections)
  * - Secure provider API keys from the keychain, for every supported
@@ -46,6 +48,8 @@ export async function clearServerlessLocalData(
     await tx.execute('DELETE FROM sentence_review_log');
     await tx.execute('DELETE FROM sentences');
     await tx.execute('DELETE FROM sentence_topics');
+    // Collection-level FSRS config (weights, retention, rollover hour).
+    await tx.execute('DELETE FROM srs_config');
 
     // Reset the auto-increment counters so new sessions start from 1.
     // SQLite keeps counters in sqlite_sequence; deleting from that table

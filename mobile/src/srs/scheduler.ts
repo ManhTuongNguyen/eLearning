@@ -1,178 +1,355 @@
 /**
- * Spaced-repetition scheduler (SENTENCE_LIVE_V1 §2.2, TASK-SENT-005).
+ * FSRS scheduler adapter (TASK-SENT-015, SENTENCE_LIVE_V1 §2.2).
  *
- * A sentence the learner remembers comes back after a longer gap; one they
- * forget comes back in ten minutes. The whole decision is this one pure
- * function: `scheduleNext(state, grade, now)` takes the current schedule, the
- * learner's rating and the moment of the review, and returns the next schedule.
- * There is no clock read, no storage and no React here — which is what makes
- * the behaviour exactly testable and keeps the repository dumb.
+ * The repository stores a sentence's FSRS card (`state`, `stability`,
+ * `difficulty`, `due_at`, …); this module converts it to the `ts-fsrs` `Card`,
+ * runs the official package — the TypeScript port of the model Anki ships — and
+ * maps the result back to row fields plus an Anki-shaped review-log entry.
  *
- * The three buttons:
+ * Anki parity details:
  *
- * | Grade | Meaning | Effect |
- * | --- | --- | --- |
- * | Again | "I did not remember it" | back to the 10-minute learning step, lapse counted, ease −0.20 |
- * | Good | "I remembered it" | interval × ease (a learning card graduates to 1 day) |
- * | Easy | "That was easy" | interval × ease × 1.3, ease +0.15 |
+ * - Four ratings, in Anki order: Again / Hard / Good / Easy.
+ * - Day-grained gaps use the learner's local 4 a.m. rollover
+ *   (`dayBoundary.ts`) instead of raw 24-hour windows.
+ * - Review cards become due at the start of the target study day, like Anki's
+ *   day-number queue; learning/relearning cards keep the package's minute-step
+ *   timestamps.
+ * - Fuzz, desired retention, the interval cap and the learning steps come from
+ *   the collection config (`srs_config`, see `config.ts`), so an optimized
+ *   weight set can be applied without touching the pure functions.
  *
- * Ease is clamped to [1.3, 3.0] and intervals never shrink and never exceed a
- * year.
+ * Nothing here reads a clock or storage: `now` and the config are parameters.
  */
-import type { ReviewGrade, SentenceReviewState, SentenceStatus } from '../db/types';
+import {
+  type Card,
+  type FSRS,
+  fsrs,
+  GenSeedStrategyWithCardId,
+  type Grade,
+  generatorParameters,
+  Rating,
+  type ReviewLog,
+  State,
+  StrategyMode,
+} from 'ts-fsrs';
 
-/** Minutes a forgotten sentence waits before it is shown again. */
-export const LEARNING_STEP_MINUTES = 10;
+import type {
+  ReviewGrade,
+  SentenceReviewLogInput,
+  SentenceReviewState,
+  SentenceState,
+} from '../db/types';
+import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from './config';
+import { startOfStudyDayAfter, studyDaysBetween } from './dayBoundary';
 
-/** Interval a learning card graduates to on Good. */
-export const GRADUATING_INTERVAL_DAYS = 1;
+const MS_PER_DAY = 86_400_000;
 
-/** Interval a learning card graduates to on Easy. */
-export const EASY_INTERVAL_DAYS = 4;
+/** Anki button order, used by the practice screen and the preview helper. */
+export const REVIEW_GRADES: readonly ReviewGrade[] = ['again', 'hard', 'good', 'easy'];
 
-/** Extra multiplier applied to a review card on Easy, on top of its ease. */
-export const EASY_BONUS = 1.3;
+/** The FSRS rating each button maps to (Anki stores this in `revlog.ease`). */
+const RATING_BY_GRADE: Record<ReviewGrade, Grade> = {
+  again: Rating.Again,
+  hard: Rating.Hard,
+  good: Rating.Good,
+  easy: Rating.Easy,
+};
 
-export const EASE_DEFAULT = 2.5;
-export const EASE_MIN = 1.3;
-export const EASE_MAX = 3.0;
-export const EASE_AGAIN_DELTA = -0.2;
-export const EASE_EASY_DELTA = 0.15;
+const STATE_BY_TS_FSRS: Record<number, SentenceState> = {
+  [State.New]: 'new',
+  [State.Learning]: 'learning',
+  [State.Review]: 'review',
+  [State.Relearning]: 'relearning',
+};
 
-/** Longest gap the scheduler will ever schedule. */
-export const INTERVAL_MAX_DAYS = 365;
+const TS_FSRS_STATE_BY_NAME: Record<SentenceState, State> = {
+  new: State.New,
+  learning: State.Learning,
+  review: State.Review,
+  relearning: State.Relearning,
+};
 
 /** The schedule-relevant half of a sentence row. */
 export interface SchedulerState {
-  status: SentenceStatus;
+  /** Card id; seeds interval fuzz so a preview matches the saved result. */
+  id?: number;
+  state: SentenceState;
   reps: number;
   lapses: number;
-  ease: number;
-  interval_days: number;
+  stability: number;
+  difficulty: number;
+  elapsed_days: number;
+  scheduled_days: number;
+  learning_steps: number;
+  due_at: string;
+  last_reviewed_at: string;
 }
 
-/** Schedule of a sentence that has never been reviewed. */
-export const INITIAL_SCHEDULE: SchedulerState = {
-  status: 'new',
-  reps: 0,
-  lapses: 0,
-  ease: EASE_DEFAULT,
-  interval_days: 0,
-};
-
-const MS_PER_DAY = 86_400_000;
-const MS_PER_MINUTE = 60_000;
-
-function clampEase(ease: number): number {
-  return Math.min(EASE_MAX, Math.max(EASE_MIN, ease));
+/** One graded review: the persisted schedule plus its revlog entry. */
+export interface ReviewOutcome {
+  state: SentenceReviewState;
+  log: SentenceReviewLogInput;
 }
 
-/** Round to two decimals so long chains of multiplication stay comparable. */
-function roundInterval(days: number): number {
-  return Math.round(days * 100) / 100;
+/** The schedule of a sentence that has never been reviewed. */
+export function initialSchedule(now: Date): SchedulerState {
+  return {
+    state: 'new',
+    reps: 0,
+    lapses: 0,
+    stability: 0,
+    difficulty: 0,
+    elapsed_days: 0,
+    scheduled_days: 0,
+    learning_steps: 0,
+    due_at: now.toISOString(),
+    last_reviewed_at: '',
+  };
 }
 
-function clampInterval(days: number): number {
-  return roundInterval(Math.min(INTERVAL_MAX_DAYS, days));
-}
-
-/**
- * The next interval for a graduated card: the current interval scaled by the
- * ease (and the Easy bonus), never below the current interval, never above the
- * cap.
- */
-function grownInterval(state: SchedulerState, multiplier: number): number {
-  const scaled = state.interval_days * multiplier;
-  return clampInterval(Math.max(state.interval_days, scaled, GRADUATING_INTERVAL_DAYS));
+/** Numeric FSRS rating (1–4) for a review button, for the review log. */
+export function ratingForGrade(grade: ReviewGrade): number {
+  return RATING_BY_GRADE[grade];
 }
 
 /**
- * Advance one sentence by one review.
- *
- * @param state Current schedule (`INITIAL_SCHEDULE` for a fresh sentence).
- * @param grade The learner's rating.
- * @param now Moment of the review; the returned `due_at` is relative to it.
+ * Extract the scheduler's view of a stored sentence row: the content columns
+ * are dropped and only the FSRS card fields survive.
  */
-export function scheduleNext(
+export function schedulerStateFrom(row: SchedulerState): SchedulerState {
+  return {
+    id: row.id,
+    state: row.state,
+    reps: row.reps,
+    lapses: row.lapses,
+    stability: row.stability,
+    difficulty: row.difficulty,
+    elapsed_days: row.elapsed_days,
+    scheduled_days: row.scheduled_days,
+    learning_steps: row.learning_steps,
+    due_at: row.due_at,
+    last_reviewed_at: row.last_reviewed_at,
+  };
+}
+
+/** Convert a stored row into the `ts-fsrs` card shape. */
+function toCard(row: SchedulerState): Card & { id?: number } {
+  const lastReviewedAt = row.last_reviewed_at ? new Date(row.last_reviewed_at) : undefined;
+  const state = TS_FSRS_STATE_BY_NAME[row.state] ?? State.New;
+  return {
+    id: row.id,
+    due: parseDate(row.due_at, new Date(0)),
+    stability: row.stability,
+    difficulty: row.difficulty,
+    elapsed_days: row.elapsed_days,
+    scheduled_days: row.scheduled_days,
+    learning_steps: row.learning_steps,
+    reps: row.reps,
+    lapses: row.lapses,
+    state,
+    last_review:
+      lastReviewedAt && Number.isFinite(lastReviewedAt.getTime()) ? lastReviewedAt : undefined,
+  };
+}
+
+function parseDate(value: string, fallback: Date): Date {
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed : fallback;
+}
+
+/** The card handed to the package, with elapsed days measured at 4 a.m. */
+function preparedCard(row: SchedulerState, now: Date, config: FsrsConfig): Card {
+  const card = toCard(row);
+  if (!card.last_review || row.state === 'new') {
+    return { ...card, last_review: undefined, elapsed_days: 0 };
+  }
+  const elapsed = studyDaysBetween(card.last_review, now, config.rolloverHour);
+  return {
+    ...card,
+    elapsed_days: elapsed,
+    last_review: new Date(now.getTime() - elapsed * MS_PER_DAY),
+  };
+}
+
+/** The package's `Card` after a grade, in the shape the repository stores. */
+function toReviewState(
+  card: Card,
+  fallbackDue: Date,
+  now: Date,
+  grade: ReviewGrade,
+  config: FsrsConfig,
+): SentenceReviewState {
+  // Anki's review queue is day-grained: a card due in N days is available when
+  // that study day starts, not N×24 h after this exact review.
+  const due =
+    card.state === State.Review
+      ? startOfStudyDayAfter(now, card.scheduled_days, config.rolloverHour)
+      : Number.isFinite(card.due.getTime())
+        ? card.due
+        : fallbackDue;
+  return {
+    state: STATE_BY_TS_FSRS[card.state] ?? 'new',
+    reps: card.reps,
+    lapses: card.lapses,
+    stability: card.stability,
+    difficulty: card.difficulty,
+    elapsed_days: card.elapsed_days,
+    scheduled_days: card.scheduled_days,
+    learning_steps: card.learning_steps,
+    due_at: due.toISOString(),
+    last_grade: grade,
+    last_reviewed_at: now.toISOString(),
+  };
+}
+
+function toReviewLog(
+  card: Card,
+  log: ReviewLog,
+  grade: ReviewGrade,
+  now: Date,
+  config: FsrsConfig,
+  lastElapsedDays: number,
+): SentenceReviewLogInput {
+  const due =
+    card.state === State.Review
+      ? startOfStudyDayAfter(now, card.scheduled_days, config.rolloverHour)
+      : card.due;
+  return {
+    grade,
+    rating: log.rating,
+    state: STATE_BY_TS_FSRS[log.state] ?? 'new',
+    due_at: due.toISOString(),
+    stability: log.stability,
+    difficulty: log.difficulty,
+    elapsed_days: log.elapsed_days,
+    // The package reads this from the previous card, which we deliberately
+    // rebuild with the 4 a.m. elapsed value; use the row's stored value so the
+    // log records the gap of the *previous* review, not this one.
+    last_elapsed_days: lastElapsedDays,
+    scheduled_days: card.scheduled_days,
+    learning_steps: log.learning_steps,
+    reviewed_at: log.review.toISOString(),
+  };
+}
+
+const schedulerCache = new Map<string, FSRS>();
+
+/** Weight-vector lengths `ts-fsrs` knows how to migrate (FSRS-4.5/5/6). */
+const SUPPORTED_WEIGHT_LENGTHS = new Set([17, 19, 21]);
+
+function schedulerKey(config: FsrsConfig): string {
+  return [
+    config.weights?.join(',') ?? 'default',
+    config.desiredRetention,
+    config.maximumInterval,
+    config.enableFuzz ? 1 : 0,
+    config.enableShortTerm ? 1 : 0,
+    config.learningSteps.join(','),
+    config.relearningSteps.join(','),
+  ].join('|');
+}
+
+/** Build (or reuse) the package scheduler for one collection config. */
+export function createScheduler(config: FsrsConfig = DEFAULT_FSRS_CONFIG): FSRS {
+  const key = schedulerKey(config);
+  const cached = schedulerCache.get(key);
+  if (cached) {
+    return cached;
+  }
+  const build = (weights: readonly number[] | null): FSRS =>
+    fsrs(
+      generatorParameters({
+        request_retention: config.desiredRetention,
+        maximum_interval: config.maximumInterval,
+        w: weights ? [...weights] : undefined,
+        enable_fuzz: config.enableFuzz,
+        enable_short_term: config.enableShortTerm,
+        learning_steps: [...config.learningSteps],
+        relearning_steps: [...config.relearningSteps],
+      }),
+    ).useStrategy(StrategyMode.SEED, GenSeedStrategyWithCardId('id'));
+
+  let scheduler: FSRS;
+  try {
+    // A vector from an unknown model version is ignored rather than logged as
+    // a warning on every review; the package's defaults are always usable.
+    const usableWeights =
+      config.weights && SUPPORTED_WEIGHT_LENGTHS.has(config.weights.length) ? config.weights : null;
+    scheduler = build(usableWeights);
+  } catch {
+    // A stored weight set that the package rejects must never brick practice.
+    scheduler = build(null);
+  }
+  schedulerCache.set(key, scheduler);
+  return scheduler;
+}
+
+/** Apply one rating to a stored schedule, producing the next row state + log. */
+export function reviewSentence(
   state: SchedulerState,
   grade: ReviewGrade,
   now: Date,
-): SentenceReviewState {
-  const reviewedAt = now.toISOString();
-
-  if (grade === 'again') {
-    return {
-      status: 'learning',
-      reps: state.reps,
-      lapses: state.lapses + 1,
-      ease: clampEase(state.ease + EASE_AGAIN_DELTA),
-      interval_days: 0,
-      due_at: new Date(now.getTime() + LEARNING_STEP_MINUTES * MS_PER_MINUTE).toISOString(),
-      last_grade: 'again',
-      last_reviewed_at: reviewedAt,
-    };
-  }
-
-  if (grade === 'good') {
-    if (state.status === 'review') {
-      const interval = grownInterval(state, state.ease);
-      return {
-        status: 'review',
-        reps: state.reps + 1,
-        lapses: state.lapses,
-        ease: clampEase(state.ease),
-        interval_days: interval,
-        due_at: new Date(now.getTime() + interval * MS_PER_DAY).toISOString(),
-        last_grade: 'good',
-        last_reviewed_at: reviewedAt,
-      };
-    }
-    return {
-      status: 'review',
-      reps: state.reps + 1,
-      lapses: state.lapses,
-      ease: clampEase(state.ease),
-      interval_days: GRADUATING_INTERVAL_DAYS,
-      due_at: new Date(now.getTime() + GRADUATING_INTERVAL_DAYS * MS_PER_DAY).toISOString(),
-      last_grade: 'good',
-      last_reviewed_at: reviewedAt,
-    };
-  }
-
-  // Easy: the only grade that moves the ease up.
-  const ease = clampEase(state.ease + EASE_EASY_DELTA);
-  if (state.status === 'review') {
-    const interval = grownInterval(state, state.ease * EASY_BONUS);
-    return {
-      status: 'review',
-      reps: state.reps + 1,
-      lapses: state.lapses,
-      ease,
-      interval_days: interval,
-      due_at: new Date(now.getTime() + interval * MS_PER_DAY).toISOString(),
-      last_grade: 'easy',
-      last_reviewed_at: reviewedAt,
-    };
-  }
+  config: FsrsConfig = DEFAULT_FSRS_CONFIG,
+): ReviewOutcome {
+  const scheduler = createScheduler(config);
+  const previous = preparedCard(state, now, config);
+  const { card, log } = scheduler.next(previous, now, RATING_BY_GRADE[grade]);
+  const nextState = toReviewState(card, log.due, now, grade, config);
   return {
-    status: 'review',
-    reps: state.reps + 1,
-    lapses: state.lapses,
-    ease,
-    interval_days: EASY_INTERVAL_DAYS,
-    due_at: new Date(now.getTime() + EASY_INTERVAL_DAYS * MS_PER_DAY).toISOString(),
-    last_grade: 'easy',
-    last_reviewed_at: reviewedAt,
+    state: nextState,
+    log: toReviewLog(card, log, grade, now, config, state.elapsed_days),
   };
 }
 
-/** Extract the scheduler's view of a stored sentence row. */
-export function schedulerStateFrom(record: SchedulerState): SchedulerState {
-  return {
-    status: record.status,
-    reps: record.reps,
-    lapses: record.lapses,
-    ease: record.ease,
-    interval_days: record.interval_days,
-  };
+export interface GradePreview {
+  grade: ReviewGrade;
+  state: SentenceReviewState;
+  /** Anki-style short interval label shown under the button (e.g. `10m`, `3d`). */
+  label: string;
+}
+
+/** Preview every button's outcome without mutating anything (Anki buttons). */
+export function previewSchedule(
+  state: SchedulerState,
+  now: Date,
+  config: FsrsConfig = DEFAULT_FSRS_CONFIG,
+): GradePreview[] {
+  const scheduler = createScheduler(config);
+  const previous = preparedCard(state, now, config);
+  const preview = scheduler.repeat(previous, now);
+  return REVIEW_GRADES.map(grade => {
+    const item = preview[RATING_BY_GRADE[grade]];
+    const nextState = toReviewState(item.card, item.log.due, now, grade, config);
+    return { grade, state: nextState, label: formatIntervalLabel(nextState, now) };
+  });
+}
+
+function roundOne(value: number): string {
+  return (Math.round(value * 10) / 10).toFixed(1);
+}
+
+/**
+ * Anki's button hint: minutes for learning steps, then days, months and years.
+ * `Learning`/`Relearning` cards ignore `scheduled_days` (always 0) and use the
+ * real minute gap the package computed.
+ */
+export function formatIntervalLabel(next: SentenceReviewState, now: Date): string {
+  if (next.state === 'learning' || next.state === 'relearning') {
+    const minutes = Math.round((Date.parse(next.due_at) - now.getTime()) / 60_000);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      return 'now';
+    }
+    return minutes < 60 ? `${minutes}m` : `${Math.round(minutes / 60)}h`;
+  }
+  const days = next.scheduled_days;
+  if (days < 1) {
+    return '<1d';
+  }
+  if (days < 30) {
+    return `${days}d`;
+  }
+  if (days < 365) {
+    return `${roundOne(days / 30)}mo`;
+  }
+  return `${roundOne(days / 365)}y`;
 }

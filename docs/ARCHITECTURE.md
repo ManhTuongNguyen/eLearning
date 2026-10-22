@@ -512,28 +512,41 @@ notice and performs zero local reads, while before the persisted mode has been
 restored it shows a spinner.
 
 **Store.** `src/db/sentenceRepository.ts` owns every SQL statement for schema
-version 4: `sentence_topics`, `sentences` and `sentence_review_log` (migration
-in `src/db/migrations.ts`). It provides typed topic CRUD, batch insertion,
-sentence listing and deletion, review-state persistence, review logging and due
-queries (`countDueSentences`, `countDueSentencesForTopic`, `listDueSentences`).
-Batch insertion computes `normalized_text` and silently skips duplicates within
-a topic; a generated sentence is due immediately. Deleting a topic cascades to
-its sentences and log rows, and `clearServerlessLocalData()` clears all three
-tables. The same repository backs the Home due badge and the per-topic due
-counts.
+version 6: `sentence_topics`, `sentences`, `sentence_review_log` and the
+single-row `srs_config` (migrations in `src/db/migrations.ts`; v6 rebuilds the
+sentence tables to replace the old ease/interval columns with FSRS fields). It
+provides typed topic CRUD, batch insertion, sentence listing and deletion,
+review-state persistence, review logging and due queries (`countDueSentences`,
+`countDueSentencesForTopic`, `listDueSentences`). Batch insertion computes
+`normalized_text` and silently skips duplicates within a topic; a generated
+sentence is due immediately. Deleting a topic cascades to its sentences and log
+rows, and `clearServerlessLocalData()` clears all four tables. The same
+repository backs the Home due badge and the per-topic due counts. Suspension is
+Anki's `suspended` flag, independent of the FSRS state.
 
-**Pure scheduler.** `src/srs/scheduler.ts` implements `scheduleNext(state,
-grade, now)` with no clock, storage or React. `Again` moves a card to a
-10-minute learning step, counts a lapse and lowers ease by 0.20. `Good`
-graduates a new/learning card to 1 day and grows a review interval by
-`interval × ease`. `Easy` graduates to 4 days or, in review, uses
-`interval × ease × 1.3`, and raises ease by 0.15. Ease starts at 2.5 and is
-clamped to `[1.3, 3.0]`; review intervals never shrink and are capped at 365
-days. `src/srs/session.ts` holds the session rules: only non-suspended cards
-with `due_at <= now`, oldest due first, at most 20 cards, practice unlocked at
-5 sentences, and an `Again` card requeued once per session.
-`src/srs/answerCheck.ts` supplies the word-level diff and the Good/Again
-suggestion for dictation; `src/srs/normalize.ts` is the shared duplicate key.
+**Pure scheduler.** `src/srs/scheduler.ts` adapts the `ts-fsrs` package (the
+TypeScript port of the FSRS-6 model Anki ships) instead of hand-rolling a
+review algorithm. `reviewSentence(state, grade, now, config)` and
+`previewSchedule(state, now, config)` are pure: the clock, the stored row and
+the collection config are parameters. The four Anki buttons — **Again / Hard /
+Good / Easy** — map to FSRS ratings 1–4, and the practice screen shows each
+button's next interval (`1m`, `10m`, `8d`, …) exactly like Anki. Learning steps
+are Anki's defaults (`1m 10m` for new cards, `10m` for relearning); graduated
+intervals grow through FSRS stability and are capped by the configured maximum
+(36500 days, as in Anki). `src/srs/dayBoundary.ts` implements the local **4 a.m.
+study-day rollover**: `elapsed_days` is the number of local study days between
+reviews, and a graduated card becomes due at the start of its target study day,
+so a 1 a.m. review still counts as the previous day. `src/srs/config.ts` holds
+the Anki-style defaults; `src/db/srsConfigStore.ts` stores the optimized weight
+vector, desired retention, interval cap, fuzz, steps and rollover hour and
+exports the revlog rows the offline FSRS optimizer consumes.
+`src/srs/session.ts` holds the session rules: only non-suspended cards with
+`due_at <= now`, oldest due first, at most 20 cards, practice unlocked at 5
+sentences. A card leaves the session only when FSRS graduates it to `review`;
+while it is in a learning/relearning step it is requeued at the end (Anki's
+learn-ahead behaviour). `src/srs/answerCheck.ts` supplies the word-level diff
+and the Good/Again suggestion for dictation; `src/srs/normalize.ts` is the
+shared duplicate key.
 
 **Generation service.** `src/serverless/sentenceGeneration.ts` makes one
 completion through the existing registry seam (the user's own provider,
@@ -546,16 +559,17 @@ the normalized key; only an empty valid result is fatal. Kept candidates are
 persisted in one transaction from the review modal.
 
 **Card modes and screens.** `src/srs/cardMode.ts` maps `auto` to dictation for
-`new`/`learning` sentences and recall for `review` sentences;
+`new`/`learning`/`relearning` sentences and recall for `review` sentences;
 `src/preferences/practiceMode.ts` persists the `auto | dictation | recall`
 preference in AsyncStorage (default `auto`, invalid values fall back to
 `auto`). The Settings row is serverless-only and applies to the next card.
 `SentencePracticeScreen` builds a due-only session, plays TTS through the shared
 speech seam (one playback, silenced on card change or unmount), persists the
-scheduler result and a review-log row with the card mode after every grade, and
-ends with a summary of cards reviewed and Again/Good/Easy counts. When nothing
-is due it shows "All caught up" and the next due time instead of allowing
-practice ahead.
+scheduler result and an Anki-shaped review-log row (rating, state before the
+review, elapsed/scheduled days, stability/difficulty, review duration) after
+every grade, and ends with a summary of cards reviewed and
+Again/Hard/Good/Easy counts. When nothing is due it shows "All caught up" and
+the next due time instead of allowing practice ahead.
 
 ---
 

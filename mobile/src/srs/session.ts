@@ -9,10 +9,15 @@
  *
  * The stateful half (`createPracticeSessionState` / `applyPracticeGrade`) is
  * still pure: the screen owns the clock, the storage and the React state, while
- * these functions decide what "next card" means. Following Anki's learning-step
- * behaviour, every `Again` puts the card back at the end of the current queue —
- * not just the first one. A sentence therefore keeps coming back within the
- * same session until it is graded Good or Easy.
+ * these functions decide what "next card" means.
+ *
+ * Anki parity: a card only leaves the session once FSRS graduates it to
+ * `review`. While it is in a short-term `learning`/`relearning` step it is
+ * appended to the end of the current queue, so an `Again` (1-minute step) or a
+ * first `Good` (10-minute step) brings it back. Anki calls this the *learn
+ * ahead* limit; a session is small enough that waiting out 10 minutes would
+ * make practice unusable, so the card is shown as soon as it reaches the end of
+ * the queue.
  */
 import type { ReviewGrade, SentenceRecord } from '../db/types';
 
@@ -45,10 +50,7 @@ export function buildPracticeSession(
   return sentences
     .map(sentence => ({ sentence, dueMs: Date.parse(sentence.due_at) }))
     .filter(
-      entry =>
-        entry.sentence.status !== 'suspended' &&
-        Number.isFinite(entry.dueMs) &&
-        entry.dueMs <= nowMs,
+      entry => !entry.sentence.suspended && Number.isFinite(entry.dueMs) && entry.dueMs <= nowMs,
     )
     .sort((first, second) => first.dueMs - second.dueMs || first.sentence.id - second.sentence.id)
     .slice(0, Math.max(0, limit))
@@ -75,18 +77,20 @@ export function createPracticeSessionState(
 /**
  * Consume the current card after a grade. `updatedCard` is the sentence with
  * the scheduler's new state applied, so a requeued card already carries its
- * `learning` status when it comes back.
+ * `learning`/`relearning` state when it comes back.
  *
- * Like Anki's learning steps, `Again` appends the card to the end of the
- * current queue every time it is pressed; only Good or Easy removes it for good.
+ * Only a card that FSRS graduated to `review` leaves the session; every other
+ * outcome (including the first `Good` of a new card, which only advances to the
+ * 10-minute step) requeues it.
  */
 export function applyPracticeGrade(
   session: PracticeSessionState,
-  grade: ReviewGrade,
+  _grade: ReviewGrade,
   updatedCard: SentenceRecord,
 ): PracticeSessionState {
   const remaining = session.queue.slice(1);
-  if (grade !== 'again') {
+  const staysInSession = updatedCard.state === 'learning' || updatedCard.state === 'relearning';
+  if (!staysInSession) {
     return { queue: remaining };
   }
   return { queue: [...remaining, updatedCard] };

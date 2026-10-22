@@ -53,6 +53,9 @@ importers:
       react-native-svg:
         specifier: ^15.16.0
         version: 15.16.0(react-native@0.81.4(@babel/core@7.29.7)(@react-native-community/cli@20.0.0(typescript@5.9.3))(@react-native/metro-config@0.81.4(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.1.0))(react@19.1.0)
+      ts-fsrs:
+        specifier: ^5.4.2
+        version: 5.4.2
     devDependencies:
       '@babel/core':
         specifier: ^7.25.2
@@ -2995,6 +2998,10 @@ packages:
   toidentifier@1.0.1:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
+
+  ts-fsrs@5.4.2:
+    resolution: {integrity: sha512-z4qop4pzTcyTzuJ566d9EaX/4bZZzhYfeaPImfVr+xcYT65c5oBgFDijUhCE/D+C78eaolHIhKRZ04/RwF+v2g==}
+    engines: {node: '>=20.0.0'}
 
   type-detect@4.0.8:
     resolution: {integrity: sha512-0fr/mIH1dlO+x7TlcMy+bIDqKPsw/70tVyeHW787goQjhmqaZe10uwLujubK9q9Lg6Fiho1KUKDYz0Z7k7g5/g==}
@@ -6765,6 +6772,8 @@ snapshots:
       is-number: 7.0.0
 
   toidentifier@1.0.1: {}
+
+  ts-fsrs@5.4.2: {}
 
   type-detect@4.0.8: {}
 

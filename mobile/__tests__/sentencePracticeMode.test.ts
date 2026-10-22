@@ -8,7 +8,7 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { SentenceStatus } from '../src/db/types';
+import type { SentenceState } from '../src/db/types';
 import {
   DEFAULT_PRACTICE_MODE,
   isPracticeMode,
@@ -66,17 +66,17 @@ describe('practice-mode preference', () => {
 });
 
 describe('selectCardMode', () => {
-  const statuses: SentenceStatus[] = ['new', 'learning', 'review', 'suspended'];
+  const states: SentenceState[] = ['new', 'learning', 'review', 'relearning'];
 
-  test.each(statuses)('auto maps %s from its schedule state', status => {
-    expect(selectCardMode(status, 'auto')).toBe(status === 'review' ? 'recall' : 'dictation');
+  test.each(states)('auto maps %s from its FSRS state', state => {
+    expect(selectCardMode(state, 'auto')).toBe(state === 'review' ? 'recall' : 'dictation');
   });
 
-  test.each(statuses)('forced dictation overrides %s', status => {
-    expect(selectCardMode(status, 'dictation')).toBe('dictation');
+  test.each(states)('forced dictation overrides %s', state => {
+    expect(selectCardMode(state, 'dictation')).toBe('dictation');
   });
 
-  test.each(statuses)('forced recall overrides %s', status => {
-    expect(selectCardMode(status, 'recall')).toBe('recall');
+  test.each(states)('forced recall overrides %s', state => {
+    expect(selectCardMode(state, 'recall')).toBe('recall');
   });
 });

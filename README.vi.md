@@ -419,7 +419,7 @@ chỉ trong nội dung tin nhắn hội thoại.
 - Luyện nói (Speaking practice, kiểu karaoke): AI tạo đoạn văn để đọc to theo độ dài buổi luyện, hiển thị dạng teleprompter cuộn với tốc độ điều chỉnh được
 - Chế độ nghe (Listen mode): TTS của thiết bị đọc đoạn văn trong khi màn hình cuộn theo giọng đọc theo thời gian thực, hỗ trợ tạm dừng/tiếp tục và giữ màn hình luôn sáng
 - Lịch sử luyện nói: các buổi luyện đã hoàn thành được lưu cục bộ, xem lại và phát lại ở chế độ nghe
-- Câu thực tế (Real-life sentences, chỉ serverless): thu thập câu tiếng Anh thường ngày theo chủ đề, tạo câu mới qua provider của bạn và luyện theo spaced repetition Again / Good / Easy, gồm dictation và recall theo tình huống
+- Câu thực tế (Real-life sentences, chỉ serverless): thu thập câu tiếng Anh thường ngày theo chủ đề, tạo câu mới qua provider của bạn và luyện theo spaced repetition FSRS (Again / Hard / Good / Easy, ngày học mới bắt đầu lúc 4 giờ sáng), gồm dictation và recall theo tình huống
 - Điều chỉnh tốc độ cuộn teleprompter trong Settings
 - Hai mode biệt lập: **Server mode** (đã authenticate) và **Serverless mode** chạy local (Real-life sentences chỉ có ở serverless mode)
 - Hỗ trợ đa LLM provider (OpenRouter, Google Gemini, OpenAI, 9Router, OpenAI-compatible) với model fallback có thứ tự

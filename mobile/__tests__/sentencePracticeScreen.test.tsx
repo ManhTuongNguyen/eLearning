@@ -157,8 +157,12 @@ async function setDue(id: number, iso: string): Promise<void> {
   await db.execute('UPDATE sentences SET due_at = ? WHERE id = ?', [iso, id]);
 }
 
-async function setStatus(id: number, status: string): Promise<void> {
-  await db.execute('UPDATE sentences SET status = ? WHERE id = ?', [status, id]);
+async function setStateColumn(id: number, state: string): Promise<void> {
+  await db.execute('UPDATE sentences SET state = ? WHERE id = ?', [state, id]);
+}
+
+async function setSuspended(id: number): Promise<void> {
+  await db.execute('UPDATE sentences SET suspended = 1 WHERE id = ?', [id]);
 }
 
 function minutesAgo(minutes: number): string {
@@ -206,7 +210,7 @@ describe('SentencePracticeScreen — session build', () => {
     await setDue(ids[1], minutesAgo(1));
     await setDue(ids[2], minutesAgo(2));
     await setDue(ids[3], daysAhead(1));
-    await setStatus(ids[4], 'suspended');
+    await setSuspended(ids[4]);
     await setDue(ids[4], minutesAgo(10));
     await setDue(ids[5], minutesAgo(4));
 
@@ -244,7 +248,7 @@ describe('SentencePracticeScreen — dictation card', () => {
     await fireEvent.press(view.getByTestId('sentence-grade-good'));
 
     await waitFor(() => {
-      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('2 / 2');
+      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('2 / 3');
     });
     await waitFor(() => {
       expect(texts()).toEqual(['First sentence', 'First sentence', 'Second sentence']);
@@ -266,7 +270,7 @@ describe('SentencePracticeScreen — dictation card', () => {
     dismissSpy.mockRestore();
   });
 
-  test('persists the schedule and a dictation review-log row', async () => {
+  test('persists the FSRS schedule and an Anki-shaped dictation log', async () => {
     const { topic, ids } = await seedTopic(['Could I get a flat white, please?']);
     const view = await renderPractice(topic.id);
 
@@ -282,27 +286,49 @@ describe('SentencePracticeScreen — dictation card', () => {
     expect(view.getByTestId('sentence-suggested-grade')).toHaveTextContent('Suggested: Good');
     expect(view.getByTestId('sentence-grade-good').props.accessibilityState?.selected).toBe(true);
 
+    // Anki's four buttons, each carrying the interval it would schedule.
+    expect(view.getByTestId('sentence-grade-hard')).toBeTruthy();
+    expect(view.getByTestId('sentence-grade-interval-again')).toHaveTextContent('1m');
+    expect(view.getByTestId('sentence-grade-interval-good')).toHaveTextContent('10m');
+    // Fuzz is seeded per card, so the Easy hint is stable for this card.
+    expect(view.getByTestId('sentence-grade-interval-easy')).toHaveTextContent(/^\d+d$/);
+
+    // The first Good only advances the learning step: FSRS keeps the card in
+    // the session, so it comes back for the graduating Good.
+    await fireEvent.press(view.getByTestId('sentence-grade-good'));
+    await waitFor(() => {
+      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('2 / 2');
+    });
+
+    await answerAndCheck(view, 'could i get a flat white please');
     await fireEvent.press(view.getByTestId('sentence-grade-good'));
 
     await view.findByTestId('sentence-practice-summary');
-    expect(view.getByTestId('sentence-practice-reviewed')).toHaveTextContent('1 card reviewed');
+    expect(view.getByTestId('sentence-practice-reviewed')).toHaveTextContent('2 cards reviewed');
     expect(view.getByTestId('sentence-practice-grades')).toHaveTextContent(
-      'Again 0 · Good 1 · Easy 0',
+      'Again 0 · Hard 0 · Good 2 · Easy 0',
     );
     expect(view.getByTestId('sentence-practice-nothing-due')).toBeTruthy();
 
     const stored = await getSentenceById(db, ids[0]);
     expect(stored).toMatchObject({
-      status: 'review',
-      reps: 1,
+      state: 'review',
+      reps: 2,
       lapses: 0,
-      interval_days: 1,
+      learning_steps: 0,
       last_grade: 'good',
     });
+    expect(stored?.stability).toBeGreaterThan(0);
+    expect(stored?.scheduled_days).toBeGreaterThanOrEqual(1);
+    expect(new Date(stored?.due_at ?? '').getHours()).toBe(4);
 
     const log = await listReviewLogForSentence(db, ids[0]);
-    expect(log).toHaveLength(1);
-    expect(log[0]).toMatchObject({ grade: 'good', mode: 'dictation' });
+    expect(log).toHaveLength(2);
+    // Newest first: the graduating review, then the learning step.
+    expect(log.map(entry => entry.grade)).toEqual(['good', 'good']);
+    expect(log[1]).toMatchObject({ state: 'new', rating: 3, mode: 'dictation' });
+    expect(log[0]).toMatchObject({ state: 'learning', rating: 3, mode: 'dictation' });
+    expect(log[0].review_duration_ms).toBeGreaterThanOrEqual(0);
 
     await fireEvent.press(view.getByTestId('sentence-practice-back-to-topic'));
     expect(goBack).toHaveBeenCalled();
@@ -321,24 +347,24 @@ describe('SentencePracticeScreen — dictation card', () => {
 
     await view.findByTestId('sentence-practice-summary');
     expect(view.getByTestId('sentence-practice-grades')).toHaveTextContent(
-      'Again 0 · Good 0 · Easy 1',
+      'Again 0 · Hard 0 · Good 0 · Easy 1',
     );
 
     const stored = await getSentenceById(db, ids[0]);
     expect(stored).toMatchObject({
-      status: 'review',
-      interval_days: 4,
+      state: 'review',
       last_grade: 'easy',
     });
+    expect(stored?.scheduled_days).toBeGreaterThanOrEqual(1);
     const log = await listReviewLogForSentence(db, ids[0]);
-    expect(log[0]).toMatchObject({ grade: 'easy', mode: 'dictation' });
+    expect(log[0]).toMatchObject({ grade: 'easy', rating: 4, mode: 'dictation' });
   });
 });
 
 describe('SentencePracticeScreen — recall card', () => {
   test('reveals meaning and answer, plays TTS and logs a recall grade', async () => {
     const { topic, ids } = await seedTopic(['It was nice meeting you.']);
-    await setStatus(ids[0], 'review');
+    await setStateColumn(ids[0], 'review');
     await setDue(ids[0], minutesAgo(1));
 
     const { engine, spoken } = makeEngine();
@@ -382,7 +408,7 @@ describe('SentencePracticeScreen — recall card', () => {
 
     await savePracticeMode('dictation');
     const dictationSeed = await seedTopic(['A review sentence shown as dictation.']);
-    await setStatus(dictationSeed.ids[0], 'review');
+    await setStateColumn(dictationSeed.ids[0], 'review');
     await setDue(dictationSeed.ids[0], minutesAgo(1));
     const dictationView = await renderPractice(dictationSeed.topic.id);
 
@@ -392,7 +418,7 @@ describe('SentencePracticeScreen — recall card', () => {
 });
 
 describe('SentencePracticeScreen — requeue and empty state', () => {
-  test('keeps an Again card in the session until it is graded Good', async () => {
+  test('keeps learning cards in the session until FSRS graduates them', async () => {
     const { topic, ids } = await seedTopic(['First sentence', 'Second sentence']);
     const { engine, spoken } = makeEngine();
     const view = await renderPractice(topic.id, engine);
@@ -401,6 +427,7 @@ describe('SentencePracticeScreen — requeue and empty state', () => {
       expect(spoken).toEqual(['First sentence']);
     });
 
+    // Again: the card drops into the 1-minute learning step and is requeued.
     await answerAndCheck(view, 'First sentence');
     await fireEvent.press(view.getByTestId('sentence-grade-again'));
     await waitFor(() => {
@@ -410,36 +437,60 @@ describe('SentencePracticeScreen — requeue and empty state', () => {
       expect(spoken).toEqual(['First sentence', 'Second sentence']);
     });
 
+    // Good on a new card only advances to the 10-minute step: still learning.
     await answerAndCheck(view, 'Second sentence');
     await fireEvent.press(view.getByTestId('sentence-grade-good'));
     await waitFor(() => {
-      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('3 / 3');
+      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('3 / 4');
     });
     await waitFor(() => {
       expect(spoken).toEqual(['First sentence', 'Second sentence', 'First sentence']);
     });
 
-    // A second Again keeps the same card in the session instead of ending it.
     await answerAndCheck(view, 'First sentence');
-    await fireEvent.press(view.getByTestId('sentence-grade-again'));
+    await fireEvent.press(view.getByTestId('sentence-grade-good'));
     await waitFor(() => {
-      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('4 / 4');
+      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('4 / 5');
+    });
+    await waitFor(() => {
+      expect(spoken).toEqual([
+        'First sentence',
+        'Second sentence',
+        'First sentence',
+        'Second sentence',
+      ]);
     });
 
-    // Only Good releases the card and finishes the session.
+    // The second Good graduates card 2 to review, so it leaves the queue.
+    await answerAndCheck(view, 'Second sentence');
+    await fireEvent.press(view.getByTestId('sentence-grade-good'));
+    await waitFor(() => {
+      expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('5 / 5');
+    });
+    await waitFor(() => {
+      expect(spoken).toEqual([
+        'First sentence',
+        'Second sentence',
+        'First sentence',
+        'Second sentence',
+        'First sentence',
+      ]);
+    });
+
+    // The second Good on card 1 graduates it too, ending the session.
     await answerAndCheck(view, 'First sentence');
     await fireEvent.press(view.getByTestId('sentence-grade-good'));
 
     await view.findByTestId('sentence-practice-summary');
-    expect(view.getByTestId('sentence-practice-reviewed')).toHaveTextContent('4 cards reviewed');
+    expect(view.getByTestId('sentence-practice-reviewed')).toHaveTextContent('5 cards reviewed');
     expect(view.getByTestId('sentence-practice-grades')).toHaveTextContent(
-      'Again 2 · Good 2 · Easy 0',
+      'Again 1 · Hard 0 · Good 4 · Easy 0',
     );
 
     const firstLog = await listReviewLogForSentence(db, ids[0]);
     const secondLog = await listReviewLogForSentence(db, ids[1]);
-    expect(firstLog.map(entry => entry.grade)).toEqual(['good', 'again', 'again']);
-    expect(secondLog.map(entry => entry.grade)).toEqual(['good']);
+    expect(firstLog.map(entry => entry.grade)).toEqual(['good', 'good', 'again']);
+    expect(secondLog.map(entry => entry.grade)).toEqual(['good', 'good']);
   });
 
   test('shows "All caught up" and names the next due time when nothing is due', async () => {

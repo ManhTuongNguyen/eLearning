@@ -1,12 +1,14 @@
 /**
- * Sentence schema tests (TASK-SENT-003).
+ * Sentence schema tests (TASK-SENT-003, TASK-SENT-015).
  *
- * Migration v4 adds the sentence bank on top of the shipped serverless schema
- * and v5 adds advanced generation guidance, so these tests run against real SQL
- * (sql.js) and prove the three properties the rest of the feature depends on: a
- * fresh install creates every object, an existing v3 database upgrades without
- * losing conversations, and topic deletion cascades through sentences and the
- * review log.
+ * Migration v4 adds the sentence bank on top of the shipped serverless schema,
+ * v5 adds advanced generation guidance, and v6 rebuilds the sentence tables for
+ * FSRS (card memory state, Anki's suspension flag, revlog columns and the
+ * `srs_config` weights row). These tests run against real SQL (sql.js) and prove
+ * the properties the rest of the feature depends on: a fresh install creates
+ * every object and the Anki defaults, a v3 database upgrades without losing
+ * conversations, a v5 sentence bank upgrades without losing sentences or
+ * history, and topic deletion cascades through sentences and the review log.
  */
 import type { SqlDriver } from '../src/db/driver';
 import { insertMessage, listMessages } from '../src/db/messageStore';
@@ -57,17 +59,17 @@ async function countRows(db: SqlDriver, table: string): Promise<number> {
   return Number(result.rows[0]?.total ?? -1);
 }
 
-describe('sentence schema (TASK-SENT-003)', () => {
-  test('a fresh database creates the sentence bank and records version 5', async () => {
+describe('sentence schema (TASK-SENT-003, TASK-SENT-015)', () => {
+  test('a fresh database creates the sentence bank and records version 6', async () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
 
-    expect(SCHEMA_VERSION).toBe(5);
-    expect(await userVersion(db)).toBe(5);
+    expect(SCHEMA_VERSION).toBe(6);
+    expect(await userVersion(db)).toBe(6);
 
     const tables = await schemaNames(db, 'table');
     expect(tables).toEqual(
-      expect.arrayContaining(['sentence_topics', 'sentences', 'sentence_review_log']),
+      expect.arrayContaining(['sentence_topics', 'sentences', 'sentence_review_log', 'srs_config']),
     );
 
     const indexes = await schemaNames(db, 'index');
@@ -76,9 +78,36 @@ describe('sentence schema (TASK-SENT-003)', () => {
         'idx_sentences_topic_normalized',
         'idx_sentences_topic',
         'idx_sentences_due',
+        'idx_sentences_topic_state',
         'idx_sentence_review_log_sentence',
+        'idx_sentence_review_log_reviewed',
       ]),
     );
+
+    await db.close();
+  });
+
+  test('a fresh database stores Anki/FSRS defaults in srs_config', async () => {
+    const db = await openSqlJsDriver();
+    await migrateDatabase(db);
+
+    const result = await db.execute(
+      `SELECT model_version, weights, desired_retention, maximum_interval,
+              enable_fuzz, enable_short_term, learning_steps, relearning_steps,
+              rollover_hour
+         FROM srs_config WHERE id = 1`,
+    );
+    expect(result.rows[0]).toMatchObject({
+      model_version: 'FSRS-6',
+      weights: '',
+      desired_retention: 0.9,
+      maximum_interval: 36500,
+      enable_fuzz: 1,
+      enable_short_term: 1,
+      learning_steps: '1m 10m',
+      relearning_steps: '10m',
+      rollover_hour: 4,
+    });
 
     await db.close();
   });
@@ -115,6 +144,80 @@ describe('sentence schema (TASK-SENT-003)', () => {
       [topicId],
     );
     expect(topicRow.rows[0]?.generation_prompt).toBe('');
+
+    await db.close();
+  });
+
+  test('an existing v5 sentence bank upgrades to FSRS without losing rows', async () => {
+    const db = await openSqlJsDriver();
+    await migrateDatabase(db, MIGRATIONS.slice(0, 5));
+    expect(await userVersion(db)).toBe(5);
+
+    const topicId = await insertTopic(db);
+    await db.execute(
+      `INSERT INTO sentences
+         (id, topic_id, text, normalized_text, meaning, situation, status, reps, lapses,
+          ease, interval_days, due_at, last_grade, last_reviewed_at, created_at, updated_at)
+       VALUES (10, ?, 'Nice to meet you.', 'nice to meet you', '', '', 'review', 4, 1,
+               2.3, 6.4, ?, 'good', ?, ?, ?)`,
+      [topicId, NOW, NOW, NOW, NOW],
+    );
+    await db.execute(
+      `INSERT INTO sentences
+         (id, topic_id, text, normalized_text, meaning, situation, status, reps, lapses,
+          ease, interval_days, due_at, last_grade, last_reviewed_at, created_at, updated_at)
+       VALUES (11, ?, 'Is this seat taken?', 'is this seat taken', '', '', 'suspended', 2, 0,
+               2.5, 0, ?, 'again', ?, ?, ?)`,
+      [topicId, NOW, NOW, NOW, NOW],
+    );
+    await db.execute(
+      `INSERT INTO sentence_review_log (sentence_id, topic_id, grade, mode, reviewed_at)
+       VALUES (10, ?, 'good', 'recall', ?)`,
+      [topicId, NOW],
+    );
+
+    await migrateDatabase(db);
+
+    expect(await userVersion(db)).toBe(SCHEMA_VERSION);
+    const sentences = await db.execute(
+      `SELECT id, state, suspended, stability, difficulty, elapsed_days, scheduled_days,
+              learning_steps, last_reviewed_at, last_grade
+         FROM sentences ORDER BY id`,
+    );
+    expect(sentences.rows[0]).toMatchObject({
+      id: 10,
+      state: 'review',
+      suspended: 0,
+      // The old SM-2 interval seeds FSRS stability (in days); difficulty is
+      // neutral because the old schema did not track it.
+      stability: 6.4,
+      difficulty: 5,
+      elapsed_days: 0,
+      scheduled_days: 6,
+      learning_steps: 0,
+      last_reviewed_at: NOW,
+      last_grade: 'good',
+    });
+    // The old `suspended` state becomes Anki's flag; with no interval there is
+    // no stability to carry over.
+    expect(sentences.rows[1]).toMatchObject({
+      id: 11,
+      state: 'new',
+      suspended: 1,
+      stability: 0,
+    });
+
+    const log = await db.execute(
+      `SELECT grade, rating, state, mode, reviewed_at
+         FROM sentence_review_log`,
+    );
+    expect(log.rows[0]).toMatchObject({
+      grade: 'good',
+      rating: 0,
+      state: 'new',
+      mode: 'recall',
+      reviewed_at: NOW,
+    });
 
     await db.close();
   });
@@ -173,7 +276,7 @@ describe('sentence schema (TASK-SENT-003)', () => {
     await expect(
       db.execute(
         `INSERT INTO sentences
-           (topic_id, text, normalized_text, status, due_at, created_at, updated_at)
+           (topic_id, text, normalized_text, state, due_at, created_at, updated_at)
          VALUES (?, 'Hello.', 'hello', 'mastered', ?, ?, ?)`,
         [topicId, NOW, NOW, NOW],
       ),

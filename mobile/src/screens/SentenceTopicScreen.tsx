@@ -12,7 +12,7 @@
  * `useSpeechPlayback` contract: one playback at a time, silenced on blur and
  * unmount.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '../components/Icon';
@@ -111,6 +111,9 @@ function createStyles(c: ThemeColors) {
     generateButton: {
       backgroundColor: c.primary,
     },
+    generateButtonBusy: {
+      opacity: 0.8,
+    },
     generateButtonText: {
       color: c.onPrimary,
       fontSize: 15,
@@ -132,12 +135,6 @@ function createStyles(c: ThemeColors) {
     hint: {
       fontSize: 13,
       color: c.textMuted,
-      marginBottom: 12,
-    },
-    generatingRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
       marginBottom: 12,
     },
     generatePanel: {
@@ -321,12 +318,12 @@ function describeError(err: unknown): string {
  * now"; future rows name the remaining whole minutes/hours/days.
  */
 export function formatDueHint(sentence: SentenceRecord, nowMs: number): string {
-  if (sentence.status === 'suspended') {
+  if (sentence.suspended) {
     return 'Suspended';
   }
   const dueMs = Date.parse(sentence.due_at);
   if (!Number.isFinite(dueMs) || dueMs <= nowMs) {
-    return sentence.status === 'new' ? 'New · due now' : 'Due now';
+    return sentence.state === 'new' ? 'New · due now' : 'Due now';
   }
   const minutes = Math.max(1, Math.ceil((dueMs - nowMs) / 60_000));
   if (minutes < 60) {
@@ -439,6 +436,9 @@ export function SentenceTopicScreen({
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [providerMissing, setProviderMissing] = useState(false);
+  // Synchronous guard: `generating` state only updates on the next render, so a
+  // double tap in the same tick could otherwise start two AI requests.
+  const generatingRef = useRef(false);
 
   const [candidates, setCandidates] = useState<SentenceCandidate[]>([]);
   const [reviewVisible, setReviewVisible] = useState(false);
@@ -537,9 +537,10 @@ export function SentenceTopicScreen({
   );
 
   const handleGenerate = useCallback(async () => {
-    if (generating) {
+    if (generatingRef.current) {
       return;
     }
+    generatingRef.current = true;
     setGenerating(true);
     setGenerateError(null);
     setProviderMissing(false);
@@ -572,9 +573,10 @@ export function SentenceTopicScreen({
     } catch (err) {
       setGenerateError(`Could not generate sentences: ${describeError(err)}`);
     } finally {
+      generatingRef.current = false;
       setGenerating(false);
     }
-  }, [generating, generateCount, topicId]);
+  }, [generateCount, topicId]);
 
   const handleKeepCandidates = useCallback(
     async (kept: SentenceCandidate[]) => {
@@ -687,7 +689,10 @@ export function SentenceTopicScreen({
               <View style={styles.actions}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Generate new sentences"
+                  accessibilityLabel={
+                    generating ? 'Generating sentences' : 'Generate new sentences'
+                  }
+                  accessibilityState={{ disabled: generating, busy: generating }}
                   testID="sentence-generate-open"
                   onPress={() => {
                     setGenerateOpen(value => !value);
@@ -698,10 +703,24 @@ export function SentenceTopicScreen({
                   style={({ pressed }) => [
                     styles.actionButton,
                     styles.generateButton,
+                    generating && styles.generateButtonBusy,
                     pressed && styles.pressedFade,
                   ]}>
-                  <Icon name="generate" size={18} color={colors.onPrimary} />
-                  <Text style={styles.generateButtonText}>Generate</Text>
+                  {generating ? (
+                    <>
+                      <ActivityIndicator
+                        size="small"
+                        color={colors.onPrimary}
+                        testID="sentence-generate-loading"
+                      />
+                      <Text style={styles.generateButtonText}>Generating…</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="generate" size={18} color={colors.onPrimary} />
+                      <Text style={styles.generateButtonText}>Generate</Text>
+                    </>
+                  )}
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -777,13 +796,6 @@ export function SentenceTopicScreen({
                 </View>
               ) : null}
 
-              {generating && !generateOpen ? (
-                <View style={styles.generatingRow} testID="sentence-generating">
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={styles.hint}>Generating sentences…</Text>
-                </View>
-              ) : null}
-
               {generateError ? (
                 <View>
                   <Text role="alert" style={styles.error} testID="sentence-generate-error">
@@ -801,6 +813,8 @@ export function SentenceTopicScreen({
                       <Pressable
                         testID="sentence-generate-retry"
                         onPress={handleGenerate}
+                        disabled={generating}
+                        accessibilityState={{ disabled: generating, busy: generating }}
                         style={styles.panelButton}>
                         <Text style={styles.panelButtonText}>Try again</Text>
                       </Pressable>

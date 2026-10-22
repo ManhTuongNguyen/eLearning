@@ -95,16 +95,20 @@ export interface LocalPracticeHistoryRecord {
 }
 
 /**
- * Spaced-repetition state of one sentence (migration v4, TASK-SENT-003).
+ * FSRS card state of one sentence (migration v6, TASK-SENT-015).
  *
- * `new` has never been reviewed; `learning` is the ten-minute relearning step
- * after an `Again`; `review` is the graduated, day-scale schedule; `suspended`
- * is excluded from every session.
+ * Mirrors `ts-fsrs`'s `State`: `new` has never been reviewed, `learning` is a
+ * short-term step for a new card, `review` is the day-scale schedule, and
+ * `relearning` is the short-term step after a lapse. Suspension is a separate
+ * `suspended` flag (as in Anki), not a state.
  */
-export type SentenceStatus = 'new' | 'learning' | 'review' | 'suspended';
+export type SentenceState = 'new' | 'learning' | 'review' | 'relearning';
 
-/** The three rating buttons of the review session. */
-export type ReviewGrade = 'again' | 'good' | 'easy';
+/**
+ * The four rating buttons of the review session, in Anki order. Each maps to
+ * an FSRS `Rating` (1–4) that is also stored in the review log.
+ */
+export type ReviewGrade = 'again' | 'hard' | 'good' | 'easy';
 
 /** Which card shape produced a review: listen-and-type or situation recall. */
 export type ReviewCardMode = 'dictation' | 'recall';
@@ -125,9 +129,13 @@ export interface SentenceTopicRecord {
 }
 
 /**
- * One sentence plus its review schedule. `normalized_text` is the duplicate
- * key (unique per topic) and `due_at` is an ISO timestamp — a freshly
+ * One sentence plus its FSRS review schedule. `normalized_text` is the
+ * duplicate key (unique per topic) and `due_at` is an ISO timestamp — a freshly
  * generated sentence is due immediately.
+ *
+ * `stability` (days; FSRS memory strength) and `difficulty` (1–10) are the
+ * FSRS memory state; `elapsed_days`/`scheduled_days` and `learning_steps` are
+ * the remaining `Card` fields the scheduler replays the next review with.
  */
 export interface SentenceRecord {
   id: number;
@@ -136,11 +144,15 @@ export interface SentenceRecord {
   normalized_text: string;
   meaning: string;
   situation: string;
-  status: SentenceStatus;
+  state: SentenceState;
+  suspended: boolean;
   reps: number;
   lapses: number;
-  ease: number;
-  interval_days: number;
+  stability: number;
+  difficulty: number;
+  elapsed_days: number;
+  scheduled_days: number;
+  learning_steps: number;
   due_at: string;
   last_grade: ReviewGrade | '';
   last_reviewed_at: string;
@@ -148,13 +160,32 @@ export interface SentenceRecord {
   updated_at: string;
 }
 
-/** One append-only review event, used for per-sentence statistics. */
+/**
+ * One append-only review event. The columns mirror Anki's `revlog` row so the
+ * history can be fed to the FSRS optimizer:
+ *
+ * - `rating` is the FSRS value 1–4 (`grade` is its readable name);
+ * - `state` is the card state *before* the review;
+ * - `elapsed_days` is the gap FSRS saw, `scheduled_days` the interval the
+ *   review produced, and `due_at` the next due date;
+ * - `stability`/`difficulty` are the memory state after the review.
+ */
 export interface SentenceReviewLogRecord {
   id: number;
   sentence_id: number;
   topic_id: number;
   grade: ReviewGrade;
+  rating: number;
+  state: SentenceState;
   mode: ReviewCardMode;
+  due_at: string;
+  stability: number;
+  difficulty: number;
+  elapsed_days: number;
+  last_elapsed_days: number;
+  scheduled_days: number;
+  learning_steps: number;
+  review_duration_ms: number;
   reviewed_at: string;
 }
 
@@ -186,14 +217,37 @@ export interface SentenceTopicSummary extends SentenceTopicRecord {
  * The review-state half of a sentence row: exactly what the scheduler returns
  * and the repository persists. Kept separate from the content columns so a
  * review can never accidentally rewrite the sentence the learner studies.
+ * `suspended` is deliberately absent: grading never changes it.
  */
 export interface SentenceReviewState {
-  status: SentenceStatus;
+  state: SentenceState;
   reps: number;
   lapses: number;
-  ease: number;
-  interval_days: number;
+  stability: number;
+  difficulty: number;
+  elapsed_days: number;
+  scheduled_days: number;
+  learning_steps: number;
   due_at: string;
   last_grade: ReviewGrade;
   last_reviewed_at: string;
+}
+
+/**
+ * The review-log half of one graded review. `state` and `elapsed_days` describe
+ * the card *before* the grade (Anki's revlog semantics); the rest describe the
+ * resulting schedule.
+ */
+export interface SentenceReviewLogInput {
+  grade: ReviewGrade;
+  rating: number;
+  state: SentenceState;
+  due_at: string;
+  stability: number;
+  difficulty: number;
+  elapsed_days: number;
+  last_elapsed_days: number;
+  scheduled_days: number;
+  learning_steps: number;
+  reviewed_at: string;
 }

@@ -159,6 +159,168 @@ const MIGRATION_005: readonly string[] = [
 ];
 
 /**
+ * Version 6: FSRS scheduling (TASK-SENT-015).
+ *
+ * Replaces the hand-written ease/interval scheduler with the FSRS card fields
+ * used by `ts-fsrs` (the model Anki ships): stability, difficulty, elapsed and
+ * scheduled days, learning steps, and a four-state card. Suspension becomes
+ * Anki's boolean flag instead of a state, so a suspended card keeps its memory
+ * state.
+ *
+ * The `sentences` and `sentence_review_log` tables are rebuilt in place because
+ * SQLite cannot add `CHECK` constraints or widen the old ones. The rebuild is
+ * ordered for SQLite < 3.25 (some Android 9 devices): the old child table is
+ * dropped before its parent, and the new log is created (with a live foreign
+ * key) only after the new parent has its final name. Legacy rows are preserved;
+ * a reviewed card seeds FSRS stability from its old interval and gets neutral
+ * difficulty, so its spacing survives the upgrade. Pre-v6 log rows keep their
+ * old grade but get `rating = 0`, `state = 'new'` and zeroed FSRS fields, so the
+ * optimizer export can skip history that predates FSRS.
+ *
+ * `srs_config` is the single-row collection config: the FSRS weight preset
+ * (space-separated, empty = package default), Anki's deck-preset knobs, and the
+ * local study-day rollover hour (4 a.m. by default).
+ */
+const MIGRATION_006: readonly string[] = [
+  `CREATE TABLE sentences_fsrs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic_id INTEGER NOT NULL REFERENCES sentence_topics (id) ON DELETE CASCADE,
+      text TEXT NOT NULL,
+      normalized_text TEXT NOT NULL,
+      meaning TEXT NOT NULL DEFAULT '',
+      situation TEXT NOT NULL DEFAULT '',
+      state TEXT NOT NULL DEFAULT 'new'
+        CHECK (state IN ('new', 'learning', 'review', 'relearning')),
+      suspended INTEGER NOT NULL DEFAULT 0 CHECK (suspended IN (0, 1)),
+      reps INTEGER NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0,
+      stability REAL NOT NULL DEFAULT 0,
+      difficulty REAL NOT NULL DEFAULT 0,
+      elapsed_days INTEGER NOT NULL DEFAULT 0,
+      scheduled_days INTEGER NOT NULL DEFAULT 0,
+      learning_steps INTEGER NOT NULL DEFAULT 0,
+      due_at TEXT NOT NULL,
+      last_grade TEXT NOT NULL DEFAULT ''
+        CHECK (last_grade IN ('', 'again', 'hard', 'good', 'easy')),
+      last_reviewed_at TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+   )`,
+  `INSERT INTO sentences_fsrs
+      (id, topic_id, text, normalized_text, meaning, situation, state, suspended,
+       reps, lapses, stability, difficulty, elapsed_days, scheduled_days,
+       learning_steps, due_at, last_grade, last_reviewed_at, created_at, updated_at)
+   SELECT id, topic_id, text, normalized_text, meaning, situation,
+          CASE status
+            WHEN 'suspended' THEN 'new'
+            WHEN 'learning' THEN 'learning'
+            WHEN 'review' THEN 'review'
+            ELSE 'new'
+          END,
+          CASE status WHEN 'suspended' THEN 1 ELSE 0 END,
+          reps, lapses,
+          -- Seed the FSRS memory state from the old SM-2 interval so an
+          -- existing review card keeps roughly its current spacing, and use a
+          -- neutral difficulty. New/learning cards have interval 0.
+          interval_days, 5, 0,
+          CAST(ROUND(interval_days) AS INTEGER), 0,
+          due_at, last_grade, last_reviewed_at, created_at, updated_at
+     FROM sentences`,
+  // Temporary log table without a foreign key: it must survive the parent
+  // rebuild without depending on rename-time FK rewriting.
+  `CREATE TABLE sentence_review_log_fsrs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sentence_id INTEGER NOT NULL,
+      topic_id INTEGER NOT NULL,
+      grade TEXT NOT NULL CHECK (grade IN ('again', 'hard', 'good', 'easy')),
+      rating INTEGER NOT NULL DEFAULT 0 CHECK (rating BETWEEN 0 AND 4),
+      state TEXT NOT NULL DEFAULT 'new'
+        CHECK (state IN ('new', 'learning', 'review', 'relearning')),
+      mode TEXT NOT NULL CHECK (mode IN ('dictation', 'recall')),
+      due_at TEXT NOT NULL DEFAULT '',
+      stability REAL NOT NULL DEFAULT 0,
+      difficulty REAL NOT NULL DEFAULT 0,
+      elapsed_days INTEGER NOT NULL DEFAULT 0,
+      last_elapsed_days INTEGER NOT NULL DEFAULT 0,
+      scheduled_days INTEGER NOT NULL DEFAULT 0,
+      learning_steps INTEGER NOT NULL DEFAULT 0,
+      review_duration_ms INTEGER NOT NULL DEFAULT 0,
+      reviewed_at TEXT NOT NULL
+   )`,
+  `INSERT INTO sentence_review_log_fsrs
+      (id, sentence_id, topic_id, grade, rating, state, mode, due_at, stability,
+       difficulty, elapsed_days, last_elapsed_days, scheduled_days,
+       learning_steps, review_duration_ms, reviewed_at)
+   SELECT id, sentence_id, topic_id, grade,
+          -- 0 = not an FSRS rating: pre-v6 history is kept for display but the
+          -- optimizer export filters it out.
+          0,
+          'new', mode, '', 0, 0, 0, 0, 0, 0, 0, reviewed_at
+     FROM sentence_review_log`,
+  `DROP TABLE sentence_review_log`,
+  `DROP TABLE sentences`,
+  `ALTER TABLE sentences_fsrs RENAME TO sentences`,
+  `CREATE TABLE sentence_review_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sentence_id INTEGER NOT NULL REFERENCES sentences (id) ON DELETE CASCADE,
+      topic_id INTEGER NOT NULL,
+      grade TEXT NOT NULL CHECK (grade IN ('again', 'hard', 'good', 'easy')),
+      rating INTEGER NOT NULL DEFAULT 0 CHECK (rating BETWEEN 0 AND 4),
+      state TEXT NOT NULL DEFAULT 'new'
+        CHECK (state IN ('new', 'learning', 'review', 'relearning')),
+      mode TEXT NOT NULL CHECK (mode IN ('dictation', 'recall')),
+      due_at TEXT NOT NULL DEFAULT '',
+      stability REAL NOT NULL DEFAULT 0,
+      difficulty REAL NOT NULL DEFAULT 0,
+      elapsed_days INTEGER NOT NULL DEFAULT 0,
+      last_elapsed_days INTEGER NOT NULL DEFAULT 0,
+      scheduled_days INTEGER NOT NULL DEFAULT 0,
+      learning_steps INTEGER NOT NULL DEFAULT 0,
+      review_duration_ms INTEGER NOT NULL DEFAULT 0,
+      reviewed_at TEXT NOT NULL
+   )`,
+  `INSERT INTO sentence_review_log
+      (id, sentence_id, topic_id, grade, rating, state, mode, due_at, stability,
+       difficulty, elapsed_days, last_elapsed_days, scheduled_days,
+       learning_steps, review_duration_ms, reviewed_at)
+   SELECT id, sentence_id, topic_id, grade, rating, state, mode, due_at,
+          stability, difficulty, elapsed_days, last_elapsed_days, scheduled_days,
+          learning_steps, review_duration_ms, reviewed_at
+     FROM sentence_review_log_fsrs`,
+  `DROP TABLE sentence_review_log_fsrs`,
+  `CREATE UNIQUE INDEX idx_sentences_topic_normalized
+      ON sentences (topic_id, normalized_text)`,
+  `CREATE INDEX idx_sentences_topic ON sentences (topic_id, due_at)`,
+  `CREATE INDEX idx_sentences_due ON sentences (due_at)`,
+  `CREATE INDEX idx_sentences_topic_state ON sentences (topic_id, state, suspended)`,
+  `CREATE INDEX idx_sentence_review_log_sentence
+      ON sentence_review_log (sentence_id, reviewed_at)`,
+  `CREATE INDEX idx_sentence_review_log_reviewed
+      ON sentence_review_log (reviewed_at)`,
+  `CREATE TABLE srs_config (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      model_version TEXT NOT NULL DEFAULT 'FSRS-6',
+      weights TEXT NOT NULL DEFAULT '',
+      desired_retention REAL NOT NULL DEFAULT 0.9
+        CHECK (desired_retention > 0 AND desired_retention <= 1),
+      maximum_interval INTEGER NOT NULL DEFAULT 36500
+        CHECK (maximum_interval > 0),
+      enable_fuzz INTEGER NOT NULL DEFAULT 1 CHECK (enable_fuzz IN (0, 1)),
+      enable_short_term INTEGER NOT NULL DEFAULT 1 CHECK (enable_short_term IN (0, 1)),
+      learning_steps TEXT NOT NULL DEFAULT '1m 10m',
+      relearning_steps TEXT NOT NULL DEFAULT '10m',
+      rollover_hour INTEGER NOT NULL DEFAULT 4 CHECK (rollover_hour BETWEEN 0 AND 23),
+      updated_at TEXT NOT NULL
+   )`,
+  `INSERT INTO srs_config
+      (id, model_version, weights, desired_retention, maximum_interval,
+       enable_fuzz, enable_short_term, learning_steps, relearning_steps,
+       rollover_hour, updated_at)
+   VALUES (1, 'FSRS-6', '', 0.9, 36500, 1, 1, '1m 10m', '10m', 4,
+           strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+];
+
+/**
  * Ordered migration list; length is the current schema version. Append new
  * entries — never edit shipped ones.
  */
@@ -168,6 +330,7 @@ export const MIGRATIONS: readonly (readonly string[])[] = [
   MIGRATION_003,
   MIGRATION_004,
   MIGRATION_005,
+  MIGRATION_006,
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS.length;
