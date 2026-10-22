@@ -24,6 +24,11 @@ import { ThemeProvider } from '../src/theme/ThemeContext';
 import type { TextToSpeechEngine } from '../src/tts/textToSpeech';
 import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
+function flattenStyle(style: unknown): Record<string, unknown> {
+  const entries = Array.isArray(style) ? style : [style];
+  return Object.assign({}, ...entries.filter(Boolean).map(s => (typeof s === 'object' ? s : {})));
+}
+
 let db: SqlDriver;
 
 jest.mock('../src/db/database', () => {
@@ -174,7 +179,14 @@ describe('SentenceTopicScreen — sentence list', () => {
     expect(view.getByText('Everyday sentence number 1')).toBeTruthy();
     expect(view.getByText('Meaning number 1')).toBeTruthy();
     expect(view.getByText('Situation number 1')).toBeTruthy();
+    expect(view.getByTestId('sentence-text-1').props.selectable).toBe(true);
+    expect(view.getByTestId('sentence-meaning-1').props.selectable).toBe(true);
+    expect(view.getByTestId('sentence-situation-1').props.selectable).toBe(true);
     expect(view.getByTestId('sentence-hint-1')).toHaveTextContent('New · due now');
+
+    // The two primary actions share the row equally.
+    expect(flattenStyle(view.getByTestId('sentence-generate-open').props.style).flex).toBe(1);
+    expect(flattenStyle(view.getByTestId('sentence-practice').props.style).flex).toBe(1);
   });
 
   test('shows the empty state when the topic has no sentences yet', async () => {

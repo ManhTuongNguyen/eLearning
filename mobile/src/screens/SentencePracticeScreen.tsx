@@ -582,7 +582,9 @@ export function SentencePracticeScreen({
 
   const handleReplay = useCallback(() => {
     if (currentCard) {
-      Keyboard.dismiss();
+      // Keep the keyboard up and the answer input focused so the learner can
+      // keep typing while the sentence plays; the surrounding scroll view uses
+      // `keyboardShouldPersistTaps="handled"` so the tap does not steal focus.
       speak(currentCard.id, currentCard.text);
     }
   }, [currentCard, speak]);

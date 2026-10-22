@@ -99,6 +99,7 @@ function createStyles(c: ThemeColors) {
       marginBottom: 12,
     },
     actionButton: {
+      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
@@ -116,7 +117,6 @@ function createStyles(c: ThemeColors) {
       fontWeight: '600',
     },
     practiceButton: {
-      flex: 1,
       backgroundColor: c.surface,
       borderWidth: 1,
       borderColor: c.borderStrong,
@@ -365,16 +365,16 @@ function SentenceRow({
     <View style={styles.row} testID={`sentence-row-${sentence.id}`}>
       <View style={styles.rowTop}>
         <View style={styles.rowText}>
-          <Text style={styles.sentenceText} testID={`sentence-text-${sentence.id}`}>
+          <Text style={styles.sentenceText} selectable testID={`sentence-text-${sentence.id}`}>
             {sentence.text}
           </Text>
           {sentence.meaning ? (
-            <Text style={styles.meaning} testID={`sentence-meaning-${sentence.id}`}>
+            <Text style={styles.meaning} selectable testID={`sentence-meaning-${sentence.id}`}>
               {sentence.meaning}
             </Text>
           ) : null}
           {sentence.situation ? (
-            <Text style={styles.situation} testID={`sentence-situation-${sentence.id}`}>
+            <Text style={styles.situation} selectable testID={`sentence-situation-${sentence.id}`}>
               {sentence.situation}
             </Text>
           ) : null}

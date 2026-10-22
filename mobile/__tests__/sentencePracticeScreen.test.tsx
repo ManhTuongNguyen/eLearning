@@ -221,7 +221,7 @@ describe('SentencePracticeScreen — session build', () => {
 });
 
 describe('SentencePracticeScreen — dictation card', () => {
-  test('auto-plays once, replays on demand and silences on card change', async () => {
+  test('auto-plays once, replays without dismissing the keyboard and silences on card change', async () => {
     const { topic } = await seedTopic(['First sentence', 'Second sentence']);
     const { engine, spoken, stopMock } = makeDeferredEngine();
     const view = await renderPractice(topic.id, engine);
@@ -234,9 +234,13 @@ describe('SentencePracticeScreen — dictation card', () => {
 
     await fireEvent.press(view.getByTestId('sentence-practice-replay'));
     expect(texts()).toEqual(['First sentence', 'First sentence']);
-    expect(dismissSpy).toHaveBeenCalled();
+    // Replay keeps the answer input focused so typing can continue with the
+    // cursor where the learner left it.
+    expect(dismissSpy).not.toHaveBeenCalled();
 
     await answerAndCheck(view, 'First sentence');
+    // Checking the answer is still allowed to dismiss the keyboard.
+    expect(dismissSpy).toHaveBeenCalled();
     await fireEvent.press(view.getByTestId('sentence-grade-good'));
 
     await waitFor(() => {
