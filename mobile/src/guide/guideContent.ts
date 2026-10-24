@@ -258,6 +258,7 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
     tips: [
       "The due badges on Home and in the topic list show today's workload.",
       'Words without dictionary data stay out of practice until they are completed or enriched.',
+      'Dictionary data is Wiktionary content under the CC BY-SA 4.0 license, served by the Free Dictionary API at freedictionaryapi.com.',
     ],
     mode: 'serverless',
     tryIt: { label: 'Open Word bank', route: 'WordTopics' },

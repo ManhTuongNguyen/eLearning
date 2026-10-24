@@ -490,3 +490,7 @@ cp .env.example .env
 | `JWT_*` | Access/refresh token lifetimes |
 
 The mobile app has its own environment file — copy `mobile/.env.example` to `mobile/.env` and set `API_BASE_URL` (the backend base URL; `http://10.0.2.2:8000` on the Android emulator). Mode-specific files (`.env.development` / `.env.test` / `.env.production`) override it per build type, values are inlined at build time, and a missing `API_BASE_URL` fails the bundle. Serverless provider settings (provider, API key, primary/fallback models) are configured in the app (Settings → provider settings; the key is stored in secure device storage).
+
+## License & Attribution
+
+The word bank's dictionary data (definitions, IPA, examples, synonyms/antonyms) originates from [Wiktionary](https://en.wiktionary.org/) and is served by the [Free Dictionary API](https://freedictionaryapi.com/) (freedictionaryapi.com) under the [Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/) license. Per the API's license terms, this attribution must be kept in every distribution of the app.

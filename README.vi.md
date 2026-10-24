@@ -491,3 +491,7 @@ cp .env.example .env
 | `JWT_*` | Access/refresh token lifetimes |
 
 Mobile app có file environment riêng — copy `mobile/.env.example` thành `mobile/.env` và đặt `API_BASE_URL` (backend base URL; `http://10.0.2.2:8000` trên Android emulator). Các file theo mode (`.env.development` / `.env.test` / `.env.production`) override nó theo build type, giá trị được inline lúc build, và thiếu `API_BASE_URL` sẽ làm fail bundle. Cấu hình provider serverless (provider, API key, primary/fallback models) được cấu hình trong app (Settings → provider settings; key được lưu trong secure device storage).
+
+## Giấy phép & Ghi công (License & Attribution)
+
+Dữ liệu từ điển của Word bank (định nghĩa, IPA, ví dụ, từ đồng nghĩa/trái nghĩa) có nguồn gốc từ [Wiktionary](https://en.wiktionary.org/) và được cung cấp qua [Free Dictionary API](https://freedictionaryapi.com/) (freedictionaryapi.com) theo giấy phép [Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/). Theo điều khoản giấy phép của API, phần ghi công này phải được giữ nguyên trong mọi bản phân phối của app.
