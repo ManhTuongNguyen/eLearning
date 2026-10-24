@@ -624,7 +624,7 @@ Priority: `P1`
 
 ## TASK-WB-005 — Word masking module
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
