@@ -26,6 +26,8 @@ import { SpeakingPracticeScreen } from '../screens/SpeakingPracticeScreen';
 import { TTSSettingsScreen } from '../screens/TTSSettingsScreen';
 import { VocabularyScreen } from '../screens/VocabularyScreen';
 import { VoiceManagerScreen } from '../screens/VoiceManagerScreen';
+import { WordTopicScreen } from '../screens/WordTopicScreen';
+import { WordTopicsScreen } from '../screens/WordTopicsScreen';
 import { settingsScreenOptions, stackScreenOptions } from './stackScreenOptions';
 import type { MainStackParamList } from './types';
 
@@ -51,6 +53,8 @@ export function MainNavigator() {
       <Stack.Screen name="SentenceTopicNew" component={SentenceTopicNewScreen} />
       <Stack.Screen name="SentenceTopic" component={SentenceTopicScreen} />
       <Stack.Screen name="SentencePractice" component={SentencePracticeScreen} />
+      <Stack.Screen name="WordTopics" component={WordTopicsScreen} />
+      <Stack.Screen name="WordTopic" component={WordTopicScreen} />
     </Stack.Navigator>
   );
 }

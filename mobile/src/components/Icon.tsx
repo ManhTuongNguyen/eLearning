@@ -34,6 +34,7 @@ import {
   SquarePen,
   Target,
   Trash2,
+  Type,
   Volume2,
   X,
 } from 'lucide-react-native';
@@ -46,6 +47,7 @@ export const ICON_NAMES = [
   'speaking',
   'speakingHistory',
   'sentences',
+  'words',
   'settings',
   'plus',
   'edit',
@@ -75,6 +77,7 @@ export const ICON_COMPONENTS: Record<IconName, LucideIcon> = {
   speaking: MicVocal,
   speakingHistory: ListChecks,
   sentences: Speech,
+  words: Type,
   settings: Settings,
   plus: Plus,
   edit: SquarePen,

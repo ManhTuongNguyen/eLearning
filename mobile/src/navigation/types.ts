@@ -74,6 +74,17 @@ export type MainStackParamList = {
   SentenceTopic: { topicId: number };
   /** Spaced-repetition practice for one topic (TASK-SENT-012). */
   SentencePractice: { topicId: number };
+  /**
+   * Word bank: topic list (WORD_BANK_V1 TASK-WB-008). Serverless-only; the
+   * Home row that opens it is hidden in server mode.
+   */
+  WordTopics: undefined;
+  /** A topic's word bank (WORD_BANK_V1 TASK-WB-009). */
+  WordTopic: { topicId: number };
+  /** One word's data and schedule (WORD_BANK_V1 TASK-WB-013). */
+  WordDetail: { wordId: number };
+  /** Spaced-repetition practice for one word topic (WORD_BANK_V1 TASK-WB-012). */
+  WordPractice: { topicId: number };
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -128,6 +139,14 @@ export type SentencePracticeScreenProps = NativeStackScreenProps<
   MainStackParamList,
   'SentencePractice'
 >;
+
+export type WordTopicsScreenProps = NativeStackScreenProps<MainStackParamList, 'WordTopics'>;
+
+export type WordTopicScreenProps = NativeStackScreenProps<MainStackParamList, 'WordTopic'>;
+
+export type WordDetailScreenProps = NativeStackScreenProps<MainStackParamList, 'WordDetail'>;
+
+export type WordPracticeScreenProps = NativeStackScreenProps<MainStackParamList, 'WordPractice'>;
 
 export type HomeScreenProps = NativeStackScreenProps<MainStackParamList, 'Home'>;
 

@@ -702,7 +702,7 @@ Priority: `P2`
 
 ## TASK-WB-008 — Routes and the word topics screens
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
