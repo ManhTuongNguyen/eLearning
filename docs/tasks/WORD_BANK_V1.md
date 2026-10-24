@@ -817,7 +817,7 @@ Priority: `P1`
 
 ## TASK-WB-011 — Manual word input on the topic screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

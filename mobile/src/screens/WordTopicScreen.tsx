@@ -45,7 +45,9 @@ import type { WordTopicScreenProps } from '../navigation/types';
 import {
   MAX_WORD_COUNT,
   MIN_WORD_COUNT,
+  addManualWords,
   generateTopicWords,
+  parseManualWordInput,
   type WordGenerationResult,
 } from '../serverless/wordGeneration';
 import { lookupDictionaryWord } from '../serverless/dictionaryApi';
@@ -345,6 +347,10 @@ export function createStyles(c: ThemeColors) {
       alignItems: 'center',
       gap: 8,
     },
+    manualInput: {
+      height: 140,
+      textAlignVertical: 'top',
+    },
   });
 }
 
@@ -483,6 +489,12 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
   const [summary, setSummary] = useState<WordGenerationResult | null>(null);
   // Synchronous guard: a double tap in the same tick must not start two AI requests.
   const generatingRef = useRef(false);
+
+  // Manual input modal (TASK-WB-011): comma-separated words through the same
+  // dictionary pipeline as generation.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualText, setManualText] = useState('');
+  const [manualBusy, setManualBusy] = useState(false);
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WordRecord | null>(null);
@@ -642,6 +654,57 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
     }
   }, [parsedCount, topicId, loadTopic]);
 
+  // --- Manual input (TASK-WB-011) ---------------------------------------------
+  /** Live counter over the parsed (deduplicated) candidates. */
+  const manualParsed = useMemo(
+    () => parseManualWordInput(manualText, words.map(word => word.normalized_text)),
+    [manualText, words],
+  );
+  const manualEmpty = manualParsed.words.length === 0;
+  const manualTooMany = manualParsed.total > MAX_WORD_COUNT;
+  const manualCountLabel = `${manualParsed.total} word${manualParsed.total === 1 ? '' : 's'}`;
+
+  const handleManualSubmit = useCallback(async () => {
+    if (manualBusy || manualEmpty || manualTooMany) {
+      return;
+    }
+    setManualBusy(true);
+    setGenerateError(null);
+    setActionError(null);
+    setSummary(null);
+    try {
+      const db = await getLocalDatabase();
+      const record = await getWordTopicById(db, topicId);
+      if (!record) {
+        throw new Error('This topic no longer exists.');
+      }
+      const existing = await listWordsByTopic(db, topicId);
+      const result = await addManualWords(db, word => lookupDictionaryWord(word, fetch), {
+        topic: record,
+        raw: manualText,
+        existingWords: existing.map(word => word.text),
+      });
+      setSummary(result);
+      setManualOpen(false);
+      setManualText('');
+      setReviewCandidates(result.words);
+      const hints: Record<number, string> = {};
+      for (const word of result.words) {
+        const hint = await getWordByText(db, word.text, { excludeTopicId: topicId });
+        if (hint) {
+          hints[word.id] = hint.topic_title;
+        }
+      }
+      setDuplicateTopicTitles(hints);
+      setReviewVisible(true);
+      await loadTopic();
+    } catch (err) {
+      setGenerateError(`Could not add the words: ${describeError(err)}`);
+    } finally {
+      setManualBusy(false);
+    }
+  }, [manualBusy, manualEmpty, manualTooMany, manualText, topicId, loadTopic]);
+
   // --- Delete -----------------------------------------------------------------
   const handleDeleteRequest = useCallback((word: WordRecord) => {
     if (deletingId !== null) {
@@ -783,6 +846,15 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
           ]}>
           <Icon name="generate" size={16} color={colors.onPrimary} />
           <Text style={styles.actionButtonTextLight}>Generate</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add words manually"
+          testID="word-topic-add-words"
+          onPress={() => setManualOpen(true)}
+          style={({ pressed }) => [styles.actionButton, pressed && styles.pressedFade]}>
+          <Icon name="plus" size={16} color={colors.accent} />
+          <Text style={styles.actionButtonText}>Add words</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -987,6 +1059,97 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
                   </View>
                 ) : (
                   <Text style={styles.modalPrimaryText}>Generate</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Manual input modal (TASK-WB-011). */}
+      <Modal
+        animationType="fade"
+        onRequestClose={() => {
+          if (!manualBusy) {
+            setManualOpen(false);
+          }
+        }}
+        testID="word-manual-modal"
+        transparent
+        visible={manualOpen}>
+        <View style={styles.backdrop}>
+          <View style={styles.modalCard} accessibilityViewIsModal>
+            <Text style={styles.modalTitle} testID="word-manual-title">
+              Add words
+            </Text>
+            <Text style={styles.inputLabel}>Words, separated by commas</Text>
+            <TextInput
+              value={manualText}
+              onChangeText={setManualText}
+              style={[styles.input, styles.manualInput]}
+              testID="word-manual-input"
+              multiline
+              scrollEnabled
+              textAlignVertical="top"
+              placeholder="type, words, separated, by, commas"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={styles.hint}>
+              Separate words with commas; a word cannot contain a comma. They run through the same
+              dictionary check as generated words.
+            </Text>
+            <Text style={styles.inputLabel} testID="word-manual-count">
+              {manualCountLabel}
+            </Text>
+            {manualTooMany ? (
+              <Text role="alert" style={styles.modalError} testID="word-manual-count-error">
+                {`Up to ${MAX_WORD_COUNT} words at a time.`}
+              </Text>
+            ) : null}
+            <View style={styles.modalFooter}>
+              <Pressable
+                accessibilityRole="button"
+                testID="word-manual-cancel"
+                onPress={() => {
+                  if (!manualBusy) {
+                    setManualOpen(false);
+                  }
+                }}
+                disabled={manualBusy}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalCancelButton,
+                  manualBusy && styles.modalDisabled,
+                  pressed && styles.modalDisabled,
+                ]}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{
+                  disabled: manualBusy || manualEmpty || manualTooMany,
+                  busy: manualBusy,
+                }}
+                testID="word-manual-submit"
+                onPress={() => {
+                  // handleManualSubmit handles its own errors, so it never rejects.
+                  handleManualSubmit();
+                }}
+                disabled={manualBusy || manualEmpty || manualTooMany}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalPrimaryButton,
+                  (manualBusy || manualEmpty || manualTooMany) && styles.modalDisabled,
+                  pressed && styles.modalDisabled,
+                ]}>
+                {manualBusy ? (
+                  <View style={styles.generatingRow}>
+                    <ActivityIndicator size="small" color={colors.onPrimary} />
+                    <Text style={styles.modalPrimaryText}>Looking up…</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.modalPrimaryText}>Add</Text>
                 )}
               </Pressable>
             </View>

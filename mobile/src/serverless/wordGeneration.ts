@@ -164,6 +164,80 @@ export interface WordGenerationResult {
 }
 
 /**
+ * Parse a comma-separated manual input into word candidates (WORD_BANK_V1
+ * TASK-WB-011). Tokens are split on commas, trimmed, empties dropped, each
+ * word normalised (§2.1 rules) and duplicates dropped both within the input
+ * and against the topic's existing words. The 1–30 bound is the generation
+ * bound: `words` carries at most `max` candidates while `total` reports the
+ * pre-bound count, so the modal can disable submission when the input exceeds
+ * it instead of silently truncating.
+ */
+export function parseManualWordInput(
+  raw: string,
+  existingNormalized: readonly string[] = [],
+  max: number = MAX_WORD_COUNT,
+): { words: string[]; total: number } {
+  const seen = new Set(existingNormalized);
+  const all: string[] = [];
+  for (const token of raw.split(',')) {
+    const word = token.trim();
+    const normalized = normalizeWordText(word);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    all.push(word);
+  }
+  return { words: all.slice(0, Math.max(0, max)), total: all.length };
+}
+
+/**
+ * The shared lookup → persist half of the pipeline: look each chosen word up
+ * sequentially in the dictionary, keep found words complete and transient-error
+ * words as dataless candidates, drop not-found words, and insert the survivors
+ * in one transaction. The inserted rows are the truth, so the summary counts
+ * come from them.
+ */
+async function lookupAndPersist(
+  db: SqlDriver,
+  topicId: number,
+  lookup: DictionaryLookupFn,
+  chosen: readonly string[],
+): Promise<WordGenerationResult> {
+  const candidates: NewWord[] = [];
+  let notFoundCount = 0;
+  for (const word of chosen) {
+    const outcome = await lookup(word);
+    if (outcome.outcome === 'found') {
+      candidates.push({
+        text: word,
+        senses_json: outcome.senses,
+        phonetics_json: outcome.phonetics,
+        data_source: 'dictionary',
+        data_status: 'complete',
+      });
+    } else if (outcome.outcome === 'unavailable') {
+      // Transient: keep the word without data; the learner fetches it later
+      // from Word detail. AI-invented definitions are never persisted.
+      candidates.push({ text: word, data_status: 'missing' });
+    } else {
+      notFoundCount += 1;
+    }
+  }
+
+  const inserted = await insertWords(db, topicId, candidates);
+  const keptWithData = inserted.filter(word => word.data_status === 'complete').length;
+  const keptWithoutData = inserted.filter(word => word.data_status === 'missing').length;
+  return {
+    words: inserted,
+    requestedCount: chosen.length,
+    keptWithData,
+    keptWithoutData,
+    notFoundCount,
+  };
+}
+
+/**
  * Run the AI → dictionary → persist pipeline for one topic:
  * parse the chosen words, look each up sequentially in the dictionary, keep
  * found words complete and transient-error words as dataless candidates, drop
@@ -190,40 +264,29 @@ export async function generateTopicWords(
   const result = await complete(request);
   const existingNormalized = input.existingWords.map(normalizeWordText);
   const chosen = parseGeneratedWords(result.text, existingNormalized);
+  return lookupAndPersist(db, input.topic.id, lookup, chosen);
+}
 
-  const candidates: NewWord[] = [];
-  let notFoundCount = 0;
-  for (const word of chosen) {
-    const outcome = await lookup(word);
-    if (outcome.outcome === 'found') {
-      candidates.push({
-        text: word,
-        senses_json: outcome.senses,
-        phonetics_json: outcome.phonetics,
-        data_source: 'dictionary',
-        data_status: 'complete',
-      });
-    } else if (outcome.outcome === 'unavailable') {
-      // Transient: keep the word without data; the learner fetches it later
-      // from Word detail. AI-invented definitions are never persisted.
-      candidates.push({ text: word, data_status: 'missing' });
-    } else {
-      notFoundCount += 1;
-    }
+/**
+ * Run the manual-input pipeline for one topic (TASK-WB-011): everything after
+ * the AI step is shared with `generateTopicWords` — sequential dictionary
+ * lookup, complete/missing/not-found handling, and one persist transaction.
+ */
+export async function addManualWords(
+  db: SqlDriver,
+  lookup: DictionaryLookupFn,
+  input: {
+    topic: Pick<WordTopicRecord, 'id' | 'title' | 'description' | 'extra_prompt'>;
+    raw: string;
+    existingWords: readonly string[];
+  },
+): Promise<WordGenerationResult> {
+  if (!input.topic.title.trim()) {
+    throw new Error('addManualWords: a topic needs a title');
   }
-
-  // The inserted rows are the truth: the repository's duplicate filter may
-  // have skipped a candidate, and the summary must not count it as kept.
-  const inserted = await insertWords(db, input.topic.id, candidates);
-  const keptWithData = inserted.filter(word => word.data_status === 'complete').length;
-  const keptWithoutData = inserted.filter(word => word.data_status === 'missing').length;
-  return {
-    words: inserted,
-    requestedCount,
-    keptWithData,
-    keptWithoutData,
-    notFoundCount,
-  };
+  const existingNormalized = input.existingWords.map(normalizeWordText);
+  const parsed = parseManualWordInput(input.raw, existingNormalized);
+  return lookupAndPersist(db, input.topic.id, lookup, parsed.words);
 }
 
 /**
