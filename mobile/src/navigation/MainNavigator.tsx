@@ -26,6 +26,7 @@ import { SpeakingPracticeScreen } from '../screens/SpeakingPracticeScreen';
 import { TTSSettingsScreen } from '../screens/TTSSettingsScreen';
 import { VocabularyScreen } from '../screens/VocabularyScreen';
 import { VoiceManagerScreen } from '../screens/VoiceManagerScreen';
+import { WordPracticeScreen } from '../screens/WordPracticeScreen';
 import { WordTopicScreen } from '../screens/WordTopicScreen';
 import { WordTopicsScreen } from '../screens/WordTopicsScreen';
 import { settingsScreenOptions, stackScreenOptions } from './stackScreenOptions';
@@ -55,6 +56,7 @@ export function MainNavigator() {
       <Stack.Screen name="SentencePractice" component={SentencePracticeScreen} />
       <Stack.Screen name="WordTopics" component={WordTopicsScreen} />
       <Stack.Screen name="WordTopic" component={WordTopicScreen} />
+      <Stack.Screen name="WordPractice" component={WordPracticeScreen} />
     </Stack.Navigator>
   );
 }

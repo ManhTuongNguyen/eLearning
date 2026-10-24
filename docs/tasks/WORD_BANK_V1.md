@@ -859,7 +859,7 @@ Priority: `P1`
 
 ## TASK-WB-012 — Word practice screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
