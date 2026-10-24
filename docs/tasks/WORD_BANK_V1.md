@@ -1012,7 +1012,7 @@ Priority: `P1`
 
 ## TASK-WB-016 — Documentation and final quality gates
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

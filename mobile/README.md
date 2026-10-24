@@ -176,6 +176,80 @@ empties all four tables in the same transaction. The screens use the shared
 `src/components/Icon.tsx` seam, so the native dependency and rebuild requirement
 in [Native dependencies (icons)](#native-dependencies-icons) applies.
 
+## Word bank (serverless)
+
+A vocabulary bank per learner-created topic, the sibling of the Real-life
+sentences feature (WORD_BANK_V1). It is **serverless-only**: the AI only *chooses
+which words* belong to the learner's domain, and every stored dictionary fact
+(meanings, IPA) comes from the Free Dictionary API (`dictionaryapi.dev` — no key,
+no auth, definitions originate from Wiktionary, CC BY-SA). The Django backend is
+never called; the Home row is hidden in server mode and the topics screen shows a
+mode notice there instead of reading SQLite.
+
+### Topics, generation and manual input
+
+- Home → **Word bank** lists topics newest first with word count, due count and
+  a due badge that disappears at zero.
+- A topic has a required title, a free-form **learner-context description**
+  (domain, habits and self-described level in one text, e.g. "I'm a chef, I
+  often read cooking blogs, I can understand about 85 percent of simple texts")
+  and an optional **additional prompt** ("focus on words about cooking"). All
+  three are editable later and are passed verbatim to every generation and
+  enrichment prompt (wrapped as untrusted learner context).
+- **Generate** takes a user-typed count (1–30, default 10). The model returns
+  ONLY a JSON array of single English words in their base dictionary form; the
+  dictionary API then fills all senses (grouped by part of speech, examples
+  included) and the IPA. A 404 drops the word; a transient API error (429,
+  network, timeout) keeps it as a `data_status='missing'` candidate that stays
+  out of practice until **Word detail → Fetch dictionary data** fills it. The
+  summary reports kept-with-data / kept-without-data / not-found.
+- **Add words** accepts comma-separated input in a fixed-height, internally
+  scrolling field and runs the same dictionary pipeline and review modal.
+- The review modal shows one row per candidate (word, POS, first sense) with a
+  keep toggle, an "already in \<topic\>" hint for cross-topic duplicates and a
+  "dictionary unavailable — fetch its data later" hint for dataless rows. The
+  generation pipeline persists the candidates before review, so keep-all just
+  confirms, keep-selected removes the unticked rows in one transaction, and
+  discard closes without writing.
+- The topic screen has a client-side search box (normalized substring match,
+  live count), per-word TTS playback and confirmed deletes that work on
+  filtered rows. Practice unlocks at 5 words.
+
+### Word detail, masking and enrichment
+
+- **Word detail** renders the word in large type with phonetics and a play
+  button (device TTS), every sense grouped by POS with examples, and the FSRS
+  schedule block (state, due, stability, difficulty, reps, lapses, last
+  grade/date). **Fetch dictionary data** appears only while the word has no
+  data; **Enrich** is disabled until data exists; **Delete** cascades the
+  review log.
+- **Enrich** sends one completion per word: the current senses go in as
+  context and the AI proposes a full replacement in the stored JSON shape. The
+  change-review modal diffs old vs new side by side; **Apply** replaces the
+  senses in one transaction and stamps `data_source='enriched'`/`enriched_at`,
+  while phonetics and the FSRS schedule are never touched. **Cancel** writes
+  nothing.
+- Recall cards mask the target word wherever a meaning or example shows it —
+  the word and its documented regular inflections (-s, -es, -ed, -d, -ing,
+  doubled final consonant, -ies/-ied), first letter + underscores, word
+  boundaries only. Masking is presentation-only (see `src/srs/wordMask.ts`).
+
+### Word practice
+
+Practice mirrors the sentence bank: due-only sessions capped at 20 through the
+shared `srs/session.ts` queue, Again / Hard / Good / Easy with the interval
+each button would schedule, and the same `srs_config` collection (90% retention,
+4 a.m. study day). **Dictation** cards (new/learning/relearning words) speak the
+word once automatically and pre-suggest `Good` for an exact or one-typo answer
+(never `Easy`). **Recall** cards (review words) show the meanings and masked
+examples and reveal with audio. Settings → **Word practice mode** (serverless
+only, default `auto`) can force either card shape.
+
+Known limitations, accepted for v1: irregular inflections (`ran` for `run`) are
+not masked; the dictionary client has no retry loop; a word containing a comma
+cannot be entered manually; the AI's enrichment proposal is trusted for senses
+only — phonetics always come from the dictionary.
+
 ## Grammar auto-check (opt-in)
 
 An opt-in learning aid (default off) built on the improvement pipeline of
@@ -211,7 +285,7 @@ Serverless mode persists conversations on-device in SQLite (`src/db/`, SPEC TASK
 - `nativeDriver.ts` — adapter over `react-native-sqlite-storage`; enables foreign keys so deleting a session cascades to its messages and summary.
 - `migrations.ts` — append-only, ordered migration list; the applied version is stored in SQLite's `user_version`. Each migration runs in a transaction and a failure leaves the recorded version untouched.
 - `database.ts` — `getLocalDatabase()` opens and migrates the database automatically on first use.
-- Entity stores (`sessionStore`, `messageStore`, `summaryStore`, `profileStore`, `settingsStore`, `sentenceRepository`, `srsConfigStore`) expose typed CRUD mirroring the backend serializers. The OpenRouter API key must not be stored here (secure storage only).
+- Entity stores (`sessionStore`, `messageStore`, `summaryStore`, `profileStore`, `settingsStore`, `sentenceRepository`, `wordRepository`, `srsConfigStore`) expose typed CRUD mirroring the backend serializers. The OpenRouter API key must not be stored here (secure storage only).
 
 Tests run against real SQL via a sql.js-backed driver (`testing/sqlJsDriver.ts`, dev-only, never bundled); `react-native-sqlite-storage` is mocked globally in `jest.setup.js`.
 

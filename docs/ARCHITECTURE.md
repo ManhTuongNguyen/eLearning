@@ -440,17 +440,18 @@ retro-checked.
   tracked in `PRAGMA user_version` (`src/db/migrations.ts`): `learning_profile`
   (single row), `settings` (key/value), `sessions`, `messages`
   (unique `(session_id, sequence)`, cascading delete), `summaries`
-  (one per session with `message_boundary`), and the schema-v4 sentence bank
-  (`sentence_topics`, `sentences`, `sentence_review_log`).
+  (one per session with `message_boundary`), the schema-v4 sentence bank
+  (`sentence_topics`, `sentences`, `sentence_review_log`) and the schema-v7
+  word bank (`word_topics`, `words`, `word_review_log`).
 - Typed entity stores (`sessionStore`, `messageStore`, `summaryStore`,
   `profileStore`, `settingsStore`) are wrapped by
-  `LocalConversationRepository` (`src/db/conversationRepository.ts`), and
-  `sentenceRepository` owns the sentence-bank tables; feature code never writes
-  SQL.
+  `LocalConversationRepository` (`src/db/conversationRepository.ts`),
+  `sentenceRepository` owns the sentence-bank tables and `wordRepository` the
+  word-bank tables; feature code never writes SQL.
 - `clearServerlessLocalData()` (`src/db/clearLocalData.ts`) wipes serverless
-  tables — including sentence topics, sentences and the review log — in one
-  transaction and clears the stored provider keys — it never touches auth
-  tokens, the theme preference, or the mode flag.
+  tables — including sentence and word topics, their items and review logs —
+  in one transaction and clears the stored provider keys — it never touches
+  auth tokens, the theme preference, or the mode flag.
 
 ### 8.5 Serverless LLM provider layer
 
@@ -548,6 +549,72 @@ learn-ahead behaviour). `src/srs/answerCheck.ts` supplies the word-level diff
 and the Good/Again suggestion for dictation; `src/srs/normalize.ts` is the
 shared duplicate key.
 
+### 8.8 Word bank (serverless)
+
+A vocabulary bank per learner-created topic (WORD_BANK_V1), the sibling of the
+sentence bank. It is serverless-only and never calls the Django backend; the
+Home row and the topics screen follow the same mode-gating pattern. The
+division of labour is the feature's core rule: **the AI only chooses which
+words** belong to the learner's domain; every stored dictionary fact comes from
+the Free Dictionary API (`dictionaryapi.dev` — no key, no auth; definitions
+originate from Wiktionary, CC BY-SA, credited in Settings).
+
+**Store.** `src/db/wordRepository.ts` owns every SQL statement for schema
+version 7: `word_topics` (title, learner-context description, optional
+`extra_prompt`), `words` (the dictionary facts stored verbatim as JSON in the
+API's own shape — `senses_json` POS groups with definitions/examples and
+`phonetics_json` IPA strings — plus `data_source`/`data_status`/`enriched_at`
+and the same FSRS card fields as sentences) and `word_review_log` (Anki's
+revlog shape, mirroring the sentence log). `normalized_text` is the per-topic
+duplicate key (lowercase, trimmed, whitespace-collapsed, surrounding
+punctuation stripped — `src/srs/normalizeWord.ts`, deliberately simpler than
+the sentence normalizer). `data_status='missing'` marks a word kept after a
+transient dictionary error: it is excluded from sessions and due counts until
+`fillWordDictionaryData` stores fetched senses and flips it to complete.
+`applyWordEnrichment` replaces the senses wholesale and stamps
+`data_source='enriched'`/`enriched_at`, never touching phonetics or the FSRS
+state.
+
+**Dictionary client.** `src/serverless/dictionaryApi.ts` performs one
+`GET /api/v2/entries/en/{word}` per word with an injected `fetch` seam and a
+per-word timeout. The pure mapper keeps every sense the API returns (merging
+same-POS groups), skips malformed entries, and yields one of three outcomes:
+`found` (rows to store), `not-found` (404, empty body, unusable JSON — the word
+is dropped) and `unavailable` (429/5xx/network/timeout — transient, the word
+survives as a dataless candidate). The API's audio URLs are deliberately
+ignored: word audio is device TTS only.
+
+**Generation and enrichment services.** `src/serverless/wordGeneration.ts`
+runs one completion that must return ONLY a JSON array of single English words
+(base dictionary form, no phrases or inflections); the prompt carries the
+topic title, the learner-context description verbatim, the additional prompt,
+the requested count (user-typed 1–30, clamped defensively) and up to 100
+existing words. After parsing (fenced/prose-tolerant, normalized dedupe), each
+chosen word goes through the dictionary client sequentially; found words are
+inserted complete, unavailable words as `missing` candidates, not-found words
+are dropped, and the summary reports kept-with-data / kept-without-data /
+not-found. `parseManualWordInput` shares the same lookup-persist pipeline for
+comma-separated manual input. `src/serverless/wordEnrichment.ts` improves one
+word's data per completion: the current senses go in as context and the AI
+proposes a full replacement in the stored shape; the proposal is returned
+WITHOUT writing — the change-review modal on `WordDetailScreen` diffs old vs
+new side by side and Apply performs the deterministic repository write while
+Cancel writes nothing. Learner-supplied text is wrapped as untrusted
+`<learner_context>` data in every prompt.
+
+**Shared session rules.** Words reuse the sentence scheduler, config and
+review-log shape unchanged. The one shared-code change is
+`src/srs/session.ts` generalized over a minimal `SchedulableItem` shape so
+`buildPracticeSession` / `createPracticeSessionState` / `applyPracticeGrade`
+serve both kinds (behavior unchanged for sentences); a word with
+`data_status='missing'` never enters a session. `src/srs/wordMask.ts` masks
+the target word and its documented regular inflections on recall fronts
+(first letter + underscores, word boundaries only, presentation-only).
+`src/preferences/wordPracticeMode.ts` persists the `auto | dictation | recall`
+preference for words; `selectCardMode` is reused as-is, dictation cards speak
+the word and pre-suggest Good on an exact or one-typo answer, and recall cards
+show the masked meanings.
+
 **Generation service.** `src/serverless/sentenceGeneration.ts` makes one
 completion through the existing registry seam (the user's own provider,
 resolved by `createProviderClient` + `loadServerlessConfig`) and reads the
@@ -596,3 +663,8 @@ the next due time instead of allowing practice ahead.
   `pnpm typecheck`). The sentence bank adds schema/repository tests, pure
   scheduler/session/answer-check tests, generation-parser tests, and screen
   tests for topics, topic generation/review, practice cards and mode gating.
+  The word bank adds schema/repository tests, dictionary-client tests over an
+  injected `fetch`, generation/enrichment parser tests, masking tests and
+  screen tests for topics, topic list/search/generation, the review modal,
+  manual input, detail, practice cards, mode gating, the Home row and the
+  clear-data wipe.
