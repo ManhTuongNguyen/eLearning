@@ -52,9 +52,11 @@ export function createStyles(c: ThemeColors) {
       flex: 1,
     },
     newTopicButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      // Compact 32x32 circle so the header row height matches the title text
+      // (a 44x44 button inflated the row and pushed the title down).
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: c.primary,
@@ -70,7 +72,9 @@ export function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: 14,
-      paddingLeft: 16,
+      // No horizontal padding: the ScreenList gutter already insets the rows,
+      // so the topic titles align with the screen title instead of sitting
+      // 16px further in (a double inset that read as a redundant margin).
       paddingRight: 6,
     },
     rowMain: {
@@ -358,7 +362,7 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
           onPress={handleNewTopic}
           style={({ pressed }) => [styles.newTopicButton, pressed && styles.pressedFade]}
           disabled={!serverlessMode}>
-          <Icon name="plus" color={colors.onPrimary} />
+          <Icon name="plus" size={20} color={colors.onPrimary} />
         </Pressable>
       </ScreenHeader>
 

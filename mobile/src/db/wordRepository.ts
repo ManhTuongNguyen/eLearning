@@ -395,9 +395,11 @@ export async function fillWordDictionaryData(
  * Replace a word's senses wholesale with an approved enrichment proposal: one
  * transaction writes the new senses, flips `data_source` to `'enriched'` and
  * stamps `enriched_at`. Phonetics are untouched (the dictionary's IPA survives
- * every enrichment) and so is the FSRS state — no review counter, schedule or
- * `due_at` changes. Returns the updated record, or null when the id is
- * unknown.
+ * an enrichment of data-bearing words), and so is the FSRS state — no review
+ * counter, schedule or `due_at` changes. A word that had no dictionary data
+ * (`data_status='missing'`) becomes complete here: the approved AI proposal is
+ * the only path that can fill a word the dictionary could not. Returns the
+ * updated record, or null when the id is unknown.
  */
 export async function applyWordEnrichment(
   db: SqlExecutor,
@@ -407,7 +409,8 @@ export async function applyWordEnrichment(
 ): Promise<WordRecord | null> {
   await db.execute(
     `UPDATE words
-        SET senses_json = ?, data_source = 'enriched', enriched_at = ?, updated_at = ?
+        SET senses_json = ?, data_source = 'enriched', enriched_at = ?,
+            data_status = 'complete', updated_at = ?
       WHERE id = ?`,
     [JSON.stringify(senses), enrichedAt, nowIso(), wordId],
   );

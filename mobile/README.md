@@ -198,11 +198,18 @@ mode notice there instead of reading SQLite.
   enrichment prompt (wrapped as untrusted learner context).
 - **Generate** takes a user-typed count (1–30, default 10). The model returns
   ONLY a JSON array of single English words in their base dictionary form; the
-  dictionary API then fills all senses (grouped by part of speech, examples
-  included) and the IPA. A 404 drops the word; a transient API error (429,
-  network, timeout) keeps it as a `data_status='missing'` candidate that stays
-  out of practice until **Word detail → Fetch dictionary data** fills it. The
-  summary reports kept-with-data / kept-without-data / not-found.
+  dictionary API then fills the verified data. The client
+  (`src/serverless/dictionaryApi.ts`) calls `freedictionaryapi.com/api/v1`
+  (no key, no auth; definitions originate from Wiktionary, CC BY-SA 4.0) and
+  stores every sense per part of speech — subsenses flattened — with up to
+  three examples per sense, usage tags ("informal", "UK", …) and up to eight
+  synonyms/antonyms at sense and definition level, plus up to six deduplicated
+  IPA pronunciations. A 404 — or the API's "HTTP 200 with empty entries" —
+  drops the word; a transient API error (429, network, timeout) keeps it as a
+  `data_status='missing'` candidate that stays out of practice until **Word
+  detail** fills it — either **Fetch dictionary data** (dictionary first) or,
+  when the dictionary cannot provide it, the approved **Enrich** proposal from
+  the AI. The summary reports kept-with-data / kept-without-data / not-found.
 - **Add words** accepts comma-separated input in a fixed-height, internally
   scrolling field and runs the same dictionary pipeline and review modal.
 - The review modal shows one row per candidate (word, POS, first sense) with a
@@ -218,17 +225,19 @@ mode notice there instead of reading SQLite.
 ### Word detail, masking and enrichment
 
 - **Word detail** renders the word in large type with phonetics and a play
-  button (device TTS), every sense grouped by POS with examples, and the FSRS
-  schedule block (state, due, stability, difficulty, reps, lapses, last
-  grade/date). **Fetch dictionary data** appears only while the word has no
-  data; **Enrich** is disabled until data exists; **Delete** cascades the
-  review log.
+  button (device TTS), every sense grouped by POS with usage-tag chips, all
+  examples, and synonyms/antonyms lines at sense and definition level, plus
+  the FSRS schedule block (state, due, stability, difficulty, reps, lapses,
+  last grade/date). **Fetch dictionary data** appears only while the word has
+  no data; **Delete** cascades the review log.
 - **Enrich** sends one completion per word: the current senses go in as
-  context and the AI proposes a full replacement in the stored JSON shape. The
-  change-review modal diffs old vs new side by side; **Apply** replaces the
-  senses in one transaction and stamps `data_source='enriched'`/`enriched_at`,
-  while phonetics and the FSRS schedule are never touched. **Cancel** writes
-  nothing.
+  context and the AI proposes a full replacement in the stored JSON shape. For
+  a dataless word the AI drafts the whole entry from scratch, and applying it
+  flips the word to complete — the only path that completes a word the
+  dictionary could not. The change-review modal diffs old vs new side by
+  side; **Apply** replaces the senses in one transaction and stamps
+  `data_source='enriched'`/`enriched_at`, while the FSRS schedule is never
+  touched. **Cancel** writes nothing.
 - Recall cards mask the target word wherever a meaning or example shows it —
   the word and its documented regular inflections (-s, -es, -ed, -d, -ing,
   doubled final consonant, -ies/-ied), first letter + underscores, word
@@ -247,8 +256,9 @@ only, default `auto`) can force either card shape.
 
 Known limitations, accepted for v1: irregular inflections (`ran` for `run`) are
 not masked; the dictionary client has no retry loop; a word containing a comma
-cannot be entered manually; the AI's enrichment proposal is trusted for senses
-only — phonetics always come from the dictionary.
+cannot be entered manually; dictionary quotes and inflection forms are fetched
+but not stored, and word audio is device TTS only (the API's recordings are
+ignored).
 
 ## Grammar auto-check (opt-in)
 

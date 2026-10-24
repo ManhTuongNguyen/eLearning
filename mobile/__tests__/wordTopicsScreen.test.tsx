@@ -166,6 +166,17 @@ describe('WordTopicsScreen — topic list', () => {
 });
 
 describe('WordTopicsScreen — create and edit topic', () => {
+  test('the form fields scroll inside the modal so Save stays reachable', async () => {
+    const { view } = await renderInMode();
+
+    await fireEvent.press(view.getByTestId('word-topics-new'));
+    expect(view.getByTestId('word-topic-form-modal')).toBeTruthy();
+    expect(view.getByTestId('word-topic-form-scroll').props.nestedScrollEnabled).toBe(true);
+    // Save and Cancel live outside the scroll view.
+    expect(view.getByTestId('word-topic-form-save')).toBeTruthy();
+    expect(view.getByTestId('word-topic-form-cancel')).toBeTruthy();
+  });
+
   test('a blank title cannot be submitted', async () => {
     const { view } = await renderInMode();
 

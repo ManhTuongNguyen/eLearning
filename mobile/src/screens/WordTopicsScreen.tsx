@@ -21,6 +21,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -70,9 +71,11 @@ export function createStyles(c: ThemeColors) {
       flex: 1,
     },
     newTopicButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      // Compact 32x32 circle so the header row height matches the title text
+      // (a 44x44 button inflated the row and pushed the title down).
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: c.primary,
@@ -88,7 +91,9 @@ export function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: 14,
-      paddingLeft: 16,
+      // No horizontal padding: the ScreenList gutter already insets the rows,
+      // so the topic titles align with the screen title instead of sitting
+      // 16px further in (a double inset that read as a redundant margin).
       paddingRight: 6,
     },
     rowMain: {
@@ -196,6 +201,7 @@ export function createStyles(c: ThemeColors) {
     modalCard: {
       width: '100%',
       maxWidth: 460,
+      maxHeight: '90%',
       backgroundColor: c.surface,
       borderColor: c.border,
       borderWidth: 1,
@@ -207,6 +213,15 @@ export function createStyles(c: ThemeColors) {
       fontSize: 18,
       fontWeight: '700',
       color: c.textPrimary,
+    },
+    formScroll: {
+      flexGrow: 0,
+      // Full-bleed over the card's horizontal padding so the Android
+      // scrollbar anchors to the card's right edge instead of floating
+      // inside the padding gutter; the content keeps its original inset.
+      marginLeft: -20,
+      marginRight: -20,
+      paddingHorizontal: 20,
     },
     inputLabel: {
       fontSize: 13,
@@ -543,7 +558,7 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
           onPress={handleNewTopic}
           style={({ pressed }) => [styles.newTopicButton, pressed && styles.pressedFade]}
           disabled={!serverlessMode}>
-          <Icon name="plus" color={colors.onPrimary} />
+          <Icon name="plus" size={20} color={colors.onPrimary} />
         </Pressable>
       </ScreenHeader>
 
@@ -611,6 +626,11 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
               {form?.topicId === null || form === null ? 'New topic' : 'Edit topic'}
             </Text>
 
+            <ScrollView
+              style={styles.formScroll}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              testID="word-topic-form-scroll">
             <Text style={styles.inputLabel}>Topic</Text>
             <TextInput
               placeholder="e.g. Cooking"
@@ -658,6 +678,7 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
                 {saveError}
               </Text>
             ) : null}
+            </ScrollView>
 
             <View style={styles.modalFooter}>
               <Pressable

@@ -88,7 +88,9 @@ export function createStyles(c: ThemeColors) {
     },
     headerTop: {
       flexDirection: 'row',
-      alignItems: 'center',
+      // Top-aligned so the back link and title sit exactly where they do on
+      // the sentence topic screen, even with the menu button in the row.
+      alignItems: 'flex-start',
       gap: 12,
     },
     backLinkButton: {
@@ -106,14 +108,14 @@ export function createStyles(c: ThemeColors) {
       color: c.textPrimary,
     },
     menuButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      // Kept text-row height so the back link and title sit at exactly the
+      // same height as the sentence topic screen (a bordered 40x40 button
+      // would center them ~6pt lower).
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.borderStrong,
     },
     descriptionBox: {
       maxHeight: DESCRIPTION_MAX_HEIGHT,

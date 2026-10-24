@@ -51,7 +51,6 @@ import {
   diffDisplayTokens,
   diffTokens,
   suggestGrade,
-  summarizeDiff,
 } from '../srs/answerCheck';
 import { selectCardMode } from '../srs/cardMode';
 import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from '../srs/config';
@@ -155,6 +154,9 @@ export function createStyles(c: ThemeColors) {
       gap: 12,
       marginBottom: 12,
     },
+    backLinkButton: {
+      paddingVertical: 4,
+    },
     backLinkText: {
       fontSize: 15,
       fontWeight: '600',
@@ -253,6 +255,29 @@ export function createStyles(c: ThemeColors) {
       letterSpacing: 2,
       fontWeight: '700',
     },
+    chipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginBottom: 2,
+    },
+    tagChip: {
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      borderRadius: 8,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      backgroundColor: c.background,
+    },
+    tagChipText: {
+      fontSize: 11,
+      color: c.textMuted,
+    },
+    relationLine: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.textMuted,
+    },
     answerInput: {
       backgroundColor: c.background,
       borderColor: c.borderStrong,
@@ -296,22 +321,44 @@ export function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.onPrimary,
     },
-    buttonLabel: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: c.textMuted,
-    },
     primaryButtonLabel: {
       fontSize: 11,
       fontWeight: '600',
       color: c.onPrimary,
     },
-    againButton: {
-      backgroundColor: c.danger,
-      borderColor: c.danger,
+    gradeRow: {
+      flexDirection: 'row',
+      gap: 10,
     },
-    againButtonText: {
-      color: c.onPrimary,
+    gradeButton: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      backgroundColor: c.surface,
+      paddingVertical: 12,
+    },
+    gradeButtonSuggested: {
+      borderColor: c.primary,
+      backgroundColor: c.accentSoft,
+    },
+    gradeText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    gradeIntervalText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: c.textMuted,
+      marginTop: 2,
+    },
+    suggestion: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: c.textSecondary,
     },
     summaryRow: {
       flexDirection: 'row',
@@ -341,6 +388,75 @@ export function createStyles(c: ThemeColors) {
 type GradeCounts = Record<ReviewGrade, number>;
 
 const EMPTY_COUNTS: GradeCounts = { again: 0, hard: 0, good: 0, easy: 0 };
+
+const GRADE_OPTIONS: Array<{ grade: ReviewGrade; label: string }> = [
+  { grade: 'again', label: 'Again' },
+  { grade: 'hard', label: 'Hard' },
+  { grade: 'good', label: 'Good' },
+  { grade: 'easy', label: 'Easy' },
+];
+
+/**
+ * Anki's four grade buttons, identical in structure to the sentence practice
+ * screen: uniform layout, and the pre-suggested grade is highlighted (border
+ * + accent background + colored label) instead of an inline check mark that
+ * would shift the text inside the button.
+ */
+function GradeButtons({
+  suggested,
+  previews,
+  saving,
+  colors,
+  styles,
+  onGrade,
+}: {
+  suggested: ReviewGrade | null;
+  previews: GradePreview[];
+  saving: boolean;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  onGrade: (grade: ReviewGrade) => void;
+}) {
+  return (
+    <View style={styles.gradeRow}>
+      {GRADE_OPTIONS.map(option => {
+        const preview = previews.find(item => item.grade === option.grade);
+        const isSuggested = suggested === option.grade;
+        return (
+          <Pressable
+            key={option.grade}
+            accessibilityRole="button"
+            accessibilityLabel={`Grade ${option.label}`}
+            accessibilityState={{ disabled: saving, selected: isSuggested }}
+            testID={`word-practice-grade-${option.grade}`}
+            disabled={saving}
+            onPress={() => onGrade(option.grade)}
+            style={({ pressed }) => [
+              styles.gradeButton,
+              isSuggested && styles.gradeButtonSuggested,
+              saving && styles.buttonDisabled,
+              pressed && styles.pressedFade,
+            ]}>
+            <Text
+              style={[
+                styles.gradeText,
+                { color: isSuggested ? colors.primary : colors.textPrimary },
+              ]}>
+              {option.label}
+            </Text>
+            {preview ? (
+              <Text
+                style={styles.gradeIntervalText}
+                testID={`word-practice-grade-interval-${option.grade}`}>
+                {preview.label}
+              </Text>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 interface WordPracticeScreenInternalProps extends WordPracticeScreenProps {
   /** TTS seam; defaults to the active engine from the registry. */
@@ -550,6 +666,73 @@ export function WordPracticeScreen({
     allWords.length > 0 && createWordPracticeSessionState(allWords, new Date(), 1).queue.length > 0;
   const showGradeButtons = cardMode === 'dictation' ? diff !== null : revealed;
 
+  /** Usage-tag chips ("informal", "UK", ...). */
+  const renderTagChips = (tags: readonly string[]) =>
+    tags.length === 0 ? null : (
+      <View style={styles.chipRow}>
+        {tags.map((tag, tagIndex) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: chips render positionally
+          <View key={tagIndex} style={styles.tagChip}>
+            <Text style={styles.tagChipText}>{tag}</Text>
+          </View>
+        ))}
+      </View>
+    );
+
+  /** One "Synonyms: a, b" / "Antonyms: …" line on the back card. */
+  const renderRelationLine = (label: string, words: readonly string[]) =>
+    words.length === 0 ? null : (
+      <Text selectable style={styles.relationLine}>
+        {label}
+        {words.join(', ')}
+      </Text>
+    );
+
+  /**
+   * Every stored sense group on the back card — part of speech, usage tags,
+   * all definitions with all examples, synonyms/antonyms — with every text
+   * selectable so the learner can copy anything they see.
+   */
+  const renderSenseGroups = (word: WordRecord) =>
+    word.senses_json.map((sense, senseIndex) => (
+      <View
+        // biome-ignore lint/suspicious/noArrayIndexKey: sense groups render positionally
+        key={`${sense.partOfSpeech}-${senseIndex}`}
+        style={styles.senseGroup}>
+        <Text selectable style={styles.posLabel}>
+          {sense.partOfSpeech}
+        </Text>
+        {renderRelationLine('Synonyms: ', sense.synonyms ?? [])}
+        {renderRelationLine('Antonyms: ', sense.antonyms ?? [])}
+        {sense.definitions.map((definition, definitionIndex) => (
+          <View
+            // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
+            key={definitionIndex}>
+            {renderTagChips(definition.tags ?? [])}
+            <Text selectable style={styles.definition}>
+              {definition.definition}
+            </Text>
+            {definition.example ? (
+              <Text selectable style={styles.example}>
+                {definition.example}
+              </Text>
+            ) : null}
+            {(definition.extraExamples ?? []).map((extra, extraIndex) => (
+              <Text
+                selectable
+                // biome-ignore lint/suspicious/noArrayIndexKey: examples render positionally
+                key={`extra-${extraIndex}`}
+                style={styles.example}>
+                {extra}
+              </Text>
+            ))}
+            {renderRelationLine('≈ ', definition.synonyms ?? [])}
+            {renderRelationLine('≠ ', definition.antonyms ?? [])}
+          </View>
+        ))}
+      </View>
+    ));
+
   /** The masked front of the recall card: every sense rendered through wordMask. */
   const renderMaskedSenses = (word: WordRecord) =>
     word.senses_json.map((sense, senseIndex) => (
@@ -603,11 +786,7 @@ export function WordPracticeScreen({
           accessibilityLabel="Back to topic"
           testID="word-practice-back"
           onPress={() => navigation.goBack()}
-          style={({ pressed }) => [
-            styles.button,
-            { flex: 0, borderWidth: 0, backgroundColor: 'transparent' },
-            pressed && styles.pressedFade,
-          ]}>
+          style={({ pressed }) => [styles.backLinkButton, pressed && styles.pressedFade]}>
           <Text style={styles.backLinkText}>‹ Topic</Text>
         </Pressable>
         <Text style={styles.title} numberOfLines={1} testID="word-practice-title">
@@ -734,28 +913,15 @@ export function WordPracticeScreen({
                 ) : null}
                 {diff !== null ? (
                   <View>
-                    <Text style={styles.definition} testID="word-practice-correct-word">
+                    <Text selectable style={styles.definition} testID="word-practice-correct-word">
                       {currentCard.text}
                     </Text>
                     {currentCard.phonetics_json.length > 0 ? (
-                      <Text style={styles.phonetics}>{currentCard.phonetics_json.join('  ')}</Text>
+                      <Text selectable style={styles.phonetics}>
+                        {currentCard.phonetics_json.join('\n')}
+                      </Text>
                     ) : null}
-                    <View style={{ gap: 6 }}>
-                      {currentCard.senses_json.map((sense, index) => (
-                        <View
-                          // biome-ignore lint/suspicious/noArrayIndexKey: sense groups render positionally
-                          key={`${sense.partOfSpeech}-${index}`}
-                          style={styles.senseGroup}>
-                          <Text style={styles.posLabel}>{sense.partOfSpeech}</Text>
-                          {sense.definitions.slice(0, 1).map((definition, definitionIndex) => (
-                            // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
-                            <Text key={definitionIndex} style={styles.definition}>
-                              {definition.definition}
-                            </Text>
-                          ))}
-                        </View>
-                      ))}
-                    </View>
+                    <View style={{ gap: 10 }}>{renderSenseGroups(currentCard)}</View>
                   </View>
                 ) : null}
               </>
@@ -774,30 +940,27 @@ export function WordPracticeScreen({
                 />
                 {revealed ? (
                   <View testID="word-practice-recall-reveal">
-                    <Text style={styles.wordText}>{currentCard.text}</Text>
-                    {currentCard.phonetics_json.length > 0 ? (
-                      <Text style={styles.phonetics}>{currentCard.phonetics_json.join('  ')}</Text>
-                    ) : null}
-                    <View style={{ gap: 10 }}>
-                      {currentCard.senses_json.map((sense, index) => (
-                        <View
-                          // biome-ignore lint/suspicious/noArrayIndexKey: sense groups render positionally
-                          key={`${sense.partOfSpeech}-${index}`}
-                          style={styles.senseGroup}>
-                          <Text style={styles.posLabel}>{sense.partOfSpeech}</Text>
-                          {sense.definitions.map((definition, definitionIndex) => (
-                            <View
-                              // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
-                              key={definitionIndex}>
-                              <Text style={styles.definition}>{definition.definition}</Text>
-                              {definition.example ? (
-                                <Text style={styles.example}>{definition.example}</Text>
-                              ) : null}
-                            </View>
+                    <Text selectable style={styles.wordText}>
+                      {currentCard.text}
+                    </Text>
+                    {diff !== null ? (
+                      <View testID="word-practice-diff">
+                        <Text style={styles.definition}>
+                          {diffDisplayTokens(diff).map((token, index) => (
+                            // biome-ignore lint/suspicious/noArrayIndexKey: diff tokens are positional
+                            <Text key={index} style={diffTokenStyle(token.kind, colors)}>
+                              {token.text}{' '}
+                            </Text>
                           ))}
-                        </View>
-                      ))}
-                    </View>
+                        </Text>
+                      </View>
+                    ) : null}
+                    {currentCard.phonetics_json.length > 0 ? (
+                      <Text selectable style={styles.phonetics}>
+                        {currentCard.phonetics_json.join('\n')}
+                      </Text>
+                    ) : null}
+                    <View style={{ gap: 10 }}>{renderSenseGroups(currentCard)}</View>
                   </View>
                 ) : null}
               </>
@@ -836,48 +999,21 @@ export function WordPracticeScreen({
                 </Pressable>
               </View>
             ) : (
-              <View style={styles.buttonRow}>
-                {previews.map(preview => {
-                  const isSuggested = suggested === preview.grade;
-                  const gradeStyle =
-                    preview.grade === 'again'
-                      ? [styles.button, styles.againButton]
-                      : [styles.button];
-                  const textStyle =
-                    preview.grade === 'again'
-                      ? [styles.buttonText, styles.againButtonText]
-                      : [styles.buttonText];
-                  return (
-                    <Pressable
-                      key={preview.grade}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${preview.grade} — schedules ${preview.label}`}
-                      testID={`word-practice-grade-${preview.grade}`}
-                      onPress={() => {
-                        // handleGrade handles its own errors, so it never rejects.
-                        handleGrade(preview.grade);
-                      }}
-                      disabled={saving}
-                      style={({ pressed }) => [
-                        ...gradeStyle,
-                        saving && styles.buttonDisabled,
-                        pressed && styles.pressedFade,
-                      ]}>
-                      <Text style={textStyle}>
-                        {preview.grade}
-                        {isSuggested ? ' ✓' : ''}
-                      </Text>
-                      <Text style={styles.buttonLabel}>{preview.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <GradeButtons
+                suggested={suggested}
+                previews={previews}
+                saving={saving}
+                colors={colors}
+                styles={styles}
+                onGrade={grade => {
+                  // handleGrade handles its own errors, so it never rejects.
+                  handleGrade(grade);
+                }}
+              />
             )}
-            {diff !== null ? (
-              <Text style={styles.stateText} testID="word-practice-suggestion">
-                {summarizeDiff(diff).correct === diff.length
-                  ? 'Exact match.'
-                  : 'Close — check the marked words.'}
+            {suggested !== null ? (
+              <Text style={styles.suggestion} testID="word-practice-suggestion">
+                {`Suggested: ${suggested === 'good' ? 'Good' : 'Again'}`}
               </Text>
             ) : null}
           </View>

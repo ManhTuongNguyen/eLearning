@@ -256,19 +256,34 @@ export interface SentenceReviewLogInput {
 
 /**
  * One dictionary sense group: a part of speech with its definitions. This is
- * the same shape the Free Dictionary API returns (minus metadata the app does
- * not store), so the AI's enrichment proposal can replace the stored JSON
- * wholesale and the change-review modal can diff old vs new structurally.
+ * the shape the Free Dictionary API (freedictionaryapi.com) returns, extended
+ * with the extra data the API carries — usage tags, additional examples and
+ * synonyms/antonyms at sense and definition level — so the AI's enrichment
+ * proposal can replace the stored JSON wholesale and the change-review modal
+ * can diff old vs new structurally. All extra fields are optional: rows
+ * stored before the API switch keep parsing.
  */
 export interface WordSense {
   partOfSpeech: string;
   definitions: WordSenseDefinition[];
+  /** Word-level synonyms of this sense group (from the API entry). */
+  synonyms?: string[];
+  /** Word-level antonyms of this sense group (from the API entry). */
+  antonyms?: string[];
 }
 
-/** One definition inside a sense group, with its optional example sentence. */
+/** One definition inside a sense group, with its examples and metadata. */
 export interface WordSenseDefinition {
   definition: string;
   example?: string;
+  /** Further example sentences beyond the first (capped at 3). */
+  extraExamples?: string[];
+  /** Usage labels from the dictionary ("informal", "UK", "archaic", ...). */
+  tags?: string[];
+  /** Synonyms of this specific sense (capped at 8). */
+  synonyms?: string[];
+  /** Antonyms of this specific sense (capped at 8). */
+  antonyms?: string[];
 }
 
 /**
@@ -399,13 +414,47 @@ export function parseWordSenses(raw: unknown): WordSense[] {
         typeof definitionRecord.example === 'string' && definitionRecord.example.trim()
           ? definitionRecord.example.trim()
           : undefined;
-      definitions.push(example === undefined ? { definition } : { definition, example });
+      const parsed: WordSenseDefinition = example === undefined ? { definition } : { definition, example };
+      const extraExamples = stringList(definitionRecord.extraExamples);
+      if (extraExamples.length > 0) {
+        parsed.extraExamples = extraExamples;
+      }
+      const tags = stringList(definitionRecord.tags);
+      if (tags.length > 0) {
+        parsed.tags = tags;
+      }
+      const synonyms = stringList(definitionRecord.synonyms);
+      if (synonyms.length > 0) {
+        parsed.synonyms = synonyms;
+      }
+      const antonyms = stringList(definitionRecord.antonyms);
+      if (antonyms.length > 0) {
+        parsed.antonyms = antonyms;
+      }
+      definitions.push(parsed);
     }
     if (partOfSpeech && definitions.length > 0) {
-      senses.push({ partOfSpeech, definitions });
+      const sense: WordSense = { partOfSpeech, definitions };
+      const senseSynonyms = stringList(record.synonyms);
+      if (senseSynonyms.length > 0) {
+        sense.synonyms = senseSynonyms;
+      }
+      const senseAntonyms = stringList(record.antonyms);
+      if (senseAntonyms.length > 0) {
+        sense.antonyms = senseAntonyms;
+      }
+      senses.push(sense);
     }
   }
   return senses;
+}
+
+/** Non-empty trimmed strings from an optional array (safe defaults). */
+function stringList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
 }
 
 /**

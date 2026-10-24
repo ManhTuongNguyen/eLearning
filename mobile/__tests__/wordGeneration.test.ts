@@ -7,6 +7,7 @@
  * outcomes are verified against the database the screens read.
  */
 import { migrateDatabase } from '../src/db/migrations';
+import { saveLearningProfile } from '../src/db/profileStore';
 import type { WordTopicRecord } from '../src/db/types';
 import { createWordTopic, insertWords, listWordsByTopic } from '../src/db/wordRepository';
 import type { DictionaryLookupResult } from '../src/serverless/dictionaryApi';
@@ -88,6 +89,25 @@ describe('parseGeneratedWords', () => {
   });
 });
 
+describe('buildWordUserPrompt — learner level', () => {
+  const levelTopic = {
+    title: 'Cooking',
+    description: "I'm a chef, I often read cooking blogs",
+    extra_prompt: 'focus on kitchen verbs',
+  };
+
+  test('states the CEFR level when the profile has one', () => {
+    const prompt = buildWordUserPrompt(levelTopic, 10, [], 'B2');
+    expect(prompt).toContain('The learner\'s English level is B2 (CEFR)');
+    expect(prompt).toContain('Choose words that fit that level');
+  });
+
+  test('asks the model to infer the level when the profile is AUTO', () => {
+    const prompt = buildWordUserPrompt(levelTopic, 10, [], 'AUTO');
+    expect(prompt).toContain("The learner's English level is unknown; infer an appropriate level.");
+  });
+});
+
 describe('buildWordUserPrompt', () => {
   const topic = {
     title: 'Cooking',
@@ -164,6 +184,35 @@ describe('generateTopicWords pipeline', () => {
 
     const rows = await listWordsByTopic(db, topic.id);
     expect(rows.map(row => row.text)).toEqual(['simmer', 'bank']);
+
+    await db.close();
+  });
+
+  test('carries the learner\'s CEFR level from the on-device profile into the prompt', async () => {
+    const { db, topic } = await freshTopic();
+    await saveLearningProfile(db, 'C1');
+    const complete = jest.fn(
+      async (): Promise<CompletionResult> => ({
+        text: '["bank"]',
+        model: 'test-model',
+        finishReason: 'stop',
+        requestId: null,
+      }),
+    );
+
+    await generateTopicWords(db, complete, async () => found(), {
+      topic,
+      count: 1,
+      existingWords: [],
+    });
+
+    const calls = complete.mock.calls as unknown as Array<[CompletionRequest]>;
+    const request = calls[0]?.[0];
+    const userPrompt = request?.messages.find(
+      (m: { role: string }) => m.role === 'user',
+    )?.content;
+    expect(userPrompt).toContain("The learner's English level is C1 (CEFR)");
+    expect(userPrompt).toContain('Choose words that fit that level');
 
     await db.close();
   });

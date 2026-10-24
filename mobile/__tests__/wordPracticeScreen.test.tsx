@@ -9,7 +9,7 @@
  * double.
  */
 
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
 import { migrateDatabase } from '../src/db/migrations';
 import type { WordRecord } from '../src/db/types';
@@ -211,15 +211,33 @@ describe('WordPracticeScreen — dictation card', () => {
     await fireEvent.changeText(view.getByTestId('word-practice-answer'), 'word2');
     await fireEvent.press(view.getByTestId('word-practice-check'));
 
-    // One typo-sized edit → Good is pre-suggested.
+    // One typo-sized edit → Good is pre-suggested (highlighted button and a
+    // sentence-style suggestion line — no check-mark glyph inside the button).
     await waitFor(() => {
-      expect(view.getByTestId('word-practice-grade-good')).toHaveTextContent(/✓/);
+      expect(
+        view.getByTestId('word-practice-grade-good').props.accessibilityState,
+      ).toMatchObject({ selected: true });
+      expect(view.getByTestId('word-practice-suggestion')).toHaveTextContent('Suggested: Good');
     });
 
     await act(async () => {
       fireEvent.press(view.getByTestId('word-practice-replay'));
     });
     expect(spoken).toEqual(['word1', 'word1']);
+  });
+
+  test('the back card shows examples and every text is selectable', async () => {
+    const topicId = await createTopicWithWords(1);
+    const view = await renderPractice(topicId);
+
+    await fireEvent.changeText(view.getByTestId('word-practice-answer'), 'word1');
+    await fireEvent.press(view.getByTestId('word-practice-check'));
+
+    // Word, POS, definition and example are all selectable.
+    expect(view.getByTestId('word-practice-correct-word').props.selectable).toBe(true);
+    expect(view.getByText('noun').props.selectable).toBe(true);
+    expect(view.getByText('A financial institution.').props.selectable).toBe(true);
+    expect(view.getByText('I went to the bank.').props.selectable).toBe(true);
   });
 
   test('grading persists the schedule and the review log with the dictation mode', async () => {
@@ -319,7 +337,9 @@ describe('WordPracticeScreen — recall card', () => {
       expect(view.getByTestId('word-practice-recall-reveal')).toBeTruthy();
     });
     expect(spoken).toEqual(['word1']);
-    expect(view.getByText('word1')).toBeTruthy();
+    const reveal = within(view.getByTestId('word-practice-recall-reveal'));
+    expect(reveal.getByText('word1').props.selectable).toBe(true);
+    expect(reveal.getByText('I went to the bank.').props.selectable).toBe(true);
 
     await fireEvent.press(view.getByTestId('word-practice-grade-easy'));
     await waitFor(() => {

@@ -13,6 +13,8 @@
  */
 
 import type { SqlDriver } from '../db/driver';
+import type { EnglishLevel } from '../api/profile';
+import { getLearningProfile } from '../db/profileStore';
 import type { NewWord, WordRecord, WordTopicRecord } from '../db/types';
 import { insertWords } from '../db/wordRepository';
 import { normalizeWordText } from '../srs/normalizeWord';
@@ -72,12 +74,21 @@ export function buildWordUserPrompt(
   topic: Pick<WordTopicRecord, 'title' | 'description' | 'extra_prompt'>,
   count: number,
   existingWords: readonly string[],
+  level: EnglishLevel = 'AUTO',
 ): string {
   const safeCount = clampWordCount(count);
   const parts: string[] = [
     `Choose ${safeCount} English word${safeCount === 1 ? '' : 's'} for a vocabulary ` +
       'topic of an English-learning app.',
   ];
+
+  if (level === 'AUTO') {
+    parts.push("The learner's English level is unknown; infer an appropriate level.");
+  } else {
+    parts.push(
+      `The learner's English level is ${level} (CEFR). Choose words that fit that level.`,
+    );
+  }
 
   const contextLines: string[] = [];
   const title = sanitizeLearnerContext(topic.title, 200);
@@ -256,12 +267,18 @@ export async function generateTopicWords(
     throw new Error('generateTopicWords: a topic needs a title');
   }
   const requestedCount = clampWordCount(input.count);
+  const profile = await getLearningProfile(db);
   const request: CompletionRequest = {
     messages: [
       { role: 'system', content: WORD_GENERATION_SYSTEM_PROMPT },
       {
         role: 'user',
-        content: buildWordUserPrompt(input.topic, requestedCount, input.existingWords),
+        content: buildWordUserPrompt(
+          input.topic,
+          requestedCount,
+          input.existingWords,
+          profile.level,
+        ),
       },
     ],
   };

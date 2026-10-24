@@ -272,9 +272,9 @@ describe('SentenceTopicsScreen — new topic entry point', () => {
     const { view } = await renderInMode();
 
     expect(view.getByTestId('sentence-topics-new')).toHaveStyle({
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
     });
   });
 });

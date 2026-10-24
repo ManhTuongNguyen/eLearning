@@ -266,6 +266,63 @@ describe('word JSON helpers (TASK-WB-001)', () => {
     expect(parseWordSenses(senses)).toEqual(senses);
   });
 
+  test('parseWordSenses preserves tags, extra examples and relations', () => {
+    const rich = JSON.stringify([
+      {
+        partOfSpeech: 'adjective',
+        synonyms: ['large', 'huge'],
+        antonyms: ['little'],
+        definitions: [
+          {
+            definition: 'Of great size.',
+            example: 'A big house.',
+            extraExamples: ['Big deal.'],
+            tags: ['informal', 'UK'],
+            synonyms: ['ample'],
+            antonyms: ['tiny'],
+          },
+        ],
+      },
+    ]);
+    expect(parseWordSenses(rich)).toEqual([
+      {
+        partOfSpeech: 'adjective',
+        synonyms: ['large', 'huge'],
+        antonyms: ['little'],
+        definitions: [
+          {
+            definition: 'Of great size.',
+            example: 'A big house.',
+            extraExamples: ['Big deal.'],
+            tags: ['informal', 'UK'],
+            synonyms: ['ample'],
+            antonyms: ['tiny'],
+          },
+        ],
+      },
+    ]);
+    // Malformed optional fields are dropped, valid ones survive.
+    expect(
+      parseWordSenses(
+        JSON.stringify([
+          {
+            partOfSpeech: 'noun',
+            synonyms: ['ok', '', 42, null],
+            definitions: [
+              { definition: 'Valid.', tags: 'not-an-array', extraExamples: [1, 'kept'] },
+            ],
+          },
+        ]),
+      ),
+    ).toEqual([
+      {
+        partOfSpeech: 'noun',
+        synonyms: ['ok'],
+        definitions: [{ definition: 'Valid.', extraExamples: ['kept'] }],
+      },
+    ]);
+  });
+
   test('parseWordSenses yields safe defaults for malformed content', () => {
     expect(parseWordSenses('not json at all')).toEqual([]);
     expect(parseWordSenses('{"senses": []}')).toEqual([]);

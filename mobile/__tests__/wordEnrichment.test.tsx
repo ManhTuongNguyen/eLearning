@@ -66,8 +66,22 @@ describe('word enrichment prompts', () => {
     expect(prompt).toContain(JSON.stringify(OLD_SENSES, null, 2));
   });
 
+  test('a dataless word asks the AI to draft the full entry', () => {
+    const prompt = buildEnrichUserPrompt(
+      { text: 'blurble', senses_json: [] },
+      { title: 'Cooking', description: 'chefs', extra_prompt: '' },
+    );
+    expect(prompt).toContain('NO stored data');
+    expect(prompt).toContain('Draft the full entry yourself');
+    expect(prompt).not.toContain('current data (context only');
+  });
+
   test('the system prompt demands the stored JSON shape and context-only learner data', () => {
+    expect(WORD_ENRICHMENT_SYSTEM_PROMPT).toContain('ONE sense object per part of speech');
     expect(WORD_ENRICHMENT_SYSTEM_PROMPT).toContain('"senses"');
+    expect(WORD_ENRICHMENT_SYSTEM_PROMPT).toContain('"extraExamples"');
+    expect(WORD_ENRICHMENT_SYSTEM_PROMPT).toContain('"synonyms"');
+    expect(WORD_ENRICHMENT_SYSTEM_PROMPT).toContain('"tags"');
     expect(WORD_ENRICHMENT_SYSTEM_PROMPT).toContain('untrusted learner context');
   });
 });
@@ -91,6 +105,79 @@ describe('parseEnrichedSenses', () => {
     });
     expect(parseEnrichedSenses(raw)).toEqual([
       { partOfSpeech: 'noun', definitions: [{ definition: 'Valid.' }] },
+    ]);
+  });
+
+  test('preserves tags, extra examples and relations from the proposal', () => {
+    const raw = JSON.stringify({
+      senses: [
+        {
+          partOfSpeech: 'adjective',
+          synonyms: ['large', 'huge'],
+          antonyms: ['little'],
+          definitions: [
+            {
+              definition: 'Of great size.',
+              example: 'A big house.',
+              extraExamples: ['Big deal.', 'Big one.', 'Big time.', 'Too many.'],
+              tags: ['informal', 'UK'],
+              synonyms: ['ample'],
+              antonyms: ['tiny'],
+            },
+          ],
+        },
+      ],
+    });
+    expect(parseEnrichedSenses(raw)).toEqual([
+      {
+        partOfSpeech: 'adjective',
+        synonyms: ['large', 'huge'],
+        antonyms: ['little'],
+        definitions: [
+          {
+            definition: 'Of great size.',
+            example: 'A big house.',
+            extraExamples: ['Big deal.', 'Big one.', 'Big time.'], // capped at 3
+            tags: ['informal', 'UK'],
+            synonyms: ['ample'],
+            antonyms: ['tiny'],
+          },
+        ],
+      },
+    ]);
+  });
+
+  test('consolidates repeated part-of-speech blocks into one group', () => {
+    // Models often emit one block per definition; the parser must merge every
+    // block that shares a part of speech so the proposal mirrors the
+    // dictionary's structure (one block per POS).
+    const raw = JSON.stringify({
+      senses: [
+        { partOfSpeech: 'noun', definitions: [{ definition: 'First noun sense.' }] },
+        {
+          partOfSpeech: 'verb',
+          definitions: [{ definition: 'To rely on.', example: 'Bank on me.' }],
+          synonyms: ['trust'],
+        },
+        { partOfSpeech: 'noun', definitions: [{ definition: 'Second noun sense.' }] },
+        { partOfSpeech: 'noun', synonyms: ['ledger'], definitions: [{ definition: 'Third.' }] },
+      ],
+    });
+    expect(parseEnrichedSenses(raw)).toEqual([
+      {
+        partOfSpeech: 'noun',
+        definitions: [
+          { definition: 'First noun sense.' },
+          { definition: 'Second noun sense.' },
+          { definition: 'Third.' },
+        ],
+        synonyms: ['ledger'],
+      },
+      {
+        partOfSpeech: 'verb',
+        definitions: [{ definition: 'To rely on.', example: 'Bank on me.' }],
+        synonyms: ['trust'],
+      },
     ]);
   });
 
@@ -231,8 +318,17 @@ describe('WordDetailScreen — change-review modal', () => {
     await waitFor(() => {
       expect(view.queryByTestId('word-enrich-modal')).toBeTruthy();
     });
-    expect(screen.getByTestId('word-enrich-old')).toHaveTextContent(/An institution/);
-    expect(screen.getByTestId('word-enrich-new')).toHaveTextContent(/financial institution/);
+    // Current and proposed are paired row by row: row 0 holds the first
+    // sense group of each side, aligned side by side.
+    expect(screen.getByTestId('word-enrich-old-0')).toHaveTextContent(/An institution/);
+    expect(screen.getByTestId('word-enrich-new-0')).toHaveTextContent(/financial institution/);
+    // The proposed list has a second group where the current has none.
+    expect(screen.getByTestId('word-enrich-old-1')).toHaveTextContent(/No data\./);
+    expect(screen.getByTestId('word-enrich-new-1')).toHaveTextContent(/To rely on\./);
+    // The paired list scrolls; the actions stay outside it.
+    expect(screen.getByTestId('word-enrich-list-scroll').props.nestedScrollEnabled).toBe(true);
+    expect(screen.getByTestId('word-enrich-apply')).toBeTruthy();
+    expect(screen.getByTestId('word-enrich-cancel')).toBeTruthy();
 
     await fireEvent.press(view.getByTestId('word-enrich-apply'));
     await waitFor(() => {
@@ -304,6 +400,45 @@ describe('WordDetailScreen — change-review modal', () => {
   });
 });
 
+describe('WordDetailScreen — AI enrichment of a dataless word', () => {
+  test('enrich → apply completes a word the dictionary could not fill', async () => {
+    const topic = await createWordTopic(db, { title: 'Cooking' });
+    const [missing] = await insertWords(db, topic.id, [{ text: 'blurble', data_status: 'missing' }]);
+    complete.mockResolvedValue({
+      text: JSON.stringify({ senses: NEW_SENSES }),
+      model: 'test-model',
+      finishReason: 'stop',
+      requestId: null,
+    });
+
+    const view = await renderDetail(missing.id);
+    // The fetch action is still there (dictionary first), but enrich is live.
+    expect(view.getByTestId('word-detail-fetch')).toBeTruthy();
+    await fireEvent.press(view.getByTestId('word-detail-enrich'));
+
+    await waitFor(() => {
+      expect(view.queryByTestId('word-enrich-modal')).toBeTruthy();
+    });
+    // The "current" column shows no data.
+    expect(screen.getByTestId('word-enrich-old-0')).toHaveTextContent(/No data\./);
+
+    await fireEvent.press(view.getByTestId('word-enrich-apply'));
+    await waitFor(() => {
+      expect(view.queryByTestId('word-enrich-modal')).toBeFalsy();
+    });
+
+    const updated = await getWordById(db, missing.id);
+    expect(updated).toMatchObject({
+      data_status: 'complete',
+      data_source: 'enriched',
+      state: 'new',
+    });
+    expect(updated?.senses_json).toEqual(NEW_SENSES);
+    // The fetch action is gone now that the word has data.
+    expect(view.queryByTestId('word-detail-fetch')).toBeNull();
+  });
+});
+
 describe('applyWordEnrichment (repository)', () => {
   test('replaces senses wholesale and keeps phonetics', async () => {
     const topic = await createWordTopic(db, { title: 'Cooking' });
@@ -319,6 +454,19 @@ describe('applyWordEnrichment (repository)', () => {
     });
     expect(updated?.senses_json).toEqual(NEW_SENSES);
     expect(updated?.phonetics_json).toEqual(['/ˈsɪmər/']);
+
+    // A word the dictionary could not fill becomes complete when its approved
+    // AI proposal is applied — the only path that completes it.
+    const [missing] = await insertWords(db, topic.id, [{ text: 'blurble', data_status: 'missing' }]);
+    const completed = await applyWordEnrichment(db, missing.id, NEW_SENSES, enrichedAt);
+    expect(completed).toMatchObject({
+      data_status: 'complete',
+      data_source: 'enriched',
+      enriched_at: enrichedAt,
+    });
+    expect(completed?.senses_json).toEqual(NEW_SENSES);
+    expect(completed?.phonetics_json).toEqual([]);
+
     expect(await applyWordEnrichment(db, 999, NEW_SENSES, enrichedAt)).toBeNull();
   });
 });

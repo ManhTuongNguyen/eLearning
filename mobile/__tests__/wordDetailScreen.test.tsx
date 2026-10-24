@@ -194,6 +194,52 @@ describe('WordDetailScreen — rendering', () => {
   });
 });
 
+describe('WordDetailScreen — rich dictionary data', () => {
+  test('renders tag chips, extra examples and synonyms/antonyms from the v1 API', async () => {
+    const topic = await createWordTopic(db, { title: 'Cooking' });
+    const [word] = await insertWords(db, topic.id, [
+      {
+        text: 'big',
+        senses_json: [
+          {
+            partOfSpeech: 'adjective',
+            synonyms: ['large', 'huge', 'ample'],
+            antonyms: ['little'],
+            definitions: [
+              {
+                definition: 'Of great size.',
+                example: 'A big house.',
+                extraExamples: ['A big deal.', 'A big one.'],
+                tags: ['informal', 'UK'],
+                synonyms: ['ample', 'huge'],
+                antonyms: ['small'],
+              },
+              { definition: 'An adult.', tags: ['informal'] },
+            ],
+          },
+        ],
+        phonetics_json: ['/bɪɡ/'],
+      },
+    ]);
+
+    const view = await renderDetail(word.id);
+
+    // Sense-level relation lines.
+    expect(view.getByText('Synonyms: large, huge, ample')).toBeTruthy();
+    expect(view.getByText('Antonyms: little')).toBeTruthy();
+    // Usage tags render as chips.
+    expect(view.getAllByText('informal').length).toBe(2); // both definitions carry it
+    expect(view.getByText('UK')).toBeTruthy();
+    // First plus extra examples.
+    expect(view.getByText('A big house.')).toBeTruthy();
+    expect(view.getByText('A big deal.')).toBeTruthy();
+    expect(view.getByText('A big one.')).toBeTruthy();
+    // Definition-level relations.
+    expect(view.getByText('≈ ample, huge')).toBeTruthy();
+    expect(view.getByText('≠ small')).toBeTruthy();
+  });
+});
+
 describe('WordDetailScreen — fetch dictionary data', () => {
   test('is absent for complete words, shown for missing words, and fills on success', async () => {
     const topic = await createWordTopic(db, { title: 'Cooking' });
@@ -210,9 +256,10 @@ describe('WordDetailScreen — fetch dictionary data', () => {
 
     const missingView = await renderDetail(missing.id);
     expect(missingView.getByTestId('word-detail-fetch')).toBeTruthy();
-    // Enrich stays disabled until the data exists.
+    // Enrich is available for dataless words too: the AI drafts the entry
+    // when the dictionary cannot.
     expect(missingView.getByTestId('word-detail-enrich').props.accessibilityState).toMatchObject({
-      disabled: true,
+      disabled: false,
     });
 
     await fireEvent.press(missingView.getByTestId('word-detail-fetch'));

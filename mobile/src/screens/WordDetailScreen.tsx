@@ -10,15 +10,24 @@
  * - **Fetch dictionary data** is visible ONLY while `data_status='missing'`:
  *   one dictionary call fills senses and phonetics and flips the word to
  *   complete; a 404 keeps it missing with a "not found" message.
- * - **Enrich** re-drafts the learning data through the AI (TASK-WB-014); it is
- *   disabled while the word has no data.
+ * - **Enrich** re-drafts the learning data through the AI (TASK-WB-014). For a
+ *   word the dictionary could not fill, the approved AI proposal is the only
+ *   path that completes it.
  * - **Delete** asks for confirmation and removes the word (its review log
  *   cascades), then navigates back.
  *
  * The screen reads from the repository on focus; no in-memory guesses.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
@@ -186,6 +195,29 @@ export function createStyles(c: ThemeColors) {
       fontStyle: 'italic',
       marginLeft: 12,
     },
+    chipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginBottom: 2,
+    },
+    tagChip: {
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      borderRadius: 8,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      backgroundColor: c.background,
+    },
+    tagChipText: {
+      fontSize: 11,
+      color: c.textMuted,
+    },
+    relationLine: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.textMuted,
+    },
     scheduleCard: {
       backgroundColor: c.surface,
       borderColor: c.border,
@@ -332,11 +364,35 @@ export function createStyles(c: ThemeColors) {
       padding: 20,
       gap: 12,
     },
-    columnsRow: {
+    pairHeaderRow: {
       flexDirection: 'row',
       gap: 12,
     },
-    column: {
+    pairHeaderLabel: {
+      flex: 1,
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+    },
+    pairListScroll: {
+      flexGrow: 0,
+      // Full-bleed over the card's horizontal padding so the Android
+      // scrollbar anchors to the card's right edge instead of floating
+      // inside the padding gutter; the content keeps its original inset.
+      marginLeft: -20,
+      marginRight: -20,
+      paddingHorizontal: 20,
+    },
+    pairRow: {
+      flexDirection: 'row',
+      gap: 12,
+      paddingVertical: 8,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    pairCell: {
       flex: 1,
       gap: 6,
       backgroundColor: c.background,
@@ -344,13 +400,6 @@ export function createStyles(c: ThemeColors) {
       borderWidth: 1,
       borderRadius: 10,
       padding: 10,
-    },
-    columnTitle: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: c.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 1,
     },
     pressedFade: {
       opacity: 0.9,
@@ -492,7 +541,7 @@ export function WordDetailScreen({
    * the modal renders old vs new and the learner decides.
    */
   const handleEnrich = useCallback(async () => {
-    if (!word || enriching || word.data_status === 'missing') {
+    if (!word || enriching) {
       return;
     }
     setEnriching(true);
@@ -572,28 +621,99 @@ export function WordDetailScreen({
 
   const scheduleRows = useMemo(() => (word ? describeSchedule(word, new Date()) : []), [word]);
 
-  /** The sense groups of one side of the change-review modal. */
-  const renderSenseColumns = (senses: readonly WordSense[]) =>
-    senses.length === 0 ? (
-      <Text style={styles.stateText}>No data.</Text>
-    ) : (
-      senses.map((sense, senseIndex) => (
-        <View
-          // biome-ignore lint/suspicious/noArrayIndexKey: sense groups render positionally
-          key={`${sense.partOfSpeech}-${senseIndex}`}
-          style={styles.senseGroup}>
-          <Text style={styles.posLabel}>{sense.partOfSpeech}</Text>
-          {sense.definitions.map((definition, definitionIndex) => (
-            <View
-              // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
-              key={definitionIndex}>
-              <Text style={styles.definition}>{definition.definition}</Text>
-              {definition.example ? <Text style={styles.example}>{definition.example}</Text> : null}
-            </View>
-          ))}
-        </View>
-      ))
+  /** One sense group of a change-review row (one side of the pair). */
+  const renderSenseCell = (senses: readonly WordSense[], partOfSpeech: string) => {
+    const sense = senses.find(item => item.partOfSpeech === partOfSpeech);
+    if (!sense) {
+      return <Text style={styles.stateText}>No data.</Text>;
+    }
+    return (
+      <View style={styles.senseGroup}>
+        <Text style={styles.posLabel}>{sense.partOfSpeech}</Text>
+        {sense.definitions.map((definition, definitionIndex) => (
+          <View
+            // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
+            key={definitionIndex}>
+            <Text style={styles.definition}>{definition.definition}</Text>
+            {definition.example ? <Text style={styles.example}>{definition.example}</Text> : null}
+          </View>
+        ))}
+      </View>
     );
+  };
+
+  /** Usage-tag chips ("informal", "UK", ...). */
+  const renderTagChips = (tags: readonly string[]) =>
+    tags.length === 0 ? null : (
+      <View style={styles.chipRow}>
+        {tags.map((tag, tagIndex) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: chips render positionally
+          <View key={tagIndex} style={styles.tagChip}>
+            <Text style={styles.tagChipText}>{tag}</Text>
+          </View>
+        ))}
+      </View>
+    );
+
+  /** One "Synonyms: a, b, c" / "Antonyms: …" line, or nothing. */
+  const renderRelationLine = (label: string, words: readonly string[]) =>
+    words.length === 0 ? null : (
+      <Text style={styles.relationLine}>
+        {label}
+        {words.join(', ')}
+      </Text>
+    );
+
+  /** Every stored sense group with tags, examples and synonyms/antonyms. */
+  const renderSenseGroups = (senses: readonly WordSense[]) =>
+    senses.map((sense, senseIndex) => (
+      <View
+        // biome-ignore lint/suspicious/noArrayIndexKey: sense groups render positionally
+        key={`${sense.partOfSpeech}-${senseIndex}`}
+        style={styles.senseGroup}>
+        <Text style={styles.posLabel}>{sense.partOfSpeech}</Text>
+        {renderRelationLine('Synonyms: ', sense.synonyms ?? [])}
+        {renderRelationLine('Antonyms: ', sense.antonyms ?? [])}
+        {sense.definitions.map((definition, definitionIndex) => (
+          <View
+            // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
+            key={definitionIndex}>
+            {renderTagChips(definition.tags ?? [])}
+            <Text style={styles.definition}>{definition.definition}</Text>
+            {definition.example ? (
+              <Text style={styles.example}>{definition.example}</Text>
+            ) : null}
+            {(definition.extraExamples ?? []).map((extra, extraIndex) => (
+              <Text
+                // biome-ignore lint/suspicious/noArrayIndexKey: examples render positionally
+                key={`extra-${extraIndex}`}
+                style={styles.example}>
+                {extra}
+              </Text>
+            ))}
+            {renderRelationLine('≈ ', definition.synonyms ?? [])}
+            {renderRelationLine('≠ ', definition.antonyms ?? [])}
+          </View>
+        ))}
+      </View>
+    ));
+
+  /**
+   * Paired rows align current and proposed groups by part of speech (the
+   * meaningful comparison), not by position: one row per POS in the union of
+   * both sides, current data first. A side without that POS shows "No data."
+   */
+  const sensePairKeys = useMemo(() => {
+    const keys: string[] = [];
+    const seen = new Set<string>();
+    for (const sense of [...(word?.senses_json ?? []), ...(proposal ?? [])]) {
+      if (!seen.has(sense.partOfSpeech)) {
+        seen.add(sense.partOfSpeech);
+        keys.push(sense.partOfSpeech);
+      }
+    }
+    return keys;
+  }, [word, proposal]);
 
   const hasData = word?.data_status === 'complete';
 
@@ -651,13 +771,15 @@ export function WordDetailScreen({
               </View>
               {word.phonetics_json.length > 0 ? (
                 <Text style={styles.phonetics} testID="word-detail-phonetics">
-                  {word.phonetics_json.join('  ')}
+                  {word.phonetics_json.join('\n')}
                 </Text>
               ) : null}
               <Text style={styles.sourceLine}>
                 {word.data_source === 'enriched'
                   ? `AI-enriched${word.enriched_at ? ` · ${word.enriched_at.slice(0, 10)}` : ''}`
-                  : 'From the Free Dictionary API'}
+                  : word.data_status === 'missing'
+                    ? 'No dictionary data yet'
+                    : 'From the Free Dictionary API'}
               </Text>
             </View>
 
@@ -690,16 +812,16 @@ export function WordDetailScreen({
               ) : null}
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ disabled: !hasData || enriching, busy: enriching }}
+                accessibilityState={{ disabled: enriching, busy: enriching }}
                 testID="word-detail-enrich"
                 onPress={() => {
                   // handleEnrich handles its own errors, so it never rejects.
                   handleEnrich();
                 }}
-                disabled={!hasData || enriching}
+                disabled={enriching}
                 style={({ pressed }) => [
                   styles.actionButton,
-                  (!hasData || enriching) && styles.buttonDisabled,
+                  enriching && styles.buttonDisabled,
                   pressed && styles.pressedFade,
                 ]}>
                 {enriching ? (
@@ -749,24 +871,7 @@ export function WordDetailScreen({
                   No dictionary data yet. Use “Fetch dictionary data” to fill it in.
                 </Text>
               ) : (
-                word.senses_json.map((sense, senseIndex) => (
-                  <View
-                    // biome-ignore lint/suspicious/noArrayIndexKey: sense groups render positionally
-                    key={`${sense.partOfSpeech}-${senseIndex}`}
-                    style={styles.senseGroup}>
-                    <Text style={styles.posLabel}>{sense.partOfSpeech}</Text>
-                    {sense.definitions.map((definition, definitionIndex) => (
-                      <View
-                        // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
-                        key={definitionIndex}>
-                        <Text style={styles.definition}>{definition.definition}</Text>
-                        {definition.example ? (
-                          <Text style={styles.example}>{definition.example}</Text>
-                        ) : null}
-                      </View>
-                    ))}
-                  </View>
-                ))
+                renderSenseGroups(word.senses_json)
               )}
             </View>
 
@@ -789,7 +894,9 @@ export function WordDetailScreen({
         </ScreenScrollView>
       )}
 
-      {/* Change-review modal (TASK-WB-014): old vs new side by side. */}
+      {/* Change-review modal (TASK-WB-014): current vs proposed, paired by
+          sense-group index and rendered as aligned rows inside a scrollable
+          list so the Apply/Cancel actions are always reachable. */}
       <Modal
         animationType="fade"
         onRequestClose={handleCancelEnrichment}
@@ -801,16 +908,33 @@ export function WordDetailScreen({
             <Text style={styles.modalTitle} testID="word-enrich-title">
               Review proposed data
             </Text>
-            <View style={styles.columnsRow}>
-              <View style={styles.column} testID="word-enrich-old">
-                <Text style={styles.columnTitle}>Current</Text>
-                {renderSenseColumns(word?.senses_json ?? [])}
-              </View>
-              <View style={styles.column} testID="word-enrich-new">
-                <Text style={styles.columnTitle}>Proposed</Text>
-                {renderSenseColumns(proposal ?? [])}
-              </View>
+            <View style={styles.pairHeaderRow}>
+              <Text style={styles.pairHeaderLabel} testID="word-enrich-old-label">
+                Current
+              </Text>
+              <Text style={styles.pairHeaderLabel} testID="word-enrich-new-label">
+                Proposed
+              </Text>
             </View>
+            <ScrollView
+              style={styles.pairListScroll}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              testID="word-enrich-list-scroll">
+              {sensePairKeys.map((partOfSpeech, index) => (
+                <View
+                  key={partOfSpeech}
+                  style={styles.pairRow}
+                  testID={`word-enrich-row-${index}`}>
+                  <View style={styles.pairCell} testID={`word-enrich-old-${index}`}>
+                    {renderSenseCell(word?.senses_json ?? [], partOfSpeech)}
+                  </View>
+                  <View style={styles.pairCell} testID={`word-enrich-new-${index}`}>
+                    {renderSenseCell(proposal ?? [], partOfSpeech)}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
             {enrichError ? (
               <Text role="alert" style={styles.modalError} testID="word-enrich-error">
                 {enrichError}

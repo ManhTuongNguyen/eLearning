@@ -178,6 +178,12 @@ function createStyles(c: ThemeColors) {
     },
     listScroll: {
       flexGrow: 0,
+      // Full-bleed over the card's horizontal padding so the Android
+      // scrollbar anchors to the card's right edge instead of floating
+      // inside the padding gutter; the content keeps its original inset.
+      marginLeft: -20,
+      marginRight: -20,
+      paddingHorizontal: 20,
     },
   });
 }
