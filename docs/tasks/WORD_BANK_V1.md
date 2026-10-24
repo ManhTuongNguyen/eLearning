@@ -784,7 +784,7 @@ Priority: `P1`
 
 ## TASK-WB-010 — Generation review modal
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

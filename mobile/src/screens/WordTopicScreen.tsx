@@ -35,6 +35,7 @@ import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/S
 import { getLocalDatabase } from '../db/database';
 import {
   deleteWord,
+  getWordByText,
   getWordTopicById,
   listWordsByTopic,
 } from '../db/wordRepository';
@@ -57,6 +58,7 @@ import { useTheme } from '../theme/ThemeContext';
 import type { TextToSpeechEngine } from '../tts/textToSpeech';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { useSpeechPlayback } from '../tts/useSpeechPlayback';
+import { WordReviewModal } from './WordReviewModal';
 
 const MODE_NOTICE_TEXT = 'The word bank is saved on this device only.';
 const PROVIDER_MISSING_MESSAGE = 'Add your provider API key in Settings to generate words.';
@@ -487,6 +489,15 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Review modal for the current generation run (TASK-WB-010). The pipeline
+  // has already persisted the candidates; the modal reconciles the learner's
+  // selection against those rows.
+  const [reviewCandidates, setReviewCandidates] = useState<WordRecord[]>([]);
+  const [duplicateTopicTitles, setDuplicateTopicTitles] = useState<Record<number, string>>({});
+  const [reviewVisible, setReviewVisible] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
   const { speakingId, speak, stop } = useSpeechPlayback(speech);
 
   const serverMode = modeStatus === 'ready' && mode === 'server';
@@ -610,6 +621,18 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
       );
       setSummary(result);
       setGenerateOpen(false);
+      // Open the review modal over this run's candidates, with the
+      // cross-topic duplicate hints the rows may show.
+      setReviewCandidates(result.words);
+      const hints: Record<number, string> = {};
+      for (const word of result.words) {
+        const hint = await getWordByText(db, word.text, { excludeTopicId: topicId });
+        if (hint) {
+          hints[word.id] = hint.topic_title;
+        }
+      }
+      setDuplicateTopicTitles(hints);
+      setReviewVisible(true);
       await loadTopic();
     } catch (err) {
       setGenerateError(`Could not generate words: ${describeError(err)}`);
@@ -655,6 +678,72 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
       setDeletingId(null);
     }
   }, [deletingId, deleteTarget]);
+
+  // --- Review modal -----------------------------------------------------------
+  /** Keep everything: the pipeline already persisted every candidate. */
+  const handleReviewKeepAll = useCallback(() => {
+    setReviewVisible(false);
+    setReviewCandidates([]);
+    setReviewError(null);
+  }, []);
+
+  /**
+   * Keep exactly the given candidates: the rows the learner toggled off are
+   * removed in one transaction, so the topic never holds a word the learner
+   * rejected. Duplicates within the topic are skipped silently by design.
+   */
+  const handleReviewKeepSelected = useCallback(
+    async (keptIds: number[]) => {
+      const kept = new Set(keptIds);
+      const removed = reviewCandidates.filter(candidate => !kept.has(candidate.id));
+      if (removed.length === 0) {
+        handleReviewKeepAll();
+        return;
+      }
+      setReviewBusy(true);
+      setReviewError(null);
+      try {
+        const db = await getLocalDatabase();
+        await db.transaction(async tx => {
+          for (const candidate of removed) {
+            await deleteWord(tx, candidate.id);
+          }
+        });
+        setSummary(previous =>
+          previous
+            ? {
+                ...previous,
+                words: previous.words.filter(word => kept.has(word.id)),
+                keptWithData: previous.words.filter(
+                  word => kept.has(word.id) && word.data_status === 'complete',
+                ).length,
+                keptWithoutData: previous.words.filter(
+                  word => kept.has(word.id) && word.data_status === 'missing',
+                ).length,
+              }
+            : previous,
+        );
+        setReviewVisible(false);
+        setReviewCandidates([]);
+        await loadTopic();
+      } catch (err) {
+        setReviewError(describeError(err));
+      } finally {
+        setReviewBusy(false);
+      }
+    },
+    [reviewCandidates, handleReviewKeepAll, loadTopic],
+  );
+
+  /** The escape: close without writing anything. */
+  const handleReviewDiscard = useCallback(() => {
+    if (reviewBusy) {
+      return;
+    }
+    setReviewVisible(false);
+    setReviewCandidates([]);
+    setReviewError(null);
+  }, [reviewBusy]);
 
   // --- Render -----------------------------------------------------------------
   const practiceUnlocked = canPractice(words.length);
@@ -904,6 +993,21 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
           </View>
         </View>
       </Modal>
+
+      {/* Review modal for the latest generation run. */}
+      <WordReviewModal
+        visible={reviewVisible}
+        candidates={reviewCandidates}
+        duplicateTopicTitles={duplicateTopicTitles}
+        busy={reviewBusy}
+        error={reviewError}
+        onKeepAll={handleReviewKeepAll}
+        onKeepSelected={keptIds => {
+          // handleReviewKeepSelected handles its own errors, so it never rejects.
+          handleReviewKeepSelected(keptIds);
+        }}
+        onDiscard={handleReviewDiscard}
+      />
 
       {/* Delete confirmation. */}
       <Modal
