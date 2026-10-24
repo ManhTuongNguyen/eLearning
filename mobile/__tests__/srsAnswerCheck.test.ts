@@ -6,6 +6,7 @@
  * about a missing word, and Easy must never be suggested.
  */
 import {
+  diffCharacters,
   diffDisplayTokens,
   diffTokens,
   isExactAnswer,
@@ -170,6 +171,46 @@ describe('diffTokens', () => {
       'very',
       'very',
       'good',
+    ]);
+  });
+});
+
+describe('diffCharacters', () => {
+  test('an exact answer is one correct run (case-insensitive, trimmed)', () => {
+    expect(diffCharacters('bank', 'bank')).toEqual([{ kind: 'correct', text: 'bank' }]);
+    expect(diffCharacters('bank', '  Bank ')).toEqual([{ kind: 'correct', text: 'bank' }]);
+  });
+
+  test('a wrong letter renders as the typed character then the expected one', () => {
+    expect(diffCharacters('bank', 'bonk')).toEqual([
+      { kind: 'correct', text: 'b' },
+      { kind: 'extra', text: 'o' },
+      { kind: 'missing', text: 'a' },
+      { kind: 'correct', text: 'nk' },
+    ]);
+  });
+
+  test('a missing letter snaps neighbouring matches to the typed spelling', () => {
+    // "repliction" keeps the typed c and misses only the a — the cheapest path.
+    expect(diffCharacters('replication', 'repliction')).toEqual([
+      { kind: 'correct', text: 'replic' },
+      { kind: 'missing', text: 'a' },
+      { kind: 'correct', text: 'tion' },
+    ]);
+  });
+
+  test('missing letters coalesce into one underlined run', () => {
+    expect(diffCharacters('friendship', 'friship')).toEqual([
+      { kind: 'correct', text: 'fri' },
+      { kind: 'missing', text: 'end' },
+      { kind: 'correct', text: 'ship' },
+    ]);
+  });
+
+  test('extra typed letters coalesce into one struck run', () => {
+    expect(diffCharacters('word', 'words')).toEqual([
+      { kind: 'correct', text: 'word' },
+      { kind: 'extra', text: 's' },
     ]);
   });
 });

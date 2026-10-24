@@ -220,11 +220,13 @@ describe('WordPracticeScreen — dictation card', () => {
       expect(view.getByTestId('word-practice-suggestion')).toHaveTextContent('Suggested: Good');
     });
 
-    // The diff matches the sentence practice screen: the wrong word is shown
-    // with the expected spelling after an arrow, plus a one-line summary, and
-    // the input locks so the shown diff can't go stale.
-    expect(view.getByTestId('word-practice-diff-token-0')).toHaveTextContent('word2 → word1');
-    expect(view.getByTestId('word-practice-diff-summary')).toHaveTextContent('1 substituted');
+    // The diff is character-level: the wrong letter struck through, the
+    // expected letter after it underlined, with a one-line summary, and the
+    // input locks so the shown diff can't go stale.
+    expect(view.getByTestId('word-practice-diff-char-0')).toHaveTextContent('word');
+    expect(view.getByTestId('word-practice-diff-char-1')).toHaveTextContent('2');
+    expect(view.getByTestId('word-practice-diff-char-2')).toHaveTextContent('1');
+    expect(view.getByTestId('word-practice-diff-summary')).toHaveTextContent('1 missing · 1 extra');
     expect(view.getByTestId('word-practice-answer').props.editable).toBe(false);
 
     await act(async () => {
@@ -240,9 +242,9 @@ describe('WordPracticeScreen — dictation card', () => {
     await fireEvent.changeText(view.getByTestId('word-practice-answer'), 'word1');
     await fireEvent.press(view.getByTestId('word-practice-check'));
 
-    // An exact answer reads as a single correct token in the diff row.
-    expect(view.getByTestId('word-practice-diff-token-0')).toHaveTextContent('word1');
-    expect(view.getByTestId('word-practice-diff-summary')).toHaveTextContent('1 correct');
+    // An exact answer reads as one correct run and "Exact match.".
+    expect(view.getByTestId('word-practice-diff-char-0')).toHaveTextContent('word1');
+    expect(view.getByTestId('word-practice-diff-summary')).toHaveTextContent('Exact match.');
 
     // Word, POS, definition and example are all selectable.
     expect(view.getByTestId('word-practice-correct-word').props.selectable).toBe(true);
@@ -352,10 +354,13 @@ describe('WordPracticeScreen — recall card', () => {
     expect(reveal.getByText('word1').props.selectable).toBe(true);
     expect(reveal.getByText('I went to the bank.').props.selectable).toBe(true);
 
-    // The recall reveal diffs the typed answer exactly like dictation does.
+    // The recall reveal diffs the typed answer character by character, the
+    // same way dictation does — a completely different word has both missing
+    // and extra characters.
     expect(reveal.getByTestId('word-practice-diff')).toBeTruthy();
-    expect(reveal.getByTestId('word-practice-diff-token-0')).toHaveTextContent('bank → word1');
-    expect(reveal.getByTestId('word-practice-diff-summary')).toHaveTextContent('1 substituted');
+    expect(reveal.getByTestId('word-practice-diff-summary')).toHaveTextContent(
+      '5 missing · 4 extra',
+    );
 
     await fireEvent.press(view.getByTestId('word-practice-grade-easy'));
     await waitFor(() => {

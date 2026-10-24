@@ -8,8 +8,8 @@
  *
  * Dictation: the word is spoken once automatically on card open (device TTS)
  * with a replay button; the learner types it; `Check` locks the input and
- * shows a sentence-practice-style diff of the answer (per-word tokens, wrong
- * words underlined with the expected spelling after an arrow, plus a one-line
+ * shows a character-level diff of the answer (missing letters underlined in
+ * the word's spelling, wrong typed letters struck through, plus a one-line
  * summary), pre-suggests Good for an exact or one-typo answer (never Easy) and
  * the reveal shows the spelling, IPA and POS labels and replays the word.
  *
@@ -41,6 +41,7 @@ import {
 
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import { WordSenseList } from '../components/WordSenseList';
 import { getLocalDatabase } from '../db/database';
 import { getSrsConfig } from '../db/srsConfigStore';
 import type { ReviewCardMode, ReviewGrade, WordRecord, WordTopicRecord } from '../db/types';
@@ -49,12 +50,10 @@ import { useApplicationMode } from '../mode/ModeContext';
 import type { WordPracticeScreenProps } from '../navigation/types';
 import { loadWordPracticeMode, type WordPracticeMode } from '../preferences/wordPracticeMode';
 import {
-  type DiffKind,
-  type DiffSegment,
-  diffDisplayTokens,
-  diffTokens,
+  type CharDiffKind,
+  type CharDiffSegment,
+  diffCharacters,
   suggestGrade,
-  summarizeDiff,
 } from '../srs/answerCheck';
 import { selectCardMode } from '../srs/cardMode';
 import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from '../srs/config';
@@ -132,36 +131,39 @@ export function formatNextWordDueLabel(words: readonly WordRecord[], now: Date):
   return `Next due in ${relative} (${absolute}).`;
 }
 
-function diffTokenStyle(kind: DiffKind, colors: ThemeColors): TextStyle {
+/** Character-level diff colors: typed-but-wrong struck, missing letters underlined. */
+function charSegmentStyle(kind: CharDiffKind, colors: ThemeColors): TextStyle {
   switch (kind) {
     case 'correct':
       return { color: colors.success };
     case 'missing':
-      return { color: colors.danger };
+      return { color: colors.danger, textDecorationLine: 'underline' };
     case 'extra':
       return { color: colors.warning, textDecorationLine: 'line-through' };
-    case 'substituted':
-      return { color: colors.danger, textDecorationLine: 'underline' };
   }
 }
 
-/** The one-line result summary under the diff row ("2 correct · 1 substituted"). */
-function diffSummary(segments: readonly DiffSegment[]): string {
-  const summary = summarizeDiff(segments);
+/** The one-line result summary for the character diff ("1 missing · 1 extra"). */
+function diffSummary(segments: readonly CharDiffSegment[]): string {
+  const counts = { missing: 0, extra: 0 };
+  for (const segment of segments) {
+    if (segment.kind === 'missing') {
+      counts.missing += segment.text.length;
+    } else if (segment.kind === 'extra') {
+      counts.extra += segment.text.length;
+    }
+  }
+  if (counts.missing === 0 && counts.extra === 0) {
+    return 'Exact match.';
+  }
   const parts: string[] = [];
-  if (summary.correct > 0) {
-    parts.push(`${summary.correct} correct`);
+  if (counts.missing > 0) {
+    parts.push(`${counts.missing} missing`);
   }
-  if (summary.missing > 0) {
-    parts.push(`${summary.missing} missing`);
+  if (counts.extra > 0) {
+    parts.push(`${counts.extra} extra`);
   }
-  if (summary.substituted > 0) {
-    parts.push(`${summary.substituted} substituted`);
-  }
-  if (summary.extra > 0) {
-    parts.push(`${summary.extra} extra`);
-  }
-  return parts.length > 0 ? parts.join(' · ') : 'Nothing typed yet.';
+  return parts.join(' · ');
 }
 
 export function createStyles(c: ThemeColors) {
@@ -253,26 +255,10 @@ export function createStyles(c: ThemeColors) {
       color: c.textMuted,
       textAlign: 'center',
     },
-    senseGroup: {
-      gap: 6,
-    },
-    posLabel: {
-      fontSize: 13,
-      fontWeight: '700',
-      color: c.accent,
-      fontStyle: 'italic',
-    },
     definition: {
       fontSize: 16,
       lineHeight: 22,
       color: c.textPrimary,
-    },
-    example: {
-      fontSize: 14,
-      lineHeight: 20,
-      color: c.textMuted,
-      fontStyle: 'italic',
-      marginLeft: 12,
     },
     maskedSegment: {
       letterSpacing: 2,
@@ -294,29 +280,6 @@ export function createStyles(c: ThemeColors) {
     diffSummary: {
       fontSize: 13,
       color: c.textSecondary,
-    },
-    chipRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-      marginBottom: 2,
-    },
-    tagChip: {
-      borderWidth: 1,
-      borderColor: c.borderStrong,
-      borderRadius: 8,
-      paddingHorizontal: 6,
-      paddingVertical: 1,
-      backgroundColor: c.background,
-    },
-    tagChipText: {
-      fontSize: 11,
-      color: c.textMuted,
-    },
-    relationLine: {
-      fontSize: 13,
-      lineHeight: 18,
-      color: c.textMuted,
     },
     answerInput: {
       backgroundColor: c.background,
@@ -525,7 +488,7 @@ export function WordPracticeScreen({
   const [reloadKey, setReloadKey] = useState(0);
 
   const [answer, setAnswer] = useState('');
-  const [diff, setDiff] = useState<DiffSegment[] | null>(null);
+  const [diff, setDiff] = useState<CharDiffSegment[] | null>(null);
   const [suggested, setSuggested] = useState<ReviewGrade | null>(null);
   const [revealed, setRevealed] = useState(false);
   // Bumped on every card presentation so an auto-played dictation also fires
@@ -629,7 +592,7 @@ export function WordPracticeScreen({
       return;
     }
     Keyboard.dismiss();
-    setDiff(diffTokens(currentCard.text, answer));
+    setDiff(diffCharacters(currentCard.text, answer));
     setSuggested(suggestGrade(currentCard.text, answer));
   }, [currentCard, answer]);
 
@@ -640,7 +603,7 @@ export function WordPracticeScreen({
     setRevealed(true);
     // The reveal also grades the typed answer, so the pre-suggested ✓ shows
     // on the buttons; the learner can still override it.
-    setDiff(diffTokens(currentCard.text, answer));
+    setDiff(diffCharacters(currentCard.text, answer));
     setSuggested(suggestGrade(currentCard.text, answer));
     speak(currentCard.id, currentCard.text);
   }, [currentCard, answer, speak]);
@@ -706,32 +669,11 @@ export function WordPracticeScreen({
     allWords.length > 0 && createWordPracticeSessionState(allWords, new Date(), 1).queue.length > 0;
   const showGradeButtons = cardMode === 'dictation' ? diff !== null : revealed;
 
-  /** Usage-tag chips ("informal", "UK", ...). */
-  const renderTagChips = (tags: readonly string[]) =>
-    tags.length === 0 ? null : (
-      <View style={styles.chipRow}>
-        {tags.map((tag, tagIndex) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: chips render positionally
-          <View key={tagIndex} style={styles.tagChip}>
-            <Text style={styles.tagChipText}>{tag}</Text>
-          </View>
-        ))}
-      </View>
-    );
-
-  /** One "Synonyms: a, b" / "Antonyms: …" line on the back card. */
-  const renderRelationLine = (label: string, words: readonly string[]) =>
-    words.length === 0 ? null : (
-      <Text selectable style={styles.relationLine}>
-        {label}
-        {words.join(', ')}
-      </Text>
-    );
-
   /**
-   * The checked answer as a sentence-practice-style diff row: one token per
-   * word, wrong words underlined with the expected word after an arrow, and a
-   * one-line summary. Shared by the dictation and recall cards.
+   * The checked answer as a character-level diff: the word with missing
+   * letters underlined and wrong typed letters struck through, plus a one-line
+   * summary. Word-level diffs are meaningless for a single word — the learner
+   * needs to see WHICH characters were wrong. Shared by dictation and recall.
    */
   const renderDiff = () => {
     if (diff === null) {
@@ -740,20 +682,14 @@ export function WordPracticeScreen({
     return (
       <>
         <View style={styles.diffRow} testID="word-practice-diff">
-          {diffDisplayTokens(diff).map((token, index) => (
+          {diff.map((segment, index) => (
             <Text
-              // biome-ignore lint/suspicious/noArrayIndexKey: diff tokens are positional
-              key={`${token.kind}-${index}`}
-              accessibilityLabel={
-                token.expected
-                  ? `${token.kind}: ${token.text}, expected ${token.expected}`
-                  : `${token.kind}: ${token.text}`
-              }
-              style={[styles.diffToken, diffTokenStyle(token.kind, colors)]}
-              testID={`word-practice-diff-token-${index}`}>
-              {token.kind === 'substituted' && token.expected
-                ? `${token.text} → ${token.expected}`
-                : token.text}
+              // biome-ignore lint/suspicious/noArrayIndexKey: diff segments are positional
+              key={`${segment.kind}-${index}`}
+              accessibilityLabel={`${segment.kind} characters: ${segment.text}`}
+              style={[styles.diffToken, charSegmentStyle(segment.kind, colors)]}
+              testID={`word-practice-diff-char-${index}`}>
+              {segment.text}
             </Text>
           ))}
         </View>
@@ -765,94 +701,21 @@ export function WordPracticeScreen({
   };
 
   /**
-   * Every stored sense group on the back card — part of speech, usage tags,
-   * all definitions with all examples, synonyms/antonyms — with every text
-   * selectable so the learner can copy anything they see.
+   * The recall front masks the target word (and its inflections) everywhere it
+   * appears; the shared sense renderer calls this for every displayed string.
    */
-  const renderSenseGroups = (word: WordRecord) =>
-    word.senses_json.map((sense, senseIndex) => (
-      <View
-        // biome-ignore lint/suspicious/noArrayIndexKey: sense groups render positionally
-        key={`${sense.partOfSpeech}-${senseIndex}`}
-        style={styles.senseGroup}>
-        <Text selectable style={styles.posLabel}>
-          {sense.partOfSpeech}
+  const renderMasked = (text: string) =>
+    maskWordInText(text, currentCard?.text ?? '').map((segment, segmentIndex) =>
+      segment.kind === 'masked' ? (
+        // biome-ignore lint/suspicious/noArrayIndexKey: mask segments are positional
+        <Text key={segmentIndex} style={styles.maskedSegment}>
+          {segment.text}
         </Text>
-        {renderRelationLine('Synonyms: ', sense.synonyms ?? [])}
-        {renderRelationLine('Antonyms: ', sense.antonyms ?? [])}
-        {sense.definitions.map((definition, definitionIndex) => (
-          <View
-            // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
-            key={definitionIndex}>
-            {renderTagChips(definition.tags ?? [])}
-            <Text selectable style={styles.definition}>
-              {definition.definition}
-            </Text>
-            {definition.example ? (
-              <Text selectable style={styles.example}>
-                {definition.example}
-              </Text>
-            ) : null}
-            {(definition.extraExamples ?? []).map((extra, extraIndex) => (
-              <Text
-                selectable
-                // biome-ignore lint/suspicious/noArrayIndexKey: examples render positionally
-                key={`extra-${extraIndex}`}
-                style={styles.example}>
-                {extra}
-              </Text>
-            ))}
-            {renderRelationLine('≈ ', definition.synonyms ?? [])}
-            {renderRelationLine('≠ ', definition.antonyms ?? [])}
-          </View>
-        ))}
-      </View>
-    ));
-
-  /** The masked front of the recall card: every sense rendered through wordMask. */
-  const renderMaskedSenses = (word: WordRecord) =>
-    word.senses_json.map((sense, senseIndex) => (
-      <View
-        // biome-ignore lint/suspicious/noArrayIndexKey: sense groups render positionally
-        key={`${sense.partOfSpeech}-${senseIndex}`}
-        style={styles.senseGroup}>
-        <Text style={styles.posLabel}>{sense.partOfSpeech}</Text>
-        {sense.definitions.map((definition, definitionIndex) => (
-          <View
-            // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
-            key={definitionIndex}>
-            <Text style={styles.definition}>
-              {maskWordInText(definition.definition, word.text).map((segment, segmentIndex) =>
-                segment.kind === 'masked' ? (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: mask segments are positional
-                  <Text key={segmentIndex} style={styles.maskedSegment}>
-                    {segment.text}
-                  </Text>
-                ) : (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: mask segments are positional
-                  <Text key={segmentIndex}>{segment.text}</Text>
-                ),
-              )}
-            </Text>
-            {definition.example ? (
-              <Text style={styles.example}>
-                {maskWordInText(definition.example, word.text).map((segment, segmentIndex) =>
-                  segment.kind === 'masked' ? (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: mask segments are positional
-                    <Text key={segmentIndex} style={styles.maskedSegment}>
-                      {segment.text}
-                    </Text>
-                  ) : (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: mask segments are positional
-                    <Text key={segmentIndex}>{segment.text}</Text>
-                  ),
-                )}
-              </Text>
-            ) : null}
-          </View>
-        ))}
-      </View>
-    ));
+      ) : (
+        // biome-ignore lint/suspicious/noArrayIndexKey: mask segments are positional
+        <Text key={segmentIndex}>{segment.text}</Text>
+      ),
+    );
 
   return (
     <Screen style={styles.container} testID="word-practice-screen">
@@ -987,14 +850,20 @@ export function WordPracticeScreen({
                         {currentCard.phonetics_json.join('\n')}
                       </Text>
                     ) : null}
-                    <View style={{ gap: 10 }}>{renderSenseGroups(currentCard)}</View>
+                    <WordSenseList senses={currentCard.senses_json} />
                   </View>
                 ) : null}
               </>
             ) : (
               <>
                 <Text style={styles.modeLabel}>Recall — which word is this?</Text>
-                <View testID="word-practice-recall-front">{renderMaskedSenses(currentCard)}</View>
+                <View testID="word-practice-recall-front">
+                  <WordSenseList
+                    senses={currentCard.senses_json}
+                    variant="front"
+                    renderText={renderMasked}
+                  />
+                </View>
                 <TextInput
                   value={answer}
                   onChangeText={setAnswer}
@@ -1016,7 +885,7 @@ export function WordPracticeScreen({
                         {currentCard.phonetics_json.join('\n')}
                       </Text>
                     ) : null}
-                    <View style={{ gap: 10 }}>{renderSenseGroups(currentCard)}</View>
+                    <WordSenseList senses={currentCard.senses_json} />
                   </View>
                 ) : null}
               </>

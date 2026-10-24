@@ -403,6 +403,95 @@ export function diffDisplayTokens(segments: readonly DiffSegment[]): DisplayToke
   });
 }
 
+// --- Character-level diff (word bank practice) -------------------------------
+
+/** How one character (or run of characters) of the answer relates to the word. */
+export type CharDiffKind = 'correct' | 'missing' | 'extra';
+
+/**
+ * One run of characters: `correct` matches the word, `missing` characters are
+ * in the word but were not typed (rendered from the word, underlined), and
+ * `extra` characters were typed but do not belong (rendered struck-through).
+ */
+export interface CharDiffSegment {
+  kind: CharDiffKind;
+  /** The characters to render — from the word for correct/missing, typed for extra. */
+  text: string;
+}
+
+/**
+ * Align the typed answer against the word character by character (Levenshtein
+ * backtrace, case-insensitive, both sides trimmed). A wrong letter renders as
+ * the typed character struck through immediately followed by the expected
+ * character underlined — the inline equivalent of the word diff's
+ * `typed → expected`. Adjacent same-kind operations coalesce into runs, so an
+ * exact answer is a single `correct` segment and a missing "ca" is one
+ * `missing` run, not two.
+ */
+export function diffCharacters(expected: string, actual: string): CharDiffSegment[] {
+  const expectedChars = [...expected.trim().toLowerCase()];
+  const actualChars = [...actual.trim().toLowerCase()];
+
+  // table[row][column] = edit distance between the first `row` expected and
+  // the first `column` actual characters.
+  const rows = expectedChars.length + 1;
+  const columns = actualChars.length + 1;
+  const table: number[][] = Array.from({ length: rows }, () => new Array<number>(columns).fill(0));
+  for (let row = 1; row < rows; row += 1) {
+    table[row][0] = row;
+  }
+  for (let column = 1; column < columns; column += 1) {
+    table[0][column] = column;
+  }
+  for (let row = 1; row < rows; row += 1) {
+    for (let column = 1; column < columns; column += 1) {
+      const substitution =
+        table[row - 1][column - 1] + (expectedChars[row - 1] === actualChars[column - 1] ? 0 : 1);
+      table[row][column] = Math.min(
+        table[row - 1][column] + 1,
+        table[row][column - 1] + 1,
+        substitution,
+      );
+    }
+  }
+
+  // Walk the cheapest path backwards, emitting the ops in reverse. A
+  // substitution pushes missing-then-extra so the reversed (reading) order is
+  // the typed character followed by its correction.
+  const reversed: CharDiffSegment[] = [];
+  let row = expectedChars.length;
+  let column = actualChars.length;
+  while (row > 0 || column > 0) {
+    if (row > 0 && column > 0 && expectedChars[row - 1] === actualChars[column - 1]) {
+      reversed.push({ kind: 'correct', text: expectedChars[row - 1] });
+      row -= 1;
+      column -= 1;
+    } else if (row > 0 && column > 0 && table[row][column] === table[row - 1][column - 1] + 1) {
+      reversed.push({ kind: 'missing', text: expectedChars[row - 1] });
+      reversed.push({ kind: 'extra', text: actualChars[column - 1] });
+      row -= 1;
+      column -= 1;
+    } else if (row > 0 && table[row][column] === table[row - 1][column] + 1) {
+      reversed.push({ kind: 'missing', text: expectedChars[row - 1] });
+      row -= 1;
+    } else {
+      reversed.push({ kind: 'extra', text: actualChars[column - 1] });
+      column -= 1;
+    }
+  }
+
+  const segments: CharDiffSegment[] = [];
+  for (const op of reversed.reverse()) {
+    const last = segments[segments.length - 1];
+    if (last && last.kind === op.kind) {
+      last.text += op.text;
+    } else {
+      segments.push({ ...op });
+    }
+  }
+  return segments;
+}
+
 /** Counts per kind, for the one-line result summary on the card. */
 export function summarizeDiff(segments: readonly DiffSegment[]): Record<DiffKind, number> {
   const summary: Record<DiffKind, number> = {

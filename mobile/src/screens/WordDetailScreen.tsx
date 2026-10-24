@@ -31,6 +31,7 @@ import {
 
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import { WordSenseList } from '../components/WordSenseList';
 import { getLocalDatabase } from '../db/database';
 import type { WordRecord, WordSense } from '../db/types';
 import {
@@ -173,50 +174,6 @@ export function createStyles(c: ThemeColors) {
       color: c.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 1,
-    },
-    senseGroup: {
-      gap: 6,
-    },
-    posLabel: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: c.accent,
-      fontStyle: 'italic',
-    },
-    definition: {
-      fontSize: 15,
-      lineHeight: 21,
-      color: c.textPrimary,
-    },
-    example: {
-      fontSize: 14,
-      lineHeight: 20,
-      color: c.textMuted,
-      fontStyle: 'italic',
-      marginLeft: 12,
-    },
-    chipRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-      marginBottom: 2,
-    },
-    tagChip: {
-      borderWidth: 1,
-      borderColor: c.borderStrong,
-      borderRadius: 8,
-      paddingHorizontal: 6,
-      paddingVertical: 1,
-      backgroundColor: c.background,
-    },
-    tagChipText: {
-      fontSize: 11,
-      color: c.textMuted,
-    },
-    relationLine: {
-      fontSize: 13,
-      lineHeight: 18,
-      color: c.textMuted,
     },
     scheduleCard: {
       backgroundColor: c.surface,
@@ -621,85 +578,23 @@ export function WordDetailScreen({
 
   const scheduleRows = useMemo(() => (word ? describeSchedule(word, new Date()) : []), [word]);
 
-  /** One sense group of a change-review row (one side of the pair). */
+  /**
+   * One change-review cell: the sense group of that part of speech through the
+   * shared renderer (POS is the row's identity, so the badge is hidden). A side
+   * without that POS shows "No data."
+   */
   const renderSenseCell = (senses: readonly WordSense[], partOfSpeech: string) => {
     const sense = senses.find(item => item.partOfSpeech === partOfSpeech);
     if (!sense) {
       return <Text style={styles.stateText}>No data.</Text>;
     }
-    return (
-      <View style={styles.senseGroup}>
-        <Text style={styles.posLabel}>{sense.partOfSpeech}</Text>
-        {sense.definitions.map((definition, definitionIndex) => (
-          <View
-            // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
-            key={definitionIndex}>
-            <Text style={styles.definition}>{definition.definition}</Text>
-            {definition.example ? <Text style={styles.example}>{definition.example}</Text> : null}
-          </View>
-        ))}
-      </View>
-    );
+    return <WordSenseList senses={[sense]} showPosHeader={false} />;
   };
-
-  /** Usage-tag chips ("informal", "UK", ...). */
-  const renderTagChips = (tags: readonly string[]) =>
-    tags.length === 0 ? null : (
-      <View style={styles.chipRow}>
-        {tags.map((tag, tagIndex) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: chips render positionally
-          <View key={tagIndex} style={styles.tagChip}>
-            <Text style={styles.tagChipText}>{tag}</Text>
-          </View>
-        ))}
-      </View>
-    );
-
-  /** One "Synonyms: a, b, c" / "Antonyms: …" line, or nothing. */
-  const renderRelationLine = (label: string, words: readonly string[]) =>
-    words.length === 0 ? null : (
-      <Text style={styles.relationLine}>
-        {label}
-        {words.join(', ')}
-      </Text>
-    );
-
-  /** Every stored sense group with tags, examples and synonyms/antonyms. */
-  const renderSenseGroups = (senses: readonly WordSense[]) =>
-    senses.map((sense, senseIndex) => (
-      <View
-        // biome-ignore lint/suspicious/noArrayIndexKey: sense groups render positionally
-        key={`${sense.partOfSpeech}-${senseIndex}`}
-        style={styles.senseGroup}>
-        <Text style={styles.posLabel}>{sense.partOfSpeech}</Text>
-        {renderRelationLine('Synonyms: ', sense.synonyms ?? [])}
-        {renderRelationLine('Antonyms: ', sense.antonyms ?? [])}
-        {sense.definitions.map((definition, definitionIndex) => (
-          <View
-            // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
-            key={definitionIndex}>
-            {renderTagChips(definition.tags ?? [])}
-            <Text style={styles.definition}>{definition.definition}</Text>
-            {definition.example ? <Text style={styles.example}>{definition.example}</Text> : null}
-            {(definition.extraExamples ?? []).map((extra, extraIndex) => (
-              <Text
-                // biome-ignore lint/suspicious/noArrayIndexKey: examples render positionally
-                key={`extra-${extraIndex}`}
-                style={styles.example}>
-                {extra}
-              </Text>
-            ))}
-            {renderRelationLine('≈ ', definition.synonyms ?? [])}
-            {renderRelationLine('≠ ', definition.antonyms ?? [])}
-          </View>
-        ))}
-      </View>
-    ));
 
   /**
    * Paired rows align current and proposed groups by part of speech (the
    * meaningful comparison), not by position: one row per POS in the union of
-   * both sides, current data first. A side without that POS shows "No data."
+   * both sides, current data first.
    */
   const sensePairKeys = useMemo(() => {
     const keys: string[] = [];
@@ -869,7 +764,7 @@ export function WordDetailScreen({
                   No dictionary data yet. Use “Fetch dictionary data” to fill it in.
                 </Text>
               ) : (
-                renderSenseGroups(word.senses_json)
+                <WordSenseList senses={word.senses_json} />
               )}
             </View>
 

@@ -232,7 +232,7 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
       'The summary separates words kept with dictionary data, kept without data (fetch later from Word detail), and not-found words.',
       'Search the list, play pronunciations, tap a word for its full data, or add words manually through the ⋯ menu.',
       "On a word's detail screen, Fetch dictionary data fills missing senses; Enrich asks the AI to draft the learning data — you approve the proposal in a modal before anything is saved.",
-      'Practice unlocks at 5+ words: type dictations, or recall the masked word from its meanings and examples. Checking shows a word-by-word diff of your answer — wrong words underlined, with the expected spelling after an arrow — like sentence dictation.',
+      'Practice unlocks at 5+ words: type dictations, or recall the masked word from its meanings and examples. Checking highlights the exact characters you got wrong — missing letters underlined, extra letters struck out.',
     ],
     aiIntro:
       'Generation and enrichment each cost one request; dictionary data comes from the Free Dictionary API, not the AI.',
