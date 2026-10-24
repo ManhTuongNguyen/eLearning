@@ -64,8 +64,8 @@ describe('sentence schema (TASK-SENT-003, TASK-SENT-015)', () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
 
-    expect(SCHEMA_VERSION).toBe(6);
-    expect(await userVersion(db)).toBe(6);
+    expect(SCHEMA_VERSION).toBe(7);
+    expect(await userVersion(db)).toBe(7);
 
     const tables = await schemaNames(db, 'table');
     expect(tables).toEqual(

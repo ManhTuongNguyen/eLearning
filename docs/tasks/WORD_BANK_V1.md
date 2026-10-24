@@ -494,7 +494,7 @@ dependency-safe task.
 
 ## TASK-WB-001 — Schema version 7 and row types
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

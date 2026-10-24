@@ -321,6 +321,89 @@ const MIGRATION_006: readonly string[] = [
 ];
 
 /**
+ * Version 7: the word bank (WORD_BANK_V1 TASK-WB-001).
+ *
+ * `word_topics` holds learner-created vocabulary topics whose description is
+ * free-form learner context and whose `extra_prompt` is an optional additional
+ * AI instruction. `words` stores the dictionary facts verbatim as JSON in the
+ * API's own shape (`senses_json`, `phonetics_json`), so enrichment can replace
+ * the senses wholesale and the change-review modal can diff structurally.
+ * `data_status='missing'` marks a word kept without dictionary data (transient
+ * API error at generation); it is excluded from practice until a fetch fills
+ * it. The FSRS review-state columns and the review log mirror the sentence
+ * tables (migration v6) so words share the scheduler, the collection config
+ * and the revlog shape. Audio URLs are deliberately not stored: word audio is
+ * device TTS only.
+ */
+const MIGRATION_007: readonly string[] = [
+  `CREATE TABLE word_topics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      extra_prompt TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE words (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic_id INTEGER NOT NULL REFERENCES word_topics (id) ON DELETE CASCADE,
+      text TEXT NOT NULL,
+      normalized_text TEXT NOT NULL,
+      phonetics_json TEXT NOT NULL DEFAULT '[]',
+      senses_json TEXT NOT NULL DEFAULT '[]',
+      data_source TEXT NOT NULL DEFAULT 'dictionary'
+        CHECK (data_source IN ('dictionary', 'enriched')),
+      enriched_at TEXT,
+      data_status TEXT NOT NULL DEFAULT 'missing'
+        CHECK (data_status IN ('complete', 'missing')),
+      state TEXT NOT NULL DEFAULT 'new'
+        CHECK (state IN ('new', 'learning', 'review', 'relearning')),
+      suspended INTEGER NOT NULL DEFAULT 0 CHECK (suspended IN (0, 1)),
+      reps INTEGER NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0,
+      stability REAL NOT NULL DEFAULT 0,
+      difficulty REAL NOT NULL DEFAULT 0,
+      elapsed_days INTEGER NOT NULL DEFAULT 0,
+      scheduled_days INTEGER NOT NULL DEFAULT 0,
+      learning_steps INTEGER NOT NULL DEFAULT 0,
+      due_at TEXT NOT NULL,
+      last_grade TEXT NOT NULL DEFAULT ''
+        CHECK (last_grade IN ('', 'again', 'hard', 'good', 'easy')),
+      last_reviewed_at TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+   )`,
+  `CREATE UNIQUE INDEX idx_words_topic_normalized
+      ON words (topic_id, normalized_text)`,
+  `CREATE INDEX idx_words_topic ON words (topic_id, due_at)`,
+  `CREATE INDEX idx_words_due ON words (due_at)`,
+  `CREATE INDEX idx_words_topic_state ON words (topic_id, state, suspended)`,
+  `CREATE TABLE word_review_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      word_id INTEGER NOT NULL REFERENCES words (id) ON DELETE CASCADE,
+      topic_id INTEGER NOT NULL,
+      grade TEXT NOT NULL CHECK (grade IN ('again', 'hard', 'good', 'easy')),
+      rating INTEGER NOT NULL DEFAULT 0 CHECK (rating BETWEEN 0 AND 4),
+      state TEXT NOT NULL DEFAULT 'new'
+        CHECK (state IN ('new', 'learning', 'review', 'relearning')),
+      mode TEXT NOT NULL CHECK (mode IN ('dictation', 'recall')),
+      due_at TEXT NOT NULL DEFAULT '',
+      stability REAL NOT NULL DEFAULT 0,
+      difficulty REAL NOT NULL DEFAULT 0,
+      elapsed_days INTEGER NOT NULL DEFAULT 0,
+      last_elapsed_days INTEGER NOT NULL DEFAULT 0,
+      scheduled_days INTEGER NOT NULL DEFAULT 0,
+      learning_steps INTEGER NOT NULL DEFAULT 0,
+      review_duration_ms INTEGER NOT NULL DEFAULT 0,
+      reviewed_at TEXT NOT NULL
+   )`,
+  `CREATE INDEX idx_word_review_log_word
+      ON word_review_log (word_id, reviewed_at)`,
+  `CREATE INDEX idx_word_review_log_reviewed
+      ON word_review_log (reviewed_at)`,
+];
+
+/**
  * Ordered migration list; length is the current schema version. Append new
  * entries — never edit shipped ones.
  */
@@ -331,6 +414,7 @@ export const MIGRATIONS: readonly (readonly string[])[] = [
   MIGRATION_004,
   MIGRATION_005,
   MIGRATION_006,
+  MIGRATION_007,
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS.length;
