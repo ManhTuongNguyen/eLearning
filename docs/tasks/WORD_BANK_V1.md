@@ -741,7 +741,7 @@ Priority: `P1`
 
 ## TASK-WB-009 — Word topic screen: list, search, generate
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
