@@ -588,7 +588,7 @@ Priority: `P1`
 
 ## TASK-WB-004 — Word generation service
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
