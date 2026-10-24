@@ -240,7 +240,7 @@ class ServerlessModeIsolationTests(SimpleTestCase):
 
     def test_serverless_isolation_documented(self) -> None:
         """ROADMAP documents that the server key is not exposed and modes are isolated."""
-        roadmap = (REPO_ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        roadmap = (REPO_ROOT / "docs" / "tasks" / "ROADMAP.md").read_text(encoding="utf-8")
         self.assertIn("Serverless mode", roadmap)
         self.assertIn("Do not expose the server's OpenRouter API key", roadmap)
         self.assertIn("intentionally isolated", roadmap)

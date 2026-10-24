@@ -22,9 +22,9 @@ Dự án này được hoàn thành từ đầu đến cuối bởi một **Auto
 
 | File | Vai trò |
 | --- | --- |
-| [`ROADMAP.md`](ROADMAP.md) | Mục tiêu sản phẩm và kiến trúc — trạng thái đích |
-| [`SPEC.md`](SPEC.md) | Backlog thực thi được — danh sách task có thứ tự kèm acceptance criteria |
-| [`STATE.md`](STATE.md) | Trạng thái thực thi live của loop — agent đang ở đâu |
+| [`docs/tasks/ROADMAP.md`](docs/tasks/ROADMAP.md) | Mục tiêu sản phẩm và kiến trúc — trạng thái đích |
+| [`docs/tasks/SPEC.md`](docs/tasks/SPEC.md) | Backlog thực thi được — danh sách task có thứ tự kèm acceptance criteria |
+| [`docs/tasks/STATE.md`](docs/tasks/STATE.md) | Trạng thái thực thi live của loop — agent đang ở đâu |
 | [`prompts/PROMPT_LOOP_TASKS.md`](prompts/PROMPT_LOOP_TASKS.md) | Prompt duy nhất mà loop feed cho agent mỗi cycle |
 | [`run-loop.sh`](run-loop.sh) | Driver `while (true)` giữ cho agent chạy liên tục |
 
@@ -83,8 +83,8 @@ Audit MVP `TASK-120` khép lại đã xác minh toàn bộ 24 yêu cầu MVP tro
 
 Dùng một AI session riêng (model reasoning mạnh) để soạn hai file planning, sau đó thêm link điều hướng đến chúng trong README của dự án (bảng ở trên đảm nhận vai trò này trong repository này):
 
-- `ROADMAP.md` — mục tiêu dự án: product scope, kiến trúc, các mode, ràng buộc, và quy tắc rằng agent không được cần thêm quyết định của con người cho các lựa chọn kỹ thuật thông thường. Xem [`ROADMAP.md`](ROADMAP.md).
-- `SPEC.md` — backlog thực thi được: chia roadmap thành danh sách task có thứ tự, mỗi task có marker ``Status: `[ ]` `` và acceptance criteria rõ ràng. Mở đầu bằng preamble "Instructions for the Autonomous Coding Agent" để backlog tự mô tả được. Xem [`SPEC.md`](SPEC.md).
+- `ROADMAP.md` — mục tiêu dự án: product scope, kiến trúc, các mode, ràng buộc, và quy tắc rằng agent không được cần thêm quyết định của con người cho các lựa chọn kỹ thuật thông thường. Xem [`docs/tasks/ROADMAP.md`](docs/tasks/ROADMAP.md).
+- `SPEC.md` — backlog thực thi được: chia roadmap thành danh sách task có thứ tự, mỗi task có marker ``Status: `[ ]` `` và acceptance criteria rõ ràng. Mở đầu bằng preamble "Instructions for the Autonomous Coding Agent" để backlog tự mô tả được. Xem [`docs/tasks/SPEC.md`](docs/tasks/SPEC.md).
 
 > **Review cả hai file từng dòng trước khi chạy loop — đây là checkpoint của con người quan trọng nhất trong toàn bộ flow.** Agent không bao giờ hỏi bạn bất cứ điều gì: mọi thứ các file này nói về tech stack, ngôn ngữ, framework, package manager và version, thư viện và dependency, cấu trúc thư mục, coding convention và quality gates sẽ trở thành dự án cuối cùng, đúng nguyên văn như đã viết. Một quyết định sai ở đây (database sai, package không còn được maintain, cấu trúc đi ngược deployment target của bạn) sẽ được xây dựng trung thực qua hàng trăm task và rất tốn kém để hoàn tác về sau. Iterate với AI cho đến khi mọi lựa chọn kỹ thuật đều là thứ bạn thực sự muốn, rồi freeze các file.
 
@@ -172,7 +172,7 @@ while true; do
 done
 ```
 
-`grep` target và prompt file là hai knob duy nhất — trỏ chúng vào bất kỳ backlog nào để tái sử dụng loop (repository này drive feedback backlog sau hoàn thành trong `POST_COMPLETION_FEEDBACK_V1.md` theo cùng một cách).
+`grep` target và prompt file là hai knob duy nhất — trỏ chúng vào bất kỳ backlog nào để tái sử dụng loop (repository này drive feedback backlog sau hoàn thành trong `docs/tasks/POST_COMPLETION_FEEDBACK_V1.md` theo cùng một cách).
 
 ##### An toàn — `--dangerously-skip-permissions`
 
@@ -420,8 +420,9 @@ chỉ trong nội dung tin nhắn hội thoại.
 - Chế độ nghe (Listen mode): TTS của thiết bị đọc đoạn văn trong khi màn hình cuộn theo giọng đọc theo thời gian thực, hỗ trợ tạm dừng/tiếp tục và giữ màn hình luôn sáng
 - Lịch sử luyện nói: các buổi luyện đã hoàn thành được lưu cục bộ, xem lại và phát lại ở chế độ nghe
 - Câu thực tế (Real-life sentences, chỉ serverless): thu thập câu tiếng Anh thường ngày theo chủ đề, tạo câu mới qua provider của bạn và luyện theo spaced repetition FSRS (Again / Hard / Good / Easy, ngày học mới bắt đầu lúc 4 giờ sáng), gồm dictation và recall theo tình huống
+- Ngân hàng từ (Word bank, chỉ serverless): thu thập vocabulary cho bất kỳ domain nào theo từng chủ đề — AI chọn từ, Free Dictionary API điền toàn bộ nghĩa (mọi senses) và phiên âm IPA — sau đó luyện cùng lịch FSRS, dictation nghe-gõ và recall với từ được che trong ngữ cảnh, kèm enrichment AI cho từng từ qua modal phê duyệt
 - Điều chỉnh tốc độ cuộn teleprompter trong Settings
-- Hai mode biệt lập: **Server mode** (đã authenticate) và **Serverless mode** chạy local (Real-life sentences chỉ có ở serverless mode)
+- Hai mode biệt lập: **Server mode** (đã authenticate) và **Serverless mode** chạy local (Real-life sentences và Word bank chỉ có ở serverless mode)
 - Hỗ trợ đa LLM provider (OpenRouter, Google Gemini, OpenAI, 9Router, OpenAI-compatible) với model fallback có thứ tự
 
 ## Kiến trúc

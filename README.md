@@ -22,9 +22,9 @@ This project was completed end-to-end by an **Autonomous Agent Loop** (Loop Engi
 
 | File | Role |
 | --- | --- |
-| [`ROADMAP.md`](ROADMAP.md) | Product and architecture goals — the target state |
-| [`SPEC.md`](SPEC.md) | Executable backlog — ordered tasks with acceptance criteria |
-| [`STATE.md`](STATE.md) | Live loop execution state — where the agent is right now |
+| [`docs/tasks/ROADMAP.md`](docs/tasks/ROADMAP.md) | Product and architecture goals — the target state |
+| [`docs/tasks/SPEC.md`](docs/tasks/SPEC.md) | Executable backlog — ordered tasks with acceptance criteria |
+| [`docs/tasks/STATE.md`](docs/tasks/STATE.md) | Live loop execution state — where the agent is right now |
 | [`prompts/PROMPT_LOOP_TASKS.md`](prompts/PROMPT_LOOP_TASKS.md) | The single prompt the loop feeds the agent every cycle |
 | [`run-loop.sh`](run-loop.sh) | The `while (true)` driver that keeps the agent running |
 
@@ -83,8 +83,8 @@ The closing `TASK-120` MVP audit verified all 24 `ROADMAP.md` MVP requirements a
 
 Use a separate AI session (a strong reasoning model) to author the two planning files, then add navigation links to them in your project README (the table above serves this role in this repository):
 
-- `ROADMAP.md` — the project goal: product scope, architecture, modes, constraints, and the rule that the agent must not need extra human decisions for routine engineering choices. See [`ROADMAP.md`](ROADMAP.md).
-- `SPEC.md` — the executable backlog: split the roadmap into an ordered list of tasks, each with a ``Status: `[ ]` `` marker and explicit acceptance criteria. Open with an "Instructions for the Autonomous Coding Agent" preamble so the backlog is self-describing. See [`SPEC.md`](SPEC.md).
+- `ROADMAP.md` — the project goal: product scope, architecture, modes, constraints, and the rule that the agent must not need extra human decisions for routine engineering choices. See [`docs/tasks/ROADMAP.md`](docs/tasks/ROADMAP.md).
+- `SPEC.md` — the executable backlog: split the roadmap into an ordered list of tasks, each with a ``Status: `[ ]` `` marker and explicit acceptance criteria. Open with an "Instructions for the Autonomous Coding Agent" preamble so the backlog is self-describing. See [`docs/tasks/SPEC.md`](docs/tasks/SPEC.md).
 
 > **Review both files line by line before running the loop — this is the single most important human checkpoint of the whole flow.** The agent never asks you anything: whatever these files say about the tech stack, languages, frameworks, package managers and versions, libraries and dependencies, directory structure, coding conventions and quality gates becomes the final project, exactly as written. A wrong decision here (the wrong database, an unmaintained package, a structure that fights your deployment target) is built faithfully across a hundred tasks and is expensive to undo afterwards. Iterate with the AI until every technical choice is what you actually want, then freeze the files.
 
@@ -172,7 +172,7 @@ while true; do
 done
 ```
 
-The `grep` target and the prompt file are the only two knobs — point them at any backlog to reuse the loop (this repository drives its post-completion feedback backlog in `POST_COMPLETION_FEEDBACK_V1.md` the same way).
+The `grep` target and the prompt file are the only two knobs — point them at any backlog to reuse the loop (this repository drives its post-completion feedback backlog in `docs/tasks/POST_COMPLETION_FEEDBACK_V1.md` the same way).
 
 ##### Safety — `--dangerously-skip-permissions`
 
@@ -419,8 +419,9 @@ system prompt confines each reply to the conversation message itself.
 - Listen mode: the device TTS reads the text aloud while the scroll follows the speech in real time, with pause/resume and the screen kept awake
 - Speaking history: completed speaking sessions are saved locally, reviewable and replayable in listen mode
 - Real-life sentences (serverless only): collect everyday English per topic, generate new sentences through your own provider, and drill them with FSRS spaced repetition (Again / Hard / Good / Easy, 4 a.m. study day), dictation and situation recall
+- Word bank (serverless only): collect vocabulary for any domain per topic — the AI picks the words, the Free Dictionary API fills in all meanings and IPA — then drill them with the same FSRS schedule, hear-and-type dictation and masked-context recall, with per-word AI enrichment behind an approval modal
 - Adjustable teleprompter scroll speed in Settings
-- Two isolated modes: authenticated **Server mode** and local **Serverless mode** (Real-life sentences are available in serverless mode only)
+- Two isolated modes: authenticated **Server mode** and local **Serverless mode** (Real-life sentences and Word bank are available in serverless mode only)
 - Multi-provider LLM support (OpenRouter, Google Gemini, OpenAI, 9Router, OpenAI-compatible) with ordered model fallback
 
 ## Architecture
