@@ -651,7 +651,7 @@ Priority: `P1`
 
 ## TASK-WB-006 — Shared session rules for words
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 

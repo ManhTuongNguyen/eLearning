@@ -513,7 +513,7 @@ export function SentencePracticeScreen({
 
   const [topic, setTopic] = useState<SentenceTopicRecord | null>(null);
   const [allSentences, setAllSentences] = useState<SentenceRecord[]>([]);
-  const [session, setSession] = useState<PracticeSessionState>({
+  const [session, setSession] = useState<PracticeSessionState<SentenceRecord>>({
     queue: [],
   });
   const [practiceMode, setPracticeMode] = useState<PracticeMode>('auto');
