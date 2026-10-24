@@ -9,16 +9,12 @@
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { ModeProvider } from '../src/mode/ModeContext';
-import { saveApplicationMode } from '../src/mode/modeStorage';
-import type { WordRecord } from '../src/db/types';
 import type { SqlDriver } from '../src/db/driver';
 import { migrateDatabase } from '../src/db/migrations';
-import {
-  createWordTopic,
-  insertWords,
-  listWordsByTopic,
-} from '../src/db/wordRepository';
+import type { WordRecord } from '../src/db/types';
+import { createWordTopic, insertWords, listWordsByTopic } from '../src/db/wordRepository';
+import { ModeProvider } from '../src/mode/ModeContext';
+import { saveApplicationMode } from '../src/mode/modeStorage';
 import type { WordTopicScreenProps } from '../src/navigation/types';
 import { WordReviewModal } from '../src/screens/WordReviewModal';
 import { WordTopicScreen } from '../src/screens/WordTopicScreen';
@@ -37,7 +33,9 @@ const CANDIDATES: WordRecord[] = [
     senses_json: [
       {
         partOfSpeech: 'noun',
-        definitions: [{ definition: 'An institution that holds money.', example: 'I went to the bank.' }],
+        definitions: [
+          { definition: 'An institution that holds money.', example: 'I went to the bank.' },
+        ],
       },
     ],
     phonetics_json: ['/bæŋk/'],
@@ -153,6 +151,17 @@ describe('WordReviewModal — rows', () => {
   test('renders nothing while closed', async () => {
     await renderModal({ visible: false });
     expect(screen.queryByTestId('word-review-modal')).toBeNull();
+  });
+
+  test('the candidate list scrolls inside the card so the actions stay reachable', async () => {
+    await renderModal();
+
+    const scroll = screen.getByTestId('word-review-list-scroll');
+    expect(scroll.props.nestedScrollEnabled).toBe(true);
+    // The buttons live outside the scroll view, so they stay visible even
+    // while the list itself overflows.
+    expect(screen.getByTestId('word-review-keep-all')).toBeTruthy();
+    expect(screen.getByTestId('word-review-discard')).toBeTruthy();
   });
 });
 
@@ -326,7 +335,8 @@ async function generateThree(db_: SqlDriver, topicId: number) {
   });
 
   const view = await renderTopicScreen(topicId);
-  await fireEvent.press(view.getByTestId('word-topic-generate'));
+  await fireEvent.press(view.getByTestId('word-topic-more'));
+  await fireEvent.press(view.getByTestId('word-topic-menu-generate'));
   await fireEvent.press(view.getByTestId('word-generate-submit'));
   await waitFor(() => {
     expect(view.queryByTestId('word-review-modal')).toBeTruthy();

@@ -25,9 +25,7 @@ const WORD_PRACTICE_MODES: readonly WordPracticeMode[] = ['auto', 'dictation', '
 
 /** Narrow an arbitrary stored value to a supported word practice mode. */
 export function isWordPracticeMode(value: unknown): value is WordPracticeMode {
-  return (
-    typeof value === 'string' && (WORD_PRACTICE_MODES as readonly string[]).includes(value)
-  );
+  return typeof value === 'string' && (WORD_PRACTICE_MODES as readonly string[]).includes(value);
 }
 
 /** Read the persisted mode; missing or invalid values mean `auto`. */

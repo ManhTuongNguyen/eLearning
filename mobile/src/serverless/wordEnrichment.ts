@@ -19,12 +19,12 @@ import type { CompleteFn } from './wordGeneration';
  */
 export const WORD_ENRICHMENT_SYSTEM_PROMPT =
   'You improve the learning data for ONE English word for the described learner. ' +
-  'You receive the word\'s current data as context. Return the full replacement: ' +
+  "You receive the word's current data as context. Return the full replacement: " +
   'senses grouped by part of speech, each with definitions; give every definition ' +
   'a natural example sentence where you can, and include examples across the ' +
   'common real-world forms of the word (tenses for verbs, plural for nouns). ' +
   'Keep current senses that are still worth learning; put the senses most relevant ' +
-  'to the learner\'s context first; definitions at most ~20 words, examples at ' +
+  "to the learner's context first; definitions at most ~20 words, examples at " +
   'most ~15 words. Respond with ONLY a JSON object: ' +
   '{"senses":[{"partOfSpeech":"...","definitions":[{"definition":"...","example":"..."}]}]}. ' +
   'No markdown, no commentary.\n' +
@@ -70,7 +70,7 @@ export function buildEnrichUserPrompt(
   }
 
   parts.push(
-    'The word\'s current data (context only — keep what is still worth learning, ' +
+    "The word's current data (context only — keep what is still worth learning, " +
       'improve the rest):\n' +
       JSON.stringify(word.senses_json, null, 2),
   );

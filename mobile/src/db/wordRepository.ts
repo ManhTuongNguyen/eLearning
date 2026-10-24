@@ -23,16 +23,15 @@ import type {
   WordDataSource,
   WordDataStatus,
   WordRecord,
-  WordReviewLogRecord,
   WordReviewLogInput,
+  WordReviewLogRecord,
   WordSense,
   WordTopicRecord,
   WordTopicSummary,
 } from './types';
 import { parseWordPhonetics, parseWordSenses } from './types';
 
-const TOPIC_COLUMNS =
-  'id, title, description, extra_prompt, created_at, updated_at';
+const TOPIC_COLUMNS = 'id, title, description, extra_prompt, created_at, updated_at';
 const WORD_COLUMNS =
   'id, topic_id, text, normalized_text, phonetics_json, senses_json, data_source, data_status, ' +
   'enriched_at, state, suspended, reps, lapses, stability, difficulty, elapsed_days, ' +
@@ -63,7 +62,8 @@ function mapWordRow(row: SqlRow): WordRecord {
     phonetics_json: parseWordPhonetics(row.phonetics_json),
     data_source: String(row.data_source ?? 'dictionary') as WordDataSource,
     data_status: String(row.data_status ?? 'missing') as WordDataStatus,
-    enriched_at: row.enriched_at === null || row.enriched_at === undefined ? null : String(row.enriched_at),
+    enriched_at:
+      row.enriched_at === null || row.enriched_at === undefined ? null : String(row.enriched_at),
     state: String(row.state ?? 'new') as SentenceState,
     suspended: Number(row.suspended ?? 0) === 1,
     reps: Number(row.reps ?? 0),
@@ -309,10 +309,7 @@ export async function insertWordsWith(
 }
 
 /** List a topic's words, newest first. */
-export async function listWordsByTopic(
-  db: SqlExecutor,
-  topicId: number,
-): Promise<WordRecord[]> {
+export async function listWordsByTopic(db: SqlExecutor, topicId: number): Promise<WordRecord[]> {
   const result = await db.execute(
     `SELECT ${WORD_COLUMNS} FROM words
       WHERE topic_id = ?

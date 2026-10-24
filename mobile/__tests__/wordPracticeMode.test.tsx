@@ -59,7 +59,12 @@ function checkedStateOf(testID: string): boolean | undefined {
 async function renderSettings(mode: 'server' | 'serverless') {
   await saveApplicationMode(mode);
   const props = {
-    navigation: { navigate: jest.fn(), goBack: jest.fn(), popToTop: jest.fn(), setParams: jest.fn() },
+    navigation: {
+      navigate: jest.fn(),
+      goBack: jest.fn(),
+      popToTop: jest.fn(),
+      setParams: jest.fn(),
+    },
     route: { key: 'settings-test', name: 'Settings', params: undefined },
   } as unknown as SettingsScreenProps;
 

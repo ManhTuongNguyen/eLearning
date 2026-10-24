@@ -21,7 +21,15 @@
  * kept candidate whose row already exists never fails the reconciliation.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER } from '../components/ScreenLayout';
@@ -168,6 +176,9 @@ function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.onPrimary,
     },
+    listScroll: {
+      flexGrow: 0,
+    },
   });
 }
 
@@ -224,7 +235,12 @@ export function WordReviewModal({
   };
 
   return (
-    <Modal animationType="fade" onRequestClose={onDiscard} testID="word-review-modal" transparent visible>
+    <Modal
+      animationType="fade"
+      onRequestClose={onDiscard}
+      testID="word-review-modal"
+      transparent
+      visible>
       <View style={styles.backdrop}>
         <View style={styles.card} accessibilityViewIsModal>
           <Text style={styles.title} testID="word-review-title">
@@ -235,47 +251,58 @@ export function WordReviewModal({
               'ones you do not want, then keep your selection.'}
           </Text>
 
-          <View style={styles.list}>
-            {candidates.map(candidate => {
-              const kept = keptIds.has(candidate.id);
-              const duplicateOf = duplicateTopicTitles[candidate.id];
-              return (
-                <View key={candidate.id} style={styles.row} testID={`word-review-row-${candidate.id}`}>
-                  <Pressable
-                    accessibilityRole="checkbox"
-                    accessibilityLabel={`Keep ${candidate.text}`}
-                    accessibilityState={{ checked: kept }}
-                    testID={`word-review-keep-${candidate.id}`}
-                    onPress={() => toggle(candidate.id)}
-                    style={[styles.toggle, kept && styles.toggleKept]}>
-                    {kept ? <Icon name="check" size={18} color={colors.onPrimary} /> : null}
-                  </Pressable>
-                  <View style={styles.rowText}>
-                    <Text style={styles.rowWord}>{candidate.text}</Text>
-                    {firstSensePreview(candidate) ? (
-                      <Text style={styles.rowSense} numberOfLines={2}>
-                        {`${posLabel(candidate)} — ${firstSensePreview(candidate)}`}
-                      </Text>
-                    ) : (
-                      <Text style={styles.rowSense}>{posLabel(candidate)}</Text>
-                    )}
-                    {duplicateOf ? (
-                      <Text style={styles.rowHint} testID={`word-review-duplicate-${candidate.id}`}>
-                        {`already in ${duplicateOf}`}
-                      </Text>
-                    ) : null}
-                    {candidate.data_status === 'missing' ? (
-                      <Text
-                        style={[styles.rowHint, styles.rowHintWarning]}
-                        testID={`word-review-missing-${candidate.id}`}>
-                        dictionary unavailable — fetch its data later from Word detail
-                      </Text>
-                    ) : null}
+          <ScrollView
+            style={styles.listScroll}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+            testID="word-review-list-scroll">
+            <View style={styles.list}>
+              {candidates.map(candidate => {
+                const kept = keptIds.has(candidate.id);
+                const duplicateOf = duplicateTopicTitles[candidate.id];
+                return (
+                  <View
+                    key={candidate.id}
+                    style={styles.row}
+                    testID={`word-review-row-${candidate.id}`}>
+                    <Pressable
+                      accessibilityRole="checkbox"
+                      accessibilityLabel={`Keep ${candidate.text}`}
+                      accessibilityState={{ checked: kept }}
+                      testID={`word-review-keep-${candidate.id}`}
+                      onPress={() => toggle(candidate.id)}
+                      style={[styles.toggle, kept && styles.toggleKept]}>
+                      {kept ? <Icon name="check" size={18} color={colors.onPrimary} /> : null}
+                    </Pressable>
+                    <View style={styles.rowText}>
+                      <Text style={styles.rowWord}>{candidate.text}</Text>
+                      {firstSensePreview(candidate) ? (
+                        <Text style={styles.rowSense} numberOfLines={2}>
+                          {`${posLabel(candidate)} — ${firstSensePreview(candidate)}`}
+                        </Text>
+                      ) : (
+                        <Text style={styles.rowSense}>{posLabel(candidate)}</Text>
+                      )}
+                      {duplicateOf ? (
+                        <Text
+                          style={styles.rowHint}
+                          testID={`word-review-duplicate-${candidate.id}`}>
+                          {`already in ${duplicateOf}`}
+                        </Text>
+                      ) : null}
+                      {candidate.data_status === 'missing' ? (
+                        <Text
+                          style={[styles.rowHint, styles.rowHintWarning]}
+                          testID={`word-review-missing-${candidate.id}`}>
+                          dictionary unavailable — fetch its data later from Word detail
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
-                </View>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
+          </ScrollView>
 
           {error ? (
             <Text role="alert" style={styles.error} testID="word-review-error">
@@ -302,7 +329,9 @@ export function WordReviewModal({
               accessibilityRole="button"
               accessibilityState={{ disabled: keepSelectedDisabled, busy }}
               testID="word-review-keep-selected"
-              onPress={() => onKeepSelected(candidates.filter(c => keptIds.has(c.id)).map(c => c.id))}
+              onPress={() =>
+                onKeepSelected(candidates.filter(c => keptIds.has(c.id)).map(c => c.id))
+              }
               disabled={keepSelectedDisabled}
               style={({ pressed }) => [
                 styles.button,
@@ -311,9 +340,7 @@ export function WordReviewModal({
                 pressed && styles.disabled,
               ]}>
               <Text style={styles.cancelText}>
-                {selectedCount === 0
-                  ? 'Keep selected'
-                  : `Keep ${selectedCount} selected`}
+                {selectedCount === 0 ? 'Keep selected' : `Keep ${selectedCount} selected`}
               </Text>
             </Pressable>
             <Pressable

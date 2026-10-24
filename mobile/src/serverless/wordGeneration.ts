@@ -11,10 +11,11 @@
  * user's own provider, a strict-JSON response, and a pure parser the screen
  * tests with a fake `complete` seam.
  */
-import { normalizeWordText } from '../srs/normalizeWord';
+
 import type { SqlDriver } from '../db/driver';
 import type { NewWord, WordRecord, WordTopicRecord } from '../db/types';
 import { insertWords } from '../db/wordRepository';
+import { normalizeWordText } from '../srs/normalizeWord';
 import type { DictionaryLookupResult } from './dictionaryApi';
 import { OpenRouterResponseError } from './errors';
 import { sanitizeLearnerContext } from './sentenceGeneration';
@@ -258,7 +259,10 @@ export async function generateTopicWords(
   const request: CompletionRequest = {
     messages: [
       { role: 'system', content: WORD_GENERATION_SYSTEM_PROMPT },
-      { role: 'user', content: buildWordUserPrompt(input.topic, requestedCount, input.existingWords) },
+      {
+        role: 'user',
+        content: buildWordUserPrompt(input.topic, requestedCount, input.existingWords),
+      },
     ],
   };
   const result = await complete(request);

@@ -10,9 +10,9 @@ import {
   DEFAULT_DICTIONARY_TIMEOUT_MS,
   DICTIONARY_API_BASE,
   DICTIONARY_ATTRIBUTION,
+  type FetchFn,
   lookupDictionaryWord,
   mapDictionaryResponse,
-  type FetchFn,
 } from '../src/serverless/dictionaryApi';
 
 const TWO_ENTRY_RESPONSE = [
@@ -70,7 +70,10 @@ describe('mapDictionaryResponse', () => {
           { definition: 'The land alongside a river.' },
         ],
       },
-      { partOfSpeech: 'verb', definitions: [{ definition: 'To rely on.', example: 'You can bank on it.' }] },
+      {
+        partOfSpeech: 'verb',
+        definitions: [{ definition: 'To rely on.', example: 'You can bank on it.' }],
+      },
     ]);
     // IPA texts kept and deduplicated; audio-only phonetics ignored.
     expect(phonetics).toEqual(['/bæŋk/']);
@@ -94,9 +97,9 @@ describe('mapDictionaryResponse', () => {
     expect(mapDictionaryResponse(null)).toEqual({ senses: [], phonetics: [] });
     expect(mapDictionaryResponse('nope')).toEqual({ senses: [], phonetics: [] });
     expect(mapDictionaryResponse([{ meanings: 'nope' }])).toEqual({ senses: [], phonetics: [] });
-    expect(mapDictionaryResponse([{ meanings: [{ partOfSpeech: 'noun', definitions: [] }] }])).toEqual(
-      { senses: [], phonetics: [] },
-    );
+    expect(
+      mapDictionaryResponse([{ meanings: [{ partOfSpeech: 'noun', definitions: [] }] }]),
+    ).toEqual({ senses: [], phonetics: [] });
   });
 });
 
@@ -120,10 +123,11 @@ describe('lookupDictionaryWord', () => {
 
   test('404, unusable JSON and zero usable senses map to not-found', async () => {
     const notFound: FetchFn = async () => jsonResponse(404, { title: 'No Definitions Found' });
-    await expect(lookupDictionaryWord('xyzzy', notFound)).resolves.toEqual({ outcome: 'not-found' });
+    await expect(lookupDictionaryWord('xyzzy', notFound)).resolves.toEqual({
+      outcome: 'not-found',
+    });
 
-    const brokenJson: FetchFn = async () =>
-      jsonResponse(200, '{not json') as unknown as Response;
+    const brokenJson: FetchFn = async () => jsonResponse(200, '{not json') as unknown as Response;
     await expect(lookupDictionaryWord('xyzzy', brokenJson)).resolves.toEqual({
       outcome: 'not-found',
     });
@@ -161,9 +165,9 @@ describe('lookupDictionaryWord', () => {
       new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
       });
-    await expect(
-      lookupDictionaryWord('bank', hangsUntilAbort, { timeoutMs: 5 }),
-    ).resolves.toEqual({ outcome: 'unavailable' });
+    await expect(lookupDictionaryWord('bank', hangsUntilAbort, { timeoutMs: 5 })).resolves.toEqual({
+      outcome: 'unavailable',
+    });
   });
 
   test('a malformed entry is skipped without failing the whole lookup', async () => {

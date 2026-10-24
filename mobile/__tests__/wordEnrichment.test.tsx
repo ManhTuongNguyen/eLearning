@@ -105,18 +105,19 @@ describe('enrichWord', () => {
   test('returns the proposal without writing', async () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
-    const complete = jest.fn(async (_request: CompletionRequest): Promise<CompletionResult> => ({
-      text: JSON.stringify({ senses: NEW_SENSES }),
-      model: 'test-model',
-      finishReason: 'stop',
-      requestId: null,
-    }));
-
-    const proposal = await enrichWord(
-      db,
-      complete,
-      { word: { text: 'simmer', senses_json: OLD_SENSES }, topic: { title: 'Cooking', description: '', extra_prompt: '' } },
+    const complete = jest.fn(
+      async (_request: CompletionRequest): Promise<CompletionResult> => ({
+        text: JSON.stringify({ senses: NEW_SENSES }),
+        model: 'test-model',
+        finishReason: 'stop',
+        requestId: null,
+      }),
     );
+
+    const proposal = await enrichWord(db, complete, {
+      word: { text: 'simmer', senses_json: OLD_SENSES },
+      topic: { title: 'Cooking', description: '', extra_prompt: '' },
+    });
     expect(proposal).toEqual(NEW_SENSES);
     expect(complete).toHaveBeenCalledTimes(1);
     await db.close();

@@ -30,13 +30,13 @@ import {
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
+import type { WordTopicSummary } from '../db/types';
 import {
   createWordTopic,
   deleteWordTopic,
   listWordTopics,
   updateWordTopic,
 } from '../db/wordRepository';
-import type { WordTopicSummary } from '../db/types';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { WordTopicsScreenProps } from '../navigation/types';
 import { MAX_GENERATION_PROMPT_LENGTH } from '../serverless/sentenceGeneration';
@@ -288,7 +288,15 @@ type TopicRowProps = {
   styles: ReturnType<typeof createStyles>;
 };
 
-function WordTopicRow({ item, onPress, onEdit, onDelete, deleting, colors, styles }: TopicRowProps) {
+function WordTopicRow({
+  item,
+  onPress,
+  onEdit,
+  onDelete,
+  deleting,
+  colors,
+  styles,
+}: TopicRowProps) {
   const dueBadge =
     item.due_count > 0 ? (
       <View style={styles.badge} testID={`word-topic-${item.id}-due`}>
@@ -558,37 +566,33 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
         </View>
       ) : null}
 
-      {serverMode
-        ? null
-        : topics.length === 0
-          ? (
-            <View style={styles.centered} testID="word-empty">
-              <Text style={styles.stateText}>No topics yet. Tap the + above to create one.</Text>
-            </View>
-          )
-          : (
-            <ScreenList
-              data={topics}
-              keyExtractor={item => String(item.id)}
-              renderItem={({ item, index }) => (
-                <>
-                  {index > 0 ? <View style={styles.rowDivider} /> : null}
-                  <WordTopicRow
-                    item={item}
-                    onPress={handleTopicPress}
-                    onEdit={handleEditTopic}
-                    onDelete={handleDeleteTopic}
-                    deleting={deletingId === item.id}
-                    colors={colors}
-                    styles={styles}
-                  />
-                </>
-              )}
-              contentContainerStyle={styles.listContent}
-              onRefresh={() => setReloadKey(key => key + 1)}
-              refreshing={loading}
-            />
+      {serverMode ? null : topics.length === 0 ? (
+        <View style={styles.centered} testID="word-empty">
+          <Text style={styles.stateText}>No topics yet. Tap the + above to create one.</Text>
+        </View>
+      ) : (
+        <ScreenList
+          data={topics}
+          keyExtractor={item => String(item.id)}
+          renderItem={({ item, index }) => (
+            <>
+              {index > 0 ? <View style={styles.rowDivider} /> : null}
+              <WordTopicRow
+                item={item}
+                onPress={handleTopicPress}
+                onEdit={handleEditTopic}
+                onDelete={handleDeleteTopic}
+                deleting={deletingId === item.id}
+                colors={colors}
+                styles={styles}
+              />
+            </>
           )}
+          contentContainerStyle={styles.listContent}
+          onRefresh={() => setReloadKey(key => key + 1)}
+          refreshing={loading}
+        />
+      )}
 
       {/* Create / edit topic form. */}
       <Modal
@@ -611,7 +615,9 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
             <TextInput
               placeholder="e.g. Cooking"
               value={form?.title ?? ''}
-              onChangeText={title => setForm(previous => (previous ? { ...previous, title } : previous))}
+              onChangeText={title =>
+                setForm(previous => (previous ? { ...previous, title } : previous))
+              }
               style={styles.input}
               testID="word-topic-form-title-input"
               autoFocus

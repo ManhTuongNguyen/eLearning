@@ -60,20 +60,20 @@ import {
   savePracticeMode,
 } from '../preferences/practiceMode';
 import {
-  DEFAULT_WORD_PRACTICE_MODE,
-  loadWordPracticeMode,
-  saveWordPracticeMode,
-  type WordPracticeMode,
-} from '../preferences/wordPracticeMode';
-import {
   loadSpeakingScrollSpeed,
   SPEED_MAX_PX_PER_S,
   SPEED_MIN_PX_PER_S,
   SPEED_STEP_PX_PER_S,
   saveSpeakingScrollSpeed,
 } from '../preferences/speakingScrollSpeed';
-import { PROVIDER_DESCRIPTORS } from '../serverless/providerRegistry';
+import {
+  DEFAULT_WORD_PRACTICE_MODE,
+  loadWordPracticeMode,
+  saveWordPracticeMode,
+  type WordPracticeMode,
+} from '../preferences/wordPracticeMode';
 import { DICTIONARY_ATTRIBUTION } from '../serverless/dictionaryApi';
+import { PROVIDER_DESCRIPTORS } from '../serverless/providerRegistry';
 import {
   clearAllServerlessData,
   loadServerlessConfig,

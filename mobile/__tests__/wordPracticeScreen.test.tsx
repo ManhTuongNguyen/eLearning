@@ -12,6 +12,7 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
 import { migrateDatabase } from '../src/db/migrations';
+import type { WordRecord } from '../src/db/types';
 import {
   applyWordReviewState,
   createWordTopic,
@@ -22,7 +23,6 @@ import {
 import { ModeProvider } from '../src/mode/ModeContext';
 import { saveApplicationMode } from '../src/mode/modeStorage';
 import type { WordPracticeScreenProps } from '../src/navigation/types';
-import type { WordRecord } from '../src/db/types';
 import { WordPracticeScreen } from '../src/screens/WordPracticeScreen';
 import { ThemeProvider } from '../src/theme/ThemeContext';
 import type { TextToSpeechEngine } from '../src/tts/textToSpeech';

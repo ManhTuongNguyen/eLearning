@@ -12,9 +12,9 @@ import {
   applyPracticeGrade,
   buildPracticeSession,
   canPractice,
+  createPracticeSessionState,
   MAX_PRACTICE_SESSION_CARDS,
   MIN_PRACTICE_ITEMS,
-  createPracticeSessionState,
 } from '../src/srs/session';
 
 const NOW = new Date('2026-10-24T09:00:00.000Z');
@@ -70,10 +70,7 @@ describe('word session queue (TASK-WB-006)', () => {
   });
 
   test('excludes suspended words', () => {
-    const words = [
-      wordFixture({ suspended: true }),
-      wordFixture({ suspended: false }),
-    ];
+    const words = [wordFixture({ suspended: true }), wordFixture({ suspended: false })];
     const session = buildPracticeSession(words, NOW);
     expect(session.map(word => word.id)).toEqual([words[1].id]);
   });

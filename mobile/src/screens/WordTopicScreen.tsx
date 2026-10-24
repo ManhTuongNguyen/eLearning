@@ -24,6 +24,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -33,26 +34,26 @@ import {
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
+import type { WordRecord, WordTopicRecord } from '../db/types';
 import {
   deleteWord,
   getWordByText,
   getWordTopicById,
   listWordsByTopic,
 } from '../db/wordRepository';
-import type { WordRecord, WordTopicRecord } from '../db/types';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { WordTopicScreenProps } from '../navigation/types';
-import {
-  MAX_WORD_COUNT,
-  MIN_WORD_COUNT,
-  addManualWords,
-  generateTopicWords,
-  parseManualWordInput,
-  type WordGenerationResult,
-} from '../serverless/wordGeneration';
 import { lookupDictionaryWord } from '../serverless/dictionaryApi';
 import { createProviderClient } from '../serverless/providerRegistry';
 import { loadServerlessConfig } from '../serverless/settings';
+import {
+  addManualWords,
+  generateTopicWords,
+  MAX_WORD_COUNT,
+  MIN_WORD_COUNT,
+  parseManualWordInput,
+  type WordGenerationResult,
+} from '../serverless/wordGeneration';
 import { normalizeWordText } from '../srs/normalizeWord';
 import { canPractice } from '../srs/session';
 import type { ThemeColors } from '../theme/colors';
@@ -65,6 +66,9 @@ import { WordReviewModal } from './WordReviewModal';
 const MODE_NOTICE_TEXT = 'The word bank is saved on this device only.';
 const PROVIDER_MISSING_MESSAGE = 'Add your provider API key in Settings to generate words.';
 const DEFAULT_GENERATION_COUNT = 10;
+
+/** Visible height of the scrollable description block (same as sentences). */
+const DESCRIPTION_MAX_HEIGHT = 110;
 
 /** Human message for any error the screen surfaces. */
 function describeError(err: unknown): string {
@@ -79,24 +83,54 @@ export function createStyles(c: ThemeColors) {
       paddingTop: 16,
     },
     header: {
+      marginBottom: 14,
+      gap: 8,
+    },
+    headerTop: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
-      marginBottom: 8,
     },
-    headerTexts: {
-      flex: 1,
-      gap: 2,
+    backLinkButton: {
+      paddingVertical: 4,
+    },
+    backLinkText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.accent,
     },
     title: {
-      fontSize: 24,
+      flex: 1,
+      fontSize: 20,
       fontWeight: '700',
       color: c.textPrimary,
     },
+    menuButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+    },
+    descriptionBox: {
+      maxHeight: DESCRIPTION_MAX_HEIGHT,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      backgroundColor: c.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    descriptionScroll: {
+      maxHeight: DESCRIPTION_MAX_HEIGHT - 22,
+    },
     description: {
-      fontSize: 13,
-      color: c.textMuted,
-      lineHeight: 18,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.textSecondary,
     },
     actionRow: {
       flexDirection: 'row',
@@ -342,6 +376,35 @@ export function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.onPrimary,
     },
+    // --- Overflow menu (Generate / Add words) ---
+    menuBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.35)',
+      alignItems: 'flex-end',
+      justifyContent: 'flex-start',
+      padding: SCREEN_GUTTER,
+      paddingTop: 84,
+    },
+    menuSheet: {
+      width: 220,
+      backgroundColor: c.surface,
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingVertical: 6,
+    },
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+    },
+    menuItemText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.textPrimary,
+    },
     generatingRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -384,7 +447,10 @@ export function primaryPosLabel(word: WordRecord): string {
 }
 
 /** Short per-row schedule hint: due, in-learning, scheduled, or no data. */
-export function wordStatusHint(word: WordRecord, nowMs: number): {
+export function wordStatusHint(
+  word: WordRecord,
+  nowMs: number,
+): {
   label: string;
   due: boolean;
   missing: boolean;
@@ -405,7 +471,16 @@ export function wordStatusHint(word: WordRecord, nowMs: number): {
   return { label: word.state === 'review' ? 'scheduled' : 'learning', due: false, missing: false };
 }
 
-function WordRow({ item, onPress, onSpeak, onDelete, speaking, deleting, colors, styles }: WordRowProps) {
+function WordRow({
+  item,
+  onPress,
+  onSpeak,
+  onDelete,
+  speaking,
+  deleting,
+  colors,
+  styles,
+}: WordRowProps) {
   const pos = primaryPosLabel(item);
   const hint = wordStatusHint(item, Date.now());
   return (
@@ -427,7 +502,11 @@ function WordRow({ item, onPress, onSpeak, onDelete, speaking, deleting, colors,
               </Text>
             ) : null}
             <Text
-              style={[styles.statusHint, hint.due && styles.statusDue, hint.missing && styles.statusMissing]}
+              style={[
+                styles.statusHint,
+                hint.due && styles.statusDue,
+                hint.missing && styles.statusMissing,
+              ]}
               testID={`word-${item.id}-status`}>
               {hint.label}
             </Text>
@@ -467,7 +546,11 @@ interface WordTopicScreenInternalProps extends WordTopicScreenProps {
   speech?: TextToSpeechEngine;
 }
 
-export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() }: WordTopicScreenInternalProps) {
+export function WordTopicScreen({
+  route,
+  navigation,
+  speech = getSpeechEngine(),
+}: WordTopicScreenInternalProps) {
   const { status: modeStatus, mode } = useApplicationMode();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -478,10 +561,12 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   const [search, setSearch] = useState('');
 
+  // Overflow menu (three-dot): Generate and Add words live behind it so the
+  // header stays uncluttered on small screens.
+  const [menuOpen, setMenuOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateCountText, setGenerateCountText] = useState(String(DEFAULT_GENERATION_COUNT));
   const [generating, setGenerating] = useState(false);
@@ -657,7 +742,11 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
   // --- Manual input (TASK-WB-011) ---------------------------------------------
   /** Live counter over the parsed (deduplicated) candidates. */
   const manualParsed = useMemo(
-    () => parseManualWordInput(manualText, words.map(word => word.normalized_text)),
+    () =>
+      parseManualWordInput(
+        manualText,
+        words.map(word => word.normalized_text),
+      ),
     [manualText, words],
   );
   const manualEmpty = manualParsed.words.length === 0;
@@ -706,13 +795,16 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
   }, [manualBusy, manualEmpty, manualTooMany, manualText, topicId, loadTopic]);
 
   // --- Delete -----------------------------------------------------------------
-  const handleDeleteRequest = useCallback((word: WordRecord) => {
-    if (deletingId !== null) {
-      return;
-    }
-    setDeleteError(null);
-    setDeleteTarget(word);
-  }, [deletingId]);
+  const handleDeleteRequest = useCallback(
+    (word: WordRecord) => {
+      if (deletingId !== null) {
+        return;
+      }
+      setDeleteError(null);
+      setDeleteTarget(word);
+    },
+    [deletingId],
+  );
 
   const cancelDelete = useCallback(() => {
     if (deletingId !== null) {
@@ -836,30 +928,10 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
       <View style={styles.actionRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Generate new words"
-          testID="word-topic-generate"
-          onPress={() => setGenerateOpen(true)}
-          style={({ pressed }) => [
-            styles.actionButton,
-            styles.primaryActionButton,
-            pressed && styles.pressedFade,
-          ]}>
-          <Icon name="generate" size={16} color={colors.onPrimary} />
-          <Text style={styles.actionButtonTextLight}>Generate</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add words manually"
-          testID="word-topic-add-words"
-          onPress={() => setManualOpen(true)}
-          style={({ pressed }) => [styles.actionButton, pressed && styles.pressedFade]}>
-          <Icon name="plus" size={16} color={colors.accent} />
-          <Text style={styles.actionButtonText}>Add words</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
           accessibilityLabel={
-            practiceUnlocked ? 'Practice this topic' : `Add ${wordsStillNeeded} more words to practice`
+            practiceUnlocked
+              ? 'Practice this topic'
+              : `Add ${wordsStillNeeded} more words to practice`
           }
           accessibilityState={{ disabled: !practiceUnlocked }}
           testID="word-topic-practice"
@@ -867,11 +939,12 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
           disabled={!practiceUnlocked}
           style={({ pressed }) => [
             styles.actionButton,
+            styles.primaryActionButton,
             !practiceUnlocked && styles.actionButtonDisabled,
             pressed && styles.pressedFade,
           ]}>
-          <Icon name="target" size={16} color={practiceUnlocked ? colors.accent : colors.textMuted} />
-          <Text style={styles.actionButtonText}>Practice</Text>
+          <Icon name="target" size={16} color={colors.onPrimary} />
+          <Text style={styles.actionButtonTextLight}>Practice</Text>
         </Pressable>
       </View>
       {!practiceUnlocked ? (
@@ -918,31 +991,41 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
   return (
     <Screen style={styles.container} testID="word-topic-screen">
       <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to topics"
-          testID="word-topic-back"
-          onPress={() => navigation.goBack()}
-          style={({ pressed }) => [styles.rowIconButton, pressed && styles.pressedFade]}>
-          <Icon name="arrowLeft" color={colors.accent} />
-        </Pressable>
-        <Pressable
-          style={styles.headerTexts}
-          onPress={() => setDescriptionExpanded(value => !value)}
-          disabled={description.length < 80}
-          testID="word-topic-header">
-          <Text style={styles.title} numberOfLines={1}>
+        <View style={styles.headerTop}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to topics"
+            testID="word-topic-back"
+            onPress={() => navigation.goBack()}
+            style={styles.backLinkButton}>
+            <Text style={styles.backLinkText}>‹ Topics</Text>
+          </Pressable>
+          <Text style={styles.title} numberOfLines={1} testID="word-topic-title">
             {topic?.title ?? 'Topic'}
           </Text>
-          {description ? (
-            <Text
-              style={styles.description}
-              numberOfLines={descriptionExpanded ? undefined : 2}
-              testID="word-topic-description">
-              {description}
-            </Text>
-          ) : null}
-        </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Word actions"
+            accessibilityState={{ expanded: menuOpen }}
+            testID="word-topic-more"
+            onPress={() => setMenuOpen(value => !value)}
+            style={({ pressed }) => [styles.menuButton, pressed && styles.pressedFade]}>
+            <Icon name="more" size={20} color={colors.textPrimary} />
+          </Pressable>
+        </View>
+        {description ? (
+          <View style={styles.descriptionBox}>
+            <ScrollView
+              style={styles.descriptionScroll}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              testID="word-topic-description-scroll">
+              <Text style={styles.description} testID="word-topic-description">
+                {description}
+              </Text>
+            </ScrollView>
+          </View>
+        ) : null}
       </ScreenHeader>
 
       {serverMode ? (
@@ -985,6 +1068,48 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
           refreshing={loading}
         />
       )}
+
+      {/* Overflow menu: Generate / Add words. */}
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setMenuOpen(false)}
+        testID="word-topic-menu"
+        transparent
+        visible={menuOpen}>
+        <Pressable
+          style={styles.menuBackdrop}
+          onPress={() => setMenuOpen(false)}
+          testID="word-topic-menu-backdrop">
+          <Pressable style={styles.menuSheet} testID="word-topic-menu-sheet">
+            <View accessibilityViewIsModal>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Generate new words"
+                testID="word-topic-menu-generate"
+                onPress={() => {
+                  setMenuOpen(false);
+                  setGenerateOpen(true);
+                }}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.pressedFade]}>
+                <Icon name="generate" size={18} color={colors.accent} />
+                <Text style={styles.menuItemText}>Generate</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add words manually"
+                testID="word-topic-menu-add-words"
+                onPress={() => {
+                  setMenuOpen(false);
+                  setManualOpen(true);
+                }}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.pressedFade]}>
+                <Icon name="plus" size={18} color={colors.accent} />
+                <Text style={styles.menuItemText}>Add words</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Generate form. */}
       <Modal
@@ -1039,7 +1164,10 @@ export function WordTopicScreen({ route, navigation, speech = getSpeechEngine() 
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ disabled: generating || parsedCount === null, busy: generating }}
+                accessibilityState={{
+                  disabled: generating || parsedCount === null,
+                  busy: generating,
+                }}
                 testID="word-generate-submit"
                 onPress={() => {
                   // handleGenerate handles its own errors, so it never rejects.

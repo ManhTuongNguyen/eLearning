@@ -9,21 +9,21 @@
 import { migrateDatabase } from '../src/db/migrations';
 import type { WordTopicRecord } from '../src/db/types';
 import { createWordTopic, insertWords, listWordsByTopic } from '../src/db/wordRepository';
-import { openSqlJsDriver } from '../testing/sqlJsDriver';
-import type { CompletionRequest, CompletionResult } from '../src/serverless/types';
+import type { DictionaryLookupResult } from '../src/serverless/dictionaryApi';
 import { OpenRouterResponseError } from '../src/serverless/errors';
+import type { CompletionRequest, CompletionResult } from '../src/serverless/types';
 import {
   buildWordSystemPrompt,
   buildWordUserPrompt,
+  type CompleteFn,
   clampWordCount,
+  type DictionaryLookupFn,
   generateTopicWords,
   MAX_WORD_COUNT,
   MIN_WORD_COUNT,
   parseGeneratedWords,
-  type CompleteFn,
-  type DictionaryLookupFn,
 } from '../src/serverless/wordGeneration';
-import type { DictionaryLookupResult } from '../src/serverless/dictionaryApi';
+import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 function completion(text: string): CompleteFn {
   return async (_request: CompletionRequest): Promise<CompletionResult> => ({
@@ -40,7 +40,10 @@ function found(): DictionaryLookupResult {
   return { outcome: 'found', senses: SENSES, phonetics: ['/wɜːd/'] };
 }
 
-async function freshTopic(): Promise<{ db: Awaited<ReturnType<typeof openSqlJsDriver>>; topic: WordTopicRecord }> {
+async function freshTopic(): Promise<{
+  db: Awaited<ReturnType<typeof openSqlJsDriver>>;
+  topic: WordTopicRecord;
+}> {
   const db = await openSqlJsDriver();
   await migrateDatabase(db);
   const topic = await createWordTopic(db, {
@@ -108,7 +111,11 @@ describe('buildWordUserPrompt', () => {
   });
 
   test('caps the existing-words list and clamps the count', () => {
-    const prompt = buildWordUserPrompt(topic, 99, Array.from({ length: 150 }, (_, i) => `word${i}`));
+    const prompt = buildWordUserPrompt(
+      topic,
+      99,
+      Array.from({ length: 150 }, (_, i) => `word${i}`),
+    );
     expect(prompt).toContain('word99');
     expect(prompt).not.toContain('word100');
     expect(prompt).toContain('Choose 30 English words');

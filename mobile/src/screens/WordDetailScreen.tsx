@@ -23,6 +23,7 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'rea
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
+import type { WordRecord, WordSense } from '../db/types';
 import {
   applyWordEnrichment,
   deleteWord,
@@ -30,7 +31,6 @@ import {
   getWordById,
   getWordTopicById,
 } from '../db/wordRepository';
-import type { WordRecord, WordSense } from '../db/types';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { WordDetailScreenProps } from '../navigation/types';
 import { lookupDictionaryWord } from '../serverless/dictionaryApi';
@@ -51,7 +51,10 @@ function describeError(err: unknown): string {
 }
 
 /** The stored FSRS schedule, formatted for the info block. */
-export function describeSchedule(word: WordRecord, now: Date): Array<{ label: string; value: string }> {
+export function describeSchedule(
+  word: WordRecord,
+  now: Date,
+): Array<{ label: string; value: string }> {
   const dueDate = new Date(word.due_at);
   const due = Number.isFinite(dueDate.getTime())
     ? `${dueDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ` +
@@ -567,10 +570,7 @@ export function WordDetailScreen({
     }
   }, [word, deleting, navigation, stop]);
 
-  const scheduleRows = useMemo(
-    () => (word ? describeSchedule(word, new Date()) : []),
-    [word],
-  );
+  const scheduleRows = useMemo(() => (word ? describeSchedule(word, new Date()) : []), [word]);
 
   /** The sense groups of one side of the change-review modal. */
   const renderSenseColumns = (senses: readonly WordSense[]) =>
@@ -642,7 +642,11 @@ export function WordDetailScreen({
                   testID="word-detail-play"
                   onPress={handlePlay}
                   style={({ pressed }) => [styles.playButton, pressed && styles.pressedFade]}>
-                  <Icon name={speakingId === word.id ? 'speaker' : 'play'} size={20} color={colors.accent} />
+                  <Icon
+                    name={speakingId === word.id ? 'speaker' : 'play'}
+                    size={20}
+                    color={colors.accent}
+                  />
                 </Pressable>
               </View>
               {word.phonetics_json.length > 0 ? (
@@ -703,9 +707,7 @@ export function WordDetailScreen({
                 ) : (
                   <Icon name="generate" size={16} color={colors.accent} />
                 )}
-                <Text style={styles.actionButtonText}>
-                  {enriching ? 'Enriching…' : 'Enrich'}
-                </Text>
+                <Text style={styles.actionButtonText}>{enriching ? 'Enriching…' : 'Enrich'}</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -714,7 +716,11 @@ export function WordDetailScreen({
                   setDeleteError(null);
                   setDeleteOpen(true);
                 }}
-                style={({ pressed }) => [styles.actionButton, styles.dangerActionButton, pressed && styles.pressedFade]}>
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.dangerActionButton,
+                  pressed && styles.pressedFade,
+                ]}>
                 <Icon name="trash" size={16} color={colors.danger} />
                 <Text style={styles.actionButtonText}>Delete</Text>
               </Pressable>
@@ -770,7 +776,9 @@ export function WordDetailScreen({
                 {scheduleRows.map(row => (
                   <View key={row.label} style={styles.scheduleRow}>
                     <Text style={styles.scheduleLabel}>{row.label}</Text>
-                    <Text style={styles.scheduleValue} testID={`word-detail-schedule-${row.label.toLowerCase().replace(' ', '-')}`}>
+                    <Text
+                      style={styles.scheduleValue}
+                      testID={`word-detail-schedule-${row.label.toLowerCase().replace(' ', '-')}`}>
                       {row.value}
                     </Text>
                   </View>

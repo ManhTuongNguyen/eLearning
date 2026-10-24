@@ -10,11 +10,7 @@
  * helpers without throwing on malformed content.
  */
 import { MIGRATIONS, migrateDatabase, SCHEMA_VERSION } from '../src/db/migrations';
-import {
-  parseWordPhonetics,
-  parseWordSenses,
-  type WordSense,
-} from '../src/db/types';
+import { parseWordPhonetics, parseWordSenses, type WordSense } from '../src/db/types';
 import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 const NOW = '2026-10-24T09:00:00.000Z';
@@ -26,7 +22,10 @@ const SENSES_JSON = JSON.stringify([
       { definition: 'The land alongside a river.' },
     ],
   },
-  { partOfSpeech: 'verb', definitions: [{ definition: 'To rely on.', example: 'You can bank on it.' }] },
+  {
+    partOfSpeech: 'verb',
+    definitions: [{ definition: 'To rely on.', example: 'You can bank on it.' }],
+  },
 ]);
 
 async function userVersion(db: Awaited<ReturnType<typeof openSqlJsDriver>>): Promise<number> {
@@ -176,7 +175,9 @@ describe('word bank schema (TASK-WB-001)', () => {
     );
 
     await insertWord(db, first);
-    await expect(insertWord(db, first, { text: 'BANK', normalized_text: 'bank' })).rejects.toThrow();
+    await expect(
+      insertWord(db, first, { text: 'BANK', normalized_text: 'bank' }),
+    ).rejects.toThrow();
     await expect(insertWord(db, Number(second.insertId))).resolves.toBeGreaterThan(0);
 
     await db.close();
@@ -188,15 +189,9 @@ describe('word bank schema (TASK-WB-001)', () => {
 
     const topicId = await insertTopic(db);
 
-    await expect(
-      insertWord(db, topicId, { data_source: 'ai' }),
-    ).rejects.toThrow();
-    await expect(
-      insertWord(db, topicId, { data_status: 'partial' }),
-    ).rejects.toThrow();
-    await expect(
-      insertWord(db, topicId, { last_grade: 'perfect' }),
-    ).rejects.toThrow();
+    await expect(insertWord(db, topicId, { data_source: 'ai' })).rejects.toThrow();
+    await expect(insertWord(db, topicId, { data_status: 'partial' })).rejects.toThrow();
+    await expect(insertWord(db, topicId, { last_grade: 'perfect' })).rejects.toThrow();
 
     await db.close();
   });
@@ -298,7 +293,10 @@ describe('word JSON helpers (TASK-WB-001)', () => {
   });
 
   test('parseWordPhonetics round-trips IPA strings and defaults safely', () => {
-    expect(parseWordPhonetics(JSON.stringify(['/bæŋk/', '/bæŋks/']))).toEqual(['/bæŋk/', '/bæŋks/']);
+    expect(parseWordPhonetics(JSON.stringify(['/bæŋk/', '/bæŋks/']))).toEqual([
+      '/bæŋk/',
+      '/bæŋks/',
+    ]);
     expect(parseWordPhonetics('[]')).toEqual([]);
     expect(parseWordPhonetics('broken')).toEqual([]);
     expect(parseWordPhonetics(JSON.stringify(['', '/ok/', 7, null]))).toEqual(['/ok/']);

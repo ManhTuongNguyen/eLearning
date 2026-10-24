@@ -169,7 +169,7 @@ describe('WordDetailScreen — rendering', () => {
       mode: 'dictation',
       reviewed_at: new Date().toISOString(),
     });
-await applyWordReviewState(db, word.id, {
+    await applyWordReviewState(db, word.id, {
       state: 'review',
       reps: 2,
       lapses: 1,
@@ -229,7 +229,9 @@ describe('WordDetailScreen — fetch dictionary data', () => {
 
   test('a 404 keeps the word missing with a not-found message', async () => {
     const topic = await createWordTopic(db, { title: 'Cooking' });
-    const [missing] = await insertWords(db, topic.id, [{ text: 'blurble', data_status: 'missing' }]);
+    const [missing] = await insertWords(db, topic.id, [
+      { text: 'blurble', data_status: 'missing' },
+    ]);
     lookupMock.mockResolvedValue({ outcome: 'not-found' });
 
     const view = await renderDetail(missing.id);

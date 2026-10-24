@@ -26,7 +26,15 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TextStyle } from 'react-native';
-import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Keyboard,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
@@ -37,29 +45,29 @@ import { getWordTopicById, listWordsByTopic, recordWordReview } from '../db/word
 import { useApplicationMode } from '../mode/ModeContext';
 import type { WordPracticeScreenProps } from '../navigation/types';
 import { loadWordPracticeMode, type WordPracticeMode } from '../preferences/wordPracticeMode';
-import { selectCardMode } from '../srs/cardMode';
-import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from '../srs/config';
 import {
+  type DiffKind,
+  type DiffSegment,
   diffDisplayTokens,
   diffTokens,
   suggestGrade,
   summarizeDiff,
-  type DiffKind,
-  type DiffSegment,
 } from '../srs/answerCheck';
-import { maskWordInText } from '../srs/wordMask';
+import { selectCardMode } from '../srs/cardMode';
+import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from '../srs/config';
 import {
+  type GradePreview,
   previewSchedule,
   reviewSentence,
   schedulerStateFrom,
-  type GradePreview,
 } from '../srs/scheduler';
 import {
   applyWordPracticeGrade,
   createWordPracticeSessionState,
-  type PracticeSessionState,
   MAX_PRACTICE_SESSION_CARDS,
+  type PracticeSessionState,
 } from '../srs/session';
+import { maskWordInText } from '../srs/wordMask';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import type { TextToSpeechEngine } from '../tts/textToSpeech';
@@ -516,9 +524,7 @@ export function WordPracticeScreen({
           ...outcome.state,
           updated_at: now.toISOString(),
         };
-        setAllWords(previous =>
-          previous.map(word => (word.id === updated.id ? updated : word)),
-        );
+        setAllWords(previous => previous.map(word => (word.id === updated.id ? updated : word)));
         setSession(previous => applyWordPracticeGrade(previous, grade, updated));
         setReviewedCount(count => count + 1);
         setGradeCounts(counts => ({ ...counts, [grade]: counts[grade] + 1 }));
@@ -541,8 +547,7 @@ export function WordPracticeScreen({
   const sessionFinished = !loading && !loadError && !serverMode && currentCard === null;
   const nextDueLabel = formatNextWordDueLabel(allWords, new Date());
   const hasRemainingDue =
-    allWords.length > 0 &&
-    createWordPracticeSessionState(allWords, new Date(), 1).queue.length > 0;
+    allWords.length > 0 && createWordPracticeSessionState(allWords, new Date(), 1).queue.length > 0;
   const showGradeButtons = cardMode === 'dictation' ? diff !== null : revealed;
 
   /** The masked front of the recall card: every sense rendered through wordMask. */
@@ -598,7 +603,11 @@ export function WordPracticeScreen({
           accessibilityLabel="Back to topic"
           testID="word-practice-back"
           onPress={() => navigation.goBack()}
-          style={({ pressed }) => [styles.button, { flex: 0, borderWidth: 0, backgroundColor: 'transparent' }, pressed && styles.pressedFade]}>
+          style={({ pressed }) => [
+            styles.button,
+            { flex: 0, borderWidth: 0, backgroundColor: 'transparent' },
+            pressed && styles.pressedFade,
+          ]}>
           <Text style={styles.backLinkText}>‹ Topic</Text>
         </Pressable>
         <Text style={styles.title} numberOfLines={1} testID="word-practice-title">
@@ -660,7 +669,11 @@ export function WordPracticeScreen({
                 );
                 setPresentationKey(key => key + 1);
               }}
-              style={({ pressed }) => [styles.button, styles.primaryButton, pressed && styles.pressedFade]}>
+              style={({ pressed }) => [
+                styles.button,
+                styles.primaryButton,
+                pressed && styles.pressedFade,
+              ]}>
               <Text style={styles.primaryButtonText}>Review again</Text>
             </Pressable>
           ) : null}
@@ -688,8 +701,15 @@ export function WordPracticeScreen({
                   accessibilityState={{ busy: speakingId === currentCard.id }}
                   testID="word-practice-replay"
                   onPress={handleReplay}
-                  style={({ pressed }) => [styles.button, { flex: 0, alignSelf: 'center', paddingHorizontal: 20 }, pressed && styles.pressedFade]}>
-                  <Icon name={speakingId === currentCard.id ? 'speaker' : 'play'} color={colors.accent} />
+                  style={({ pressed }) => [
+                    styles.button,
+                    { flex: 0, alignSelf: 'center', paddingHorizontal: 20 },
+                    pressed && styles.pressedFade,
+                  ]}>
+                  <Icon
+                    name={speakingId === currentCard.id ? 'speaker' : 'play'}
+                    color={colors.accent}
+                  />
                 </Pressable>
                 <TextInput
                   value={answer}
@@ -824,7 +844,9 @@ export function WordPracticeScreen({
                       ? [styles.button, styles.againButton]
                       : [styles.button];
                   const textStyle =
-                    preview.grade === 'again' ? [styles.buttonText, styles.againButtonText] : [styles.buttonText];
+                    preview.grade === 'again'
+                      ? [styles.buttonText, styles.againButtonText]
+                      : [styles.buttonText];
                   return (
                     <Pressable
                       key={preview.grade}

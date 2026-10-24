@@ -10,7 +10,12 @@
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
-import { createWordTopic, insertWords, listWordsByTopic, listWordTopics } from '../src/db/wordRepository';
+import {
+  createWordTopic,
+  insertWords,
+  listWordsByTopic,
+  listWordTopics,
+} from '../src/db/wordRepository';
 import { ModeProvider } from '../src/mode/ModeContext';
 import { saveApplicationMode } from '../src/mode/modeStorage';
 import type { WordTopicsScreenProps } from '../src/navigation/types';
@@ -216,10 +221,7 @@ describe('WordTopicsScreen — create and edit topic', () => {
     await fireEvent.press(view.getByTestId(`word-topic-edit-${topic.id}`));
     expect(view.getByTestId('word-topic-form-title')).toHaveTextContent('Edit topic');
     await fireEvent.changeText(view.getByTestId('word-topic-form-description'), 'blog reading');
-    await fireEvent.changeText(
-      view.getByTestId('word-topic-form-extra-prompt'),
-      'focus on verbs',
-    );
+    await fireEvent.changeText(view.getByTestId('word-topic-form-extra-prompt'), 'focus on verbs');
     await fireEvent.press(view.getByTestId('word-topic-form-save'));
 
     await waitFor(() => {

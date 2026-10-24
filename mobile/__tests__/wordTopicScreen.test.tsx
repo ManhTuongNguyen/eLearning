@@ -10,14 +10,10 @@
  * blur silencing.
  */
 
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, type RenderResult, render, waitFor } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
 import { migrateDatabase } from '../src/db/migrations';
-import {
-  createWordTopic,
-  insertWords,
-  listWordsByTopic,
-} from '../src/db/wordRepository';
+import { createWordTopic, insertWords, listWordsByTopic } from '../src/db/wordRepository';
 import { ModeProvider } from '../src/mode/ModeContext';
 import { saveApplicationMode } from '../src/mode/modeStorage';
 import type { WordTopicScreenProps } from '../src/navigation/types';
@@ -148,7 +144,9 @@ async function createTopicWithWords(count: number, title = 'Cooking') {
       topic.id,
       Array.from({ length: count }, (_, index) => ({
         text: `word${index + 1}`,
-        senses_json: [{ partOfSpeech: 'noun', definitions: [{ definition: `Sense ${index + 1}.` }] }],
+        senses_json: [
+          { partOfSpeech: 'noun', definitions: [{ definition: `Sense ${index + 1}.` }] },
+        ],
         phonetics_json: ['/wɜːd/'],
       })),
     );
@@ -187,9 +185,15 @@ describe('WordTopicScreen — word list', () => {
 
     const view = await renderScreen(topic.id);
 
+    // The header matches the sentence topic screen: small title beside the
+    // back link, description in its own scrollable box below (no shared
+    // margins).
+    expect(view.getByTestId('word-topic-title')).toHaveTextContent('Cooking');
+    expect(view.getByText('‹ Topics')).toBeTruthy();
     expect(view.getByTestId('word-topic-description')).toHaveTextContent(
       "I'm a chef, I often read cooking blogs.",
     );
+    expect(view.getByTestId('word-topic-description-scroll').props.nestedScrollEnabled).toBe(true);
     expect(view.getByText('word1')).toBeTruthy();
     expect(view.getByText('word2')).toBeTruthy();
     expect(view.getAllByText('noun').length).toBe(2);
@@ -320,12 +324,35 @@ describe('WordTopicScreen — practice unlock', () => {
   });
 });
 
+/** Generation now lives behind the header's three-dot overflow menu. */
+async function openGenerate(view: RenderResult) {
+  await fireEvent.press(view.getByTestId('word-topic-more'));
+  await fireEvent.press(view.getByTestId('word-topic-menu-generate'));
+}
+
+describe('WordTopicScreen — overflow menu', () => {
+  test('the three-dot menu offers Generate and Add words and closes on backdrop', async () => {
+    const topic = await createTopicWithWords(0);
+    const view = await renderScreen(topic.id);
+
+    await fireEvent.press(view.getByTestId('word-topic-more'));
+    expect(view.getByTestId('word-topic-menu-sheet')).toBeTruthy();
+    expect(view.getByTestId('word-topic-menu-generate')).toBeTruthy();
+    expect(view.getByTestId('word-topic-menu-add-words')).toBeTruthy();
+
+    await fireEvent.press(view.getByTestId('word-topic-menu-backdrop'));
+    await waitFor(() => {
+      expect(view.queryByTestId('word-topic-menu-sheet')).toBeFalsy();
+    });
+  });
+});
+
 describe('WordTopicScreen — generation', () => {
   test('the count input validates 1-30 and disables an invalid submit', async () => {
     const topic = await createTopicWithWords(0);
 
     const view = await renderScreen(topic.id);
-    await fireEvent.press(view.getByTestId('word-topic-generate'));
+    await openGenerate(view);
     expect(view.getByTestId('word-generate-modal')).toBeTruthy();
 
     // Default is 10 and valid.
@@ -358,7 +385,7 @@ describe('WordTopicScreen — generation', () => {
     });
 
     const view = await renderScreen(topic.id);
-    await fireEvent.press(view.getByTestId('word-topic-generate'));
+    await openGenerate(view);
     await fireEvent.changeText(view.getByTestId('word-generate-count'), '2');
     await fireEvent.press(view.getByTestId('word-generate-submit'));
 
@@ -403,7 +430,7 @@ describe('WordTopicScreen — generation', () => {
     });
 
     const view = await renderScreen(topic.id);
-    await fireEvent.press(view.getByTestId('word-topic-generate'));
+    await openGenerate(view);
     await fireEvent.press(view.getByTestId('word-generate-submit'));
 
     await waitFor(() => {
@@ -424,7 +451,7 @@ describe('WordTopicScreen — generation', () => {
     settings.loadServerlessConfig.mockResolvedValue(null);
 
     const view = await renderScreen(topic.id);
-    await fireEvent.press(view.getByTestId('word-topic-generate'));
+    await openGenerate(view);
     await fireEvent.press(view.getByTestId('word-generate-submit'));
 
     await waitFor(() => {

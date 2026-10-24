@@ -18,14 +18,10 @@ import {
   insertSentences,
   logSentenceReview,
 } from '../src/db/sentenceRepository';
-import {
-  createWordTopic,
-  insertWords,
-  logWordReview,
-} from '../src/db/wordRepository';
 import { insertSession, listSessions } from '../src/db/sessionStore';
 import { getSetting, setSetting } from '../src/db/settingsStore';
 import { saveSummary } from '../src/db/summaryStore';
+import { createWordTopic, insertWords, logWordReview } from '../src/db/wordRepository';
 import { loadServerlessApiKey, saveServerlessApiKey } from '../src/serverless/secureApiKey';
 import { openSqlJsDriver } from '../testing/sqlJsDriver';
 

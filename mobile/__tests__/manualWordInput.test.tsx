@@ -7,7 +7,7 @@
  * counter, submit disabled for empty or over-bound input, and a submission
  * running the same dictionary pipeline as generation.
  */
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, type RenderResult, render, waitFor } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
 import { migrateDatabase } from '../src/db/migrations';
 import { createWordTopic, insertWords, listWordsByTopic } from '../src/db/wordRepository';
@@ -45,6 +45,12 @@ describe('parseManualWordInput', () => {
     expect(parsed.total).toBe(32);
   });
 });
+
+/** Manual input now lives behind the header's three-dot overflow menu. */
+async function openAddWords(view: RenderResult) {
+  await fireEvent.press(view.getByTestId('word-topic-more'));
+  await fireEvent.press(view.getByTestId('word-topic-menu-add-words'));
+}
 
 // --- Modal / pipeline ----------------------------------------------------------
 
@@ -140,7 +146,7 @@ describe('WordTopicScreen — manual input modal', () => {
     const topic = await createWordTopic(db, { title: 'Cooking' });
     const view = await renderTopicScreen(topic.id);
 
-    await fireEvent.press(view.getByTestId('word-topic-add-words'));
+    await openAddWords(view);
     expect(view.getByTestId('word-manual-modal')).toBeTruthy();
 
     // Empty input: submit disabled.
@@ -160,7 +166,7 @@ describe('WordTopicScreen — manual input modal', () => {
     const topic = await createWordTopic(db, { title: 'Cooking' });
     const view = await renderTopicScreen(topic.id);
 
-    await fireEvent.press(view.getByTestId('word-topic-add-words'));
+    await openAddWords(view);
     const input = view.getByTestId('word-manual-input');
     expect(input.props.multiline).toBe(true);
     expect(input.props.scrollEnabled).toBe(true);
@@ -185,8 +191,11 @@ describe('WordTopicScreen — manual input modal', () => {
     });
 
     const view = await renderTopicScreen(topic.id);
-    await fireEvent.press(view.getByTestId('word-topic-add-words'));
-    await fireEvent.changeText(view.getByTestId('word-manual-input'), ' bank , Bank , blurble , simmer ');
+    await openAddWords(view);
+    await fireEvent.changeText(
+      view.getByTestId('word-manual-input'),
+      ' bank , Bank , blurble , simmer ',
+    );
 
     // Duplicates within the input collapse into the counter.
     expect(view.getByTestId('word-manual-count')).toHaveTextContent('3 words');
@@ -216,12 +225,14 @@ describe('WordTopicScreen — manual input modal', () => {
     const topic = await createWordTopic(db, { title: 'Cooking' });
     const view = await renderTopicScreen(topic.id);
 
-    await fireEvent.press(view.getByTestId('word-topic-add-words'));
+    await openAddWords(view);
     const raw = Array.from({ length: 31 }, (_, index) => `word${index + 1}`).join(', ');
     await fireEvent.changeText(view.getByTestId('word-manual-input'), raw);
 
     expect(view.getByTestId('word-manual-count')).toHaveTextContent('31 words');
-    expect(view.getByTestId('word-manual-count-error')).toHaveTextContent('Up to 30 words at a time.');
+    expect(view.getByTestId('word-manual-count-error')).toHaveTextContent(
+      'Up to 30 words at a time.',
+    );
     expect(view.getByTestId('word-manual-submit').props.accessibilityState).toMatchObject({
       disabled: true,
     });
@@ -233,7 +244,7 @@ describe('WordTopicScreen — manual input modal', () => {
     await insertWords(db, topic.id, [{ text: 'bank' }]);
     const view = await renderTopicScreen(topic.id);
 
-    await fireEvent.press(view.getByTestId('word-topic-add-words'));
+    await openAddWords(view);
     await fireEvent.changeText(view.getByTestId('word-manual-input'), 'bank, whisk');
     expect(view.getByTestId('word-manual-count')).toHaveTextContent('1 word');
 

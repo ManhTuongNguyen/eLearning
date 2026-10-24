@@ -8,6 +8,7 @@
  */
 import type { SqlDriver } from '../src/db/driver';
 import { migrateDatabase } from '../src/db/migrations';
+import type { SentenceReviewState, WordSense } from '../src/db/types';
 import {
   applyWordReviewState,
   countDueWords,
@@ -16,8 +17,8 @@ import {
   deleteWord,
   deleteWordTopic,
   fillWordDictionaryData,
-  getWordByText,
   getWordById,
+  getWordByText,
   getWordTopicById,
   insertWords,
   insertWordsWith,
@@ -29,7 +30,6 @@ import {
   recordWordReview,
   updateWordTopic,
 } from '../src/db/wordRepository';
-import type { SentenceReviewState, WordSense } from '../src/db/types';
 import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 const EARLIER = '2026-10-24T08:00:00.000Z';
@@ -164,9 +164,7 @@ describe('inserting words', () => {
 
     // An existing word keeps its row untouched; casing of the stored text is
     // whatever the first insert kept.
-    const secondBatch = await insertWords(db, topic.id, [
-      { text: 'Bank', senses_json: SENSES },
-    ]);
+    const secondBatch = await insertWords(db, topic.id, [{ text: 'Bank', senses_json: SENSES }]);
     expect(secondBatch).toEqual([]);
 
     const rows = await listWordsByTopic(db, topic.id);
@@ -179,16 +177,12 @@ describe('inserting words', () => {
     const db = await freshDb();
     const topic = await createWordTopic(db, { title: 'Cooking' });
 
-    const [missing] = await insertWords(db, topic.id, [
-      { text: 'blanch', data_status: 'missing' },
-    ]);
+    const [missing] = await insertWords(db, topic.id, [{ text: 'blanch', data_status: 'missing' }]);
     expect(missing.data_status).toBe('missing');
     expect(missing.senses_json).toEqual([]);
     expect(missing.phonetics_json).toEqual([]);
 
-    const [punctuated] = await insertWordsWith(db, topic.id, [
-      { text: '"whisk"' },
-    ]);
+    const [punctuated] = await insertWordsWith(db, topic.id, [{ text: '"whisk"' }]);
     expect(punctuated.normalized_text).toBe('whisk');
 
     await db.close();
@@ -270,7 +264,9 @@ describe('word lookups and duplicates', () => {
     });
     expect(updated?.senses_json).toEqual(SENSES);
     expect(updated?.phonetics_json).toEqual(['/blɑːntʃ/']);
-    expect(await fillWordDictionaryData(db, 999, { senses_json: [], phonetics_json: [] })).toBeNull();
+    expect(
+      await fillWordDictionaryData(db, 999, { senses_json: [], phonetics_json: [] }),
+    ).toBeNull();
 
     await db.close();
   });
@@ -388,7 +384,11 @@ describe('review state and log', () => {
     const topic = await createWordTopic(db, { title: 'Cooking' });
     const [word] = await insertWords(db, topic.id, [WORD_A]);
 
-    await applyWordReviewState(db, word.id, reviewState({ state: 'relearning', last_grade: 'again' }));
+    await applyWordReviewState(
+      db,
+      word.id,
+      reviewState({ state: 'relearning', last_grade: 'again' }),
+    );
 
     const reviewed = await getWordById(db, word.id);
     expect(reviewed?.state).toBe('relearning');
