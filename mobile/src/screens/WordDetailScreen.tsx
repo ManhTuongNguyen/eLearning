@@ -23,11 +23,20 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'rea
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
-import { deleteWord, fillWordDictionaryData, getWordById } from '../db/wordRepository';
-import type { WordRecord } from '../db/types';
+import {
+  applyWordEnrichment,
+  deleteWord,
+  fillWordDictionaryData,
+  getWordById,
+  getWordTopicById,
+} from '../db/wordRepository';
+import type { WordRecord, WordSense } from '../db/types';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { WordDetailScreenProps } from '../navigation/types';
 import { lookupDictionaryWord } from '../serverless/dictionaryApi';
+import { createProviderClient } from '../serverless/providerRegistry';
+import { loadServerlessConfig } from '../serverless/settings';
+import { enrichWord } from '../serverless/wordEnrichment';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import type { TextToSpeechEngine } from '../tts/textToSpeech';
@@ -305,6 +314,41 @@ export function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.onPrimary,
     },
+    modalPrimaryButton: {
+      backgroundColor: c.primary,
+    },
+    // --- Change-review modal (TASK-WB-014) ---
+    enrichCard: {
+      width: '100%',
+      maxWidth: 560,
+      maxHeight: '90%',
+      backgroundColor: c.surface,
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 20,
+      gap: 12,
+    },
+    columnsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    column: {
+      flex: 1,
+      gap: 6,
+      backgroundColor: c.background,
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 10,
+      padding: 10,
+    },
+    columnTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+    },
     pressedFade: {
       opacity: 0.9,
     },
@@ -338,6 +382,13 @@ export function WordDetailScreen({
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Enrichment (TASK-WB-014): the AI proposes a replacement, the learner
+  // reviews it side by side with the old data and applies or cancels.
+  const [enriching, setEnriching] = useState(false);
+  const [proposal, setProposal] = useState<WordSense[] | null>(null);
+  const [enrichError, setEnrichError] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
 
   const { speakingId, speak, stop } = useSpeechPlayback(speech);
 
@@ -433,6 +484,70 @@ export function WordDetailScreen({
     }
   }, [word, fetching]);
 
+  /**
+   * Run one enrichment completion. The proposal is returned without writing;
+   * the modal renders old vs new and the learner decides.
+   */
+  const handleEnrich = useCallback(async () => {
+    if (!word || enriching || word.data_status === 'missing') {
+      return;
+    }
+    setEnriching(true);
+    setEnrichError(null);
+    try {
+      const config = await loadServerlessConfig();
+      if (!config) {
+        setEnrichError('Add your provider API key in Settings to enrich words.');
+        return;
+      }
+      const client = createProviderClient(config);
+      const db = await getLocalDatabase();
+      const topic = await getWordTopicById(db, word.topic_id);
+      if (!topic) {
+        throw new Error('This topic no longer exists.');
+      }
+      const proposed = await enrichWord(db, request => client.complete(request), {
+        word,
+        topic,
+      });
+      setProposal(proposed);
+    } catch (err) {
+      setEnrichError(describeError(err));
+    } finally {
+      setEnriching(false);
+    }
+  }, [word, enriching]);
+
+  /** Apply the approved proposal: one wholesale senses write; FSRS untouched. */
+  const handleApplyEnrichment = useCallback(async () => {
+    if (!word || proposal === null || applying) {
+      return;
+    }
+    setApplying(true);
+    setEnrichError(null);
+    try {
+      const db = await getLocalDatabase();
+      const updated = await applyWordEnrichment(db, word.id, proposal, new Date().toISOString());
+      if (updated) {
+        setWord(updated);
+      }
+      setProposal(null);
+    } catch (err) {
+      setEnrichError(describeError(err));
+    } finally {
+      setApplying(false);
+    }
+  }, [word, proposal, applying]);
+
+  /** Cancel writes nothing. */
+  const handleCancelEnrichment = useCallback(() => {
+    if (applying) {
+      return;
+    }
+    setProposal(null);
+    setEnrichError(null);
+  }, [applying]);
+
   const confirmDelete = useCallback(async () => {
     if (!word || deleting) {
       return;
@@ -456,6 +571,29 @@ export function WordDetailScreen({
     () => (word ? describeSchedule(word, new Date()) : []),
     [word],
   );
+
+  /** The sense groups of one side of the change-review modal. */
+  const renderSenseColumns = (senses: readonly WordSense[]) =>
+    senses.length === 0 ? (
+      <Text style={styles.stateText}>No data.</Text>
+    ) : (
+      senses.map((sense, senseIndex) => (
+        <View
+          // biome-ignore lint/suspicious/noArrayIndexKey: sense groups render positionally
+          key={`${sense.partOfSpeech}-${senseIndex}`}
+          style={styles.senseGroup}>
+          <Text style={styles.posLabel}>{sense.partOfSpeech}</Text>
+          {sense.definitions.map((definition, definitionIndex) => (
+            <View
+              // biome-ignore lint/suspicious/noArrayIndexKey: definitions render positionally
+              key={definitionIndex}>
+              <Text style={styles.definition}>{definition.definition}</Text>
+              {definition.example ? <Text style={styles.example}>{definition.example}</Text> : null}
+            </View>
+          ))}
+        </View>
+      ))
+    );
 
   const hasData = word?.data_status === 'complete';
 
@@ -548,19 +686,26 @@ export function WordDetailScreen({
               ) : null}
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ disabled: !hasData }}
+                accessibilityState={{ disabled: !hasData || enriching, busy: enriching }}
                 testID="word-detail-enrich"
                 onPress={() => {
-                  // Wired to the enrichment flow in TASK-WB-014.
+                  // handleEnrich handles its own errors, so it never rejects.
+                  handleEnrich();
                 }}
-                disabled={!hasData}
+                disabled={!hasData || enriching}
                 style={({ pressed }) => [
                   styles.actionButton,
-                  !hasData && styles.buttonDisabled,
+                  (!hasData || enriching) && styles.buttonDisabled,
                   pressed && styles.pressedFade,
                 ]}>
-                <Icon name="generate" size={16} color={colors.accent} />
-                <Text style={styles.actionButtonText}>Enrich</Text>
+                {enriching ? (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                ) : (
+                  <Icon name="generate" size={16} color={colors.accent} />
+                )}
+                <Text style={styles.actionButtonText}>
+                  {enriching ? 'Enriching…' : 'Enrich'}
+                </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -583,6 +728,11 @@ export function WordDetailScreen({
             {fetchError ? (
               <Text role="alert" style={styles.errorText} testID="word-detail-fetch-error">
                 {fetchError}
+              </Text>
+            ) : null}
+            {enrichError ? (
+              <Text role="alert" style={styles.errorText} testID="word-detail-enrich-error">
+                {enrichError}
               </Text>
             ) : null}
 
@@ -630,6 +780,73 @@ export function WordDetailScreen({
           </View>
         </ScreenScrollView>
       )}
+
+      {/* Change-review modal (TASK-WB-014): old vs new side by side. */}
+      <Modal
+        animationType="fade"
+        onRequestClose={handleCancelEnrichment}
+        testID="word-enrich-modal"
+        transparent
+        visible={proposal !== null}>
+        <View style={styles.backdrop}>
+          <View style={styles.enrichCard} accessibilityViewIsModal>
+            <Text style={styles.modalTitle} testID="word-enrich-title">
+              Review proposed data
+            </Text>
+            <View style={styles.columnsRow}>
+              <View style={styles.column} testID="word-enrich-old">
+                <Text style={styles.columnTitle}>Current</Text>
+                {renderSenseColumns(word?.senses_json ?? [])}
+              </View>
+              <View style={styles.column} testID="word-enrich-new">
+                <Text style={styles.columnTitle}>Proposed</Text>
+                {renderSenseColumns(proposal ?? [])}
+              </View>
+            </View>
+            {enrichError ? (
+              <Text role="alert" style={styles.modalError} testID="word-enrich-error">
+                {enrichError}
+              </Text>
+            ) : null}
+            <View style={styles.modalFooter}>
+              <Pressable
+                accessibilityRole="button"
+                testID="word-enrich-cancel"
+                onPress={handleCancelEnrichment}
+                disabled={applying}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalCancelButton,
+                  applying && styles.modalDisabled,
+                  pressed && styles.modalDisabled,
+                ]}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: applying, busy: applying }}
+                testID="word-enrich-apply"
+                onPress={() => {
+                  // handleApplyEnrichment handles its own errors.
+                  handleApplyEnrichment();
+                }}
+                disabled={applying}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalPrimaryButton,
+                  applying && styles.modalDisabled,
+                  pressed && styles.modalDisabled,
+                ]}>
+                {applying ? (
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
+                ) : (
+                  <Text style={styles.actionButtonTextLight}>Apply</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Delete confirmation. */}
       <Modal

@@ -394,6 +394,29 @@ export async function fillWordDictionaryData(
   return getWordById(db, wordId);
 }
 
+/**
+ * Replace a word's senses wholesale with an approved enrichment proposal: one
+ * transaction writes the new senses, flips `data_source` to `'enriched'` and
+ * stamps `enriched_at`. Phonetics are untouched (the dictionary's IPA survives
+ * every enrichment) and so is the FSRS state — no review counter, schedule or
+ * `due_at` changes. Returns the updated record, or null when the id is
+ * unknown.
+ */
+export async function applyWordEnrichment(
+  db: SqlExecutor,
+  wordId: number,
+  senses: WordSense[],
+  enrichedAt: string,
+): Promise<WordRecord | null> {
+  await db.execute(
+    `UPDATE words
+        SET senses_json = ?, data_source = 'enriched', enriched_at = ?, updated_at = ?
+      WHERE id = ?`,
+    [JSON.stringify(senses), enrichedAt, nowIso(), wordId],
+  );
+  return getWordById(db, wordId);
+}
+
 // --- Due queries ------------------------------------------------------------
 
 /**

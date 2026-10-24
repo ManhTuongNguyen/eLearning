@@ -947,7 +947,7 @@ Priority: `P1`
 
 ## TASK-WB-014 — Word enrichment service and change-review modal
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
