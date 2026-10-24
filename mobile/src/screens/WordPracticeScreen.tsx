@@ -7,13 +7,16 @@
  * words and a meaning-recall card for `review` words.
  *
  * Dictation: the word is spoken once automatically on card open (device TTS)
- * with a replay button; the learner types it; `Check` pre-suggests Good for an
- * exact or one-typo answer (never Easy) and the learner can override; the
- * reveal shows the spelling, IPA and POS labels and replays the word.
+ * with a replay button; the learner types it; `Check` locks the input and
+ * shows a sentence-practice-style diff of the answer (per-word tokens, wrong
+ * words underlined with the expected spelling after an arrow, plus a one-line
+ * summary), pre-suggests Good for an exact or one-typo answer (never Easy) and
+ * the reveal shows the spelling, IPA and POS labels and replays the word.
  *
  * Recall: the front shows the meanings and examples with the target word
  * masked (first letter + underscores, inflections included — see wordMask);
- * the reveal plays the word, unmasks everything and shows the full data.
+ * the reveal plays the word, unmasks everything, diffs the typed answer the
+ * same way and shows the full data.
  *
  * Grading goes through the shared FSRS scheduler and persists the word state
  * plus an Anki-shaped review-log row in one transaction; a card still in a
@@ -51,6 +54,7 @@ import {
   diffDisplayTokens,
   diffTokens,
   suggestGrade,
+  summarizeDiff,
 } from '../srs/answerCheck';
 import { selectCardMode } from '../srs/cardMode';
 import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from '../srs/config';
@@ -137,8 +141,27 @@ function diffTokenStyle(kind: DiffKind, colors: ThemeColors): TextStyle {
     case 'extra':
       return { color: colors.warning, textDecorationLine: 'line-through' };
     case 'substituted':
-      return { color: colors.warning };
+      return { color: colors.danger, textDecorationLine: 'underline' };
   }
+}
+
+/** The one-line result summary under the diff row ("2 correct · 1 substituted"). */
+function diffSummary(segments: readonly DiffSegment[]): string {
+  const summary = summarizeDiff(segments);
+  const parts: string[] = [];
+  if (summary.correct > 0) {
+    parts.push(`${summary.correct} correct`);
+  }
+  if (summary.missing > 0) {
+    parts.push(`${summary.missing} missing`);
+  }
+  if (summary.substituted > 0) {
+    parts.push(`${summary.substituted} substituted`);
+  }
+  if (summary.extra > 0) {
+    parts.push(`${summary.extra} extra`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : 'Nothing typed yet.';
 }
 
 export function createStyles(c: ThemeColors) {
@@ -254,6 +277,23 @@ export function createStyles(c: ThemeColors) {
     maskedSegment: {
       letterSpacing: 2,
       fontWeight: '700',
+    },
+    diffRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+      backgroundColor: c.background,
+    },
+    diffToken: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    diffSummary: {
+      fontSize: 13,
+      color: c.textSecondary,
     },
     chipRow: {
       flexDirection: 'row',
@@ -689,6 +729,42 @@ export function WordPracticeScreen({
     );
 
   /**
+   * The checked answer as a sentence-practice-style diff row: one token per
+   * word, wrong words underlined with the expected word after an arrow, and a
+   * one-line summary. Shared by the dictation and recall cards.
+   */
+  const renderDiff = () => {
+    if (diff === null) {
+      return null;
+    }
+    return (
+      <>
+        <View style={styles.diffRow} testID="word-practice-diff">
+          {diffDisplayTokens(diff).map((token, index) => (
+            <Text
+              // biome-ignore lint/suspicious/noArrayIndexKey: diff tokens are positional
+              key={`${token.kind}-${index}`}
+              accessibilityLabel={
+                token.expected
+                  ? `${token.kind}: ${token.text}, expected ${token.expected}`
+                  : `${token.kind}: ${token.text}`
+              }
+              style={[styles.diffToken, diffTokenStyle(token.kind, colors)]}
+              testID={`word-practice-diff-token-${index}`}>
+              {token.kind === 'substituted' && token.expected
+                ? `${token.text} → ${token.expected}`
+                : token.text}
+            </Text>
+          ))}
+        </View>
+        <Text style={styles.diffSummary} testID="word-practice-diff-summary">
+          {diffSummary(diff)}
+        </Text>
+      </>
+    );
+  };
+
+  /**
    * Every stored sense group on the back card — part of speech, usage tags,
    * all definitions with all examples, synonyms/antonyms — with every text
    * selectable so the learner can copy anything they see.
@@ -898,19 +974,9 @@ export function WordPracticeScreen({
                   autoCapitalize="none"
                   autoCorrect={false}
                   placeholder="Type the word you hear"
+                  editable={diff === null && !saving}
                 />
-                {diff !== null ? (
-                  <View testID="word-practice-diff">
-                    <Text style={styles.definition}>
-                      {diffDisplayTokens(diff).map((token, index) => (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: diff tokens are positional
-                        <Text key={index} style={diffTokenStyle(token.kind, colors)}>
-                          {token.text}{' '}
-                        </Text>
-                      ))}
-                    </Text>
-                  </View>
-                ) : null}
+                {renderDiff()}
                 {diff !== null ? (
                   <View>
                     <Text selectable style={styles.definition} testID="word-practice-correct-word">
@@ -937,24 +1003,14 @@ export function WordPracticeScreen({
                   autoCapitalize="none"
                   autoCorrect={false}
                   placeholder="Type the word"
+                  editable={!revealed && !saving}
                 />
                 {revealed ? (
                   <View testID="word-practice-recall-reveal">
                     <Text selectable style={styles.wordText}>
                       {currentCard.text}
                     </Text>
-                    {diff !== null ? (
-                      <View testID="word-practice-diff">
-                        <Text style={styles.definition}>
-                          {diffDisplayTokens(diff).map((token, index) => (
-                            // biome-ignore lint/suspicious/noArrayIndexKey: diff tokens are positional
-                            <Text key={index} style={diffTokenStyle(token.kind, colors)}>
-                              {token.text}{' '}
-                            </Text>
-                          ))}
-                        </Text>
-                      </View>
-                    ) : null}
+                    {renderDiff()}
                     {currentCard.phonetics_json.length > 0 ? (
                       <Text selectable style={styles.phonetics}>
                         {currentCard.phonetics_json.join('\n')}

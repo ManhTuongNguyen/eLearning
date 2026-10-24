@@ -220,6 +220,13 @@ describe('WordPracticeScreen — dictation card', () => {
       expect(view.getByTestId('word-practice-suggestion')).toHaveTextContent('Suggested: Good');
     });
 
+    // The diff matches the sentence practice screen: the wrong word is shown
+    // with the expected spelling after an arrow, plus a one-line summary, and
+    // the input locks so the shown diff can't go stale.
+    expect(view.getByTestId('word-practice-diff-token-0')).toHaveTextContent('word2 → word1');
+    expect(view.getByTestId('word-practice-diff-summary')).toHaveTextContent('1 substituted');
+    expect(view.getByTestId('word-practice-answer').props.editable).toBe(false);
+
     await act(async () => {
       fireEvent.press(view.getByTestId('word-practice-replay'));
     });
@@ -232,6 +239,10 @@ describe('WordPracticeScreen — dictation card', () => {
 
     await fireEvent.changeText(view.getByTestId('word-practice-answer'), 'word1');
     await fireEvent.press(view.getByTestId('word-practice-check'));
+
+    // An exact answer reads as a single correct token in the diff row.
+    expect(view.getByTestId('word-practice-diff-token-0')).toHaveTextContent('word1');
+    expect(view.getByTestId('word-practice-diff-summary')).toHaveTextContent('1 correct');
 
     // Word, POS, definition and example are all selectable.
     expect(view.getByTestId('word-practice-correct-word').props.selectable).toBe(true);
@@ -340,6 +351,11 @@ describe('WordPracticeScreen — recall card', () => {
     const reveal = within(view.getByTestId('word-practice-recall-reveal'));
     expect(reveal.getByText('word1').props.selectable).toBe(true);
     expect(reveal.getByText('I went to the bank.').props.selectable).toBe(true);
+
+    // The recall reveal diffs the typed answer exactly like dictation does.
+    expect(reveal.getByTestId('word-practice-diff')).toBeTruthy();
+    expect(reveal.getByTestId('word-practice-diff-token-0')).toHaveTextContent('bank → word1');
+    expect(reveal.getByTestId('word-practice-diff-summary')).toHaveTextContent('1 substituted');
 
     await fireEvent.press(view.getByTestId('word-practice-grade-easy'));
     await waitFor(() => {
