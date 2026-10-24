@@ -561,7 +561,7 @@ Priority: `P1`
 
 ## TASK-WB-003 — Free Dictionary API client
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
