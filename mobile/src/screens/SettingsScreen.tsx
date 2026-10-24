@@ -60,6 +60,12 @@ import {
   savePracticeMode,
 } from '../preferences/practiceMode';
 import {
+  DEFAULT_WORD_PRACTICE_MODE,
+  loadWordPracticeMode,
+  saveWordPracticeMode,
+  type WordPracticeMode,
+} from '../preferences/wordPracticeMode';
+import {
   loadSpeakingScrollSpeed,
   SPEED_MAX_PX_PER_S,
   SPEED_MIN_PX_PER_S,
@@ -127,6 +133,28 @@ const SENTENCE_PRACTICE_MODE_OPTIONS: Array<{
     value: 'recall',
     label: 'Recall',
     testID: 'settings-practice-mode-recall',
+  },
+];
+
+const WORD_PRACTICE_MODE_OPTIONS: Array<{
+  value: WordPracticeMode;
+  label: string;
+  testID: string;
+}> = [
+  {
+    value: 'auto',
+    label: 'Auto',
+    testID: 'settings-word-practice-mode-auto',
+  },
+  {
+    value: 'dictation',
+    label: 'Dictation',
+    testID: 'settings-word-practice-mode-dictation',
+  },
+  {
+    value: 'recall',
+    label: 'Recall',
+    testID: 'settings-word-practice-mode-recall',
   },
 ];
 
@@ -639,6 +667,35 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
   }, []);
 
   /**
+   * Word practice mode (WORD_BANK_V1 TASK-WB-007): same null-until-loaded and
+   * serverless-only contract as the sentence practice mode above.
+   */
+  const [wordPracticeMode, setWordPracticeMode] = useState<WordPracticeMode | null>(null);
+  useEffect(() => {
+    if (modeStatus !== 'ready' || appMode !== 'serverless') {
+      return;
+    }
+    let cancelled = false;
+    loadWordPracticeMode().then(mode => {
+      if (!cancelled) {
+        setWordPracticeMode(mode);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [modeStatus, appMode]);
+
+  const handleWordPracticeModeChange = useCallback((mode: WordPracticeMode) => {
+    setWordPracticeMode(mode);
+    saveWordPracticeMode(mode).catch(() => {
+      loadWordPracticeMode()
+        .then(stored => setWordPracticeMode(stored))
+        .catch(() => setWordPracticeMode(DEFAULT_WORD_PRACTICE_MODE));
+    });
+  }, []);
+
+  /**
    * Speaking-practice karaoke scroll speed (px/s). The slider updates the
    * displayed value live while dragging; persistence is debounced by
    * SCROLL_SPEED_SAVE_DELAY_MS so the store is written once after the user
@@ -1026,6 +1083,47 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                         accessibilityLabel={option.label}
                         accessibilityState={{ checked: isSelected }}
                         onPress={() => handlePracticeModeChange(option.value)}
+                        style={({ pressed }) => [
+                          styles.segment,
+                          isSelected && styles.segmentSelected,
+                          pressed && styles.buttonDisabled,
+                        ]}
+                        testID={option.testID}>
+                        <Text
+                          style={[styles.segmentText, isSelected && styles.segmentTextSelected]}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Word practice mode (WORD_BANK_V1 TASK-WB-007): serverless-only,
+              same contract as the sentence card above but for the word bank's
+              dictation/recall mix. Visually its own card under its own label
+              so the two preferences stay distinguishable. */}
+          {appMode === 'serverless' && wordPracticeMode !== null ? (
+            <View style={styles.rowGroup} testID="settings-word-practice-mode-section">
+              <Text style={styles.sectionLabel}>Word practice</Text>
+              <View style={styles.practiceModeCard}>
+                <Text style={styles.toggleTitle}>Word practice mode</Text>
+                <Text style={styles.toggleDescription}>
+                  Let Auto pick dictation or recall from each word&apos;s schedule, or force one
+                  card shape for every word.
+                </Text>
+                <View style={styles.segmentRow}>
+                  {WORD_PRACTICE_MODE_OPTIONS.map(option => {
+                    const isSelected = option.value === wordPracticeMode;
+                    return (
+                      <Pressable
+                        key={option.value}
+                        accessibilityRole="radio"
+                        accessibilityLabel={option.label}
+                        accessibilityState={{ checked: isSelected }}
+                        onPress={() => handleWordPracticeModeChange(option.value)}
                         style={({ pressed }) => [
                           styles.segment,
                           isSelected && styles.segmentSelected,

@@ -676,7 +676,7 @@ Priority: `P1`
 
 ## TASK-WB-007 — Word practice mode preference
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P2`
 
