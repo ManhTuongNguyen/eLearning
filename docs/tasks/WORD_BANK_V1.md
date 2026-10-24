@@ -907,7 +907,7 @@ Priority: `P1`
 
 ## TASK-WB-013 — Word detail screen
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
