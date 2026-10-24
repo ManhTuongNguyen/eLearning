@@ -403,7 +403,9 @@ describe('WordDetailScreen — change-review modal', () => {
 describe('WordDetailScreen — AI enrichment of a dataless word', () => {
   test('enrich → apply completes a word the dictionary could not fill', async () => {
     const topic = await createWordTopic(db, { title: 'Cooking' });
-    const [missing] = await insertWords(db, topic.id, [{ text: 'blurble', data_status: 'missing' }]);
+    const [missing] = await insertWords(db, topic.id, [
+      { text: 'blurble', data_status: 'missing' },
+    ]);
     complete.mockResolvedValue({
       text: JSON.stringify({ senses: NEW_SENSES }),
       model: 'test-model',
@@ -457,7 +459,9 @@ describe('applyWordEnrichment (repository)', () => {
 
     // A word the dictionary could not fill becomes complete when its approved
     // AI proposal is applied — the only path that completes it.
-    const [missing] = await insertWords(db, topic.id, [{ text: 'blurble', data_status: 'missing' }]);
+    const [missing] = await insertWords(db, topic.id, [
+      { text: 'blurble', data_status: 'missing' },
+    ]);
     const completed = await applyWordEnrichment(db, missing.id, NEW_SENSES, enrichedAt);
     expect(completed).toMatchObject({
       data_status: 'complete',

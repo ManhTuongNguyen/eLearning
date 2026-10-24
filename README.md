@@ -421,6 +421,7 @@ system prompt confines each reply to the conversation message itself.
 - Real-life sentences (serverless only): collect everyday English per topic, generate new sentences through your own provider, and drill them with FSRS spaced repetition (Again / Hard / Good / Easy, 4 a.m. study day), dictation and situation recall
 - Word bank (serverless only): collect vocabulary for any domain per topic — the AI picks the words, the Free Dictionary API fills in all meanings and IPA — then drill them with the same FSRS schedule, hear-and-type dictation and masked-context recall, with per-word AI enrichment behind an approval modal
 - Adjustable teleprompter scroll speed in Settings
+- In-app guide (Home → **App guide**): one page per feature with usage steps, the exact AI requests each action makes, how your level and inputs shape the prompts, and deep links that open the real screen
 - Two isolated modes: authenticated **Server mode** and local **Serverless mode** (Real-life sentences and Word bank are available in serverless mode only)
 - Multi-provider LLM support (OpenRouter, Google Gemini, OpenAI, 9Router, OpenAI-compatible) with ordered model fallback
 

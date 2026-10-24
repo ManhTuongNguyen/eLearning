@@ -85,9 +85,7 @@ export function buildWordUserPrompt(
   if (level === 'AUTO') {
     parts.push("The learner's English level is unknown; infer an appropriate level.");
   } else {
-    parts.push(
-      `The learner's English level is ${level} (CEFR). Choose words that fit that level.`,
-    );
+    parts.push(`The learner's English level is ${level} (CEFR). Choose words that fit that level.`);
   }
 
   const contextLines: string[] = [];

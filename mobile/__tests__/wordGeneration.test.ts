@@ -98,7 +98,7 @@ describe('buildWordUserPrompt — learner level', () => {
 
   test('states the CEFR level when the profile has one', () => {
     const prompt = buildWordUserPrompt(levelTopic, 10, [], 'B2');
-    expect(prompt).toContain('The learner\'s English level is B2 (CEFR)');
+    expect(prompt).toContain("The learner's English level is B2 (CEFR)");
     expect(prompt).toContain('Choose words that fit that level');
   });
 
@@ -188,7 +188,7 @@ describe('generateTopicWords pipeline', () => {
     await db.close();
   });
 
-  test('carries the learner\'s CEFR level from the on-device profile into the prompt', async () => {
+  test("carries the learner's CEFR level from the on-device profile into the prompt", async () => {
     const { db, topic } = await freshTopic();
     await saveLearningProfile(db, 'C1');
     const complete = jest.fn(
@@ -208,9 +208,7 @@ describe('generateTopicWords pipeline', () => {
 
     const calls = complete.mock.calls as unknown as Array<[CompletionRequest]>;
     const request = calls[0]?.[0];
-    const userPrompt = request?.messages.find(
-      (m: { role: string }) => m.role === 'user',
-    )?.content;
+    const userPrompt = request?.messages.find((m: { role: string }) => m.role === 'user')?.content;
     expect(userPrompt).toContain("The learner's English level is C1 (CEFR)");
     expect(userPrompt).toContain('Choose words that fit that level');
 

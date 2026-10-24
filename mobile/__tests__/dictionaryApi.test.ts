@@ -177,9 +177,10 @@ describe('mapDictionaryResponse', () => {
     expect(mapDictionaryResponse({})).toEqual({ senses: [], phonetics: [] });
     expect(mapDictionaryResponse({ entries: 'nope' })).toEqual({ senses: [], phonetics: [] });
     expect(mapDictionaryResponse([{ senses: 'nope' }])).toEqual({ senses: [], phonetics: [] });
-    expect(
-      mapDictionaryResponse({ entries: [{ partOfSpeech: 'noun', senses: [] }] }),
-    ).toEqual({ senses: [], phonetics: [] });
+    expect(mapDictionaryResponse({ entries: [{ partOfSpeech: 'noun', senses: [] }] })).toEqual({
+      senses: [],
+      phonetics: [],
+    });
   });
 });
 
@@ -255,9 +256,9 @@ describe('lookupDictionaryWord', () => {
       new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
       });
-    await expect(
-      lookupDictionaryWord('bank', hangsUntilAbort, { timeoutMs: 5 }),
-    ).resolves.toEqual({ outcome: 'unavailable' });
+    await expect(lookupDictionaryWord('bank', hangsUntilAbort, { timeoutMs: 5 })).resolves.toEqual({
+      outcome: 'unavailable',
+    });
   });
 
   test('a malformed entry is skipped without failing the whole lookup', async () => {

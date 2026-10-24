@@ -43,7 +43,7 @@ export const WORD_ENRICHMENT_SYSTEM_PROMPT =
   'the word (tenses for verbs, plural for nouns). Each definition may also carry ' +
   'short "tags" (register/region, e.g. "informal", "UK") and a few useful ' +
   '"synonyms" and "antonyms". Keep current senses that are still worth learning; ' +
-  'put the senses most relevant to the learner\'s context first; definitions at ' +
+  "put the senses most relevant to the learner's context first; definitions at " +
   'most ~20 words, examples at most ~15 words. Respond with ONLY a JSON object: ' +
   '{"senses":[{"partOfSpeech":"...","synonyms":["..."],"antonyms":["..."],' +
   '"definitions":[{"definition":"...","example":"...","extraExamples":["..."],' +

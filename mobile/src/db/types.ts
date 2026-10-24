@@ -414,7 +414,8 @@ export function parseWordSenses(raw: unknown): WordSense[] {
         typeof definitionRecord.example === 'string' && definitionRecord.example.trim()
           ? definitionRecord.example.trim()
           : undefined;
-      const parsed: WordSenseDefinition = example === undefined ? { definition } : { definition, example };
+      const parsed: WordSenseDefinition =
+        example === undefined ? { definition } : { definition, example };
       const extraExamples = stringList(definitionRecord.extraExamples);
       if (extraExamples.length > 0) {
         parsed.extraExamples = extraExamples;

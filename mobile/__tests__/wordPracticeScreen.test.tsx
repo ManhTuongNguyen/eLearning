@@ -214,9 +214,9 @@ describe('WordPracticeScreen — dictation card', () => {
     // One typo-sized edit → Good is pre-suggested (highlighted button and a
     // sentence-style suggestion line — no check-mark glyph inside the button).
     await waitFor(() => {
-      expect(
-        view.getByTestId('word-practice-grade-good').props.accessibilityState,
-      ).toMatchObject({ selected: true });
+      expect(view.getByTestId('word-practice-grade-good').props.accessibilityState).toMatchObject({
+        selected: true,
+      });
       expect(view.getByTestId('word-practice-suggestion')).toHaveTextContent('Suggested: Good');
     });
 

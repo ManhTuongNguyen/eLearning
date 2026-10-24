@@ -40,6 +40,7 @@ serverless is active.
 | Copy / text selection surface | Yes | Copy only | clipboard + `MessageActionsMenu` |
 | Application mode switcher | Yes | Yes | `SettingsScreen` |
 | Theme switching (persisted, `app.themeMode`) | Yes | Yes | `ThemeContext` + `preferences/theme` (mode-independent) |
+| App guide (usage steps, AI-request costs, deep links) | Yes | Yes | `guide/guideContent`, `GuideScreen`, `GuideDetailScreen` (mode-independent content with per-entry mode badges) |
 
 ## 2. Route-by-route audit
 
@@ -66,6 +67,8 @@ both the mode and the auth restore have settled.
 | `WordDetail` | Main | Reachable only through `WordTopic` | All senses, schedule, dictionary fetch, enrich change-review, delete | Serverless-only parent route (WORD_BANK_V1 TASK-WB-013) |
 | `WordPractice` | Main | Reachable only through `WordTopic` | Due-only dictation/recall session (max 20) | Serverless-only parent route (WORD_BANK_V1 TASK-WB-012) |
 | `AIProviderSettings` | Main | Serverless-only notice, no config reads | Full provider editor | In-screen guard (TASK-AUDIT-016) |
+| `Guide` | Main | Hub listing every guide entry | Same listing in both modes | Mode-independent; mode-specific entries carry a badge instead of being hidden |
+| `GuideDetail` | Main | One guide page: steps, AI-request costs, deep link | Same content; deep links into serverless-only screens keep those screens' own guards | Static content from `guide/guideContent` |
 
 ## 3. Enforcement layers
 

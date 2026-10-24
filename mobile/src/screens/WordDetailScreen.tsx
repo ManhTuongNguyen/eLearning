@@ -680,9 +680,7 @@ export function WordDetailScreen({
             key={definitionIndex}>
             {renderTagChips(definition.tags ?? [])}
             <Text style={styles.definition}>{definition.definition}</Text>
-            {definition.example ? (
-              <Text style={styles.example}>{definition.example}</Text>
-            ) : null}
+            {definition.example ? <Text style={styles.example}>{definition.example}</Text> : null}
             {(definition.extraExamples ?? []).map((extra, extraIndex) => (
               <Text
                 // biome-ignore lint/suspicious/noArrayIndexKey: examples render positionally
@@ -922,10 +920,7 @@ export function WordDetailScreen({
               showsVerticalScrollIndicator
               testID="word-enrich-list-scroll">
               {sensePairKeys.map((partOfSpeech, index) => (
-                <View
-                  key={partOfSpeech}
-                  style={styles.pairRow}
-                  testID={`word-enrich-row-${index}`}>
+                <View key={partOfSpeech} style={styles.pairRow} testID={`word-enrich-row-${index}`}>
                   <View style={styles.pairCell} testID={`word-enrich-old-${index}`}>
                     {renderSenseCell(word?.senses_json ?? [], partOfSpeech)}
                   </View>

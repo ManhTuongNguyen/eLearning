@@ -56,6 +56,7 @@ const ROWS = [
     title: 'Real-life sentences',
   },
   { icon: 'settings', testID: 'home-open-settings', route: 'Settings', title: 'Settings' },
+  { icon: 'help', testID: 'home-open-guide', route: 'Guide', title: 'App guide' },
 ] as const;
 
 function homeProps(): HomeScreenProps {

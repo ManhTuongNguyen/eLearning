@@ -287,6 +287,31 @@ default off) and `src/hooks/useGrammarAutoCheck.ts` (check pipeline, cache
 and stale-result guards); the badge renders inside `MessageRow` and reuses
 the `ImprovementSheet` of the manual "Improve my English" action.
 
+## App guide (in-app help)
+
+Home → **App guide** opens the guide hub (`src/screens/GuideScreen.tsx`),
+which lists one entry per feature grouped like the Home hub
+(`src/guide/guideContent.ts`). Every entry opens a full page
+(`src/screens/GuideDetailScreen.tsx`) with:
+
+- an intro and numbered "how to use it" steps naming the screen's real controls;
+- an **AI requests** card: each learner action and its exact request cost
+  (streamed, cached, background or none), mirroring the serverless services
+  and backend views;
+- **Getting better results**: how the prompts are built — the CEFR level line
+  present in every prompt, topic hints and question lists, learner-context
+  descriptions and batch counts;
+- practical tips and a mode notice for serverless-only or server-only features
+  (the hub badges them instead of hiding them);
+- a **Try it** deep link that navigates straight to the real screen — the
+  `GuideDeepLinkRoute` type restricts targets to parameterless routes, so
+  every link typechecks against `MainStackParamList`.
+
+Guide text is plain data in `src/guide/types.ts` / `guideContent.ts`; when a
+feature changes, update its entry in the same commit. The content invariants
+(one entry per id, complete sections, unique steps, every entry deep-linked)
+are pinned by `__tests__/guideContent.test.ts`.
+
 ## Local database (serverless)
 
 Serverless mode persists conversations on-device in SQLite (`src/db/`, SPEC TASK-081):

@@ -2,6 +2,7 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { SampleTurn } from '../api/sessions';
+import type { GuideId } from '../guide/types';
 
 /** Stack shown to unauthenticated users. */
 export type AuthStackParamList = {
@@ -85,6 +86,13 @@ export type MainStackParamList = {
   WordDetail: { wordId: number };
   /** Spaced-repetition practice for one word topic (WORD_BANK_V1 TASK-WB-012). */
   WordPractice: { topicId: number };
+  /**
+   * Guide hub: explains every feature, the AI requests each action makes and
+   * how prompts use the learner profile. Pushed from the Home row.
+   */
+  Guide: undefined;
+  /** One guide entry rendered as a full screen; `guideId` selects the content. */
+  GuideDetail: { guideId: GuideId };
 };
 
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -147,6 +155,10 @@ export type WordTopicScreenProps = NativeStackScreenProps<MainStackParamList, 'W
 export type WordDetailScreenProps = NativeStackScreenProps<MainStackParamList, 'WordDetail'>;
 
 export type WordPracticeScreenProps = NativeStackScreenProps<MainStackParamList, 'WordPractice'>;
+
+export type GuideScreenProps = NativeStackScreenProps<MainStackParamList, 'Guide'>;
+
+export type GuideDetailScreenProps = NativeStackScreenProps<MainStackParamList, 'GuideDetail'>;
 
 export type HomeScreenProps = NativeStackScreenProps<MainStackParamList, 'Home'>;
 

@@ -17,6 +17,7 @@ import {
   ArrowRight,
   AudioLines,
   Check,
+  CircleHelp,
   EllipsisVertical,
   Headphones,
   History,
@@ -67,6 +68,7 @@ export const ICON_NAMES = [
   'keyboard',
   'list',
   'target',
+  'help',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -98,6 +100,7 @@ export const ICON_COMPONENTS: Record<IconName, LucideIcon> = {
   keyboard: Keyboard,
   list: ListIcon,
   target: Target,
+  help: CircleHelp,
 };
 
 export interface IconProps {

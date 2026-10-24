@@ -270,6 +270,13 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
             onPress: () => navigation.navigate('Settings'),
             testID: 'home-open-settings',
           },
+          {
+            title: 'App guide',
+            description: 'How every feature works and where it uses the AI.',
+            icon: 'help',
+            onPress: () => navigation.navigate('Guide'),
+            testID: 'home-open-guide',
+          },
         ],
       },
     ],

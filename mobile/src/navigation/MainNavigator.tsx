@@ -11,6 +11,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AIProviderSettingsScreen } from '../screens/AIProviderSettingsScreen';
 import { ChatScreen } from '../screens/ChatScreen';
+import { GuideDetailScreen } from '../screens/GuideDetailScreen';
+import { GuideScreen } from '../screens/GuideScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LevelScreen } from '../screens/LevelScreen';
@@ -59,6 +61,8 @@ export function MainNavigator() {
       <Stack.Screen name="WordTopic" component={WordTopicScreen} />
       <Stack.Screen name="WordDetail" component={WordDetailScreen} />
       <Stack.Screen name="WordPractice" component={WordPracticeScreen} />
+      <Stack.Screen name="Guide" component={GuideScreen} />
+      <Stack.Screen name="GuideDetail" component={GuideDetailScreen} />
     </Stack.Navigator>
   );
 }

@@ -66,6 +66,7 @@ describe('Icon seam', () => {
       'trash',
       'speaker',
       'check',
+      'help',
     ];
     for (const name of required) {
       expect(ICON_NAMES).toContain(name);
