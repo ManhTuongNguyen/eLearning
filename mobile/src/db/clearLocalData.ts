@@ -18,6 +18,7 @@ import type { SqlDriver, SqlExecutor } from './driver';
  * Deletes:
  * - All conversation sessions, messages, and summaries (cascade via FKs)
  * - All sentence topics, sentences and their review log (TASK-SENT-014)
+ * - All word topics, words and their review log (WORD_BANK_V1 TASK-WB-015)
  * - The FSRS collection config: weights, retention, steps, rollover hour
  *   (TASK-SENT-015)
  * - Learning profile row
@@ -48,6 +49,10 @@ export async function clearServerlessLocalData(
     await tx.execute('DELETE FROM sentence_review_log');
     await tx.execute('DELETE FROM sentences');
     await tx.execute('DELETE FROM sentence_topics');
+    // Word bank (WORD_BANK_V1 TASK-WB-015): same explicit order.
+    await tx.execute('DELETE FROM word_review_log');
+    await tx.execute('DELETE FROM words');
+    await tx.execute('DELETE FROM word_topics');
     // Collection-level FSRS config (weights, retention, rollover hour).
     await tx.execute('DELETE FROM srs_config');
 
@@ -56,7 +61,8 @@ export async function clearServerlessLocalData(
     // resets AUTOINCREMENT for the named tables.
     await tx.execute(
       'DELETE FROM sqlite_sequence WHERE name IN ' +
-        "('sessions', 'messages', 'summaries', 'sentence_topics', 'sentences', 'sentence_review_log')",
+        "('sessions', 'messages', 'summaries', 'sentence_topics', 'sentences', " +
+        "'sentence_review_log', 'word_topics', 'words', 'word_review_log')",
     );
   });
 

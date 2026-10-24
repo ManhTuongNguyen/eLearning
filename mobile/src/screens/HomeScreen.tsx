@@ -23,6 +23,7 @@ import { Icon } from '../components/Icon';
 import { Screen, ScreenScrollView } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
 import { countDueSentences } from '../db/sentenceRepository';
+import { countDueWords } from '../db/wordRepository';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { HomeScreenProps } from '../navigation/types';
 import type { ThemeColors } from '../theme/colors';
@@ -154,19 +155,28 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
   // (TASK-SENT-014), so server-mode users never see a dead destination.
   const serverlessReady = modeStatus === 'ready' && mode === 'serverless';
   const [dueCount, setDueCount] = useState(0);
+  // Word bank due badge (WORD_BANK_V1 TASK-WB-015): same advisory contract.
+  const [wordDueCount, setWordDueCount] = useState(0);
 
   const loadDueCount = useCallback(async () => {
     if (!serverlessReady) {
       setDueCount(0);
+      setWordDueCount(0);
       return;
     }
     try {
       const db = await getLocalDatabase();
-      setDueCount(await countDueSentences(db));
+      const [sentencesDue, wordsDue] = await Promise.all([
+        countDueSentences(db),
+        countDueWords(db),
+      ]);
+      setDueCount(sentencesDue);
+      setWordDueCount(wordsDue);
     } catch {
       // The badge is advisory: a local database failure must never take the
       // Home hub down with it.
       setDueCount(0);
+      setWordDueCount(0);
     }
   }, [serverlessReady]);
 
@@ -239,6 +249,15 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
             modes: ['serverless'],
             badgeCount: dueCount,
           },
+          {
+            title: 'Word bank',
+            description: 'Build topic vocabulary with AI-picked, dictionary-verified words.',
+            icon: 'words',
+            onPress: () => navigation.navigate('WordTopics'),
+            testID: 'home-open-words',
+            modes: ['serverless'],
+            badgeCount: wordDueCount,
+          },
         ],
       },
       {
@@ -254,7 +273,7 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
         ],
       },
     ],
-    [navigation, dueCount],
+    [navigation, dueCount, wordDueCount],
   );
 
   return (

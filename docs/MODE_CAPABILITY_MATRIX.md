@@ -22,6 +22,7 @@ serverless is active.
 | Server conversation history | Yes | No | `api/sessions` |
 | Local conversation history | No | Yes | `db/sessionStore`, `db/messageStore` |
 | Real-life sentences (topics, AI generation, SRS practice) | No | Yes | `db/sentenceRepository`, `srs/*`, `Sentence*Screen` |
+| Word bank (topics, AI words + dictionary data, SRS practice, enrichment) | No | Yes | `db/wordRepository`, `serverless/wordGeneration`, `serverless/wordEnrichment`, `serverless/dictionaryApi`, `Word*Screen` |
 | AI chat (turn + retry) | Yes (SSE via backend) | Yes (direct provider) | `useChatTurns` mode branch |
 | Topic suggestions | Yes | Yes | `useMessageSuggestions` mode branch |
 | Improve my English | Yes | Yes | `useMessageImprovement` mode branch |
@@ -60,6 +61,10 @@ both the mode and the auth restore have settled.
 | `SentenceTopics` | Main | Hidden from Home; server-only notice if pushed, zero local reads | Topic list, create and due counts | Home row + in-screen guard (TASK-SENT-008/014) |
 | `SentenceTopic` | Main | Reachable only through `SentenceTopics`; local sentence bank UI | Sentence bank, generation, TTS, delete, Practice | Serverless-only parent route (TASK-SENT-009) |
 | `SentencePractice` | Main | Reachable only through `SentenceTopics`; local SRS session | Due-only dictation/recall session (max 20) | Serverless-only parent route (TASK-SENT-012) |
+| `WordTopics` | Main | Hidden from Home; server-only notice if pushed, zero local reads | Topic list, create/edit/delete and due counts | Home row + in-screen guard (WORD_BANK_V1 TASK-WB-008) |
+| `WordTopic` | Main | Reachable only through `WordTopics`; local word bank UI | Word list, search, generation, manual input, TTS, delete, Practice | Serverless-only parent route (WORD_BANK_V1 TASK-WB-009) |
+| `WordDetail` | Main | Reachable only through `WordTopic` | All senses, schedule, dictionary fetch, enrich change-review, delete | Serverless-only parent route (WORD_BANK_V1 TASK-WB-013) |
+| `WordPractice` | Main | Reachable only through `WordTopic` | Due-only dictation/recall session (max 20) | Serverless-only parent route (WORD_BANK_V1 TASK-WB-012) |
 | `AIProviderSettings` | Main | Serverless-only notice, no config reads | Full provider editor | In-screen guard (TASK-AUDIT-016) |
 
 ## 3. Enforcement layers
@@ -79,8 +84,8 @@ both the mode and the auth restore have settled.
    hides the vocabulary row / account / logout in serverless plus the
    provider card / clear-local in server mode; `MessageActionsMenu` hides
    the server-only `Select text` entry in serverless (TASK-AUDIT-016); the
-   Home "Real-life sentences" row exists only in serverless and carries the
-   due-today badge (TASK-SENT-014).
+   Home "Real-life sentences" and "Word bank" rows exist only in serverless
+   and carry the due-today badge (TASK-SENT-014, WORD_BANK_V1 TASK-WB-015).
 5. **Auth restore isolation** — `AuthProvider` skips keychain reads and
    `/auth/me` entirely while serverless; stored server credentials are
    neither used nor removed by serverless usage.
@@ -99,4 +104,5 @@ both the mode and the auth restore have settled.
 | AI provider editor serverless + server-mode notice/no-reads | `AIProviderSettingsScreen.test.tsx`, `aiProviderSettingsLayout.test.tsx` |
 | Menu action gating (`vocabularyEnabled`) | `MessageActionsMenu.test.tsx` |
 | Home sentence row visibility, due badge and clear-data wipe | `homeSentenceRow.test.tsx`, `clearLocalData.test.ts` |
+| Home word-bank row visibility, due badge, clear-data wipe and word screens' mode gating | `wordHomeRow.test.tsx`, `clearLocalData.test.ts`, `wordTopicsScreen.test.tsx` |
 | Serverless entry from login | `LoginScreen.test.tsx` |

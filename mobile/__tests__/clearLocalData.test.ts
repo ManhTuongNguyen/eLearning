@@ -18,6 +18,11 @@ import {
   insertSentences,
   logSentenceReview,
 } from '../src/db/sentenceRepository';
+import {
+  createWordTopic,
+  insertWords,
+  logWordReview,
+} from '../src/db/wordRepository';
 import { insertSession, listSessions } from '../src/db/sessionStore';
 import { getSetting, setSetting } from '../src/db/settingsStore';
 import { saveSummary } from '../src/db/summaryStore';
@@ -219,6 +224,45 @@ describe('clearLocalData (TASK-094)', () => {
       },
     ]);
     expect(nextSentences[0]?.id).toBe(1);
+
+    await db.close();
+  });
+
+  it('clears word topics, words and the review log, leaving sentence data untouched', async () => {
+    const db = await openLocalDatabase(() => openSqlJsDriver());
+
+    const wordTopic = await createWordTopic(db, { title: 'Cooking' });
+    const insertedWords = await insertWords(db, wordTopic.id, [{ text: 'bank' }]);
+    const word = insertedWords[0];
+    if (!word) {
+      throw new Error('expected the word to be inserted');
+    }
+    await logWordReview(db, {
+      word_id: word.id,
+      topic_id: wordTopic.id,
+      grade: 'good',
+      mode: 'dictation',
+    });
+
+    // Sentence data seeded alongside: the same clear wipes both banks, and
+    // this test focuses on the word tables being emptied.
+    const sentenceTopic = await createSentenceTopic(db, { title: 'Coffee' });
+    await insertSentences(db, sentenceTopic.id, [
+      { text: 'Could I get a flat white, please?', meaning: 'Ask for a coffee politely.' },
+    ]);
+
+    await clearServerlessLocalData(() => Promise.resolve(db));
+
+    for (const table of ['word_topics', 'words', 'word_review_log']) {
+      const result = await db.execute(`SELECT COUNT(*) AS n FROM ${table}`);
+      expect(Number(result.rows[0]?.n)).toBe(0);
+    }
+
+    // Auto-increment counters restart so the next topic/word starts at 1.
+    const nextTopic = await createWordTopic(db, { title: 'After clear' });
+    expect(nextTopic.id).toBe(1);
+    const nextWords = await insertWords(db, nextTopic.id, [{ text: 'whisk' }]);
+    expect(nextWords[0]?.id).toBe(1);
 
     await db.close();
   });

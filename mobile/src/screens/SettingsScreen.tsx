@@ -73,6 +73,7 @@ import {
   saveSpeakingScrollSpeed,
 } from '../preferences/speakingScrollSpeed';
 import { PROVIDER_DESCRIPTORS } from '../serverless/providerRegistry';
+import { DICTIONARY_ATTRIBUTION } from '../serverless/dictionaryApi';
 import {
   clearAllServerlessData,
   loadServerlessConfig,
@@ -1139,6 +1140,19 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
                   })}
                 </View>
               </View>
+            </View>
+          ) : null}
+
+          {/* Dictionary attribution (WORD_BANK_V1 TASK-WB-015): the word
+              bank's definitions originate from Wiktionary via the Free
+              Dictionary API; the credits line lives in the serverless
+              section next to the features that use it. */}
+          {appMode === 'serverless' ? (
+            <View style={styles.rowGroup} testID="settings-dictionary-attribution">
+              <Text style={styles.sectionLabel}>Word bank</Text>
+              <Text style={styles.toggleDescription} testID="settings-dictionary-attribution-text">
+                {DICTIONARY_ATTRIBUTION}
+              </Text>
             </View>
           ) : null}
 

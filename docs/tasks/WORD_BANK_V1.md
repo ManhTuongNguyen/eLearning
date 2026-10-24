@@ -981,7 +981,7 @@ Priority: `P1`
 
 ## TASK-WB-015 — Home row, due badge, gating and data clearing
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
