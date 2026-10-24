@@ -426,3 +426,38 @@ export function parseWordPhonetics(raw: unknown): string[] {
   }
   return raw.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
 }
+
+/** Attributes accepted when creating a word topic; omitted fields default. */
+export interface NewWordTopic {
+  title: string;
+  description?: string;
+  /** Optional additional AI instruction appended to every prompt. */
+  extra_prompt?: string;
+}
+
+/**
+ * One word candidate before it has an id. Senses/phonetics arrive already
+ * parsed; a candidate with `data_status: 'missing'` (kept after a transient
+ * dictionary error) has empty arrays.
+ */
+export interface NewWord {
+  text: string;
+  senses_json?: WordSense[];
+  phonetics_json?: string[];
+  data_source?: WordDataSource;
+  data_status?: WordDataStatus;
+}
+
+/** A topic row plus the counts the topic list shows. */
+export interface WordTopicSummary extends WordTopicRecord {
+  /** Words in the topic, suspended ones included. */
+  word_count: number;
+  /** Complete words due at the reference time, suspended ones excluded. */
+  due_count: number;
+}
+
+/**
+ * The review-log half of one graded word review — the same Anki `revlog`
+ * semantics the sentence log uses, so both histories train the FSRS optimizer.
+ */
+export type WordReviewLogInput = SentenceReviewLogInput;

@@ -526,7 +526,7 @@ Priority: `P1`
 
 ## TASK-WB-002 — Word repository
 
-Status: `[ ]`
+Status: `[x]`
 
 Priority: `P1`
 
