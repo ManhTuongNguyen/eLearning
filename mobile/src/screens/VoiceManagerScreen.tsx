@@ -15,8 +15,13 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import {
+  SCREEN_GUTTER,
+  SCREEN_TOP_SPACING,
+  Screen,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import type { VoiceManagerScreenProps } from '../navigation/types';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
@@ -42,7 +47,7 @@ export function createStyles(c: ThemeColors) {
       backgroundColor: c.background,
       // Same fixed header spacing as the other pushed screens (the app shell
       // in App.tsx already pads the tree out of the system status bar).
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
@@ -50,19 +55,6 @@ export function createStyles(c: ThemeColors) {
       justifyContent: 'space-between',
       paddingHorizontal: SCREEN_GUTTER,
       marginBottom: 4,
-    },
-    backText: {
-      fontSize: 16,
-      color: c.accent,
-      fontWeight: '600',
-    },
-    title: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    headerSpacer: {
-      width: 48,
     },
     scroll: {
       paddingBottom: 32,
@@ -356,17 +348,11 @@ export function VoiceManagerScreen({ navigation }: VoiceManagerScreenProps) {
   if (!preferences) {
     return (
       <Screen style={styles.container}>
-        <ScreenHeader style={styles.header}>
-          <Pressable
-            accessibilityLabel="Go back"
-            hitSlop={8}
-            onPress={() => navigation.goBack()}
-            testID="voice-manager-back">
-            <Text style={styles.backText}>‹ Back</Text>
-          </Pressable>
-          <Text style={styles.title}>Voice manager</Text>
-          <View style={styles.headerSpacer} />
-        </ScreenHeader>
+        <ScreenTitleBar
+          title="Voice manager"
+          onBack={() => navigation.goBack()}
+          backTestID="voice-manager-back"
+        />
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" testID="voice-manager-loading" />
         </View>
@@ -376,17 +362,11 @@ export function VoiceManagerScreen({ navigation }: VoiceManagerScreenProps) {
 
   return (
     <Screen style={styles.container} testID="voice-manager-screen">
-      <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={() => navigation.goBack()}
-          testID="voice-manager-back">
-          <Text style={styles.backText}>‹ Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Voice manager</Text>
-        <View style={styles.headerSpacer} />
-      </ScreenHeader>
+      <ScreenTitleBar
+        title="Voice manager"
+        onBack={() => navigation.goBack()}
+        backTestID="voice-manager-back"
+      />
       <ScreenScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.notice}>
           English voices installed on this device. Tapping a voice makes it the active system voice

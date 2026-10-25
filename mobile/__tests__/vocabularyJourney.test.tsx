@@ -172,7 +172,8 @@ describe('TASK-112 vocabulary journey', () => {
 
     // Enter the conversation through History as well (a second Chat instance
     // on top — the capture flow below addresses the topmost one).
-    await fireEvent.press(screen.getByTestId('chat-open-history'));
+    await fireEvent.press(screen.getByTestId('chat-back'));
+    await fireEvent.press(await screen.findByTestId('home-open-history'));
     const sessionRow = await screen.findByTestId('history-item-5');
     await fireEvent.press(sessionRow);
     expect(mockedSessions.listMessages).toHaveBeenCalledWith(expect.any(Function), 5);
@@ -208,7 +209,8 @@ describe('TASK-112 vocabulary journey', () => {
     }
 
     // Reach the vocabulary list through Settings.
-    await fireEvent.press(topScreenByTestId('chat-open-settings'));
+    await fireEvent.press(topScreenByTestId('chat-back'));
+    await fireEvent.press(topScreenByTestId('home-open-settings'));
     await waitFor(() => expect(screen.getByTestId('settings-screen')).toBeOnTheScreen());
     await fireEvent.press(screen.getByTestId('settings-open-vocabulary'));
 
@@ -247,7 +249,8 @@ describe('TASK-112 vocabulary journey', () => {
 
     await fireEvent.press(await screen.findByTestId('home-open-chat'));
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
-    await fireEvent.press(screen.getByTestId('chat-open-history'));
+    await fireEvent.press(screen.getByTestId('chat-back'));
+    await fireEvent.press(await screen.findByTestId('home-open-history'));
     await fireEvent.press(await screen.findByTestId('history-item-5'));
 
     await captureWordFromMessage();
@@ -262,7 +265,8 @@ describe('TASK-112 vocabulary journey', () => {
     expect(mockedVocabulary.saveVocabulary).toHaveBeenCalledTimes(1);
 
     // Nothing was stored: the vocabulary list renders its empty state.
-    await fireEvent.press(topScreenByTestId('chat-open-settings'));
+    await fireEvent.press(topScreenByTestId('chat-back'));
+    await fireEvent.press(topScreenByTestId('home-open-settings'));
     await waitFor(() => expect(screen.getByTestId('settings-screen')).toBeOnTheScreen());
     await fireEvent.press(screen.getByTestId('settings-open-vocabulary'));
 

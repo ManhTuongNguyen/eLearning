@@ -32,7 +32,7 @@ import { WordDetailScreen } from '../screens/WordDetailScreen';
 import { WordPracticeScreen } from '../screens/WordPracticeScreen';
 import { WordTopicScreen } from '../screens/WordTopicScreen';
 import { WordTopicsScreen } from '../screens/WordTopicsScreen';
-import { settingsScreenOptions, stackScreenOptions } from './stackScreenOptions';
+import { stackScreenOptions } from './stackScreenOptions';
 import type { MainStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
@@ -44,7 +44,7 @@ export function MainNavigator() {
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="NewConversation" component={NewConversationScreen} />
       <Stack.Screen name="History" component={HistoryScreen} />
-      <Stack.Screen name="Settings" component={SettingsScreen} options={settingsScreenOptions} />
+      <Stack.Screen name="Settings" component={SettingsScreen} options={stackScreenOptions} />
       <Stack.Screen name="Level" component={LevelScreen} />
       <Stack.Screen name="Vocabulary" component={VocabularyScreen} />
       <Stack.Screen name="AIProviderSettings" component={AIProviderSettingsScreen} />

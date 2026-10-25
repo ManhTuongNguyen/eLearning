@@ -13,8 +13,8 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { SCREEN_GUTTER, SCREEN_TOP_SPACING, Screen, ScreenList } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { getLocalDatabase } from '../db/database';
 import {
   deleteSpeakingPracticeRecord,
@@ -24,6 +24,7 @@ import type { LocalPracticeHistoryRecord } from '../db/types';
 import type { SpeakingHistoryScreenProps } from '../navigation/types';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
+import { describeError } from '../utils/describeError';
 
 function formatDate(isoString: string): string {
   const date = new Date(isoString);
@@ -41,35 +42,6 @@ function formatMinutes(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
-}
-
-/**
- * Extract a readable message from any thrown value: native SQLite and other
- * modules sometimes reject with plain objects or strings instead of Errors,
- * which used to collapse into a useless 'unknown error'.
- */
-function describeError(err: unknown): string {
-  if (err instanceof Error && err.message) {
-    return err.message;
-  }
-  if (typeof err === 'string' && err.trim()) {
-    return err;
-  }
-  if (typeof err === 'object' && err !== null) {
-    const record = err as Record<string, unknown>;
-    if (typeof record.message === 'string' && record.message.trim()) {
-      return record.message;
-    }
-    try {
-      const serialized = JSON.stringify(err);
-      if (serialized && serialized !== '{}') {
-        return serialized.slice(0, 300);
-      }
-    } catch {
-      // Fall through to the generic text.
-    }
-  }
-  return 'unknown error';
 }
 
 interface RecordRowProps {
@@ -267,7 +239,7 @@ function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
@@ -279,12 +251,6 @@ function createStyles(c: ThemeColors) {
       fontSize: 26,
       fontWeight: '700',
       color: c.textPrimary,
-    },
-    backLink: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.accent,
-      paddingVertical: 4,
     },
     empty: {
       flex: 1,
@@ -378,12 +344,11 @@ export function SpeakingHistoryScreen({ navigation }: SpeakingHistoryScreenProps
   if (loading) {
     return (
       <Screen style={styles.container} testID="speaking-history-screen">
-        <ScreenHeader style={styles.header}>
-          <Text style={styles.title}>Speaking history</Text>
-          <Pressable onPress={() => navigation.goBack()} testID="speaking-history-back">
-            <Text style={styles.backLink}>Close</Text>
-          </Pressable>
-        </ScreenHeader>
+        <ScreenTitleBar
+          title="Speaking history"
+          onBack={() => navigation.goBack()}
+          backTestID="speaking-history-back"
+        />
         <View style={styles.empty}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -393,12 +358,11 @@ export function SpeakingHistoryScreen({ navigation }: SpeakingHistoryScreenProps
 
   return (
     <Screen style={styles.container} testID="speaking-history-screen">
-      <ScreenHeader style={styles.header}>
-        <Text style={styles.title}>Speaking history</Text>
-        <Pressable onPress={() => navigation.goBack()} testID="speaking-history-back">
-          <Text style={styles.backLink}>Close</Text>
-        </Pressable>
-      </ScreenHeader>
+      <ScreenTitleBar
+        title="Speaking history"
+        onBack={() => navigation.goBack()}
+        backTestID="speaking-history-back"
+      />
 
       {error !== null ? (
         <Text role="alert" style={styles.error} testID="speaking-history-error">

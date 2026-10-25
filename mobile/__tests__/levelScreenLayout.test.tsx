@@ -7,6 +7,7 @@ import * as authApi from '../src/api/auth';
 import * as profileApi from '../src/api/profile';
 import { AuthProvider } from '../src/auth/AuthContext';
 import * as secureStorage from '../src/auth/secureStorage';
+import { SCREEN_TOP_SPACING } from '../src/components/ScreenLayout';
 import { getLocalDatabase } from '../src/db/database';
 import * as profileStore from '../src/db/profileStore';
 import { ModeProvider } from '../src/mode/ModeContext';
@@ -93,7 +94,7 @@ describe('LevelScreen layout (TASK-AUDIT-011)', () => {
   it('uses the shared pushed-screen header spacing on top of the app-shell inset padding', () => {
     const styles = createStyles(lightColors);
 
-    expect(styles.container.paddingTop).toBe(16);
+    expect(styles.container.paddingTop).toBe(SCREEN_TOP_SPACING);
     expect(flattenStyle(styles.container).marginTop).toBeUndefined();
   });
 
@@ -116,7 +117,7 @@ describe('LevelScreen layout (TASK-AUDIT-011)', () => {
       await renderScreen();
 
       const container = screen.getByTestId('level-screen');
-      expect(flattenStyle(container.props.style).paddingTop).toBe(16);
+      expect(flattenStyle(container.props.style).paddingTop).toBe(SCREEN_TOP_SPACING);
       await waitFor(() => expect(screen.getByTestId('level-B1')).toBeOnTheScreen());
     },
   );

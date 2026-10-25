@@ -14,7 +14,13 @@ import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Icon } from '../components/Icon';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import {
+  SCREEN_GUTTER,
+  SCREEN_TOP_SPACING,
+  Screen,
+  ScreenHeader,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
 import { createSentenceTopic } from '../db/sentenceRepository';
 import { useApplicationMode } from '../mode/ModeContext';
@@ -28,7 +34,7 @@ export function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',

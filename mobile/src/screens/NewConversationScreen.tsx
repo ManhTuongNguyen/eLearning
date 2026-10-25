@@ -36,7 +36,7 @@ import {
 
 import { createSession } from '../api/sessions';
 import { toErrorMessage, useAuth } from '../auth/AuthContext';
-import { SCREEN_GUTTER } from '../components/ScreenLayout';
+import { SCREEN_GUTTER, SCREEN_TOP_SPACING } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { NewConversationScreenProps } from '../navigation/types';
@@ -53,7 +53,7 @@ function createStyles(c: ThemeColors) {
       backgroundColor: c.background,
       // Same header spacing as the Chat screen; the other sides keep the
       // previous screen gutter.
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
       paddingHorizontal: SCREEN_GUTTER,
       paddingBottom: 24,
     },

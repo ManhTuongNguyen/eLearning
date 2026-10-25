@@ -22,7 +22,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,10 +29,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { ConfirmModal } from '../components/ConfirmModal';
 import type { ContextMenuAnchor } from '../components/ContextMenu';
 import { ContextMenu } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { SCREEN_GUTTER, SCREEN_TOP_SPACING, Screen, ScreenList } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { getLocalDatabase } from '../db/database';
 import type { WordRecord, WordTopicRecord } from '../db/types';
 import {
@@ -64,12 +65,16 @@ import { useTheme } from '../theme/ThemeContext';
 import type { TextToSpeechEngine } from '../tts/textToSpeech';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { useSpeechPlayback } from '../tts/useSpeechPlayback';
+import { describeError } from '../utils/describeError';
+import { AddWordsModal } from './AddWordsModal';
+import { GenerateWordsModal } from './GenerateWordsModal';
 import {
   DEFAULT_TOPIC_PRACTICE_SETTINGS,
   PracticeSettingsModal,
   type TopicPracticeSettings,
 } from './PracticeSettingsModal';
 import { WordReviewModal } from './WordReviewModal';
+import { WordRow } from './WordRow';
 
 const MODE_NOTICE_TEXT = 'The word bank is saved on this device only.';
 const PROVIDER_MISSING_MESSAGE = 'Add your provider API key in Settings to generate words.';
@@ -79,41 +84,16 @@ const DEFAULT_GENERATION_COUNT = 10;
 const DESCRIPTION_MAX_HEIGHT = 110;
 
 /** Human message for any error the screen surfaces. */
-function describeError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       marginBottom: 14,
       gap: 8,
-    },
-    headerTop: {
-      flexDirection: 'row',
-      // Top-aligned so the back link and title sit exactly where they do on
-      // the sentence topic screen, even with the menu button in the row.
-      alignItems: 'flex-start',
-      gap: 12,
-    },
-    backLinkButton: {
-      paddingVertical: 4,
-    },
-    backLinkText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.accent,
-    },
-    title: {
-      flex: 1,
-      fontSize: 20,
-      fontWeight: '700',
-      color: c.textPrimary,
     },
     menuButton: {
       // Kept text-row height so the back link and title sit at exactly the
@@ -178,7 +158,9 @@ export function createStyles(c: ThemeColors) {
     practiceHint: {
       fontSize: 12,
       color: c.textMuted,
-      marginTop: 6,
+      // No top margin: the action row above already carries marginBottom.
+      // Bottom spacing separates the hint from the search box below.
+      marginBottom: 10,
     },
     searchInput: {
       backgroundColor: c.surface,
@@ -202,66 +184,6 @@ export function createStyles(c: ThemeColors) {
       borderWidth: 1,
       borderRadius: 14,
       overflow: 'hidden',
-    },
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 10,
-      paddingLeft: 16,
-      paddingRight: 6,
-    },
-    rowMain: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
-    rowText: {
-      flex: 1,
-      gap: 1,
-    },
-    rowTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: c.textPrimary,
-    },
-    rowSub: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    posLabel: {
-      fontSize: 12,
-      color: c.textMuted,
-      fontStyle: 'italic',
-    },
-    statusHint: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: c.textMuted,
-      backgroundColor: c.background,
-      borderColor: c.borderStrong,
-      borderWidth: 1,
-      borderRadius: 8,
-      paddingHorizontal: 6,
-      paddingVertical: 1,
-      overflow: 'hidden',
-    },
-    statusDue: {
-      color: c.onPrimary,
-      backgroundColor: c.primary,
-      borderColor: c.primary,
-    },
-    statusMissing: {
-      color: c.errorText,
-      borderColor: c.errorText,
-    },
-    rowIconButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
     rowDivider: {
       borderTopWidth: 1,
@@ -301,100 +223,6 @@ export function createStyles(c: ThemeColors) {
     pressedFade: {
       opacity: 0.9,
     },
-    // --- Modals ---
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: SCREEN_GUTTER,
-    },
-    modalCard: {
-      width: '100%',
-      maxWidth: 420,
-      backgroundColor: c.surface,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 16,
-      padding: 20,
-      gap: 12,
-    },
-    modalTitle: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    inputLabel: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: c.textMuted,
-    },
-    input: {
-      backgroundColor: c.background,
-      borderColor: c.borderStrong,
-      borderWidth: 1,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      fontSize: 16,
-      color: c.textPrimary,
-    },
-    hint: {
-      fontSize: 12,
-      lineHeight: 17,
-      color: c.textMuted,
-    },
-    modalError: {
-      fontSize: 13,
-      color: c.errorText,
-    },
-    modalFooter: {
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      gap: 12,
-      marginTop: 4,
-    },
-    modalButton: {
-      minWidth: 88,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 10,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-    },
-    modalCancelButton: {
-      backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.borderStrong,
-    },
-    modalPrimaryButton: {
-      backgroundColor: c.primary,
-    },
-    modalDangerButton: {
-      backgroundColor: c.danger,
-    },
-    modalDisabled: {
-      opacity: 0.5,
-    },
-    modalCancelText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.textPrimary,
-    },
-    modalPrimaryText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.onPrimary,
-    },
-    generatingRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    manualInput: {
-      height: 140,
-      textAlignVertical: 'top',
-    },
   });
 }
 
@@ -409,117 +237,6 @@ export function parseGenerationCount(raw: string): number | null {
     return null;
   }
   return parsed;
-}
-
-type WordRowProps = {
-  item: WordRecord;
-  onPress: (item: WordRecord) => void;
-  onSpeak: (item: WordRecord) => void;
-  onDelete: (item: WordRecord) => void;
-  speaking: boolean;
-  deleting: boolean;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-};
-
-/** The first POS label of the stored senses, or a placeholder. */
-export function primaryPosLabel(word: WordRecord): string {
-  return word.senses_json[0]?.partOfSpeech ?? '';
-}
-
-/** Short per-row schedule hint: due, in-learning, scheduled, or no data. */
-export function wordStatusHint(
-  word: WordRecord,
-  nowMs: number,
-): {
-  label: string;
-  due: boolean;
-  missing: boolean;
-} {
-  if (word.data_status === 'missing') {
-    return { label: 'no data', due: false, missing: true };
-  }
-  const dueMs = Date.parse(word.due_at);
-  if (Number.isFinite(dueMs) && dueMs <= nowMs && !word.suspended) {
-    return { label: 'due', due: true, missing: false };
-  }
-  if (word.suspended) {
-    return { label: 'suspended', due: false, missing: false };
-  }
-  if (word.state === 'new') {
-    return { label: 'new', due: false, missing: false };
-  }
-  return { label: word.state === 'review' ? 'scheduled' : 'learning', due: false, missing: false };
-}
-
-function WordRow({
-  item,
-  onPress,
-  onSpeak,
-  onDelete,
-  speaking,
-  deleting,
-  colors,
-  styles,
-}: WordRowProps) {
-  const pos = primaryPosLabel(item);
-  const hint = wordStatusHint(item, Date.now());
-  return (
-    <View style={styles.row}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${item.text}`}
-        testID={`word-${item.id}`}
-        onPress={() => onPress(item)}
-        style={({ pressed }) => [styles.rowMain, pressed && styles.pressedFade]}>
-        <View style={styles.rowText}>
-          <Text style={styles.rowTitle} numberOfLines={1}>
-            {item.text}
-          </Text>
-          <View style={styles.rowSub}>
-            {pos ? (
-              <Text style={styles.posLabel} numberOfLines={1}>
-                {pos}
-              </Text>
-            ) : null}
-            <Text
-              style={[
-                styles.statusHint,
-                hint.due && styles.statusDue,
-                hint.missing && styles.statusMissing,
-              ]}
-              testID={`word-${item.id}-status`}>
-              {hint.label}
-            </Text>
-          </View>
-        </View>
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Play ${item.text}`}
-        accessibilityState={{ busy: speaking }}
-        testID={`word-speak-${item.id}`}
-        onPress={() => onSpeak(item)}
-        style={({ pressed }) => [styles.rowIconButton, pressed && styles.pressedFade]}>
-        <Icon name={speaking ? 'speaker' : 'play'} size={18} color={colors.accent} />
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Delete ${item.text}`}
-        accessibilityState={{ disabled: deleting, busy: deleting }}
-        testID={`word-delete-${item.id}`}
-        onPress={() => onDelete(item)}
-        disabled={deleting}
-        style={({ pressed }) => [styles.rowIconButton, pressed && styles.pressedFade]}>
-        {deleting ? (
-          <ActivityIndicator size="small" color={colors.textMuted} />
-        ) : (
-          <Icon name="trash" size={18} color={colors.danger} />
-        )}
-      </Pressable>
-    </View>
-  );
 }
 
 interface WordTopicScreenInternalProps extends WordTopicScreenProps {
@@ -944,8 +661,6 @@ export function WordTopicScreen({
         onDelete={handleDeleteRequest}
         speaking={speakingId === item.id}
         deleting={deletingId === item.id}
-        colors={colors}
-        styles={styles}
       />
     </>
   );
@@ -1018,19 +733,12 @@ export function WordTopicScreen({
 
   return (
     <Screen style={styles.container} testID="word-topic-screen">
-      <ScreenHeader style={styles.header}>
-        <View style={styles.headerTop}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back to topics"
-            testID="word-topic-back"
-            onPress={() => navigation.goBack()}
-            style={styles.backLinkButton}>
-            <Text style={styles.backLinkText}>‹ Topics</Text>
-          </Pressable>
-          <Text style={styles.title} numberOfLines={1} testID="word-topic-title">
-            {topic?.title ?? 'Topic'}
-          </Text>
+      <ScreenTitleBar
+        title={topic?.title ?? 'Topic'}
+        titleTestID="word-topic-title"
+        onBack={() => navigation.goBack()}
+        backTestID="word-topic-back"
+        right={
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Word actions"
@@ -1045,21 +753,23 @@ export function WordTopicScreen({
             style={({ pressed }) => [styles.menuButton, pressed && styles.pressedFade]}>
             <Icon name="more" size={20} color={colors.textPrimary} />
           </Pressable>
-        </View>
-        {description ? (
-          <View style={styles.descriptionBox}>
-            <ScrollView
-              style={styles.descriptionScroll}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-              testID="word-topic-description-scroll">
-              <Text style={styles.description} testID="word-topic-description">
-                {description}
-              </Text>
-            </ScrollView>
-          </View>
-        ) : null}
-      </ScreenHeader>
+        }
+        below={
+          description ? (
+            <View style={styles.descriptionBox}>
+              <ScrollView
+                style={styles.descriptionScroll}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+                testID="word-topic-description-scroll">
+                <Text style={styles.description} testID="word-topic-description">
+                  {description}
+                </Text>
+              </ScrollView>
+            </View>
+          ) : null
+        }
+      />
 
       {serverMode ? (
         <View style={styles.centered} testID="word-topic-mode-notice">
@@ -1160,187 +870,36 @@ export function WordTopicScreen({
       />
 
       {/* Generate form. */}
-      <Modal
-        animationType="fade"
-        onRequestClose={() => {
-          if (!generating) {
-            setGenerateOpen(false);
-          }
+      <GenerateWordsModal
+        visible={generateOpen}
+        isSystemTopic={topic?.is_system ?? false}
+        countText={generateCountText}
+        onCountChange={setGenerateCountText}
+        countInvalid={countInvalid}
+        collectedEmpty={collectedEmpty}
+        generating={generating}
+        onCancel={() => setGenerateOpen(false)}
+        onSubmit={() => {
+          // handleGenerate handles its own errors, so it never rejects.
+          handleGenerate();
         }}
-        testID="word-generate-modal"
-        transparent
-        visible={generateOpen}>
-        <View style={styles.backdrop}>
-          <View style={styles.modalCard} accessibilityViewIsModal>
-            <Text style={styles.modalTitle} testID="word-generate-title">
-              {topic?.is_system ? 'Generate similar words' : 'Generate words'}
-            </Text>
-            <Text style={styles.hint}>
-              {topic?.is_system
-                ? 'The AI picks words in the spirit of your collection; meanings and IPA come from the Free Dictionary API.'
-                : 'The AI picks the words; meanings and IPA come from the Free Dictionary API.'}
-            </Text>
-            <Text style={styles.inputLabel}>How many words (1–30)?</Text>
-            <TextInput
-              value={generateCountText}
-              onChangeText={setGenerateCountText}
-              style={styles.input}
-              testID="word-generate-count"
-              keyboardType="number-pad"
-              autoFocus
-            />
-            {countInvalid ? (
-              <Text role="alert" style={styles.modalError} testID="word-generate-count-error">
-                Enter a number between 1 and 30.
-              </Text>
-            ) : null}
-            {collectedEmpty ? (
-              <Text role="alert" style={styles.modalError} testID="word-generate-empty-error">
-                Collect or add words first — similar words grow from your collection.
-              </Text>
-            ) : null}
-            <View style={styles.modalFooter}>
-              <Pressable
-                accessibilityRole="button"
-                testID="word-generate-cancel"
-                onPress={() => {
-                  if (!generating) {
-                    setGenerateOpen(false);
-                  }
-                }}
-                disabled={generating}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.modalCancelButton,
-                  generating && styles.modalDisabled,
-                  pressed && styles.modalDisabled,
-                ]}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{
-                  disabled: generating || parsedCount === null || collectedEmpty,
-                  busy: generating,
-                }}
-                testID="word-generate-submit"
-                onPress={() => {
-                  // handleGenerate handles its own errors, so it never rejects.
-                  handleGenerate();
-                }}
-                disabled={generating || parsedCount === null || collectedEmpty}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.modalPrimaryButton,
-                  (generating || parsedCount === null || collectedEmpty) && styles.modalDisabled,
-                  pressed && styles.modalDisabled,
-                ]}>
-                {generating ? (
-                  <View style={styles.generatingRow}>
-                    <ActivityIndicator size="small" color={colors.onPrimary} />
-                    <Text style={styles.modalPrimaryText}>Generating…</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.modalPrimaryText}>
-                    {topic?.is_system ? 'Generate similar' : 'Generate'}
-                  </Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
 
       {/* Manual input modal (TASK-WB-011). */}
-      <Modal
-        animationType="fade"
-        onRequestClose={() => {
-          if (!manualBusy) {
-            setManualOpen(false);
-          }
+      <AddWordsModal
+        visible={manualOpen}
+        text={manualText}
+        onTextChange={setManualText}
+        countLabel={manualCountLabel}
+        busy={manualBusy}
+        invalid={manualEmpty}
+        tooMany={manualTooMany}
+        onCancel={() => setManualOpen(false)}
+        onSubmit={() => {
+          // handleManualSubmit handles its own errors, so it never rejects.
+          handleManualSubmit();
         }}
-        testID="word-manual-modal"
-        transparent
-        visible={manualOpen}>
-        <View style={styles.backdrop}>
-          <View style={styles.modalCard} accessibilityViewIsModal>
-            <Text style={styles.modalTitle} testID="word-manual-title">
-              Add words
-            </Text>
-            <Text style={styles.inputLabel}>Words, separated by commas</Text>
-            <TextInput
-              value={manualText}
-              onChangeText={setManualText}
-              style={[styles.input, styles.manualInput]}
-              testID="word-manual-input"
-              multiline
-              scrollEnabled
-              textAlignVertical="top"
-              placeholder="type, words, separated, by, commas"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text style={styles.hint}>
-              Separate words with commas; a word cannot contain a comma. They run through the same
-              dictionary check as generated words.
-            </Text>
-            <Text style={styles.inputLabel} testID="word-manual-count">
-              {manualCountLabel}
-            </Text>
-            {manualTooMany ? (
-              <Text role="alert" style={styles.modalError} testID="word-manual-count-error">
-                {`Up to ${MAX_WORD_COUNT} words at a time.`}
-              </Text>
-            ) : null}
-            <View style={styles.modalFooter}>
-              <Pressable
-                accessibilityRole="button"
-                testID="word-manual-cancel"
-                onPress={() => {
-                  if (!manualBusy) {
-                    setManualOpen(false);
-                  }
-                }}
-                disabled={manualBusy}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.modalCancelButton,
-                  manualBusy && styles.modalDisabled,
-                  pressed && styles.modalDisabled,
-                ]}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{
-                  disabled: manualBusy || manualEmpty || manualTooMany,
-                  busy: manualBusy,
-                }}
-                testID="word-manual-submit"
-                onPress={() => {
-                  // handleManualSubmit handles its own errors, so it never rejects.
-                  handleManualSubmit();
-                }}
-                disabled={manualBusy || manualEmpty || manualTooMany}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.modalPrimaryButton,
-                  (manualBusy || manualEmpty || manualTooMany) && styles.modalDisabled,
-                  pressed && styles.modalDisabled,
-                ]}>
-                {manualBusy ? (
-                  <View style={styles.generatingRow}>
-                    <ActivityIndicator size="small" color={colors.onPrimary} />
-                    <Text style={styles.modalPrimaryText}>Looking up…</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.modalPrimaryText}>Add</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
 
       {/* Review modal for the latest generation run. */}
       <WordReviewModal
@@ -1358,64 +917,19 @@ export function WordTopicScreen({
       />
 
       {/* Delete confirmation. */}
-      <Modal
-        animationType="fade"
-        onRequestClose={cancelDelete}
-        testID="word-delete-modal"
-        transparent
-        visible={deleteTarget !== null}>
-        <View style={styles.backdrop}>
-          <View style={styles.modalCard} accessibilityViewIsModal>
-            <Text style={styles.modalTitle} testID="word-delete-title">
-              Delete word?
-            </Text>
-            <Text style={styles.hint} testID="word-delete-message">
-              {`"${deleteTarget?.text ?? ''}" and its practice history will be permanently deleted.`}
-            </Text>
-            {deleteError ? (
-              <Text role="alert" style={styles.modalError} testID="word-delete-error">
-                {deleteError}
-              </Text>
-            ) : null}
-            <View style={styles.modalFooter}>
-              <Pressable
-                accessibilityRole="button"
-                testID="word-delete-cancel"
-                onPress={cancelDelete}
-                disabled={deletingId !== null}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.modalCancelButton,
-                  deletingId !== null && styles.modalDisabled,
-                  pressed && styles.modalDisabled,
-                ]}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: deletingId !== null, busy: deletingId !== null }}
-                testID="word-delete-confirm"
-                onPress={() => {
-                  // confirmDelete handles its own errors, so it never rejects.
-                  confirmDelete();
-                }}
-                disabled={deletingId !== null}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.modalDangerButton,
-                  deletingId !== null && styles.modalDisabled,
-                  pressed && styles.modalDisabled,
-                ]}>
-                {deletingId !== null ? (
-                  <ActivityIndicator size="small" color={colors.onPrimary} />
-                ) : (
-                  <Text style={styles.modalPrimaryText}>Delete</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ConfirmModal
+        visible={deleteTarget !== null}
+        title="Delete word?"
+        message={`"${deleteTarget?.text ?? ''}" and its practice history will be permanently deleted.`}
+        busy={deletingId !== null}
+        error={deleteError}
+        onCancel={cancelDelete}
+        onConfirm={() => {
+          // confirmDelete handles its own errors, so it never rejects.
+          confirmDelete();
+        }}
+        testID="word-delete"
+      />
     </Screen>
   );
 }

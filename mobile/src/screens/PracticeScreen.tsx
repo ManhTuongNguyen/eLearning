@@ -35,7 +35,13 @@ import {
 } from 'react-native';
 
 import { Icon } from '../components/Icon';
-import { Screen, ScreenContent, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import {
+  SCREEN_TOP_SPACING,
+  Screen,
+  ScreenContent,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import type { PracticeScreenProps } from '../navigation/types';
 import {
   createPracticeQuestion,
@@ -52,6 +58,7 @@ import {
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import { getSpeechEngine } from '../tts/textToSpeech';
+import { PracticeSummaryCard } from './PracticeSummaryCard';
 
 const MODE_OPTIONS: Array<{
   value: PracticeMode;
@@ -94,7 +101,7 @@ export function createStyles(c: ThemeColors) {
       // Horizontal padding lives on the shared header/scroll containers so
       // the scroll indicator binds to the right screen edge. Same 16px
       // header spacing as the other pushed screens.
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     keyboardShell: {
       flex: 1,
@@ -104,32 +111,6 @@ export function createStyles(c: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingBottom: 6,
-    },
-    headerSide: {
-      width: 64,
-      alignItems: 'flex-start',
-    },
-    headerSideRight: {
-      alignItems: 'flex-end',
-    },
-    backButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      minHeight: 36,
-      paddingRight: 4,
-    },
-    backText: {
-      fontSize: 15,
-      color: c.accent,
-      fontWeight: '600',
-    },
-    title: {
-      flex: 1,
-      textAlign: 'center',
-      fontSize: 18,
-      fontWeight: '700',
-      color: c.textPrimary,
     },
     modeToggle: {
       flexDirection: 'row',
@@ -573,73 +554,6 @@ export function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.textSecondary,
     },
-    summaryScroll: {
-      paddingTop: 12,
-      paddingBottom: 24,
-    },
-    summary: {
-      alignItems: 'center',
-      gap: 8,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.surface,
-      borderRadius: 22,
-      padding: 24,
-    },
-    summaryIcon: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: c.accentSoft,
-      marginBottom: 4,
-    },
-    summaryEyebrow: {
-      fontSize: 10,
-      fontWeight: '800',
-      letterSpacing: 1.2,
-      color: c.accent,
-    },
-    summaryTitle: {
-      fontSize: 24,
-      fontWeight: '700',
-      textAlign: 'center',
-      color: c.textPrimary,
-    },
-    summaryScore: {
-      fontSize: 15,
-      fontWeight: '600',
-      textAlign: 'center',
-      color: c.textSecondary,
-    },
-    summaryHint: {
-      maxWidth: 260,
-      marginTop: 2,
-      fontSize: 12,
-      lineHeight: 18,
-      textAlign: 'center',
-      color: c.textMuted,
-    },
-    summaryPrimary: {
-      alignSelf: 'stretch',
-      marginTop: 10,
-    },
-    secondaryButton: {
-      alignSelf: 'stretch',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: 48,
-      borderWidth: 1,
-      borderColor: c.borderStrong,
-      backgroundColor: c.surface,
-      borderRadius: 14,
-    },
-    secondaryButtonText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.textPrimary,
-    },
   });
 }
 
@@ -894,59 +808,13 @@ export function PracticeScreen({ navigation }: PracticeScreenProps) {
 
   if (ended) {
     return (
-      <Screen style={styles.container} testID="practice-screen">
-        <ScreenHeader style={styles.header}>
-          <View style={styles.headerSide}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              hitSlop={8}
-              onPress={() => navigation.goBack()}
-              style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-              testID="practice-back">
-              <Icon name="arrowLeft" size={18} color={colors.accent} />
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.title}>Listening practice</Text>
-          <View style={[styles.headerSide, styles.headerSideRight]} />
-        </ScreenHeader>
-        <ScreenScrollView contentContainerStyle={styles.summaryScroll}>
-          <View style={styles.summary} testID="practice-summary">
-            <View style={styles.summaryIcon}>
-              <Icon name="listening" size={32} color={colors.primary} />
-            </View>
-            <Text style={styles.summaryEyebrow}>SESSION COMPLETE</Text>
-            <Text style={styles.summaryTitle}>Practice ended</Text>
-            <Text style={styles.summaryScore} testID="practice-summary-score">
-              {correctCount} of {attemptedCount} correct
-              {accuracy !== null ? ` · ${accuracy}%` : ''}
-            </Text>
-            <Text style={styles.summaryHint}>
-              Every replay sharpens your ear. Ready for another round?
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={handleRestart}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                styles.summaryPrimary,
-                pressed && styles.primaryButtonPressed,
-              ]}
-              testID="practice-restart">
-              <Icon name="refresh" size={18} color={colors.onPrimary} />
-              <Text style={styles.primaryButtonText}>Practice again</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => navigation.goBack()}
-              style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
-              testID="practice-summary-done">
-              <Text style={styles.secondaryButtonText}>Done</Text>
-            </Pressable>
-          </View>
-        </ScreenScrollView>
-      </Screen>
+      <PracticeSummaryCard
+        correctCount={correctCount}
+        attemptedCount={attemptedCount}
+        accuracy={accuracy}
+        onRestart={handleRestart}
+        onGoBack={() => navigation.goBack()}
+      />
     );
   }
 
@@ -1023,22 +891,11 @@ export function PracticeScreen({ navigation }: PracticeScreenProps) {
       style={styles.keyboardShell}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Screen style={styles.container} testID="practice-screen">
-        <ScreenHeader style={styles.header}>
-          <View style={styles.headerSide}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              hitSlop={8}
-              onPress={() => navigation.goBack()}
-              style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-              testID="practice-back">
-              <Icon name="arrowLeft" size={18} color={colors.accent} />
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.title}>Listening practice</Text>
-          <View style={[styles.headerSide, styles.headerSideRight]} />
-        </ScreenHeader>
+        <ScreenTitleBar
+          title="Listening practice"
+          onBack={() => navigation.goBack()}
+          backTestID="practice-back"
+        />
 
         <ScreenScrollView
           style={styles.scroll}

@@ -36,7 +36,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import type { Session } from '../api/sessions';
 import { deleteSession, listSessions, renameSession } from '../api/sessions';
 import { toErrorMessage, useAuth } from '../auth/AuthContext';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { SCREEN_GUTTER, SCREEN_TOP_SPACING, Screen, ScreenList } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { LocalConversationRepository } from '../db/conversationRepository';
 import type { LocalSession } from '../db/types';
 import { useApplicationMode } from '../mode/ModeContext';
@@ -77,24 +78,13 @@ function createStyles(c: ThemeColors) {
       // Same header spacing as the Chat screen. Horizontal spacing lives on
       // the shared header/list content so the scroll indicator binds to the
       // right screen edge.
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       marginBottom: 16,
-    },
-    title: {
-      fontSize: 26,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    backLink: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.accent,
-      paddingVertical: 4,
     },
     centered: {
       flex: 1,
@@ -429,12 +419,11 @@ export function HistoryScreen({ navigation }: Props) {
 
   return (
     <Screen style={styles.container} testID="history-screen">
-      <ScreenHeader style={styles.header}>
-        <Text style={styles.title}>History</Text>
-        <Pressable onPress={() => navigation.goBack()} testID="history-back">
-          <Text style={styles.backLink}>Close</Text>
-        </Pressable>
-      </ScreenHeader>
+      <ScreenTitleBar
+        title="History"
+        onBack={() => navigation.goBack()}
+        backTestID="history-back"
+      />
 
       {error !== null ? (
         <Text role="alert" style={styles.error} testID="form-error">

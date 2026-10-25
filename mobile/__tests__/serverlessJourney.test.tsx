@@ -303,7 +303,8 @@ describe('TASK-117 serverless journey', () => {
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     // ---- Enable serverless mode through Settings. ----------------------
-    await pressTop('chat-open-settings');
+    await pressTop('chat-back');
+    await pressTop('home-open-settings');
     await waitFor(() => expect(top('settings-screen')).toBeOnTheScreen());
     expect(screen.getByTestId('settings-open-vocabulary')).toBeOnTheScreen();
     await pressTop('settings-mode-serverless');
@@ -391,7 +392,8 @@ describe('TASK-117 serverless journey', () => {
     ]);
 
     // ---- History: the local conversation is listed and reopens. --------
-    await pressTop('chat-open-history');
+    await pressTop('chat-back');
+    await pressTop('home-open-history');
     await waitFor(() => expect(top('history-screen')).toBeOnTheScreen());
     await waitFor(() => expect(screen.getByTestId('history-item-1')).toBeOnTheScreen());
     expect(within(screen.getByTestId('history-item-1')).getByText(TOPIC.title)).toBeOnTheScreen();
@@ -462,7 +464,8 @@ describe('TASK-117 serverless journey', () => {
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     // Settings hides the server-side vocabulary entry while serverless.
-    await pressTop('chat-open-settings');
+    await pressTop('chat-back');
+    await pressTop('home-open-settings');
     await waitFor(() => expect(top('settings-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('settings-open-vocabulary')).toBeNull();
 
@@ -507,7 +510,8 @@ describe('TASK-117 serverless journey', () => {
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
     await startConversationWithReply(fake);
 
-    await pressTop('chat-open-settings');
+    await pressTop('chat-back');
+    await pressTop('home-open-settings');
     await waitFor(() => expect(top('settings-screen')).toBeOnTheScreen());
 
     await confirmClearLocalData();
@@ -575,7 +579,8 @@ describe('TASK-117 serverless journey', () => {
     expect(mockedAuth.getMe).not.toHaveBeenCalled();
 
     // No server-only account UI exists in serverless mode.
-    await pressTop('chat-open-settings');
+    await pressTop('chat-back');
+    await pressTop('home-open-settings');
     await waitFor(() => expect(top('settings-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('settings-account-section')).toBeNull();
     expect(screen.queryByText('Signed in as')).toBeNull();

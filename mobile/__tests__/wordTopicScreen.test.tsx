@@ -203,7 +203,7 @@ describe('WordTopicScreen — word list', () => {
     // back link, description in its own scrollable box below (no shared
     // margins).
     expect(view.getByTestId('word-topic-title')).toHaveTextContent('Cooking');
-    expect(view.getByText('‹ Topics')).toBeTruthy();
+    expect(view.getByText('‹ Back')).toBeTruthy();
     expect(view.getByTestId('word-topic-description')).toHaveTextContent(
       "I'm a chef, I often read cooking blogs.",
     );

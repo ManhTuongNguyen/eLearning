@@ -216,13 +216,6 @@ describe('controls present in every mode', () => {
     },
   );
 
-  it('renders the top-drop transition wrapper when opened from Chat', async () => {
-    await renderSettings('server', { slideFromTop: true });
-
-    expect(screen.getByTestId('settings-transition')).toBeOnTheScreen();
-    expect(screen.getByTestId('settings-screen')).toBeOnTheScreen();
-  });
-
   it('hides the server logout control in serverless mode (TASK-AUDIT-003)', async () => {
     await renderSettings('serverless');
 

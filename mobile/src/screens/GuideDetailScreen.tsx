@@ -6,8 +6,13 @@
  */
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-
-import { Screen, ScreenContent, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import {
+  SCREEN_TOP_SPACING,
+  Screen,
+  ScreenContent,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { guideEntries, guideModeBadge } from '../guide/guideContent';
 import type { GuideAiUsage, GuideEntry } from '../guide/types';
 import type { GuideDetailScreenProps } from '../navigation/types';
@@ -21,24 +26,10 @@ function createStyles(c: ThemeColors) {
       backgroundColor: c.background,
     },
     header: {
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
       flexDirection: 'row',
       alignItems: 'center',
       minHeight: 40,
-    },
-    backText: {
-      fontSize: 16,
-      color: c.accent,
-    },
-    headerSpacer: {
-      width: 48,
-    },
-    headerTitle: {
-      flex: 1,
-      textAlign: 'center',
-      fontSize: 17,
-      fontWeight: '600',
-      color: c.textPrimary,
     },
     scroll: {
       paddingTop: 16,
@@ -244,17 +235,11 @@ export function GuideDetailScreen({ route, navigation }: GuideDetailScreenProps)
   if (!entry) {
     return (
       <Screen style={styles.container} testID="guide-detail-screen">
-        <ScreenHeader style={styles.header}>
-          <Pressable
-            accessibilityLabel="Go back"
-            hitSlop={8}
-            onPress={() => navigation.goBack()}
-            testID="guide-detail-back">
-            <Text style={styles.backText}>‹ Back</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>App guide</Text>
-          <View style={styles.headerSpacer} />
-        </ScreenHeader>
+        <ScreenTitleBar
+          title="App guide"
+          onBack={() => navigation.goBack()}
+          backTestID="guide-detail-back"
+        />
         <ScreenContent>
           <Text style={styles.missingText}>This guide entry does not exist.</Text>
         </ScreenContent>
@@ -268,17 +253,11 @@ export function GuideDetailScreen({ route, navigation }: GuideDetailScreenProps)
 
   return (
     <Screen style={styles.container} testID="guide-detail-screen">
-      <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={() => navigation.goBack()}
-          testID="guide-detail-back">
-          <Text style={styles.backText}>‹ Back</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>{entry.title}</Text>
-        <View style={styles.headerSpacer} />
-      </ScreenHeader>
+      <ScreenTitleBar
+        title={entry.title}
+        onBack={() => navigation.goBack()}
+        backTestID="guide-detail-back"
+      />
       <ScreenScrollView contentContainerStyle={styles.scroll}>
         <ModeNotice entry={entry} styles={styles} />
         <Text style={styles.intro}>{entry.intro}</Text>

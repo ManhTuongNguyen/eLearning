@@ -25,7 +25,9 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import type { VocabularyItem } from '../api/vocabulary';
 import { exportVocabulary, listVocabulary } from '../api/vocabulary';
 import { toErrorMessage, useAuth } from '../auth/AuthContext';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { SCREEN_GUTTER, SCREEN_TOP_SPACING, Screen, ScreenList } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
+import { Toast } from '../components/Toast';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { VocabularyScreenProps } from '../navigation/types';
 import type { ThemeColors } from '../theme/colors';
@@ -45,29 +47,13 @@ function createStyles(c: ThemeColors) {
       // Same header spacing as the Chat screen. Horizontal spacing lives on
       // the shared header/list content so the scroll indicator binds to the
       // right screen edge.
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       marginBottom: 16,
-    },
-    title: {
-      fontSize: 26,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    backLink: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.accent,
-      paddingVertical: 4,
-    },
-    headerActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 16,
     },
     exportLink: {
       flexDirection: 'row',
@@ -88,30 +74,6 @@ function createStyles(c: ThemeColors) {
       fontSize: 13,
       marginBottom: 12,
       paddingHorizontal: SCREEN_GUTTER,
-    },
-    toast: {
-      position: 'absolute',
-      bottom: 24,
-      left: SCREEN_GUTTER,
-      right: SCREEN_GUTTER,
-      backgroundColor: c.surface,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 6,
-    },
-    toastText: {
-      color: c.success,
-      fontSize: 14,
-      fontWeight: '600',
-      textAlign: 'center',
     },
     centered: {
       flex: 1,
@@ -402,10 +364,12 @@ export function VocabularyScreen({ navigation }: Props) {
 
   return (
     <Screen style={styles.container} testID="vocabulary-screen">
-      <ScreenHeader style={styles.header}>
-        <Text style={styles.title}>Vocabulary</Text>
-        <View style={styles.headerActions}>
-          {serverVocabulary ? (
+      <ScreenTitleBar
+        title="Vocabulary"
+        onBack={() => navigation.goBack()}
+        backTestID="vocabulary-back"
+        right={
+          serverVocabulary ? (
             <Pressable
               style={[styles.exportLink, exporting && styles.exportLinkDisabled]}
               onPress={() => {
@@ -419,12 +383,9 @@ export function VocabularyScreen({ navigation }: Props) {
               {exporting ? <ActivityIndicator size="small" color={colors.primary} /> : null}
               <Text style={styles.actionLinkText}>{exporting ? 'Exporting…' : 'Export CSV'}</Text>
             </Pressable>
-          ) : null}
-          <Pressable onPress={() => navigation.goBack()} testID="vocabulary-back">
-            <Text style={styles.backLink}>Close</Text>
-          </Pressable>
-        </View>
-      </ScreenHeader>
+          ) : null
+        }
+      />
 
       {serverVocabulary && exportError !== null ? (
         <Text role="alert" style={styles.exportError} testID="vocabulary-export-error">
@@ -516,12 +477,8 @@ export function VocabularyScreen({ navigation }: Props) {
         />
       )}
 
-      {serverVocabulary && toast !== null ? (
-        <View pointerEvents="none" style={styles.toast} testID="vocabulary-toast">
-          <Text role="status" style={styles.toastText}>
-            {toast}
-          </Text>
-        </View>
+      {serverVocabulary ? (
+        <Toast message={toast} testID="vocabulary-toast" inset={SCREEN_GUTTER} />
       ) : null}
     </Screen>
   );

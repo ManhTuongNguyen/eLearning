@@ -9,6 +9,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { SCREEN_TOP_SPACING } from '../src/components/ScreenLayout';
 import type { TTSSettingsScreenProps } from '../src/navigation/types';
 import { createStyles, TTSSettingsScreen } from '../src/screens/TTSSettingsScreen';
 import { lightColors } from '../src/theme/colors';
@@ -70,7 +71,7 @@ describe('TTSSettingsScreen', () => {
 
   it('uses the shared 16px header spacing like the other screens (bug #1)', () => {
     const styles = createStyles(lightColors);
-    expect(styles.container.paddingTop).toBe(16);
+    expect(styles.container.paddingTop).toBe(SCREEN_TOP_SPACING);
   });
 
   it('has no inline voice list — voice picking lives on the manager (bug #5)', async () => {

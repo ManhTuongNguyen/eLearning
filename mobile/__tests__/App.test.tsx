@@ -69,13 +69,11 @@ describe('App authentication flow', () => {
     render(<App />);
 
     // Session restored from secure storage survives an app restart; the
-    // homepage hub is the landing route, then open the conversations view.
+    // homepage hub is the landing route, then open Settings from the hub.
     await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
-    await fireEvent.press(screen.getByTestId('home-open-chat'));
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     // Logout lives on the Settings screen of the main stack.
-    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    await fireEvent.press(screen.getByTestId('home-open-settings'));
     await fireEvent.press(await screen.findByTestId('settings-logout'));
 
     await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());
@@ -90,10 +88,8 @@ describe('App authentication flow', () => {
 
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
-    await fireEvent.press(screen.getByTestId('home-open-chat'));
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
-    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    await fireEvent.press(screen.getByTestId('home-open-settings'));
     await fireEvent.press(await screen.findByTestId('settings-open-level'));
     expect(screen.getByTestId('level-AUTO')).toBeOnTheScreen();
 

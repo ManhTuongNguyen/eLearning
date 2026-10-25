@@ -281,7 +281,8 @@ describe('serverless mode regression (TASK-AUDIT-003/016)', () => {
     expect(mockedAuth.getMe).not.toHaveBeenCalled();
 
     // ---- Server-only Account UI is absent in serverless mode. -----------
-    await pressTop('chat-open-settings');
+    await pressTop('chat-back');
+    await pressTop('home-open-settings');
     await waitFor(() => expect(top('settings-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('settings-account-section')).toBeNull();
     expect(screen.queryByText('Signed in as')).toBeNull();
@@ -319,8 +320,10 @@ describe('history after login regression (TASK-AUDIT-008)', () => {
     expect(screen.queryByTestId('chat-no-session')).toBeNull();
     expect(mockedSessions.listSessions).toHaveBeenCalledWith(expect.any(Function), 1);
 
-    // The history screen lists every existing conversation.
-    await pressTop('chat-open-history');
+    // The history screen lists every existing conversation (reached from
+    // the hub now that the chat header no longer links to it).
+    await pressTop('chat-back');
+    await pressTop('home-open-history');
     await waitFor(() => expect(top('history-screen')).toBeOnTheScreen());
     expect(screen.getByTestId('history-item-9')).toBeOnTheScreen();
     expect(screen.getByTestId('history-item-7')).toBeOnTheScreen();
@@ -346,7 +349,8 @@ describe('immediate vocabulary save regression (TASK-AUDIT-007)', () => {
     await waitFor(() => expect(top('composer-input')).toBeOnTheScreen());
 
     // Reach the conversation through History (a second Chat instance mounts).
-    await pressTop('chat-open-history');
+    await pressTop('chat-back');
+    await pressTop('home-open-history');
     await fireEvent.press(await screen.findByTestId('history-item-5'));
     await waitFor(() => expect(top('chat-message-810')).toBeOnTheScreen());
 

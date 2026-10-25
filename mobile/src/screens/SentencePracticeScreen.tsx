@@ -18,7 +18,6 @@
  * changes, the screen blurs or it unmounts.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { TextStyle } from 'react-native';
 import {
   ActivityIndicator,
   Keyboard,
@@ -26,11 +25,18 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextStyle,
   View,
 } from 'react-native';
-
+import { EMPTY_GRADE_COUNTS, GradeButtons, type GradeCounts } from '../components/GradeButtons';
 import { Icon } from '../components/Icon';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import {
+  SCREEN_GUTTER,
+  SCREEN_TOP_SPACING,
+  Screen,
+  ScreenHeader,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
 import {
   countNewSentencesIntroducedToday,
@@ -54,6 +60,7 @@ import {
 import { selectCardMode } from '../srs/cardMode';
 import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from '../srs/config';
 import { startOfStudyDay } from '../srs/dayBoundary';
+import { formatNextDueLabel as formatNextDueTimestampLabel } from '../srs/nextDue';
 import { previewSchedule, reviewSentence, schedulerStateFrom } from '../srs/scheduler';
 import {
   applyPracticeGrade,
@@ -66,26 +73,14 @@ import { useTheme } from '../theme/ThemeContext';
 import type { TextToSpeechEngine } from '../tts/textToSpeech';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { useSpeechPlayback } from '../tts/useSpeechPlayback';
-
-const GRADE_OPTIONS: Array<{ grade: ReviewGrade; label: string }> = [
-  { grade: 'again', label: 'Again' },
-  { grade: 'hard', label: 'Hard' },
-  { grade: 'good', label: 'Good' },
-  { grade: 'easy', label: 'Easy' },
-];
-
-type GradeCounts = Record<ReviewGrade, number>;
-
-function emptyGradeCounts(): GradeCounts {
-  return { again: 0, hard: 0, good: 0, easy: 0 };
-}
+import { describeError } from '../utils/describeError';
 
 export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
@@ -270,35 +265,6 @@ export function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.textSecondary,
     },
-    gradeRow: {
-      flexDirection: 'row',
-      gap: 10,
-    },
-    gradeButton: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: c.borderStrong,
-      backgroundColor: c.surface,
-      paddingVertical: 12,
-    },
-    gradeButtonSuggested: {
-      borderColor: c.primary,
-      backgroundColor: c.accentSoft,
-    },
-    gradeText: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    gradeIntervalText: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: c.textMuted,
-      marginTop: 2,
-    },
     error: {
       color: c.errorText,
       fontSize: 13,
@@ -356,60 +322,16 @@ export function createStyles(c: ThemeColors) {
   });
 }
 
-/** Local, secret-free description of any thrown value. */
-function describeError(err: unknown): string {
-  if (err instanceof Error && err.message) {
-    return err.message;
-  }
-  if (typeof err === 'string' && err.trim()) {
-    return err;
-  }
-  return 'unknown error';
-}
-
 /**
  * Human-readable "when is the next card due" line for the caught-up state. Only
  * non-suspended sentences count; an empty topic yields null and the caller
  * shows its own copy.
  */
 export function formatNextDueLabel(sentences: readonly SentenceRecord[], now: Date): string | null {
-  const pending = sentences
-    .filter(sentence => !sentence.suspended)
-    .map(sentence => Date.parse(sentence.due_at))
-    .filter(dueMs => Number.isFinite(dueMs));
-  if (pending.length === 0) {
-    return null;
-  }
-
-  const nextMs = Math.min(...pending);
-  const deltaMs = nextMs - now.getTime();
-  if (deltaMs <= 0) {
-    return 'Next due now.';
-  }
-
-  const minutes = Math.ceil(deltaMs / 60_000);
-  let relative: string;
-  if (minutes < 60) {
-    relative = `${minutes} min`;
-  } else {
-    const hours = Math.ceil(minutes / 60);
-    if (hours < 24) {
-      relative = `${hours} h`;
-    } else {
-      const days = Math.ceil(hours / 24);
-      relative = `${days} day${days === 1 ? '' : 's'}`;
-    }
-  }
-
-  const next = new Date(nextMs);
-  const absolute = `${next.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  })} at ${next.toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  })}`;
-  return `Next due in ${relative} (${absolute}).`;
+  return formatNextDueTimestampLabel(
+    sentences.filter(sentence => !sentence.suspended).map(sentence => Date.parse(sentence.due_at)),
+    now,
+  );
 }
 
 function diffTokenStyle(kind: DiffKind, colors: ThemeColors): TextStyle {
@@ -443,64 +365,6 @@ function diffSummary(segments: readonly DiffSegment[]): string {
   return parts.length > 0 ? parts.join(' · ') : 'Nothing typed yet.';
 }
 
-interface GradeButtonsProps {
-  suggested: ReviewGrade | null;
-  /** Anki-style next-interval hint per button (`10m`, `3d`, …). */
-  intervals: Partial<Record<ReviewGrade, string>>;
-  saving: boolean;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-  onGrade: (grade: ReviewGrade) => void;
-}
-
-function GradeButtons({
-  suggested,
-  intervals,
-  saving,
-  colors,
-  styles,
-  onGrade,
-}: GradeButtonsProps) {
-  return (
-    <View style={styles.gradeRow}>
-      {GRADE_OPTIONS.map(option => {
-        const isSuggested = suggested === option.grade;
-        const interval = intervals[option.grade];
-        return (
-          <Pressable
-            key={option.grade}
-            accessibilityRole="button"
-            accessibilityLabel={`Grade ${option.label}`}
-            accessibilityState={{ disabled: saving, selected: isSuggested }}
-            testID={`sentence-grade-${option.grade}`}
-            disabled={saving}
-            onPress={() => onGrade(option.grade)}
-            style={({ pressed }) => [
-              styles.gradeButton,
-              isSuggested && styles.gradeButtonSuggested,
-              pressed && styles.pressedFade,
-            ]}>
-            <Text
-              style={[
-                styles.gradeText,
-                { color: isSuggested ? colors.primary : colors.textPrimary },
-              ]}>
-              {option.label}
-            </Text>
-            {interval ? (
-              <Text
-                style={styles.gradeIntervalText}
-                testID={`sentence-grade-interval-${option.grade}`}>
-                {interval}
-              </Text>
-            ) : null}
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 interface SentencePracticeScreenInternalProps extends SentencePracticeScreenProps {
   /** TTS seam; defaults to the active engine from the registry. */
   speech?: TextToSpeechEngine;
@@ -526,7 +390,7 @@ export function SentencePracticeScreen({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [reviewedCount, setReviewedCount] = useState(0);
-  const [gradeCounts, setGradeCounts] = useState<GradeCounts>(emptyGradeCounts);
+  const [gradeCounts, setGradeCounts] = useState<GradeCounts>(EMPTY_GRADE_COUNTS);
   const [presentationKey, setPresentationKey] = useState(0);
 
   const [answer, setAnswer] = useState('');
@@ -582,7 +446,7 @@ export function SentencePracticeScreen({
       setAllSentences(sentences);
       setSession(createPracticeSessionState(sentences, new Date(), sessionLimitsRef.current));
       setReviewedCount(0);
-      setGradeCounts(emptyGradeCounts());
+      setGradeCounts(EMPTY_GRADE_COUNTS);
       setPresentationKey(key => key + 1);
       setAnswer('');
       setDiff(null);
@@ -1035,9 +899,8 @@ export function SentencePracticeScreen({
               suggested={currentMode === 'dictation' ? suggested : null}
               intervals={previews}
               saving={saving}
-              colors={colors}
-              styles={styles}
               onGrade={handleGrade}
+              testIDPrefix="sentence-grade"
             />
           ) : null}
 

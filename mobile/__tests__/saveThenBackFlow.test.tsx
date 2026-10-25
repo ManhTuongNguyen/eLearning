@@ -91,14 +91,13 @@ async function renderMainStack() {
       </ThemeProvider>
     </ModeProvider>,
   );
-  // The homepage hub is the landing screen; open the conversations view.
-  fireEvent.press(await screen.findByTestId('home-open-chat'));
-  await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+  await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
 }
 
-/** Walks Chat -> Settings -> editor -> Save and asserts the editor is gone. */
+/** Walks Home -> Settings -> editor -> Save and asserts the editor is gone. */
 async function openEditorAndSave() {
-  fireEvent.press(screen.getByTestId('chat-open-settings'));
+  // Settings is opened from the hub; the removed Chat header link is gone.
+  fireEvent.press(await screen.findByTestId('home-open-settings'));
   expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
 
   fireEvent.press(await screen.findByTestId('settings-ai-provider-card'));
@@ -113,18 +112,18 @@ async function openEditorAndSave() {
 }
 
 describe('save in the provider editor, then Back (regression)', () => {
-  it('the header back button on Settings lands on Chat, not the editor', async () => {
+  it('the header back button on Settings lands on Home, not the editor', async () => {
     await renderMainStack();
     await openEditorAndSave();
 
     fireEvent.press(screen.getByTestId('settings-back'));
 
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('ai-provider-settings-screen')).toBeNull();
     expect(screen.queryByTestId('settings-screen')).toBeNull();
   });
 
-  it('the Android system back from Settings lands on Chat, not the editor', async () => {
+  it('the Android system back from Settings lands on Home, not the editor', async () => {
     await renderMainStack();
     await openEditorAndSave();
 
@@ -135,7 +134,7 @@ describe('save in the provider editor, then Back (regression)', () => {
       hardwareBackHandlers[hardwareBackHandlers.length - 1]();
     });
 
-    await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
+    await waitFor(() => expect(screen.getByTestId('home-screen')).toBeOnTheScreen());
     expect(screen.queryByTestId('ai-provider-settings-screen')).toBeNull();
     expect(screen.queryByTestId('settings-screen')).toBeNull();
   });

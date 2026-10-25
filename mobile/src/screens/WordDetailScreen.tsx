@@ -19,18 +19,17 @@
  * The screen reads from the repository on focus; no in-memory guesses.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ConfirmModal } from '../components/ConfirmModal';
 import { Icon } from '../components/Icon';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import {
+  SCREEN_GUTTER,
+  SCREEN_TOP_SPACING,
+  Screen,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { WordSenseList } from '../components/WordSenseList';
 import { getLocalDatabase } from '../db/database';
 import type { WordRecord, WordSense } from '../db/types';
@@ -52,63 +51,25 @@ import { useTheme } from '../theme/ThemeContext';
 import type { TextToSpeechEngine } from '../tts/textToSpeech';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { useSpeechPlayback } from '../tts/useSpeechPlayback';
+import { describeError } from '../utils/describeError';
+import { WordEnrichReviewModal } from './WordEnrichReviewModal';
+import { WordScheduleCard } from './WordScheduleCard';
 
 const MODE_NOTICE_TEXT = 'The word bank is saved on this device only.';
 const NOT_FOUND_MESSAGE = 'Not found in the dictionary. The word stays without data.';
-
-function describeError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
-/** The stored FSRS schedule, formatted for the info block. */
-export function describeSchedule(
-  word: WordRecord,
-  now: Date,
-): Array<{ label: string; value: string }> {
-  const dueDate = new Date(word.due_at);
-  const due = Number.isFinite(dueDate.getTime())
-    ? `${dueDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ` +
-      `${dueDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
-    : word.due_at;
-  const rows: Array<{ label: string; value: string }> = [
-    { label: 'State', value: word.state },
-    { label: 'Due', value: dueDate.getTime() <= now.getTime() ? `${due} (due now)` : due },
-    { label: 'Stability', value: `${word.stability}` },
-    { label: 'Difficulty', value: `${word.difficulty}` },
-    { label: 'Reps', value: `${word.reps}` },
-    { label: 'Lapses', value: `${word.lapses}` },
-  ];
-  if (word.last_grade) {
-    const lastDate = new Date(word.last_reviewed_at);
-    rows.push({
-      label: 'Last grade',
-      value:
-        `${word.last_grade}` +
-        (Number.isFinite(lastDate.getTime())
-          ? ` (${lastDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })})`
-          : ''),
-    });
-  }
-  return rows;
-}
 
 export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
       marginBottom: 12,
-    },
-    backLinkText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.accent,
     },
     centered: {
       flex: 1,
@@ -175,27 +136,6 @@ export function createStyles(c: ThemeColors) {
       textTransform: 'uppercase',
       letterSpacing: 1,
     },
-    scheduleCard: {
-      backgroundColor: c.surface,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 12,
-      padding: 12,
-      gap: 6,
-    },
-    scheduleRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
-    scheduleLabel: {
-      fontSize: 13,
-      color: c.textMuted,
-    },
-    scheduleValue: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: c.textPrimary,
-    },
     actionRow: {
       flexDirection: 'row',
       gap: 10,
@@ -240,124 +180,7 @@ export function createStyles(c: ThemeColors) {
       fontSize: 13,
       color: c.errorText,
     },
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: SCREEN_GUTTER,
-    },
-    modalCard: {
-      width: '100%',
-      maxWidth: 420,
-      backgroundColor: c.surface,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 16,
-      padding: 20,
-      gap: 12,
-    },
-    modalTitle: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    hint: {
-      fontSize: 13,
-      lineHeight: 18,
-      color: c.textSecondary,
-    },
-    modalError: {
-      fontSize: 13,
-      color: c.errorText,
-    },
-    modalFooter: {
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      gap: 12,
-      marginTop: 4,
-    },
-    modalButton: {
-      minWidth: 88,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 10,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-    },
-    modalCancelButton: {
-      backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.borderStrong,
-    },
-    modalDangerButton: {
-      backgroundColor: c.danger,
-    },
-    modalDisabled: {
-      opacity: 0.5,
-    },
-    modalCancelText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.textPrimary,
-    },
-    modalDangerText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.onPrimary,
-    },
-    modalPrimaryButton: {
-      backgroundColor: c.primary,
-    },
     // --- Change-review modal (TASK-WB-014) ---
-    enrichCard: {
-      width: '100%',
-      maxWidth: 560,
-      maxHeight: '90%',
-      backgroundColor: c.surface,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 16,
-      padding: 20,
-      gap: 12,
-    },
-    pairHeaderRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    pairHeaderLabel: {
-      flex: 1,
-      fontSize: 12,
-      fontWeight: '700',
-      color: c.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 1,
-    },
-    pairListScroll: {
-      flexGrow: 0,
-      // Full-bleed over the card's horizontal padding so the Android
-      // scrollbar anchors to the card's right edge instead of floating
-      // inside the padding gutter; the content keeps its original inset.
-      marginLeft: -20,
-      marginRight: -20,
-      paddingHorizontal: 20,
-    },
-    pairRow: {
-      flexDirection: 'row',
-      gap: 12,
-      paddingVertical: 8,
-      borderTopWidth: 1,
-      borderTopColor: c.border,
-    },
-    pairCell: {
-      flex: 1,
-      gap: 6,
-      backgroundColor: c.background,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 10,
-      padding: 10,
-    },
     pressedFade: {
       opacity: 0.9,
     },
@@ -576,52 +399,15 @@ export function WordDetailScreen({
     }
   }, [word, deleting, navigation, stop]);
 
-  const scheduleRows = useMemo(() => (word ? describeSchedule(word, new Date()) : []), [word]);
-
-  /**
-   * One change-review cell: the sense group of that part of speech through the
-   * shared renderer (POS is the row's identity, so the badge is hidden). A side
-   * without that POS shows "No data."
-   */
-  const renderSenseCell = (senses: readonly WordSense[], partOfSpeech: string) => {
-    const sense = senses.find(item => item.partOfSpeech === partOfSpeech);
-    if (!sense) {
-      return <Text style={styles.stateText}>No data.</Text>;
-    }
-    return <WordSenseList senses={[sense]} showPosHeader={false} />;
-  };
-
-  /**
-   * Paired rows align current and proposed groups by part of speech (the
-   * meaningful comparison), not by position: one row per POS in the union of
-   * both sides, current data first.
-   */
-  const sensePairKeys = useMemo(() => {
-    const keys: string[] = [];
-    const seen = new Set<string>();
-    for (const sense of [...(word?.senses_json ?? []), ...(proposal ?? [])]) {
-      if (!seen.has(sense.partOfSpeech)) {
-        seen.add(sense.partOfSpeech);
-        keys.push(sense.partOfSpeech);
-      }
-    }
-    return keys;
-  }, [word, proposal]);
-
   const hasData = word?.data_status === 'complete';
 
   return (
     <Screen style={styles.container} testID="word-detail-screen">
-      <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to topic"
-          testID="word-detail-back"
-          onPress={() => navigation.goBack()}
-          style={({ pressed }) => [pressed && styles.pressedFade]}>
-          <Text style={styles.backLinkText}>‹ Topic</Text>
-        </Pressable>
-      </ScreenHeader>
+      <ScreenTitleBar
+        title="Word"
+        onBack={() => navigation.goBack()}
+        backTestID="word-detail-back"
+      />
 
       {serverMode ? (
         <View style={styles.centered} testID="word-detail-mode-notice">
@@ -772,18 +558,7 @@ export function WordDetailScreen({
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Schedule</Text>
-              <View style={styles.scheduleCard} testID="word-detail-schedule">
-                {scheduleRows.map(row => (
-                  <View key={row.label} style={styles.scheduleRow}>
-                    <Text style={styles.scheduleLabel}>{row.label}</Text>
-                    <Text
-                      style={styles.scheduleValue}
-                      testID={`word-detail-schedule-${row.label.toLowerCase().replace(' ', '-')}`}>
-                      {row.value}
-                    </Text>
-                  </View>
-                ))}
-              </View>
+              <WordScheduleCard word={word} />
             </View>
           </View>
         </ScreenScrollView>
@@ -792,149 +567,36 @@ export function WordDetailScreen({
       {/* Change-review modal (TASK-WB-014): current vs proposed, paired by
           sense-group index and rendered as aligned rows inside a scrollable
           list so the Apply/Cancel actions are always reachable. */}
-      <Modal
-        animationType="fade"
-        onRequestClose={handleCancelEnrichment}
-        testID="word-enrich-modal"
-        transparent
-        visible={proposal !== null}>
-        <View style={styles.backdrop}>
-          <View style={styles.enrichCard} accessibilityViewIsModal>
-            <Text style={styles.modalTitle} testID="word-enrich-title">
-              Review proposed data
-            </Text>
-            <View style={styles.pairHeaderRow}>
-              <Text style={styles.pairHeaderLabel} testID="word-enrich-old-label">
-                Current
-              </Text>
-              <Text style={styles.pairHeaderLabel} testID="word-enrich-new-label">
-                Proposed
-              </Text>
-            </View>
-            <ScrollView
-              style={styles.pairListScroll}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-              testID="word-enrich-list-scroll">
-              {sensePairKeys.map((partOfSpeech, index) => (
-                <View key={partOfSpeech} style={styles.pairRow} testID={`word-enrich-row-${index}`}>
-                  <View style={styles.pairCell} testID={`word-enrich-old-${index}`}>
-                    {renderSenseCell(word?.senses_json ?? [], partOfSpeech)}
-                  </View>
-                  <View style={styles.pairCell} testID={`word-enrich-new-${index}`}>
-                    {renderSenseCell(proposal ?? [], partOfSpeech)}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-            {enrichError ? (
-              <Text role="alert" style={styles.modalError} testID="word-enrich-error">
-                {enrichError}
-              </Text>
-            ) : null}
-            <View style={styles.modalFooter}>
-              <Pressable
-                accessibilityRole="button"
-                testID="word-enrich-cancel"
-                onPress={handleCancelEnrichment}
-                disabled={applying}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.modalCancelButton,
-                  applying && styles.modalDisabled,
-                  pressed && styles.modalDisabled,
-                ]}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: applying, busy: applying }}
-                testID="word-enrich-apply"
-                onPress={() => {
-                  // handleApplyEnrichment handles its own errors.
-                  handleApplyEnrichment();
-                }}
-                disabled={applying}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.modalPrimaryButton,
-                  applying && styles.modalDisabled,
-                  pressed && styles.modalDisabled,
-                ]}>
-                {applying ? (
-                  <ActivityIndicator size="small" color={colors.onPrimary} />
-                ) : (
-                  <Text style={styles.actionButtonTextLight}>Apply</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <WordEnrichReviewModal
+        proposal={proposal}
+        currentSenses={word?.senses_json ?? []}
+        applying={applying}
+        error={enrichError}
+        onCancel={handleCancelEnrichment}
+        onApply={() => {
+          // handleApplyEnrichment handles its own errors, so it never rejects.
+          handleApplyEnrichment();
+        }}
+      />
 
       {/* Delete confirmation. */}
-      <Modal
-        animationType="fade"
-        onRequestClose={() => {
+      <ConfirmModal
+        visible={deleteOpen}
+        title="Delete word?"
+        message={`"${word?.text ?? ''}" and its practice history will be permanently deleted.`}
+        busy={deleting}
+        error={deleteError}
+        onCancel={() => {
           if (!deleting) {
             setDeleteOpen(false);
           }
         }}
-        testID="word-detail-delete-modal"
-        transparent
-        visible={deleteOpen}>
-        <View style={styles.backdrop}>
-          <View style={styles.modalCard} accessibilityViewIsModal>
-            <Text style={styles.modalTitle} testID="word-detail-delete-title">
-              Delete word?
-            </Text>
-            <Text style={styles.hint} testID="word-detail-delete-message">
-              {`"${word?.text ?? ''}" and its practice history will be permanently deleted.`}
-            </Text>
-            {deleteError ? (
-              <Text role="alert" style={styles.modalError} testID="word-detail-delete-error">
-                {deleteError}
-              </Text>
-            ) : null}
-            <View style={styles.modalFooter}>
-              <Pressable
-                accessibilityRole="button"
-                testID="word-detail-delete-cancel"
-                onPress={() => setDeleteOpen(false)}
-                disabled={deleting}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.modalCancelButton,
-                  deleting && styles.modalDisabled,
-                  pressed && styles.modalDisabled,
-                ]}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: deleting, busy: deleting }}
-                testID="word-detail-delete-confirm"
-                onPress={() => {
-                  // confirmDelete handles its own errors, so it never rejects.
-                  confirmDelete();
-                }}
-                disabled={deleting}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.modalDangerButton,
-                  deleting && styles.modalDisabled,
-                  pressed && styles.modalDisabled,
-                ]}>
-                {deleting ? (
-                  <ActivityIndicator size="small" color={colors.onPrimary} />
-                ) : (
-                  <Text style={styles.modalDangerText}>Delete</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onConfirm={() => {
+          // confirmDelete handles its own errors, so it never rejects.
+          confirmDelete();
+        }}
+        testID="word-detail-delete"
+      />
     </Screen>
   );
 }

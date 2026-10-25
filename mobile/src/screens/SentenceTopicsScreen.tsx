@@ -16,18 +16,14 @@
  * list with an explicit notice instead of touching the local database.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  type GestureResponderEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ConfirmModal } from '../components/ConfirmModal';
 import type { ContextMenuAnchor, ContextMenuItem } from '../components/ContextMenu';
 import { ContextMenu } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { SCREEN_GUTTER, SCREEN_TOP_SPACING, Screen, ScreenList } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
+import { TopicRow } from '../components/TopicRow';
 import { getLocalDatabase } from '../db/database';
 import {
   deleteSentenceTopic,
@@ -39,7 +35,6 @@ import { useApplicationMode } from '../mode/ModeContext';
 import type { SentenceTopicsScreenProps } from '../navigation/types';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
-import { DeleteTopicModal } from './DeleteTopicModal';
 import {
   DEFAULT_TOPIC_PRACTICE_SETTINGS,
   PracticeSettingsModal,
@@ -50,24 +45,29 @@ const MODE_NOTICE_TEXT =
   'Real-life sentences are saved on this device only. Switch to server mode to ' +
   'manage your server account — your local sentences are never sent there.';
 
+/** Describe exactly what the cascade removes, avoiding "0 sentences". */
+function describeDeletedTopic(sentenceCount: number): string {
+  if (sentenceCount === 0) {
+    return 'its practice history';
+  }
+  if (sentenceCount === 1) {
+    return 'its sentence and practice history';
+  }
+  return `its ${sentenceCount} sentences and practice history`;
+}
+
 export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
       marginBottom: 16,
-    },
-    title: {
-      fontSize: 24,
-      fontWeight: '700',
-      color: c.textPrimary,
-      flex: 1,
     },
     newTopicButton: {
       // Compact 32x32 circle so the header row height matches the title text
@@ -86,28 +86,6 @@ export function createStyles(c: ThemeColors) {
       borderRadius: 14,
       overflow: 'hidden',
     },
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 14,
-      // No horizontal padding: the ScreenList gutter already insets the rows,
-      // so the topic titles align with the screen title instead of sitting
-      // 16px further in (a double inset that read as a redundant margin).
-      paddingRight: 6,
-    },
-    rowMain: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 14,
-    },
-    rowMenuButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     rowDivider: {
       borderTopWidth: 1,
       borderTopColor: c.border,
@@ -124,35 +102,6 @@ export function createStyles(c: ThemeColors) {
       fontSize: 16,
       fontWeight: '600',
       color: c.textPrimary,
-    },
-    rowDescription: {
-      fontSize: 13,
-      color: c.textMuted,
-      lineHeight: 18,
-    },
-    rowCounts: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    badge: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: c.onPrimary,
-      backgroundColor: c.primary,
-      borderRadius: 10,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-    },
-    badgeGhost: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: c.textMuted,
-      backgroundColor: c.surface,
-      borderColor: c.borderStrong,
-      borderWidth: 1,
-      borderRadius: 10,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
     },
     centered: {
       flex: 1,
@@ -174,10 +123,6 @@ export function createStyles(c: ThemeColors) {
     listContent: {
       gap: 12,
     },
-    badgeLabel: {
-      fontSize: 12,
-      fontWeight: '600',
-    },
     actionText: {
       color: c.primary,
       fontSize: 14,
@@ -187,67 +132,6 @@ export function createStyles(c: ThemeColors) {
       opacity: 0.9,
     },
   });
-}
-
-type TopicRowProps = {
-  item: SentenceTopicSummary;
-  onPress: (item: SentenceTopicSummary) => void;
-  onMenu: (item: SentenceTopicSummary, event: GestureResponderEvent) => void;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-};
-
-function SentenceTopicRow({ item, onPress, onMenu, colors, styles }: TopicRowProps) {
-  const dueBadge =
-    item.due_count > 0 ? (
-      <View style={styles.badge} testID={`topic-${item.id}-due`}>
-        <Text style={[styles.badgeLabel, { color: colors.onPrimary }]}>{item.due_count} due</Text>
-      </View>
-    ) : (
-      <View style={styles.badgeGhost} testID={`topic-${item.id}-done`}>
-        <Text style={[styles.badgeLabel, { color: colors.textMuted }]}>all done</Text>
-      </View>
-    );
-
-  return (
-    <View style={styles.row}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${item.title} — ${item.sentence_count} sentences, ${item.due_count} due`}
-        testID={`topic-${item.id}`}
-        onPress={() => onPress(item)}
-        style={({ pressed }) => [styles.rowMain, pressed && styles.pressedFade]}>
-        <View style={styles.rowIcon}>
-          <Icon name="sentences" color={colors.accent} />
-        </View>
-        <View style={styles.rowText}>
-          <Text style={styles.rowTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
-          {item.description ? (
-            <Text style={styles.rowDescription} numberOfLines={2}>
-              {item.description}
-            </Text>
-          ) : null}
-          <View style={styles.rowCounts}>
-            <Text style={styles.badgeGhost}>
-              {item.sentence_count} sentence{item.sentence_count === 1 ? '' : 's'}
-            </Text>
-            {dueBadge}
-          </View>
-        </View>
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Topic actions for ${item.title}`}
-        testID={`topic-menu-${item.id}`}
-        onPress={event => onMenu(item, event)}
-        style={({ pressed }) => [styles.rowMenuButton, pressed && styles.pressedFade]}>
-        <Icon name="more" size={18} color={colors.textMuted} />
-      </Pressable>
-    </View>
-  );
 }
 
 export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) {
@@ -428,18 +312,22 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
 
   return (
     <Screen style={styles.container} testID="sentence-topics-screen">
-      <ScreenHeader style={styles.header}>
-        <Text style={styles.title}>Real-life sentences</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="New topic"
-          testID="sentence-topics-new"
-          onPress={handleNewTopic}
-          style={({ pressed }) => [styles.newTopicButton, pressed && styles.pressedFade]}
-          disabled={!serverlessMode}>
-          <Icon name="plus" size={20} color={colors.onPrimary} />
-        </Pressable>
-      </ScreenHeader>
+      <ScreenTitleBar
+        title="Real-life sentences"
+        onBack={() => navigation.goBack()}
+        backTestID="sentence-topics-back"
+        right={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="New topic"
+            testID="sentence-topics-new"
+            onPress={handleNewTopic}
+            style={({ pressed }) => [styles.newTopicButton, pressed && styles.pressedFade]}
+            disabled={!serverlessMode}>
+            <Icon name="plus" size={20} color={colors.onPrimary} />
+          </Pressable>
+        }
+      />
 
       {serverMode ? (
         <View style={styles.centered} testID="sentence-mode-notice">
@@ -471,20 +359,24 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
           renderItem={({ item, index }) => (
             <>
               {index > 0 ? <View style={styles.rowDivider} /> : null}
-              <SentenceTopicRow
-                item={item}
-                onPress={handleTopicPress}
-                onMenu={(rowItem, event) =>
+              <TopicRow
+                title={item.title}
+                description={item.description}
+                icon="sentences"
+                countLabel={`${item.sentence_count} sentence${item.sentence_count === 1 ? '' : 's'}`}
+                dueCount={item.due_count}
+                onPress={() => handleTopicPress(item)}
+                onMenuPress={event =>
                   setMenuTarget({
-                    item: rowItem,
+                    item,
                     anchor: {
                       x: event.nativeEvent.pageX,
                       y: event.nativeEvent.pageY,
                     },
                   })
                 }
-                colors={colors}
-                styles={styles}
+                testID={`topic-${item.id}`}
+                menuTestID={`topic-menu-${item.id}`}
               />
             </>
           )}
@@ -494,17 +386,18 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
         />
       )}
 
-      <DeleteTopicModal
+      <ConfirmModal
         visible={deleteTarget !== null}
-        topicTitle={deleteTarget?.title ?? ''}
-        sentenceCount={deleteTarget?.sentence_count ?? 0}
-        deleting={deletingId !== null}
+        title="Delete topic?"
+        message={`"${deleteTarget?.title ?? ''}" and ${describeDeletedTopic(deleteTarget?.sentence_count ?? 0)} will be permanently deleted. This cannot be undone.`}
+        busy={deletingId !== null}
         error={deleteError}
         onCancel={cancelDeleteTopic}
         onConfirm={() => {
           // confirmDeleteTopic handles its own errors, so it never rejects.
           confirmDeleteTopic();
         }}
+        testID="delete-topic"
       />
 
       {/* Row context menu (learn ahead / delete), anchored to the ⋮. */}

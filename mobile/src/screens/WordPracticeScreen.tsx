@@ -28,7 +28,6 @@
  * on card change, blur and unmount.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { TextStyle } from 'react-native';
 import {
   ActivityIndicator,
   Keyboard,
@@ -38,9 +37,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
-
+import { AnswerDiff } from '../components/AnswerDiff';
+import { EMPTY_GRADE_COUNTS, GradeButtons, type GradeCounts } from '../components/GradeButtons';
 import { Icon } from '../components/Icon';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import {
+  SCREEN_GUTTER,
+  SCREEN_TOP_SPACING,
+  Screen,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { WordSenseList } from '../components/WordSenseList';
 import { getLocalDatabase } from '../db/database';
 import { getSrsConfig } from '../db/srsConfigStore';
@@ -55,15 +61,11 @@ import {
 import { useApplicationMode } from '../mode/ModeContext';
 import type { WordPracticeScreenProps } from '../navigation/types';
 import { loadWordPracticeMode, type WordPracticeMode } from '../preferences/wordPracticeMode';
-import {
-  type CharDiffKind,
-  type CharDiffSegment,
-  diffCharacters,
-  suggestGrade,
-} from '../srs/answerCheck';
+import { type CharDiffSegment, diffCharacters, suggestGrade } from '../srs/answerCheck';
 import { selectCardMode } from '../srs/cardMode';
 import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from '../srs/config';
 import { startOfStudyDay } from '../srs/dayBoundary';
+import { formatNextDueLabel as formatNextDueTimestampLabel } from '../srs/nextDue';
 import {
   type GradePreview,
   previewSchedule,
@@ -82,16 +84,8 @@ import { useTheme } from '../theme/ThemeContext';
 import type { TextToSpeechEngine } from '../tts/textToSpeech';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { useSpeechPlayback } from '../tts/useSpeechPlayback';
-
-function describeError(err: unknown): string {
-  if (err instanceof Error && err.message.trim()) {
-    return err.message;
-  }
-  if (typeof err === 'string' && err.trim()) {
-    return err;
-  }
-  return 'unknown error';
-}
+import { describeError } from '../utils/describeError';
+import { WordSessionSummary } from './WordSessionSummary';
 
 /**
  * Human-readable "when is the next card due" line for the caught-up state.
@@ -99,78 +93,12 @@ function describeError(err: unknown): string {
  * as practiceable cards.
  */
 export function formatNextWordDueLabel(words: readonly WordRecord[], now: Date): string | null {
-  const pending = words
-    .filter(word => !word.suspended && word.data_status === 'complete')
-    .map(word => Date.parse(word.due_at))
-    .filter(dueMs => Number.isFinite(dueMs));
-  if (pending.length === 0) {
-    return null;
-  }
-
-  const nextMs = Math.min(...pending);
-  const deltaMs = nextMs - now.getTime();
-  if (deltaMs <= 0) {
-    return 'Next due now.';
-  }
-
-  const minutes = Math.ceil(deltaMs / 60_000);
-  let relative: string;
-  if (minutes < 60) {
-    relative = `${minutes} min`;
-  } else {
-    const hours = Math.ceil(minutes / 60);
-    if (hours < 24) {
-      relative = `${hours} h`;
-    } else {
-      const days = Math.ceil(hours / 24);
-      relative = `${days} day${days === 1 ? '' : 's'}`;
-    }
-  }
-
-  const next = new Date(nextMs);
-  const absolute = `${next.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  })} at ${next.toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  })}`;
-  return `Next due in ${relative} (${absolute}).`;
-}
-
-/** Character-level diff colors: typed-but-wrong struck, missing letters underlined. */
-function charSegmentStyle(kind: CharDiffKind, colors: ThemeColors): TextStyle {
-  switch (kind) {
-    case 'correct':
-      return { color: colors.success };
-    case 'missing':
-      return { color: colors.danger, textDecorationLine: 'underline' };
-    case 'extra':
-      return { color: colors.warning, textDecorationLine: 'line-through' };
-  }
-}
-
-/** The one-line result summary for the character diff ("1 missing · 1 extra"). */
-function diffSummary(segments: readonly CharDiffSegment[]): string {
-  const counts = { missing: 0, extra: 0 };
-  for (const segment of segments) {
-    if (segment.kind === 'missing') {
-      counts.missing += segment.text.length;
-    } else if (segment.kind === 'extra') {
-      counts.extra += segment.text.length;
-    }
-  }
-  if (counts.missing === 0 && counts.extra === 0) {
-    return 'Exact match.';
-  }
-  const parts: string[] = [];
-  if (counts.missing > 0) {
-    parts.push(`${counts.missing} missing`);
-  }
-  if (counts.extra > 0) {
-    parts.push(`${counts.extra} extra`);
-  }
-  return parts.join(' · ');
+  return formatNextDueTimestampLabel(
+    words
+      .filter(word => !word.suspended && word.data_status === 'complete')
+      .map(word => Date.parse(word.due_at)),
+    now,
+  );
 }
 
 export function createStyles(c: ThemeColors) {
@@ -178,27 +106,13 @@ export function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
       marginBottom: 12,
-    },
-    backLinkButton: {
-      paddingVertical: 4,
-    },
-    backLinkText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.accent,
-    },
-    title: {
-      flex: 1,
-      fontSize: 18,
-      fontWeight: '700',
-      color: c.textPrimary,
     },
     progress: {
       fontSize: 13,
@@ -219,12 +133,6 @@ export function createStyles(c: ThemeColors) {
       color: c.textSecondary,
       textAlign: 'center',
       paddingHorizontal: 24,
-    },
-    stateTitle: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: c.textPrimary,
-      textAlign: 'center',
     },
     errorText: {
       color: c.errorText,
@@ -270,23 +178,6 @@ export function createStyles(c: ThemeColors) {
     maskedSegment: {
       letterSpacing: 2,
       fontWeight: '700',
-    },
-    diffRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-      paddingVertical: 8,
-      paddingHorizontal: 10,
-      borderRadius: 10,
-      backgroundColor: c.background,
-    },
-    diffToken: {
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    diffSummary: {
-      fontSize: 13,
-      color: c.textSecondary,
     },
     answerInput: {
       backgroundColor: c.background,
@@ -336,136 +227,15 @@ export function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.onPrimary,
     },
-    gradeRow: {
-      flexDirection: 'row',
-      gap: 10,
-    },
-    gradeButton: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: c.borderStrong,
-      backgroundColor: c.surface,
-      paddingVertical: 12,
-    },
-    gradeButtonSuggested: {
-      borderColor: c.primary,
-      backgroundColor: c.accentSoft,
-    },
-    gradeText: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    gradeIntervalText: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: c.textMuted,
-      marginTop: 2,
-    },
     suggestion: {
       fontSize: 14,
       fontWeight: '600',
       color: c.textSecondary,
     },
-    summaryRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 16,
-      flexWrap: 'wrap',
-    },
-    summaryItem: {
-      alignItems: 'center',
-    },
-    summaryCount: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    summaryLabel: {
-      fontSize: 12,
-      color: c.textMuted,
-    },
     pressedFade: {
       opacity: 0.9,
     },
   });
-}
-
-/** Per-grade count used by the summary. */
-type GradeCounts = Record<ReviewGrade, number>;
-
-const EMPTY_COUNTS: GradeCounts = { again: 0, hard: 0, good: 0, easy: 0 };
-
-const GRADE_OPTIONS: Array<{ grade: ReviewGrade; label: string }> = [
-  { grade: 'again', label: 'Again' },
-  { grade: 'hard', label: 'Hard' },
-  { grade: 'good', label: 'Good' },
-  { grade: 'easy', label: 'Easy' },
-];
-
-/**
- * Anki's four grade buttons, identical in structure to the sentence practice
- * screen: uniform layout, and the pre-suggested grade is highlighted (border
- * + accent background + colored label) instead of an inline check mark that
- * would shift the text inside the button.
- */
-function GradeButtons({
-  suggested,
-  previews,
-  saving,
-  colors,
-  styles,
-  onGrade,
-}: {
-  suggested: ReviewGrade | null;
-  previews: GradePreview[];
-  saving: boolean;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-  onGrade: (grade: ReviewGrade) => void;
-}) {
-  return (
-    <View style={styles.gradeRow}>
-      {GRADE_OPTIONS.map(option => {
-        const preview = previews.find(item => item.grade === option.grade);
-        const isSuggested = suggested === option.grade;
-        return (
-          <Pressable
-            key={option.grade}
-            accessibilityRole="button"
-            accessibilityLabel={`Grade ${option.label}`}
-            accessibilityState={{ disabled: saving, selected: isSuggested }}
-            testID={`word-practice-grade-${option.grade}`}
-            disabled={saving}
-            onPress={() => onGrade(option.grade)}
-            style={({ pressed }) => [
-              styles.gradeButton,
-              isSuggested && styles.gradeButtonSuggested,
-              saving && styles.buttonDisabled,
-              pressed && styles.pressedFade,
-            ]}>
-            <Text
-              style={[
-                styles.gradeText,
-                { color: isSuggested ? colors.primary : colors.textPrimary },
-              ]}>
-              {option.label}
-            </Text>
-            {preview ? (
-              <Text
-                style={styles.gradeIntervalText}
-                testID={`word-practice-grade-interval-${option.grade}`}>
-                {preview.label}
-              </Text>
-            ) : null}
-          </Pressable>
-        );
-      })}
-    </View>
-  );
 }
 
 interface WordPracticeScreenInternalProps extends WordPracticeScreenProps {
@@ -503,7 +273,7 @@ export function WordPracticeScreen({
   const [presentationKey, setPresentationKey] = useState(0);
 
   const [reviewedCount, setReviewedCount] = useState(0);
-  const [gradeCounts, setGradeCounts] = useState<GradeCounts>(EMPTY_COUNTS);
+  const [gradeCounts, setGradeCounts] = useState<GradeCounts>(EMPTY_GRADE_COUNTS);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const gradingRef = useRef(false);
@@ -642,6 +412,15 @@ export function WordPracticeScreen({
     return previewSchedule(schedulerStateFrom(currentCard), new Date(), config);
   }, [currentCard, config]);
 
+  /** The same previews reshaped for the shared grade buttons. */
+  const intervalLabels = useMemo(() => {
+    const map: Partial<Record<ReviewGrade, string>> = {};
+    for (const preview of previews) {
+      map[preview.grade] = preview.label;
+    }
+    return map;
+  }, [previews]);
+
   const handleGrade = useCallback(
     async (grade: ReviewGrade) => {
       if (!currentCard || gradingRef.current) {
@@ -717,37 +496,6 @@ export function WordPracticeScreen({
   const showGradeButtons = cardMode === 'dictation' ? diff !== null : revealed;
 
   /**
-   * The checked answer as a character-level diff: the word with missing
-   * letters underlined and wrong typed letters struck through, plus a one-line
-   * summary. Word-level diffs are meaningless for a single word — the learner
-   * needs to see WHICH characters were wrong. Shared by dictation and recall.
-   */
-  const renderDiff = () => {
-    if (diff === null) {
-      return null;
-    }
-    return (
-      <>
-        <View style={styles.diffRow} testID="word-practice-diff">
-          {diff.map((segment, index) => (
-            <Text
-              // biome-ignore lint/suspicious/noArrayIndexKey: diff segments are positional
-              key={`${segment.kind}-${index}`}
-              accessibilityLabel={`${segment.kind} characters: ${segment.text}`}
-              style={[styles.diffToken, charSegmentStyle(segment.kind, colors)]}
-              testID={`word-practice-diff-char-${index}`}>
-              {segment.text}
-            </Text>
-          ))}
-        </View>
-        <Text style={styles.diffSummary} testID="word-practice-diff-summary">
-          {diffSummary(diff)}
-        </Text>
-      </>
-    );
-  };
-
-  /**
    * The recall front masks the target word (and its inflections) everywhere it
    * appears; the shared sense renderer calls this for every displayed string.
    */
@@ -766,19 +514,12 @@ export function WordPracticeScreen({
 
   return (
     <Screen style={styles.container} testID="word-practice-screen">
-      <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to topic"
-          testID="word-practice-back"
-          onPress={() => navigation.goBack()}
-          style={({ pressed }) => [styles.backLinkButton, pressed && styles.pressedFade]}>
-          <Text style={styles.backLinkText}>‹ Topic</Text>
-        </Pressable>
-        <Text style={styles.title} numberOfLines={1} testID="word-practice-title">
-          {topic ? topic.title : 'Practice'}
-        </Text>
-      </ScreenHeader>
+      <ScreenTitleBar
+        title={topic ? topic.title : 'Practice'}
+        titleTestID="word-practice-title"
+        onBack={() => navigation.goBack()}
+        backTestID="word-practice-back"
+      />
 
       {loading ? (
         <View style={styles.centered} testID="word-practice-loading">
@@ -794,62 +535,21 @@ export function WordPracticeScreen({
           </Pressable>
         </View>
       ) : sessionFinished ? (
-        <View style={styles.centered} testID="word-practice-summary">
-          <Text style={styles.stateTitle}>
-            {reviewedCount === 0 ? 'All caught up' : 'Session complete'}
-          </Text>
-          {reviewedCount > 0 ? (
-            <>
-              <Text style={styles.stateText} testID="word-practice-summary-count">
-                {`${reviewedCount} word${reviewedCount === 1 ? '' : 's'} reviewed.`}
-              </Text>
-              <View style={styles.summaryRow}>
-                {(['again', 'hard', 'good', 'easy'] as const).map(grade => (
-                  <View key={grade} style={styles.summaryItem}>
-                    <Text style={styles.summaryCount} testID={`word-practice-summary-${grade}`}>
-                      {gradeCounts[grade]}
-                    </Text>
-                    <Text style={styles.summaryLabel}>{grade}</Text>
-                  </View>
-                ))}
-              </View>
-            </>
-          ) : null}
-          {nextDueLabel ? (
-            <Text style={styles.stateText} testID="word-practice-next-due">
-              {nextDueLabel}
-            </Text>
-          ) : (
-            <Text style={styles.stateText}>No words to practice yet.</Text>
-          )}
-          {hasRemainingDue ? (
-            <Pressable
-              accessibilityRole="button"
-              testID="word-practice-review-again"
-              onPress={() => {
-                setReviewedCount(0);
-                setGradeCounts(EMPTY_COUNTS);
-                setSession(
-                  createWordPracticeSessionState(allWords, new Date(), sessionLimitsRef.current),
-                );
-                setPresentationKey(key => key + 1);
-              }}
-              style={({ pressed }) => [
-                styles.button,
-                styles.primaryButton,
-                pressed && styles.pressedFade,
-              ]}>
-              <Text style={styles.primaryButtonText}>Review again</Text>
-            </Pressable>
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            testID="word-practice-back-to-topic"
-            onPress={() => navigation.goBack()}
-            style={({ pressed }) => [styles.button, pressed && styles.pressedFade]}>
-            <Text style={styles.buttonText}>Back to topic</Text>
-          </Pressable>
-        </View>
+        <WordSessionSummary
+          reviewedCount={reviewedCount}
+          gradeCounts={gradeCounts}
+          nextDueLabel={nextDueLabel}
+          hasRemainingDue={hasRemainingDue}
+          onReviewAgain={() => {
+            setReviewedCount(0);
+            setGradeCounts(EMPTY_GRADE_COUNTS);
+            setSession(
+              createWordPracticeSessionState(allWords, new Date(), sessionLimitsRef.current),
+            );
+            setPresentationKey(key => key + 1);
+          }}
+          onBack={() => navigation.goBack()}
+        />
       ) : currentCard ? (
         <ScreenScrollView keyboardShouldPersistTaps="handled">
           <Text style={styles.progress} testID="word-practice-progress">
@@ -886,7 +586,7 @@ export function WordPracticeScreen({
                   placeholder="Type the word you hear"
                   editable={diff === null && !saving}
                 />
-                {renderDiff()}
+                {diff !== null ? <AnswerDiff segments={diff} /> : null}
                 {diff !== null ? (
                   <View>
                     <Text selectable style={styles.definition} testID="word-practice-correct-word">
@@ -926,7 +626,7 @@ export function WordPracticeScreen({
                     <Text selectable style={styles.wordText}>
                       {currentCard.text}
                     </Text>
-                    {renderDiff()}
+                    {diff !== null ? <AnswerDiff segments={diff} /> : null}
                     {currentCard.phonetics_json.length > 0 ? (
                       <Text selectable style={styles.phonetics}>
                         {currentCard.phonetics_json.join('\n')}
@@ -973,14 +673,13 @@ export function WordPracticeScreen({
             ) : (
               <GradeButtons
                 suggested={suggested}
-                previews={previews}
+                intervals={intervalLabels}
                 saving={saving}
-                colors={colors}
-                styles={styles}
                 onGrade={grade => {
                   // handleGrade handles its own errors, so it never rejects.
                   handleGrade(grade);
                 }}
+                testIDPrefix="word-practice-grade"
               />
             )}
             {suggested !== null ? (

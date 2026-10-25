@@ -235,7 +235,8 @@ describe('TASK-109 logout journey', () => {
     await waitFor(() => expect(screen.getByTestId('chat-screen')).toBeOnTheScreen());
 
     // Logout lives on the Settings screen of the main stack.
-    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    await fireEvent.press(screen.getByTestId('chat-back'));
+    await fireEvent.press(await screen.findByTestId('home-open-settings'));
     await fireEvent.press(await screen.findByTestId('settings-logout'));
 
     await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());

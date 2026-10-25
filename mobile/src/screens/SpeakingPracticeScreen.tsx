@@ -22,7 +22,7 @@
  * continue a stopped utterance); End/finish never saves a new history
  * record — the session was opened from one.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -37,7 +37,8 @@ import {
   View,
 } from 'react-native';
 import { toErrorMessage } from '../auth/AuthContext';
-import { SCREEN_GUTTER } from '../components/ScreenLayout';
+import { SCREEN_GUTTER, SCREEN_TOP_SPACING } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { getLocalDatabase } from '../db/database';
 import { getLearningProfile } from '../db/profileStore';
 import { createSpeakingPracticeRecord } from '../db/speakingPracticeRepository';
@@ -65,6 +66,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { setKeepScreenAwake } from '../tts/keepAwake';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { copyText } from '../utils/clipboard';
+import { ClipboardIcon, KaraokeText } from './KaraokeText';
 
 /** Session-length chips in minutes (the AI sizes the text to these). */
 const MINUTES_OPTIONS = [1, 2, 3, 5, 10] as const;
@@ -74,7 +76,6 @@ const MINUTES_OPTIONS = [1, 2, 3, 5, 10] as const;
  * text: reading never starts right at the top edge of the box, and the
  * auto-scroll gives the learner a moment before the first words arrive.
  */
-const LEAD_IN_BLANK_LINES = 3;
 
 /** Vertical padding of the karaoke text area (lead-in room above/below). */
 const TEXT_AREA_PADDING_V = 48;
@@ -102,100 +103,12 @@ const READ_END_HOLD_MS = 30000;
 
 type Phase = 'form' | 'practicing' | 'complete';
 
-type ScreenStyles = ReturnType<typeof createStyles>;
-
-interface KaraokeTextProps {
-  paragraphs: readonly string[];
-  styles: ScreenStyles;
-  onContentLayout: (height: number) => void;
-  onParagraphLayout: (index: number, y: number, height: number) => void;
-}
-
-/**
- * Hand-drawn clipboard icon (outlined board with a filled clip on top), built
- * from plain Views like the eye icon: no icon library.
- */
-function ClipboardIcon({ color }: { color: string }) {
-  return (
-    <View
-      style={clipboardStyles.container}
-      accessibilityElementsHidden
-      importantForAccessibility="no">
-      <View style={[clipboardStyles.board, { borderColor: color }]} />
-      <View style={[clipboardStyles.clip, { backgroundColor: color }]} />
-    </View>
-  );
-}
-
-const CLIPBOARD_SIZE = 20;
-
-const clipboardStyles = StyleSheet.create({
-  container: {
-    width: CLIPBOARD_SIZE,
-    height: CLIPBOARD_SIZE,
-    alignItems: 'center',
-  },
-  board: {
-    position: 'absolute',
-    top: 3,
-    width: CLIPBOARD_SIZE - 4,
-    height: CLIPBOARD_SIZE - 3,
-    borderWidth: 2,
-    borderRadius: 3,
-  },
-  clip: {
-    position: 'absolute',
-    top: 0,
-    width: 8,
-    height: 5,
-    borderRadius: 2,
-  },
-});
-
-/**
- * The teleprompter text block. Memoized so the once-a-second elapsed-timer
- * re-render of the screen does not reconcile the whole text while the
- * scroll is running.
- */
-const KaraokeText = React.memo(function KaraokeText({
-  paragraphs,
-  styles,
-  onContentLayout,
-  onParagraphLayout,
-}: KaraokeTextProps) {
-  return (
-    <View
-      testID="speaking-text-block"
-      onLayout={event => onContentLayout(event.nativeEvent.layout.height)}>
-      {Array.from({ length: LEAD_IN_BLANK_LINES }, (_, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: blank lead-in lines are positional
-        <Text key={`lead-in-${index}`} style={styles.paragraph}>
-          {' '}
-        </Text>
-      ))}
-      {paragraphs.map((paragraph, index) => (
-        <Text
-          // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs map to layout offsets by position
-          key={index}
-          selectable
-          style={styles.paragraph}
-          onLayout={event => {
-            const { y, height } = event.nativeEvent.layout;
-            onParagraphLayout(index, y, height);
-          }}>
-          {paragraph}
-        </Text>
-      ))}
-    </View>
-  );
-});
-
 function createStyles(c: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
       paddingHorizontal: SCREEN_GUTTER,
       paddingBottom: 24,
     },
@@ -205,14 +118,6 @@ function createStyles(c: ThemeColors) {
       justifyContent: 'space-between',
       paddingBottom: 8,
     },
-    backText: {
-      fontSize: 16,
-      color: c.accent,
-      fontWeight: '600',
-    },
-    headerSpacer: {
-      width: 48,
-    },
     copyButton: {
       position: 'absolute',
       top: 10,
@@ -221,11 +126,6 @@ function createStyles(c: ThemeColors) {
       padding: 6,
       borderRadius: 8,
       backgroundColor: c.surface,
-    },
-    title: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: c.textPrimary,
     },
     subtitle: {
       marginTop: 6,
@@ -362,13 +262,6 @@ function createStyles(c: ThemeColors) {
       // Lead-in space above and below the reading text: the first line never
       // starts glued to the top edge, so it is easy to begin speaking.
       paddingVertical: TEXT_AREA_PADDING_V,
-    },
-    paragraph: {
-      fontSize: 22,
-      lineHeight: 32,
-      color: c.textPrimary,
-      textAlign: 'center',
-      marginVertical: 10,
     },
     summary: {
       flex: 1,
@@ -989,19 +882,12 @@ export function SpeakingPracticeScreen({ navigation, route }: SpeakingPracticeSc
   if (phase === 'complete') {
     return (
       <View style={styles.container} testID="speaking-practice-screen">
-        <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Go back"
-            hitSlop={8}
-            onPress={() => navigation.goBack()}
-            testID="speaking-back">
-            <Text style={styles.backText}>‹ Back</Text>
-          </Pressable>
-          <Text style={styles.title}>
-            {listenMode ? 'Listening practice' : 'Speaking practice'}
-          </Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenTitleBar
+          title={listenMode ? 'Listening practice' : 'Speaking practice'}
+          onBack={() => navigation.goBack()}
+          backTestID="speaking-back"
+          gutterInset={false}
+        />
         <View style={styles.summary} testID="speaking-summary">
           <Text style={styles.summaryTitle}>
             {listenMode ? 'Listening complete' : 'Practice complete'}
@@ -1039,19 +925,11 @@ export function SpeakingPracticeScreen({ navigation, route }: SpeakingPracticeSc
   if (phase === 'practicing') {
     return (
       <View style={styles.container} testID="speaking-practice-screen">
-        <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Go back"
-            hitSlop={8}
-            onPress={() => navigation.goBack()}
-            testID="speaking-back">
-            <Text style={styles.backText}>‹ Back</Text>
-          </Pressable>
-          <Text style={styles.title}>
-            {listenMode ? 'Listening practice' : 'Speaking practice'}
-          </Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenTitleBar
+          title={listenMode ? 'Listening practice' : 'Speaking practice'}
+          onBack={() => navigation.goBack()}
+          backTestID="speaking-back"
+        />
 
         <View style={styles.statusBar} testID="speaking-status">
           <Text style={styles.elapsed} testID="speaking-elapsed">
@@ -1108,7 +986,6 @@ export function SpeakingPracticeScreen({ navigation, route }: SpeakingPracticeSc
           <Animated.View style={[styles.textArea, { transform: [{ translateY: layerTranslate }] }]}>
             <KaraokeText
               paragraphs={paragraphs}
-              styles={styles}
               onContentLayout={handleContentLayout}
               onParagraphLayout={remeasureParagraph}
             />
@@ -1123,17 +1000,12 @@ export function SpeakingPracticeScreen({ navigation, route }: SpeakingPracticeSc
       style={styles.container}
       behavior={Platform.OS === 'android' ? undefined : 'padding'}
       testID="speaking-practice-screen">
-      <View style={styles.header}>
-        <Pressable
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={() => navigation.goBack()}
-          testID="speaking-back">
-          <Text style={styles.backText}>‹ Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Speaking practice</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenTitleBar
+        title="Speaking practice"
+        onBack={() => navigation.goBack()}
+        backTestID="speaking-back"
+        gutterInset={false}
+      />
 
       <Text style={styles.subtitle}>
         Read aloud while the text scrolls at your speed. Type a topic, a list of questions, or your

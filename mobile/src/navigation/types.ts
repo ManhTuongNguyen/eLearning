@@ -30,12 +30,11 @@ export type MainStackParamList = {
   NewConversation: undefined;
   History: undefined;
   /**
-   * `slideFromTop` opts into the top-drop transition used only when the
    * conversation header opens Settings (the screen slides down over Chat and
    * retracts upwards on Back). Other entry points keep the standard stack
    * push from the right.
    */
-  Settings: { configSaved?: boolean; slideFromTop?: boolean } | undefined;
+  Settings: { configSaved?: boolean } | undefined;
   /** Learning-level editor pushed from Settings (SPEC TASK-018). */
   Level: undefined;
   /** Saved-expression list pushed from Settings (SPEC TASK-072). */

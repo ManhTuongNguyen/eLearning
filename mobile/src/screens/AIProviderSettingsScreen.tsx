@@ -43,7 +43,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { toErrorMessage } from '../auth/AuthContext';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import {
+  SCREEN_GUTTER,
+  SCREEN_TOP_SPACING,
+  Screen,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { SecretInput } from '../components/SecretInput';
 import { getLocalDatabase } from '../db/database';
 import { useApplicationMode } from '../mode/ModeContext';
@@ -71,7 +77,6 @@ import { useTheme } from '../theme/ThemeContext';
 const MAX_VISIBLE_MODELS = 50;
 
 /** Spacing between the safe-area top inset and the header row (px). */
-const HEADER_TOP_SPACING = 16;
 
 export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -85,7 +90,7 @@ export function createStyles(c: ThemeColors) {
       // The app shell (App.tsx) pads the whole tree out of the system bars
       // on edge-to-edge devices (Android 15+); screens only add their own
       // fixed header spacing on top of that.
-      paddingTop: HEADER_TOP_SPACING,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     scroll: {
       paddingBottom: 32,
@@ -98,19 +103,6 @@ export function createStyles(c: ThemeColors) {
       justifyContent: 'space-between',
       paddingHorizontal: SCREEN_GUTTER,
       marginBottom: 4,
-    },
-    backText: {
-      fontSize: 16,
-      color: c.accent,
-      fontWeight: '600',
-    },
-    title: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    headerSpacer: {
-      width: 48,
     },
     modeNotice: {
       // Outside the ScrollView, so it carries the screen gutter itself now
@@ -781,17 +773,11 @@ export function AIProviderSettingsScreen({ navigation }: AIProviderSettingsScree
   if (modeStatus === 'ready' && mode !== 'serverless') {
     return (
       <Screen style={styles.container} testID="ai-provider-settings-screen">
-        <ScreenHeader style={styles.header}>
-          <Pressable
-            accessibilityLabel="Go back"
-            hitSlop={8}
-            onPress={() => navigation.goBack()}
-            testID="ai-provider-back">
-            <Text style={styles.backText}>‹ Back</Text>
-          </Pressable>
-          <Text style={styles.title}>AI provider</Text>
-          <View style={styles.headerSpacer} />
-        </ScreenHeader>
+        <ScreenTitleBar
+          title="AI provider"
+          onBack={() => navigation.goBack()}
+          backTestID="ai-provider-back"
+        />
         <View style={styles.modeNotice} testID="ai-provider-mode-notice">
           <Text style={styles.modeNoticeText}>
             Direct AI connections are a serverless feature. Switch the application to serverless
@@ -804,17 +790,11 @@ export function AIProviderSettingsScreen({ navigation }: AIProviderSettingsScree
 
   return (
     <Screen style={styles.container} testID="ai-provider-settings-screen">
-      <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={() => navigation.goBack()}
-          testID="ai-provider-back">
-          <Text style={styles.backText}>‹ Back</Text>
-        </Pressable>
-        <Text style={styles.title}>{descriptor.label}</Text>
-        <View style={styles.headerSpacer} />
-      </ScreenHeader>
+      <ScreenTitleBar
+        title={descriptor.label}
+        onBack={() => navigation.goBack()}
+        backTestID="ai-provider-back"
+      />
 
       <ScreenScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.sectionLabel}>Provider</Text>

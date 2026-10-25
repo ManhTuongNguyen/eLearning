@@ -17,7 +17,8 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import type { ContextMenuAnchor } from '../components/ContextMenu';
 import { ContextMenu } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { SCREEN_GUTTER, SCREEN_TOP_SPACING, Screen, ScreenList } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { getLocalDatabase } from '../db/database';
 import {
   deleteSentence,
@@ -37,6 +38,7 @@ import { useTheme } from '../theme/ThemeContext';
 import type { TextToSpeechEngine } from '../tts/textToSpeech';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { useSpeechPlayback } from '../tts/useSpeechPlayback';
+import { describeError } from '../utils/describeError';
 import {
   DEFAULT_TOPIC_PRACTICE_SETTINGS,
   PracticeSettingsModal,
@@ -57,30 +59,11 @@ function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       marginBottom: 14,
       gap: 8,
-    },
-    headerTop: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
-    backLinkButton: {
-      paddingVertical: 4,
-    },
-    backLinkText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.accent,
-    },
-    title: {
-      flex: 1,
-      fontSize: 20,
-      fontWeight: '700',
-      color: c.textPrimary,
     },
     // --- Header context menu button; the popover itself is <ContextMenu> ---
     menuButton: {
@@ -311,23 +294,6 @@ function createStyles(c: ThemeColors) {
       opacity: 0.9,
     },
   });
-}
-
-/** Local, secret-free description of any thrown value. */
-function describeError(err: unknown): string {
-  if (err instanceof Error && err.message) {
-    return err.message;
-  }
-  if (typeof err === 'string' && err.trim()) {
-    return err;
-  }
-  if (typeof err === 'object' && err !== null) {
-    const record = err as Record<string, unknown>;
-    if (typeof record.message === 'string' && record.message.trim()) {
-      return record.message;
-    }
-  }
-  return 'unknown error';
 }
 
 /**
@@ -687,19 +653,12 @@ export function SentenceTopicScreen({
 
   return (
     <Screen style={styles.container} testID="sentence-topic-screen">
-      <ScreenHeader style={styles.header}>
-        <View style={styles.headerTop}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back to topics"
-            testID="sentence-topic-back"
-            onPress={() => navigation.goBack()}
-            style={styles.backLinkButton}>
-            <Text style={styles.backLinkText}>‹ Topics</Text>
-          </Pressable>
-          <Text style={styles.title} numberOfLines={1} testID="sentence-topic-title">
-            {topic?.title ?? 'Topic'}
-          </Text>
+      <ScreenTitleBar
+        title={topic?.title ?? 'Topic'}
+        titleTestID="sentence-topic-title"
+        onBack={() => navigation.goBack()}
+        backTestID="sentence-topic-back"
+        right={
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Topic actions"
@@ -714,21 +673,23 @@ export function SentenceTopicScreen({
             style={({ pressed }) => [styles.menuButton, pressed && styles.pressedFade]}>
             <Icon name="more" size={20} color={colors.textPrimary} />
           </Pressable>
-        </View>
-        {topic?.description ? (
-          <View style={styles.descriptionBox}>
-            <ScrollView
-              style={styles.descriptionScroll}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-              testID="sentence-topic-description-scroll">
-              <Text style={styles.description} testID="sentence-topic-description">
-                {topic.description}
-              </Text>
-            </ScrollView>
-          </View>
-        ) : null}
-      </ScreenHeader>
+        }
+        below={
+          topic?.description ? (
+            <View style={styles.descriptionBox}>
+              <ScrollView
+                style={styles.descriptionScroll}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+                testID="sentence-topic-description-scroll">
+                <Text style={styles.description} testID="sentence-topic-description">
+                  {topic.description}
+                </Text>
+              </ScrollView>
+            </View>
+          ) : null
+        }
+      />
 
       {loading ? (
         <View style={styles.centered} testID="sentence-topic-loading">

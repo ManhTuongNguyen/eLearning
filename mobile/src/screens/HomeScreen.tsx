@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { IconName } from '../components/Icon';
 import { Icon } from '../components/Icon';
-import { Screen, ScreenScrollView } from '../components/ScreenLayout';
+import { SCREEN_TOP_SPACING, Screen, ScreenScrollView } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
 import { countDueSentences } from '../db/sentenceRepository';
 import { countDueWords } from '../db/wordRepository';
@@ -51,7 +51,7 @@ function createStyles(c: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: c.background,
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     content: {
       gap: 18,

@@ -47,7 +47,7 @@ async function openChatFromHome() {
 }
 
 /** renderAuthenticated + the hub-to-Chat hop, returning the tracker helpers. */
-async function openChatAndTrack() {
+async function _openChatAndTrack() {
   const helpers = await renderAuthenticated();
   await openChatFromHome();
   return helpers;
@@ -177,43 +177,40 @@ describe('root switch', () => {
 });
 
 describe('main stack navigation', () => {
-  it('navigates Home -> Chat -> History and back through the stack state', async () => {
-    const { focusedRouteName } = await openChatAndTrack();
+  it('navigates Home -> History and back through the stack state', async () => {
+    const { focusedRouteName } = await renderAuthenticated();
 
-    await fireEvent.press(screen.getByTestId('chat-open-history'));
+    await fireEvent.press(await screen.findByTestId('home-open-history'));
     expect(await screen.findByTestId('history-screen')).toBeOnTheScreen();
     expect(focusedRouteName()).toBe('History');
 
     await fireEvent.press(screen.getByTestId('history-back'));
 
-    await waitFor(() => expect(focusedRouteName()).toBe('Chat'));
+    await waitFor(() => expect(focusedRouteName()).toBe('Home'));
   });
 
-  it('returns from Settings to Chat through the header back affordance without duplicating stack entries (TASK-AUDIT-006)', async () => {
-    const { focusedRouteName, stackRouteNames, stackRoutes } = await openChatAndTrack();
+  it('returns from Settings to Home through the header back affordance without duplicating stack entries (TASK-AUDIT-006)', async () => {
+    const { focusedRouteName, stackRouteNames } = await renderAuthenticated();
 
-    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    await fireEvent.press(await screen.findByTestId('home-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
-    expect(focusedRouteName()).toBe('Settings'); // Exactly one Settings entry sits on top of Chat below the hub.
-    expect(stackRouteNames()).toEqual(['Home', 'Chat', 'Settings']);
-    // The Chat entry opts into the top-drop transition; other entry points
-    // to Settings keep the shared push (see navigationAnimations.test.ts).
-    expect(stackRoutes()[2]?.params).toEqual({ slideFromTop: true });
+    expect(focusedRouteName()).toBe('Settings');
+    expect(stackRouteNames()).toEqual(['Home', 'Settings']);
 
     await fireEvent.press(screen.getByTestId('settings-back'));
 
     // Back pops just Settings, returning to the screen that opened it
     // rather than unwinding the whole stack to the Home hub.
-    await waitFor(() => expect(focusedRouteName()).toBe('Chat'));
-    expect(screen.getByTestId('chat-screen')).toBeOnTheScreen();
+    await waitFor(() => expect(focusedRouteName()).toBe('Home'));
+    expect(screen.getByTestId('home-screen')).toBeOnTheScreen();
     expect(screen.queryByTestId('settings-screen')).toBeNull();
-    expect(stackRouteNames()).toEqual(['Home', 'Chat']);
+    expect(stackRouteNames()).toEqual(['Home']);
   });
 
   it('reaches Settings and returns to it after editing the learning level', async () => {
-    const { focusedRouteName } = await openChatAndTrack();
+    const { focusedRouteName } = await renderAuthenticated();
 
-    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    await fireEvent.press(await screen.findByTestId('home-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByTestId('settings-open-level'));
@@ -227,9 +224,9 @@ describe('main stack navigation', () => {
   });
 
   it('opens the saved vocabulary list from Settings and returns after closing (TASK-072)', async () => {
-    const { focusedRouteName } = await openChatAndTrack();
+    const { focusedRouteName } = await renderAuthenticated();
 
-    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    await fireEvent.press(await screen.findByTestId('home-open-settings'));
     expect(await screen.findByTestId('settings-screen')).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByTestId('settings-open-vocabulary'));
@@ -249,9 +246,8 @@ describe('main stack navigation', () => {
   it('logging out from Settings returns the user to the auth stack', async () => {
     const tokens = { access: 'token-a', refresh: 'token-r' };
     const { focusedRouteName } = await renderAuthenticated(tokens);
-    await openChatFromHome();
 
-    await fireEvent.press(screen.getByTestId('chat-open-settings'));
+    await fireEvent.press(await screen.findByTestId('home-open-settings'));
     await fireEvent.press(await screen.findByTestId('settings-logout'));
 
     await waitFor(() => expect(screen.getByTestId('login-identifier')).toBeOnTheScreen());

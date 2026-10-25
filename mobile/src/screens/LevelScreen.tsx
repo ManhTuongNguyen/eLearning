@@ -18,7 +18,13 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import type { EnglishLevel, LevelOption } from '../api/profile';
 import { getProfile, LEVELS, updateProfile } from '../api/profile';
 import { toErrorMessage, useAuth } from '../auth/AuthContext';
-import { Screen, ScreenContent, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import {
+  SCREEN_TOP_SPACING,
+  Screen,
+  ScreenContent,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { getLocalDatabase } from '../db/database';
 import { getLearningProfile, saveLearningProfile } from '../db/profileStore';
 import { useApplicationMode } from '../mode/ModeContext';
@@ -27,7 +33,6 @@ import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 
 /** Spacing between the safe-area top inset and the header row (px). */
-const HEADER_TOP_SPACING = 16;
 
 export function createStyles(c: ThemeColors) {
   return StyleSheet.create({
@@ -39,25 +44,12 @@ export function createStyles(c: ThemeColors) {
       // fixed header spacing on top of that. Horizontal padding lives on the
       // shared ScreenHeader/ScreenScrollView so the scroll indicator stays
       // anchored to the right screen edge.
-      paddingTop: HEADER_TOP_SPACING,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-    },
-    backText: {
-      fontSize: 16,
-      color: c.accent,
-      fontWeight: '600',
-    },
-    headerSpacer: {
-      width: 48,
-    },
-    title: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: c.textPrimary,
     },
     subtitle: {
       marginTop: 8,
@@ -267,17 +259,11 @@ export function LevelScreen({ navigation }: LevelScreenProps) {
 
   return (
     <Screen style={styles.container} testID="level-screen">
-      <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityLabel="Go back"
-          onPress={() => navigation.goBack()}
-          testID="level-back"
-          hitSlop={8}>
-          <Text style={styles.backText}>‹ Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Your English level</Text>
-        <View style={styles.headerSpacer} />
-      </ScreenHeader>
+      <ScreenTitleBar
+        title="Your English level"
+        onBack={() => navigation.goBack()}
+        backTestID="level-back"
+      />
       <ScreenContent>
         <Text style={styles.subtitle}>
           This shapes topics, vocabulary and corrections. You can change it anytime.

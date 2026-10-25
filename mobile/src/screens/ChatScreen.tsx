@@ -85,7 +85,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ChatMessage, Session } from '../api/sessions';
 import { toErrorMessage, useAuth } from '../auth/AuthContext';
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
+import { SCREEN_GUTTER, SCREEN_TOP_SPACING, Screen, ScreenList } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
+import { Toast } from '../components/Toast';
 import { useChatKeyboardAvoidance } from '../hooks/useChatKeyboardAvoidance';
 import { useChatTurns } from '../hooks/useChatTurns';
 import { useFollowBottom } from '../hooks/useFollowBottom';
@@ -131,20 +133,11 @@ function createStyles(c: ThemeColors) {
       justifyContent: 'space-between',
       // Gutter lives on the shared header row; the screen container stays
       // full-bleed so the message list indicator binds to the right edge.
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
       paddingBottom: 12,
       borderBottomWidth: 1,
       borderBottomColor: c.border,
       backgroundColor: c.background,
-    },
-    headerTitle: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    headerActions: {
-      flexDirection: 'row',
-      gap: 16,
     },
     headerLink: {
       fontSize: 15,
@@ -346,36 +339,6 @@ function createStyles(c: ThemeColors) {
       fontSize: 13,
       lineHeight: 18,
       color: c.textPrimary,
-    },
-    toast: {
-      position: 'absolute',
-      bottom: 96,
-      left: SCREEN_GUTTER,
-      right: SCREEN_GUTTER,
-      backgroundColor: c.surface,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 6,
-    },
-    toastText: {
-      color: c.success,
-      fontSize: 14,
-      fontWeight: '600',
-      textAlign: 'center',
-    },
-    toastError: {
-      borderColor: c.errorText,
-    },
-    toastTextError: {
-      color: c.errorText,
     },
   });
 }
@@ -863,25 +826,16 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
       style={[styles.container, { paddingBottom: keyboardPadding }]}
       onLayout={handleShellLayout}
       testID="chat-screen">
-      <ScreenHeader style={styles.header}>
-        <Text style={styles.headerTitle}>Chat</Text>
-        <View style={styles.headerActions}>
-          <Pressable onPress={() => navigation.popToTop()} testID="chat-open-home">
-            <Text style={styles.headerLink}>Home</Text>
-          </Pressable>
+      <ScreenTitleBar
+        title="Chat"
+        onBack={() => navigation.goBack()}
+        backTestID="chat-back"
+        right={
           <Pressable onPress={() => navigation.navigate('NewConversation')} testID="chat-open-new">
             <Text style={styles.headerLink}>New</Text>
           </Pressable>
-          <Pressable onPress={() => navigation.navigate('History')} testID="chat-open-history">
-            <Text style={styles.headerLink}>History</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => navigation.navigate('Settings', { slideFromTop: true })}
-            testID="chat-open-settings">
-            <Text style={styles.headerLink}>Settings</Text>
-          </Pressable>
-        </View>
-      </ScreenHeader>
+        }
+      />
 
       {loading ? (
         <View style={styles.centered}>
@@ -1104,17 +1058,13 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
             onSave={handleSaveSelection}
           />
           {toast !== null ? (
-            <View
-              pointerEvents="none"
-              style={[styles.toast, toast.kind === 'error' ? styles.toastError : null]}
-              testID="chat-toast">
-              <Text
-                role={toast.kind === 'error' ? 'alert' : 'status'}
-                style={[styles.toastText, toast.kind === 'error' ? styles.toastTextError : null]}
-                testID="chat-toast-text">
-                {toast.text}
-              </Text>
-            </View>
+            <Toast
+              message={toast.text}
+              kind={toast.kind}
+              testID="chat-toast"
+              bottom={96}
+              inset={SCREEN_GUTTER}
+            />
           ) : null}
         </>
       )}

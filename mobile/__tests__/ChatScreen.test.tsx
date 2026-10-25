@@ -142,11 +142,30 @@ async function renderChat(
         <AuthProvider>
           <NavigationContainer initialState={initialState}>
             <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Chat">
-              <Stack.Screen name="Home">{() => <View testID="home-screen-stub" />}</Stack.Screen>
+              <Stack.Screen name="Home">
+                {({ navigation }) => (
+                  <View testID="home-screen-stub">
+                    <Pressable
+                      testID="home-open-history"
+                      onPress={() => navigation.navigate('History')}>
+                      <Text>history</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </Stack.Screen>
               <Stack.Screen name="Chat">
                 {props => {
                   options.onChatRoute?.(props.route.key);
-                  return <ChatScreen {...props} />;
+                  return (
+                    <View>
+                      <ChatScreen {...props} />
+                      {/* Test-only stand-in for the removed chat header link. */}
+                      <Pressable
+                        testID="chat-stub-history"
+                        onPress={() => props.navigation.navigate('History')}
+                      />
+                    </View>
+                  );
                 }}
               </Stack.Screen>
               <Stack.Screen name="NewConversation">
@@ -751,8 +770,9 @@ describe('ChatScreen', () => {
     // The user navigates away before the lookup settles; the unfocused
     // route neither replaces itself nor claims the empty state. The wait
     // guarantees the History screen (and the focus change) is committed
-    // before the lookup's answer arrives.
-    await fireEvent.press(screen.getByTestId('chat-open-history'));
+    // before the lookup's answer arrives. The stub route hosts the jump:
+    // the real chat header no longer links to History.
+    await fireEvent.press(screen.getByTestId('chat-stub-history'));
     await screen.findByTestId('history-stub-back');
     resolveFirst(sessionPageOf([makeSession({ id: 9 })]));
 
@@ -788,12 +808,12 @@ describe('ChatScreen', () => {
     expect(screen.getByTestId('new-conversation-screen')).toBeOnTheScreen();
   });
 
-  it('returns to the existing Home screen from the header link instead of pushing a duplicate', async () => {
+  it('returns to the existing Home screen from the back button instead of pushing a duplicate', async () => {
     mockedSessions.listMessages.mockResolvedValue(emptyPage());
     await renderChat({ sessionId: 5 }, { startAtHome: true });
     await waitFor(() => expect(screen.getByTestId('composer-input')).toBeOnTheScreen());
 
-    await fireEvent.press(screen.getByTestId('chat-open-home'));
+    await fireEvent.press(screen.getByTestId('chat-back'));
 
     expect(await screen.findByTestId('home-screen-stub')).toBeOnTheScreen();
     expect(screen.queryByTestId('chat-screen')).toBeNull();

@@ -25,8 +25,16 @@ import { useTheme } from '../theme/ThemeContext';
 
 /** Shared horizontal screen gutter (px). */
 export const SCREEN_GUTTER = 16;
-/** Fixed spacing between the app-shell inset and a pushed screen header (px). */
-export const SCREEN_TOP_SPACING = 16;
+/**
+ * Fixed spacing between the app-shell inset and a pushed screen header (px).
+ *
+ * The shell (App.tsx `InsetShell`) already clears the system status bar with
+ * the safe-area inset, so this is the whole deliberate gap on top of it —
+ * kept at 0 so a pushed screen starts flush under the status bar like a
+ * native nav bar, with the header row's own padding providing the touch
+ * breathing room.
+ */
+export const SCREEN_TOP_SPACING = 0;
 /** Breathing room below scrollable content (px). */
 export const SCREEN_BOTTOM_SPACING = 32;
 

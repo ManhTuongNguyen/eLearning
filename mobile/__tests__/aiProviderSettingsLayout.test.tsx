@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { render, screen, waitFor } from '@testing-library/react-native';
-import { SCREEN_GUTTER } from '../src/components/ScreenLayout';
+import { SCREEN_GUTTER, SCREEN_TOP_SPACING } from '../src/components/ScreenLayout';
 import { ModeProvider } from '../src/mode/ModeContext';
 import { saveApplicationMode } from '../src/mode/modeStorage';
 import { setRuntimeApplicationMode } from '../src/mode/runtime';
@@ -68,7 +68,7 @@ describe('AIProviderSettingsScreen layout (TASK-AUDIT-012)', () => {
   it('uses the shared pushed-screen header spacing on top of the app-shell inset padding', () => {
     const styles = createStyles(lightColors);
 
-    expect(styles.container.paddingTop).toBe(16);
+    expect(styles.container.paddingTop).toBe(SCREEN_TOP_SPACING);
     expect(flattenStyle(styles.container).marginTop).toBeUndefined();
   });
 
@@ -88,7 +88,7 @@ describe('AIProviderSettingsScreen layout (TASK-AUDIT-012)', () => {
     await renderScreen();
 
     const container = screen.getByTestId('ai-provider-settings-screen');
-    expect(flattenStyle(container.props.style).paddingTop).toBe(16);
+    expect(flattenStyle(container.props.style).paddingTop).toBe(SCREEN_TOP_SPACING);
     await waitFor(() => expect(screen.getByTestId('ai-provider-save')).toBeOnTheScreen());
   });
 });

@@ -13,8 +13,14 @@
 import Slider from '@react-native-community/slider';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-
-import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
+import {
+  SCREEN_GUTTER,
+  SCREEN_TOP_SPACING,
+  Screen,
+  ScreenScrollView,
+} from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
+import { Toast } from '../components/Toast';
 import type { TTSSettingsScreenProps } from '../navigation/types';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
@@ -47,7 +53,7 @@ export function createStyles(c: ThemeColors) {
       backgroundColor: c.background,
       // Same fixed header spacing as the other pushed screens (the app shell
       // in App.tsx already pads the tree out of the system status bar).
-      paddingTop: 16,
+      paddingTop: SCREEN_TOP_SPACING,
     },
     header: {
       flexDirection: 'row',
@@ -55,19 +61,6 @@ export function createStyles(c: ThemeColors) {
       justifyContent: 'space-between',
       paddingHorizontal: SCREEN_GUTTER,
       marginBottom: 4,
-    },
-    backText: {
-      fontSize: 16,
-      color: c.accent,
-      fontWeight: '600',
-    },
-    title: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
-    headerSpacer: {
-      width: 48,
     },
     scroll: {
       paddingBottom: 32,
@@ -212,30 +205,6 @@ export function createStyles(c: ThemeColors) {
       color: c.textMuted,
       lineHeight: 16,
     },
-    toast: {
-      position: 'absolute',
-      bottom: 24,
-      left: 24,
-      right: 24,
-      backgroundColor: c.surface,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 6,
-    },
-    toastText: {
-      color: c.success,
-      fontSize: 14,
-      fontWeight: '600',
-      textAlign: 'center',
-    },
     loadingRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -338,17 +307,11 @@ export function TTSSettingsScreen({ navigation }: TTSSettingsScreenProps) {
   if (!preferences) {
     return (
       <Screen style={styles.container}>
-        <ScreenHeader style={styles.header}>
-          <Pressable
-            accessibilityLabel="Go back"
-            hitSlop={8}
-            onPress={() => navigation.goBack()}
-            testID="tts-settings-back">
-            <Text style={styles.backText}>‹ Back</Text>
-          </Pressable>
-          <Text style={styles.title}>Speech</Text>
-          <View style={styles.headerSpacer} />
-        </ScreenHeader>
+        <ScreenTitleBar
+          title="Speech"
+          onBack={() => navigation.goBack()}
+          backTestID="tts-settings-back"
+        />
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" testID="tts-settings-loading" />
         </View>
@@ -358,17 +321,11 @@ export function TTSSettingsScreen({ navigation }: TTSSettingsScreenProps) {
 
   return (
     <Screen style={styles.container} testID="tts-settings-screen">
-      <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={() => navigation.goBack()}
-          testID="tts-settings-back">
-          <Text style={styles.backText}>‹ Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Speech</Text>
-        <View style={styles.headerSpacer} />
-      </ScreenHeader>
+      <ScreenTitleBar
+        title="Speech"
+        onBack={() => navigation.goBack()}
+        backTestID="tts-settings-back"
+      />
       <ScreenScrollView contentContainerStyle={styles.scroll}>
         {/* Engine status */}
         <View style={styles.engineGroup}>
@@ -473,13 +430,10 @@ export function TTSSettingsScreen({ navigation }: TTSSettingsScreenProps) {
         </View>
       </ScreenScrollView>
 
-      {resetToastVisible ? (
-        <View pointerEvents="none" style={styles.toast} testID="tts-reset-toast">
-          <Text role="status" style={styles.toastText} testID="tts-reset-toast-text">
-            Speech settings reset to defaults.
-          </Text>
-        </View>
-      ) : null}
+      <Toast
+        message={resetToastVisible ? 'Speech settings reset to defaults.' : null}
+        testID="tts-reset-toast"
+      />
     </Screen>
   );
 }
