@@ -645,7 +645,9 @@ export function WordDetailScreen({
           <View style={styles.body}>
             <View style={styles.wordBlock}>
               <View style={styles.wordRow}>
-                <Text style={styles.wordText} testID="word-detail-word">
+                {/* Selectable matches the practice screen's revealed word:
+                    long-press copies the word natively. */}
+                <Text selectable style={styles.wordText} testID="word-detail-word">
                   {word.text}
                 </Text>
                 <Pressable

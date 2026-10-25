@@ -146,6 +146,9 @@ describe('WordDetailScreen — rendering', () => {
 
     expect(view.getByTestId('word-detail-word')).toHaveTextContent('bank');
     expect(view.getByTestId('word-detail-phonetics')).toHaveTextContent('/bæŋk/  /bæŋks/');
+    // Only the word is selectable (long-press copy); the IPA stays plain.
+    expect(view.getByTestId('word-detail-word').props.selectable).toBe(true);
+    expect(view.getByTestId('word-detail-phonetics').props.selectable).toBeFalsy();
     expect(view.getAllByText('noun')).toHaveLength(1);
     expect(view.getAllByText('verb')).toHaveLength(1);
     expect(view.getByText('An institution that holds money.')).toBeTruthy();
