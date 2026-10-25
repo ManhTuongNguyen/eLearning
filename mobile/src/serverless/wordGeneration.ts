@@ -12,8 +12,8 @@
  * tests with a fake `complete` seam.
  */
 
-import type { SqlDriver } from '../db/driver';
 import type { EnglishLevel } from '../api/profile';
+import type { SqlDriver } from '../db/driver';
 import { getLearningProfile } from '../db/profileStore';
 import type { NewWord, WordRecord, WordTopicRecord } from '../db/types';
 import { insertWords } from '../db/wordRepository';

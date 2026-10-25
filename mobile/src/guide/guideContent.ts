@@ -208,7 +208,8 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
       'An optional learner note steers the register (slang, workplace English, travel...).',
     ],
     tips: [
-      'The due badges on Home and in the topic list show how many sentences are due today.',
+      'The due badges on Home and in the topic list show how many sentences practice can still show today.',
+      'Each topic has Anki-style practice settings (its ⋮ menu): learn ahead limit, new cards per day, max reviews per day and how many cards one session holds. The daily limits reset at your study-day rollover.',
       'A forced practice mode in Settings overrides the automatic dictation/recall mix.',
     ],
     mode: 'serverless',
@@ -256,7 +257,8 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
       'The AI never writes definitions — if the dictionary has nothing, only an approved Enrich proposal can complete the word.',
     ],
     tips: [
-      "The due badges on Home and in the topic list show today's workload.",
+      'The due badges on Home and in the topic list show how many words practice can still show today.',
+      'Each topic has Anki-style practice settings (its ⋮ menu): learn ahead limit, new cards per day, max reviews per day and how many cards one session holds. The daily limits reset at your study-day rollover.',
       'Words without dictionary data stay out of practice until they are completed or enriched.',
       'Dictionary data is Wiktionary content under the CC BY-SA 4.0 license, served by the Free Dictionary API at freedictionaryapi.com.',
     ],

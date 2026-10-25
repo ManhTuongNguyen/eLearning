@@ -8,9 +8,10 @@
  * optional additional AI prompt. Creating a topic navigates straight to its
  * (empty) topic screen; editing reuses the same form pre-filled.
  *
- * A topic row also carries a delete action. Deleting asks for confirmation and
- * then removes the topic together with its words and review history (the
- * schema's `ON DELETE CASCADE`).
+ * A topic row carries a ⋮ overflow menu with Edit, the per-topic settings
+ * (learn ahead limit) and Delete. Deleting asks for confirmation and then
+ * removes the topic together with its words and review history (the schema's
+ * `ON DELETE CASCADE`).
  *
  * The whole feature is serverless-only: until the persisted mode has been
  * restored the screen shows its spinner, and in server mode it replaces the
@@ -19,6 +20,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  type GestureResponderEvent,
   Modal,
   Pressable,
   ScrollView,
@@ -27,7 +29,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-
+import type { ContextMenuAnchor, ContextMenuItem } from '../components/ContextMenu';
+import { ContextMenu } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
@@ -43,6 +46,11 @@ import type { WordTopicsScreenProps } from '../navigation/types';
 import { MAX_GENERATION_PROMPT_LENGTH } from '../serverless/sentenceGeneration';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
+import {
+  DEFAULT_TOPIC_PRACTICE_SETTINGS,
+  PracticeSettingsModal,
+  type TopicPracticeSettings,
+} from './PracticeSettingsModal';
 
 const MODE_NOTICE_TEXT =
   'The word bank is saved on this device only. Switch to server mode to manage ' +
@@ -101,9 +109,6 @@ export function createStyles(c: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 14,
-    },
-    rowActions: {
-      flexDirection: 'row',
     },
     rowIconButton: {
       width: 44,
@@ -296,22 +301,12 @@ export function createStyles(c: ThemeColors) {
 type TopicRowProps = {
   item: WordTopicSummary;
   onPress: (item: WordTopicSummary) => void;
-  onEdit: (item: WordTopicSummary) => void;
-  onDelete: (item: WordTopicSummary) => void;
-  deleting: boolean;
+  onMenu: (item: WordTopicSummary, event: GestureResponderEvent) => void;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 };
 
-function WordTopicRow({
-  item,
-  onPress,
-  onEdit,
-  onDelete,
-  deleting,
-  colors,
-  styles,
-}: TopicRowProps) {
+function WordTopicRow({ item, onPress, onMenu, colors, styles }: TopicRowProps) {
   const dueBadge =
     item.due_count > 0 ? (
       <View style={styles.badge} testID={`word-topic-${item.id}-due`}>
@@ -352,30 +347,14 @@ function WordTopicRow({
         </View>
       </Pressable>
 
-      <View style={styles.rowActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Edit topic ${item.title}`}
-          testID={`word-topic-edit-${item.id}`}
-          onPress={() => onEdit(item)}
-          style={({ pressed }) => [styles.rowIconButton, pressed && styles.pressedFade]}>
-          <Icon name="edit" size={18} color={colors.textMuted} />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Delete topic ${item.title}`}
-          accessibilityState={{ disabled: deleting, busy: deleting }}
-          testID={`word-topic-delete-${item.id}`}
-          onPress={() => onDelete(item)}
-          disabled={deleting}
-          style={({ pressed }) => [styles.rowIconButton, pressed && styles.pressedFade]}>
-          {deleting ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : (
-            <Icon name="trash" size={18} color={colors.danger} />
-          )}
-        </Pressable>
-      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Topic actions for ${item.title}`}
+        testID={`word-topic-menu-${item.id}`}
+        onPress={event => onMenu(item, event)}
+        style={({ pressed }) => [styles.rowIconButton, pressed && styles.pressedFade]}>
+        <Icon name="more" size={18} color={colors.textMuted} />
+      </Pressable>
     </View>
   );
 }
@@ -403,6 +382,13 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WordTopicSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [menuTarget, setMenuTarget] = useState<{
+    item: WordTopicSummary;
+    anchor: ContextMenuAnchor;
+  } | null>(null);
+  const [settingsTarget, setSettingsTarget] = useState<WordTopicSummary | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [form, setForm] = useState<TopicFormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -547,6 +533,72 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
 
   const formTitleInvalid = form !== null && form.title.trim() === '';
 
+  /** The ⋮ actions of the row that opened the menu. */
+  const menuItems: readonly ContextMenuItem[] = useMemo(() => {
+    const target = menuTarget?.item ?? null;
+    if (target === null) {
+      return [];
+    }
+    return [
+      {
+        key: 'edit',
+        label: 'Edit topic',
+        icon: 'edit',
+        onPress: () => {
+          setMenuTarget(null);
+          handleEditTopic(target);
+        },
+      },
+      {
+        key: 'practice-settings',
+        label: 'Practice settings',
+        icon: 'settings',
+        detail: `${target.learn_ahead_minutes}m ahead · ${target.max_session_cards}/session`,
+        onPress: () => {
+          setMenuTarget(null);
+          setSettingsError(null);
+          setSettingsTarget(target);
+        },
+      },
+      {
+        key: 'delete',
+        label: 'Delete topic',
+        icon: 'trash',
+        danger: true,
+        onPress: () => {
+          setMenuTarget(null);
+          handleDeleteTopic(target);
+        },
+      },
+    ];
+  }, [menuTarget, handleEditTopic, handleDeleteTopic]);
+
+  /**
+   * Persist the settings drafted in the modal. Failures keep the dialog open
+   * with the message; success closes it and reloads the list so the due badges
+   * reflect the new limits immediately.
+   */
+  const handleSaveSettings = useCallback(
+    async (settings: TopicPracticeSettings) => {
+      if (settingsTarget === null || settingsSaving) {
+        return;
+      }
+      setSettingsSaving(true);
+      setSettingsError(null);
+      try {
+        const db = await getLocalDatabase();
+        await updateWordTopic(db, settingsTarget.id, settings);
+        setSettingsTarget(null);
+        setReloadKey(key => key + 1);
+      } catch (err) {
+        setSettingsError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSettingsSaving(false);
+      }
+    },
+    [settingsTarget, settingsSaving],
+  );
+
   return (
     <Screen style={styles.container} testID="word-topics-screen">
       <ScreenHeader style={styles.header}>
@@ -595,9 +647,15 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
               <WordTopicRow
                 item={item}
                 onPress={handleTopicPress}
-                onEdit={handleEditTopic}
-                onDelete={handleDeleteTopic}
-                deleting={deletingId === item.id}
+                onMenu={(rowItem, event) =>
+                  setMenuTarget({
+                    item: rowItem,
+                    anchor: {
+                      x: event.nativeEvent.pageX,
+                      y: event.nativeEvent.pageY,
+                    },
+                  })
+                }
                 colors={colors}
                 styles={styles}
               />
@@ -787,6 +845,34 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
           </View>
         </View>
       </Modal>
+
+      {/* Row context menu (edit / learn ahead / delete), anchored to the ⋮. */}
+      <ContextMenu
+        visible={menuTarget !== null}
+        anchor={menuTarget?.anchor ?? null}
+        items={menuItems}
+        onCancel={() => setMenuTarget(null)}
+        testID="word-topic-row-menu"
+      />
+
+      {/* Per-topic practice settings. */}
+      <PracticeSettingsModal
+        visible={settingsTarget !== null}
+        topicTitle={settingsTarget?.title ?? ''}
+        settings={settingsTarget ?? DEFAULT_TOPIC_PRACTICE_SETTINGS}
+        saving={settingsSaving}
+        error={settingsError}
+        onCancel={() => {
+          if (!settingsSaving) {
+            setSettingsTarget(null);
+            setSettingsError(null);
+          }
+        }}
+        onSave={settings => {
+          // handleSaveSettings handles its own errors, so it never rejects.
+          handleSaveSettings(settings);
+        }}
+      />
     </Screen>
   );
 }

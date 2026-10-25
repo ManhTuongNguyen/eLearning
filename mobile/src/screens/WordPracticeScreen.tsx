@@ -45,7 +45,13 @@ import { WordSenseList } from '../components/WordSenseList';
 import { getLocalDatabase } from '../db/database';
 import { getSrsConfig } from '../db/srsConfigStore';
 import type { ReviewCardMode, ReviewGrade, WordRecord, WordTopicRecord } from '../db/types';
-import { getWordTopicById, listWordsByTopic, recordWordReview } from '../db/wordRepository';
+import {
+  countNewWordsIntroducedToday,
+  countWordReviewsToday,
+  getWordTopicById,
+  listWordsByTopic,
+  recordWordReview,
+} from '../db/wordRepository';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { WordPracticeScreenProps } from '../navigation/types';
 import { loadWordPracticeMode, type WordPracticeMode } from '../preferences/wordPracticeMode';
@@ -57,6 +63,7 @@ import {
 } from '../srs/answerCheck';
 import { selectCardMode } from '../srs/cardMode';
 import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from '../srs/config';
+import { startOfStudyDay } from '../srs/dayBoundary';
 import {
   type GradePreview,
   previewSchedule,
@@ -66,8 +73,8 @@ import {
 import {
   applyWordPracticeGrade,
   createWordPracticeSessionState,
-  MAX_PRACTICE_SESSION_CARDS,
   type PracticeSessionState,
+  type SessionBuildOptions,
 } from '../srs/session';
 import { maskWordInText } from '../srs/wordMask';
 import type { ThemeColors } from '../theme/colors';
@@ -501,6 +508,13 @@ export function WordPracticeScreen({
   const [actionError, setActionError] = useState<string | null>(null);
   const gradingRef = useRef(false);
   const cardShownAtRef = useRef(Date.now());
+  /**
+   * The session's build options (session cap, learn-ahead window, remaining
+   * daily quotas), refreshed by `loadSession` and decremented as cards are
+   * graded so the "Review again" probe never promises cards the daily limits
+   * have already spent.
+   */
+  const sessionLimitsRef = useRef<SessionBuildOptions>({});
 
   const { speakingId, speak, stop } = useSpeechPlayback(speech);
 
@@ -523,11 +537,24 @@ export function WordPracticeScreen({
       if (!topicRecord) {
         throw new Error('This topic no longer exists.');
       }
+      // Anki's daily deck limits: what the review log consumed since the study
+      // day started is subtracted from the topic's per-day settings.
+      const dayStartIso = startOfStudyDay(new Date(), srsConfig.rolloverHour).toISOString();
+      const [newIntroduced, reviewsDone] = await Promise.all([
+        countNewWordsIntroducedToday(db, topicId, dayStartIso),
+        countWordReviewsToday(db, topicId, dayStartIso),
+      ]);
+      sessionLimitsRef.current = {
+        maxCards: topicRecord.max_session_cards,
+        learnAheadMinutes: topicRecord.learn_ahead_minutes,
+        newRemaining: topicRecord.new_cards_per_day - newIntroduced,
+        reviewRemaining: topicRecord.max_reviews_per_day - reviewsDone,
+      };
       setTopic(topicRecord);
       setAllWords(words);
       setPracticeMode(storedMode);
       setConfig(srsConfig);
-      setSession(createWordPracticeSessionState(words, new Date(), MAX_PRACTICE_SESSION_CARDS));
+      setSession(createWordPracticeSessionState(words, new Date(), sessionLimitsRef.current));
     } catch (err) {
       setLoadError(describeError(err));
     } finally {
@@ -643,6 +670,20 @@ export function WordPracticeScreen({
           ...outcome.state,
           updated_at: now.toISOString(),
         };
+        // Consume one unit of the matching daily quota (the card's state before
+        // this grade decides which counter it burns, exactly like the log).
+        const limits = sessionLimitsRef.current;
+        if (currentCard.state === 'new') {
+          sessionLimitsRef.current = {
+            ...limits,
+            newRemaining: Math.max(0, (limits.newRemaining ?? 0) - 1),
+          };
+        } else if (currentCard.state === 'review') {
+          sessionLimitsRef.current = {
+            ...limits,
+            reviewRemaining: Math.max(0, (limits.reviewRemaining ?? 0) - 1),
+          };
+        }
         setAllWords(previous => previous.map(word => (word.id === updated.id ? updated : word)));
         setSession(previous => applyWordPracticeGrade(previous, grade, updated));
         setReviewedCount(count => count + 1);
@@ -665,8 +706,14 @@ export function WordPracticeScreen({
   const totalCards = reviewedCount + session.queue.length;
   const sessionFinished = !loading && !loadError && !serverMode && currentCard === null;
   const nextDueLabel = formatNextWordDueLabel(allWords, new Date());
+  // The same limits the session was built with (including the daily quotas
+  // consumed so far) decide whether "Review again" has anything to show.
   const hasRemainingDue =
-    allWords.length > 0 && createWordPracticeSessionState(allWords, new Date(), 1).queue.length > 0;
+    allWords.length > 0 &&
+    createWordPracticeSessionState(allWords, new Date(), {
+      ...sessionLimitsRef.current,
+      maxCards: 1,
+    }).queue.length > 0;
   const showGradeButtons = cardMode === 'dictation' ? diff !== null : revealed;
 
   /**
@@ -783,7 +830,7 @@ export function WordPracticeScreen({
                 setReviewedCount(0);
                 setGradeCounts(EMPTY_COUNTS);
                 setSession(
-                  createWordPracticeSessionState(allWords, new Date(), MAX_PRACTICE_SESSION_CARDS),
+                  createWordPracticeSessionState(allWords, new Date(), sessionLimitsRef.current),
                 );
                 setPresentationKey(key => key + 1);
               }}

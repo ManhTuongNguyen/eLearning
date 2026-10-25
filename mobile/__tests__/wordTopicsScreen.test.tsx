@@ -12,6 +12,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
 import {
   createWordTopic,
+  getWordTopicById,
   insertWords,
   listWordsByTopic,
   listWordTopics,
@@ -229,7 +230,8 @@ describe('WordTopicsScreen — create and edit topic', () => {
       expect(view.getByTestId(`word-topic-${topic.id}`)).toBeTruthy();
     });
 
-    await fireEvent.press(view.getByTestId(`word-topic-edit-${topic.id}`));
+    await fireEvent.press(view.getByTestId(`word-topic-menu-${topic.id}`));
+    await fireEvent.press(view.getByTestId('word-topic-row-menu-edit'));
     expect(view.getByTestId('word-topic-form-title')).toHaveTextContent('Edit topic');
     await fireEvent.changeText(view.getByTestId('word-topic-form-description'), 'blog reading');
     await fireEvent.changeText(view.getByTestId('word-topic-form-extra-prompt'), 'focus on verbs');
@@ -258,7 +260,8 @@ describe('WordTopicsScreen — delete topic', () => {
       expect(view.getByTestId(`word-topic-${topic.id}`)).toBeTruthy();
     });
 
-    await fireEvent.press(view.getByTestId(`word-topic-delete-${topic.id}`));
+    await fireEvent.press(view.getByTestId(`word-topic-menu-${topic.id}`));
+    await fireEvent.press(view.getByTestId('word-topic-row-menu-delete'));
 
     expect(view.getByTestId('word-topic-delete-modal')).toBeTruthy();
     expect(view.getByTestId('word-topic-delete-title')).toHaveTextContent('Delete topic?');
@@ -286,7 +289,8 @@ describe('WordTopicsScreen — delete topic', () => {
       expect(view.getByTestId(`word-topic-${topic.id}`)).toBeTruthy();
     });
 
-    await fireEvent.press(view.getByTestId(`word-topic-delete-${topic.id}`));
+    await fireEvent.press(view.getByTestId(`word-topic-menu-${topic.id}`));
+    await fireEvent.press(view.getByTestId('word-topic-row-menu-delete'));
     expect(view.getByTestId('word-topic-delete-modal')).toBeTruthy();
 
     await fireEvent.press(view.getByTestId('word-topic-delete-cancel'));
@@ -295,5 +299,53 @@ describe('WordTopicsScreen — delete topic', () => {
       expect(view.queryByTestId('word-topic-delete-modal')).toBeFalsy();
     });
     expect(await listWordTopics(localDb)).toHaveLength(1);
+  });
+});
+
+describe('WordTopicsScreen — practice settings', () => {
+  test('row menu opens the modal and saves the drafted limits', async () => {
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createWordTopic(localDb, { title: 'Cooking', description: 'chefs' });
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByTestId(`word-topic-${topic.id}`)).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId(`word-topic-menu-${topic.id}`));
+    expect(view.getByTestId('word-topic-row-menu-practice-settings')).toHaveTextContent(
+      /10m ahead · 20\/session/,
+    );
+
+    await fireEvent.press(view.getByTestId('word-topic-row-menu-practice-settings'));
+
+    expect(view.getByTestId('practice-settings-modal')).toBeTruthy();
+    expect(view.getByTestId('practice-settings-value-learnAhead')).toHaveTextContent('10 min');
+
+    const sessionCards = view.getByTestId('practice-settings-slider-sessionCards');
+    const maxReviews = view.getByTestId('practice-settings-slider-maxReviews');
+    expect(sessionCards.props.minimumValue).toBe(5);
+    expect(sessionCards.props.maximumValue).toBe(50);
+    expect(maxReviews.props.maximumValue).toBe(200);
+    expect(maxReviews.props.step).toBe(5);
+
+    await act(async () => {
+      sessionCards.props.onValueChange(40);
+      maxReviews.props.onValueChange(100);
+    });
+    expect(view.getByTestId('practice-settings-value-sessionCards')).toHaveTextContent('40');
+    expect(view.getByTestId('practice-settings-value-maxReviews')).toHaveTextContent('100');
+
+    await fireEvent.press(view.getByTestId('practice-settings-save'));
+
+    await waitFor(() => {
+      expect(view.queryByTestId('practice-settings-modal')).toBeFalsy();
+    });
+    expect(await getWordTopicById(localDb, topic.id)).toMatchObject({
+      learn_ahead_minutes: 10,
+      new_cards_per_day: 20,
+      max_reviews_per_day: 100,
+      max_session_cards: 40,
+    });
   });
 });

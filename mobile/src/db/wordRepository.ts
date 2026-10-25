@@ -11,6 +11,16 @@
  */
 
 import { normalizeWordText } from '../srs/normalizeWord';
+import {
+  clampLearnAheadMinutes,
+  clampMaxReviewsPerDay,
+  clampMaxSessionCards,
+  clampNewCardsPerDay,
+  DEFAULT_LEARN_AHEAD_MINUTES,
+  DEFAULT_MAX_REVIEWS_PER_DAY,
+  DEFAULT_MAX_SESSION_CARDS,
+  DEFAULT_NEW_CARDS_PER_DAY,
+} from '../srs/session';
 import type { SqlDriver, SqlExecutor, SqlRow } from './driver';
 import { nowIso } from './driver';
 import type {
@@ -31,7 +41,9 @@ import type {
 } from './types';
 import { parseWordPhonetics, parseWordSenses } from './types';
 
-const TOPIC_COLUMNS = 'id, title, description, extra_prompt, created_at, updated_at';
+const TOPIC_COLUMNS =
+  'id, title, description, extra_prompt, learn_ahead_minutes, new_cards_per_day, ' +
+  'max_reviews_per_day, max_session_cards, created_at, updated_at';
 const WORD_COLUMNS =
   'id, topic_id, text, normalized_text, phonetics_json, senses_json, data_source, data_status, ' +
   'enriched_at, state, suspended, reps, lapses, stability, difficulty, elapsed_days, ' +
@@ -41,12 +53,72 @@ const REVIEW_LOG_COLUMNS =
   'elapsed_days, last_elapsed_days, scheduled_days, learning_steps, review_duration_ms, ' +
   'reviewed_at';
 
+/**
+ * Start of the current study day in the stored `toISOString()` format: the most
+ * recent rollover instant, derived from `srs_config.rollover_hour`. The single
+ * `?` binds `now`. Used by the daily-quota counts.
+ */
+const DAY_START_SQL =
+  "strftime('%Y-%m-%dT%H:%M:%fZ', ?, '-' || (SELECT rollover_hour FROM srs_config WHERE id = 1) || ' hours', " +
+  "'start of day', '+' || (SELECT rollover_hour FROM srs_config WHERE id = 1) || ' hours')";
+
+/**
+ * Per-topic due components for the quota-aware badge, mirroring
+ * `buildWordPracticeSession` with Anki's daily limits: new/review words due
+ * now, learning words due within the topic's learn-ahead window, and how many
+ * new/review words the review log already consumed today. Suspended and
+ * `data_status='missing'` words never count. The five `?` placeholders all
+ * bind `now`. Aliases `w`/`l` (words/log) and the topic alias `t` must be in
+ * scope.
+ */
+const DUE_COMPONENT_SELECT = `
+  (SELECT COUNT(*) FROM words w
+     WHERE w.topic_id = t.id AND w.suspended = 0 AND w.data_status = 'complete'
+       AND w.state = 'new' AND w.due_at <= ?) AS new_due,
+  (SELECT COUNT(*) FROM words w
+     WHERE w.topic_id = t.id AND w.suspended = 0 AND w.data_status = 'complete'
+       AND w.state IN ('learning', 'relearning')
+       AND w.due_at <= strftime('%Y-%m-%dT%H:%M:%fZ', ?, '+' || t.learn_ahead_minutes || ' minutes')) AS learn_due,
+  (SELECT COUNT(*) FROM words w
+     WHERE w.topic_id = t.id AND w.suspended = 0 AND w.data_status = 'complete'
+       AND w.state = 'review' AND w.due_at <= ?) AS review_due,
+  (SELECT COUNT(*) FROM word_review_log l
+     WHERE l.topic_id = t.id AND l.state = 'new' AND l.reviewed_at >= ${DAY_START_SQL}) AS new_done_today,
+  (SELECT COUNT(*) FROM word_review_log l
+     WHERE l.topic_id = t.id AND l.state = 'review' AND l.reviewed_at >= ${DAY_START_SQL}) AS review_done_today`;
+
+/**
+ * Fold the components into the badge number: each daily-capped category keeps
+ * only its remaining allowance, learning words are never capped. The row must
+ * carry the topic's limit columns too.
+ */
+function dueCountFromComponents(row: SqlRow): number {
+  const newRemaining = Math.max(
+    0,
+    Number(row.new_cards_per_day ?? DEFAULT_NEW_CARDS_PER_DAY) - Number(row.new_done_today ?? 0),
+  );
+  const reviewRemaining = Math.max(
+    0,
+    Number(row.max_reviews_per_day ?? DEFAULT_MAX_REVIEWS_PER_DAY) -
+      Number(row.review_done_today ?? 0),
+  );
+  return (
+    Math.min(Number(row.new_due ?? 0), newRemaining) +
+    Number(row.learn_due ?? 0) +
+    Math.min(Number(row.review_due ?? 0), reviewRemaining)
+  );
+}
+
 function mapTopicRow(row: SqlRow): WordTopicRecord {
   return {
     id: Number(row.id),
     title: String(row.title ?? ''),
     description: String(row.description ?? ''),
     extra_prompt: String(row.extra_prompt ?? ''),
+    learn_ahead_minutes: Number(row.learn_ahead_minutes ?? DEFAULT_LEARN_AHEAD_MINUTES),
+    new_cards_per_day: Number(row.new_cards_per_day ?? DEFAULT_NEW_CARDS_PER_DAY),
+    max_reviews_per_day: Number(row.max_reviews_per_day ?? DEFAULT_MAX_REVIEWS_PER_DAY),
+    max_session_cards: Number(row.max_session_cards ?? DEFAULT_MAX_SESSION_CARDS),
     created_at: String(row.created_at ?? ''),
     updated_at: String(row.updated_at ?? ''),
   };
@@ -116,11 +188,32 @@ export async function createWordTopic(
   }
   const description = input.description?.trim() ?? '';
   const extraPrompt = input.extra_prompt?.trim() ?? '';
+  const learnAheadMinutes = clampLearnAheadMinutes(
+    input.learn_ahead_minutes ?? DEFAULT_LEARN_AHEAD_MINUTES,
+  );
+  const newCardsPerDay = clampNewCardsPerDay(input.new_cards_per_day ?? DEFAULT_NEW_CARDS_PER_DAY);
+  const maxReviewsPerDay = clampMaxReviewsPerDay(
+    input.max_reviews_per_day ?? DEFAULT_MAX_REVIEWS_PER_DAY,
+  );
+  const maxSessionCards = clampMaxSessionCards(
+    input.max_session_cards ?? DEFAULT_MAX_SESSION_CARDS,
+  );
   const result = await db.execute(
     `INSERT INTO word_topics
-       (title, description, extra_prompt, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?)`,
-    [title, description, extraPrompt, timestamp, timestamp],
+       (title, description, extra_prompt, learn_ahead_minutes, new_cards_per_day,
+        max_reviews_per_day, max_session_cards, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      title,
+      description,
+      extraPrompt,
+      learnAheadMinutes,
+      newCardsPerDay,
+      maxReviewsPerDay,
+      maxSessionCards,
+      timestamp,
+      timestamp,
+    ],
   );
   const id = result.insertId;
   if (id === null || id === undefined) {
@@ -131,6 +224,10 @@ export async function createWordTopic(
     title,
     description,
     extra_prompt: extraPrompt,
+    learn_ahead_minutes: learnAheadMinutes,
+    new_cards_per_day: newCardsPerDay,
+    max_reviews_per_day: maxReviewsPerDay,
+    max_session_cards: maxSessionCards,
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -138,27 +235,29 @@ export async function createWordTopic(
 
 /**
  * List topics newest first, each with its word count and the number of words
- * due at `now`. Suspended words and `data_status='missing'` words (no
- * dictionary data to recall yet) never count as due.
+ * practice would still show at `now`: new/review words capped by what the
+ * topic's daily limits have left (counted from the review log since the
+ * rollover), learning words never capped. Suspended words and
+ * `data_status='missing'` words never count.
  */
 export async function listWordTopics(
   db: SqlExecutor,
   now: string = nowIso(),
 ): Promise<WordTopicSummary[]> {
   const result = await db.execute(
-    `SELECT t.id, t.title, t.description, t.extra_prompt, t.created_at, t.updated_at,
+    `SELECT t.id, t.title, t.description, t.extra_prompt, t.learn_ahead_minutes,
+            t.new_cards_per_day, t.max_reviews_per_day, t.max_session_cards,
+            t.created_at, t.updated_at,
             (SELECT COUNT(*) FROM words w WHERE w.topic_id = t.id) AS word_count,
-            (SELECT COUNT(*) FROM words w
-              WHERE w.topic_id = t.id AND w.suspended = 0 AND w.data_status = 'complete'
-                AND w.due_at <= ?) AS due_count
+            ${DUE_COMPONENT_SELECT}
        FROM word_topics t
       ORDER BY t.created_at DESC, t.id DESC`,
-    [now],
+    [now, now, now, now, now],
   );
   return result.rows.map(row => ({
     ...mapTopicRow(row),
     word_count: Number(row.word_count ?? 0),
-    due_count: Number(row.due_count ?? 0),
+    due_count: dueCountFromComponents(row),
   }));
 }
 
@@ -171,11 +270,19 @@ export async function getWordTopicById(
   return row ? mapTopicRow(row) : null;
 }
 
-/** Update the title, description and/or additional prompt of a topic. */
+/** Update the title, description, prompts and/or practice limits of a topic. */
 export async function updateWordTopic(
   db: SqlExecutor,
   id: number,
-  patch: { title?: string; description?: string; extra_prompt?: string },
+  patch: {
+    title?: string;
+    description?: string;
+    extra_prompt?: string;
+    learn_ahead_minutes?: number;
+    new_cards_per_day?: number;
+    max_reviews_per_day?: number;
+    max_session_cards?: number;
+  },
 ): Promise<WordTopicRecord | null> {
   const assignments: string[] = [];
   const params: (string | number)[] = [];
@@ -194,6 +301,22 @@ export async function updateWordTopic(
   if (patch.extra_prompt !== undefined) {
     assignments.push('extra_prompt = ?');
     params.push(patch.extra_prompt.trim());
+  }
+  if (patch.learn_ahead_minutes !== undefined) {
+    assignments.push('learn_ahead_minutes = ?');
+    params.push(clampLearnAheadMinutes(patch.learn_ahead_minutes));
+  }
+  if (patch.new_cards_per_day !== undefined) {
+    assignments.push('new_cards_per_day = ?');
+    params.push(clampNewCardsPerDay(patch.new_cards_per_day));
+  }
+  if (patch.max_reviews_per_day !== undefined) {
+    assignments.push('max_reviews_per_day = ?');
+    params.push(clampMaxReviewsPerDay(patch.max_reviews_per_day));
+  }
+  if (patch.max_session_cards !== undefined) {
+    assignments.push('max_session_cards = ?');
+    params.push(clampMaxSessionCards(patch.max_session_cards));
   }
   if (assignments.length === 0) {
     return getWordTopicById(db, id);
@@ -439,24 +562,67 @@ export async function listDueWords(
   return result.rows.map(mapWordRow);
 }
 
+/**
+ * Words practice would still show at `now` across every topic, honouring each
+ * topic's learn-ahead window and daily limits (Home's due badge).
+ */
 export async function countDueWords(db: SqlExecutor, now: string = nowIso()): Promise<number> {
   const result = await db.execute(
-    `SELECT COUNT(*) AS total FROM words
-      WHERE suspended = 0 AND data_status = 'complete' AND due_at <= ?`,
-    [now],
+    `SELECT t.new_cards_per_day, t.max_reviews_per_day, ${DUE_COMPONENT_SELECT}
+       FROM word_topics t`,
+    [now, now, now, now, now],
   );
-  return Number(result.rows[0]?.total ?? 0);
+  return result.rows.reduce((total, row) => total + dueCountFromComponents(row), 0);
 }
 
+/** The per-topic version of {@link countDueWords}. */
 export async function countDueWordsForTopic(
   db: SqlExecutor,
   topicId: number,
   now: string = nowIso(),
 ): Promise<number> {
   const result = await db.execute(
-    `SELECT COUNT(*) AS total FROM words
-      WHERE topic_id = ? AND suspended = 0 AND data_status = 'complete' AND due_at <= ?`,
-    [topicId, now],
+    `SELECT t.new_cards_per_day, t.max_reviews_per_day, ${DUE_COMPONENT_SELECT}
+       FROM word_topics t
+      WHERE t.id = ?`,
+    [now, now, now, now, now, topicId],
+  );
+  return result.rows[0] ? dueCountFromComponents(result.rows[0]) : 0;
+}
+
+/**
+ * How many `new` cards this topic already introduced since the study day
+ * started — review-log rows whose pre-review state is `new` (a new card
+ * regraded within its learning steps logs `learning`, so it counts once).
+ * `dayStartIso` is `startOfStudyDay(now, rolloverHour).toISOString()`.
+ */
+export async function countNewWordsIntroducedToday(
+  db: SqlExecutor,
+  topicId: number,
+  dayStartIso: string,
+): Promise<number> {
+  const result = await db.execute(
+    `SELECT COUNT(*) AS total FROM word_review_log
+      WHERE topic_id = ? AND state = 'new' AND reviewed_at >= ?`,
+    [topicId, dayStartIso],
+  );
+  return Number(result.rows[0]?.total ?? 0);
+}
+
+/**
+ * How many `review` cards this topic already answered since the study day
+ * started — review-log rows whose pre-review state is `review` (a lapsed
+ * card's intraday relearning steps log `relearning` and do not burn quota).
+ */
+export async function countWordReviewsToday(
+  db: SqlExecutor,
+  topicId: number,
+  dayStartIso: string,
+): Promise<number> {
+  const result = await db.execute(
+    `SELECT COUNT(*) AS total FROM word_review_log
+      WHERE topic_id = ? AND state = 'review' AND reviewed_at >= ?`,
+    [topicId, dayStartIso],
   );
   return Number(result.rows[0]?.total ?? 0);
 }

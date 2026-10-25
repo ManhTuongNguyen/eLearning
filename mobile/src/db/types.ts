@@ -124,6 +124,29 @@ export interface SentenceTopicRecord {
    */
   generation_prompt: string;
   english_level: EnglishLevel;
+  /**
+   * Learn-ahead window in minutes (Anki deck option): a `learning`/`relearning`
+   * card due within this many minutes may be shown early once nothing else is
+   * due. `0` disables. Bounded 0–50; default `DEFAULT_LEARN_AHEAD_MINUTES`.
+   */
+  learn_ahead_minutes: number;
+  /**
+   * Anki's "New cards/day": at most this many `new`-state cards may enter
+   * practice per study day (the rest wait for the next day). `0` disables new
+   * cards. Bounded 0–50; default `DEFAULT_NEW_CARDS_PER_DAY`.
+   */
+  new_cards_per_day: number;
+  /**
+   * Anki's "Maximum reviews/day": at most this many `review`-state cards per
+   * study day. `0` disables reviews. Bounded 0–200; default
+   * `DEFAULT_MAX_REVIEWS_PER_DAY`.
+   */
+  max_reviews_per_day: number;
+  /**
+   * Per-sitting session cap (was the fixed `MAX_PRACTICE_SESSION_CARDS`).
+   * Bounded 5–50; default `DEFAULT_MAX_SESSION_CARDS`.
+   */
+  max_session_cards: number;
   created_at: string;
   updated_at: string;
 }
@@ -196,6 +219,14 @@ export interface NewSentenceTopic {
   /** Optional advanced guidance used only for sentence generation. */
   generation_prompt?: string;
   english_level?: EnglishLevel;
+  /** Learn-ahead window in minutes; defaults to `DEFAULT_LEARN_AHEAD_MINUTES`. */
+  learn_ahead_minutes?: number;
+  /** Anki's "New cards/day"; defaults to `DEFAULT_NEW_CARDS_PER_DAY`. */
+  new_cards_per_day?: number;
+  /** Anki's "Maximum reviews/day"; defaults to `DEFAULT_MAX_REVIEWS_PER_DAY`. */
+  max_reviews_per_day?: number;
+  /** Per-sitting session cap; defaults to `DEFAULT_MAX_SESSION_CARDS`. */
+  max_session_cards?: number;
 }
 
 /** One generated (or hand-written) sentence before it has an id. */
@@ -297,6 +328,18 @@ export interface WordTopicRecord {
   title: string;
   description: string;
   extra_prompt: string;
+  /**
+   * Learn-ahead window in minutes (Anki deck option): a `learning`/`relearning`
+   * word due within this many minutes may be shown early once nothing else is
+   * due. `0` disables. Bounded 0–50; default `DEFAULT_LEARN_AHEAD_MINUTES`.
+   */
+  learn_ahead_minutes: number;
+  /** Anki's "New cards/day" for this topic; see {@link SentenceTopicRecord}. */
+  new_cards_per_day: number;
+  /** Anki's "Maximum reviews/day" for this topic. */
+  max_reviews_per_day: number;
+  /** Per-sitting session cap for this topic. */
+  max_session_cards: number;
   created_at: string;
   updated_at: string;
 }
@@ -483,6 +526,14 @@ export interface NewWordTopic {
   description?: string;
   /** Optional additional AI instruction appended to every prompt. */
   extra_prompt?: string;
+  /** Learn-ahead window in minutes; defaults to `DEFAULT_LEARN_AHEAD_MINUTES`. */
+  learn_ahead_minutes?: number;
+  /** Anki's "New cards/day"; defaults to `DEFAULT_NEW_CARDS_PER_DAY`. */
+  new_cards_per_day?: number;
+  /** Anki's "Maximum reviews/day"; defaults to `DEFAULT_MAX_REVIEWS_PER_DAY`. */
+  max_reviews_per_day?: number;
+  /** Per-sitting session cap; defaults to `DEFAULT_MAX_SESSION_CARDS`. */
+  max_session_cards?: number;
 }
 
 /**

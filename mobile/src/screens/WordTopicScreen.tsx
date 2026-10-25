@@ -30,7 +30,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-
+import type { ContextMenuAnchor } from '../components/ContextMenu';
+import { ContextMenu } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
@@ -40,6 +41,7 @@ import {
   getWordByText,
   getWordTopicById,
   listWordsByTopic,
+  updateWordTopic,
 } from '../db/wordRepository';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { WordTopicScreenProps } from '../navigation/types';
@@ -61,6 +63,11 @@ import { useTheme } from '../theme/ThemeContext';
 import type { TextToSpeechEngine } from '../tts/textToSpeech';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { useSpeechPlayback } from '../tts/useSpeechPlayback';
+import {
+  DEFAULT_TOPIC_PRACTICE_SETTINGS,
+  PracticeSettingsModal,
+  type TopicPracticeSettings,
+} from './PracticeSettingsModal';
 import { WordReviewModal } from './WordReviewModal';
 
 const MODE_NOTICE_TEXT = 'The word bank is saved on this device only.';
@@ -378,35 +385,6 @@ export function createStyles(c: ThemeColors) {
       fontWeight: '600',
       color: c.onPrimary,
     },
-    // --- Overflow menu (Generate / Add words) ---
-    menuBackdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.35)',
-      alignItems: 'flex-end',
-      justifyContent: 'flex-start',
-      padding: SCREEN_GUTTER,
-      paddingTop: 84,
-    },
-    menuSheet: {
-      width: 220,
-      backgroundColor: c.surface,
-      borderColor: c.border,
-      borderWidth: 1,
-      borderRadius: 12,
-      paddingVertical: 6,
-    },
-    menuItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-    },
-    menuItemText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.textPrimary,
-    },
     generatingRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -566,9 +544,9 @@ export function WordTopicScreen({
 
   const [search, setSearch] = useState('');
 
-  // Overflow menu (three-dot): Generate and Add words live behind it so the
-  // header stays uncluttered on small screens.
-  const [menuOpen, setMenuOpen] = useState(false);
+  // Context menu anchored to the header ⋮: Generate, Add words and the
+  // learn-ahead setting live behind it so the header stays uncluttered.
+  const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateCountText, setGenerateCountText] = useState(String(DEFAULT_GENERATION_COUNT));
   const [generating, setGenerating] = useState(false);
@@ -576,6 +554,11 @@ export function WordTopicScreen({
   const [summary, setSummary] = useState<WordGenerationResult | null>(null);
   // Synchronous guard: a double tap in the same tick must not start two AI requests.
   const generatingRef = useRef(false);
+
+  // Per-topic practice settings (the same modal the topics list opens).
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   // Manual input modal (TASK-WB-011): comma-separated words through the same
   // dictionary pipeline as generation.
@@ -663,6 +646,32 @@ export function WordTopicScreen({
       speak(word.id, word.text);
     },
     [speakingId, speak, stop],
+  );
+
+  /**
+   * Persist the settings drafted in the modal. The local topic record is
+   * patched in place so the header menu reflects the new limits without a
+   * reload; failures keep the dialog open with the message.
+   */
+  const handleSaveSettings = useCallback(
+    async (settings: TopicPracticeSettings) => {
+      if (topic === null || settingsSaving) {
+        return;
+      }
+      setSettingsSaving(true);
+      setSettingsError(null);
+      try {
+        const db = await getLocalDatabase();
+        await updateWordTopic(db, topic.id, settings);
+        setTopic({ ...topic, ...settings });
+        setSettingsOpen(false);
+      } catch (err) {
+        setSettingsError(describeError(err));
+      } finally {
+        setSettingsSaving(false);
+      }
+    },
+    [topic, settingsSaving],
   );
 
   const handleOpenWord = useCallback(
@@ -1008,9 +1017,14 @@ export function WordTopicScreen({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Word actions"
-            accessibilityState={{ expanded: menuOpen }}
+            accessibilityState={{ expanded: menuAnchor !== null }}
             testID="word-topic-more"
-            onPress={() => setMenuOpen(value => !value)}
+            onPress={event =>
+              setMenuAnchor({
+                x: event.nativeEvent.pageX,
+                y: event.nativeEvent.pageY,
+              })
+            }
             style={({ pressed }) => [styles.menuButton, pressed && styles.pressedFade]}>
             <Icon name="more" size={20} color={colors.textPrimary} />
           </Pressable>
@@ -1071,47 +1085,62 @@ export function WordTopicScreen({
         />
       )}
 
-      {/* Overflow menu: Generate / Add words. */}
-      <Modal
-        animationType="fade"
-        onRequestClose={() => setMenuOpen(false)}
+      {/* Context menu anchored to the header ⋮: Generate / Add words / Learn ahead. */}
+      <ContextMenu
+        visible={menuAnchor !== null}
+        anchor={menuAnchor}
+        items={[
+          {
+            key: 'generate',
+            label: 'Generate',
+            icon: 'generate',
+            onPress: () => {
+              setMenuAnchor(null);
+              setGenerateOpen(true);
+            },
+          },
+          {
+            key: 'add-words',
+            label: 'Add words',
+            icon: 'plus',
+            onPress: () => {
+              setMenuAnchor(null);
+              setManualOpen(true);
+            },
+          },
+          {
+            key: 'practice-settings',
+            label: 'Practice settings',
+            icon: 'settings',
+            onPress: () => {
+              setMenuAnchor(null);
+              setSettingsError(null);
+              setSettingsOpen(true);
+            },
+          },
+        ]}
+        onCancel={() => setMenuAnchor(null)}
         testID="word-topic-menu"
-        transparent
-        visible={menuOpen}>
-        <Pressable
-          style={styles.menuBackdrop}
-          onPress={() => setMenuOpen(false)}
-          testID="word-topic-menu-backdrop">
-          <Pressable style={styles.menuSheet} testID="word-topic-menu-sheet">
-            <View accessibilityViewIsModal>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Generate new words"
-                testID="word-topic-menu-generate"
-                onPress={() => {
-                  setMenuOpen(false);
-                  setGenerateOpen(true);
-                }}
-                style={({ pressed }) => [styles.menuItem, pressed && styles.pressedFade]}>
-                <Icon name="generate" size={18} color={colors.accent} />
-                <Text style={styles.menuItemText}>Generate</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Add words manually"
-                testID="word-topic-menu-add-words"
-                onPress={() => {
-                  setMenuOpen(false);
-                  setManualOpen(true);
-                }}
-                style={({ pressed }) => [styles.menuItem, pressed && styles.pressedFade]}>
-                <Icon name="plus" size={18} color={colors.accent} />
-                <Text style={styles.menuItemText}>Add words</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      />
+
+      {/* Per-topic practice settings. */}
+      <PracticeSettingsModal
+        visible={settingsOpen}
+        topicTitle={topic?.title ?? ''}
+        settings={topic ?? DEFAULT_TOPIC_PRACTICE_SETTINGS}
+        saving={settingsSaving}
+        error={settingsError}
+        onCancel={() => {
+          if (!settingsSaving) {
+            setSettingsOpen(false);
+            setSettingsError(null);
+          }
+        }}
+        onSave={settings => {
+          // handleSaveSettings handles its own errors, so it never rejects.
+          handleSaveSettings(settings);
+        }}
+      />
 
       {/* Generate form. */}
       <Modal

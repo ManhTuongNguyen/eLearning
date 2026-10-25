@@ -33,6 +33,8 @@ import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenScrollView } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
 import {
+  countNewSentencesIntroducedToday,
+  countSentenceReviewsToday,
   getSentenceTopicById,
   listSentencesByTopic,
   recordSentenceReview,
@@ -51,11 +53,13 @@ import {
 } from '../srs/answerCheck';
 import { selectCardMode } from '../srs/cardMode';
 import { DEFAULT_FSRS_CONFIG, type FsrsConfig } from '../srs/config';
+import { startOfStudyDay } from '../srs/dayBoundary';
 import { previewSchedule, reviewSentence, schedulerStateFrom } from '../srs/scheduler';
 import {
   applyPracticeGrade,
   createPracticeSessionState,
   type PracticeSessionState,
+  type SessionBuildOptions,
 } from '../srs/session';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
@@ -535,6 +539,13 @@ export function SentencePracticeScreen({
 
   const gradingRef = useRef(false);
   const cardShownAtRef = useRef(Date.now());
+  /**
+   * The session's build options (session cap, learn-ahead window, remaining
+   * daily quotas), refreshed by `loadSession` and decremented as cards are
+   * graded so the "Review again" probe never promises cards the daily limits
+   * have already spent.
+   */
+  const sessionLimitsRef = useRef<SessionBuildOptions>({});
   const { speakingId, speak, stop } = useSpeechPlayback(speech);
 
   const loadSession = useCallback(async () => {
@@ -552,11 +563,24 @@ export function SentencePracticeScreen({
       if (!record) {
         throw new Error('This topic no longer exists.');
       }
+      // Anki's daily deck limits: what the review log consumed since the study
+      // day started is subtracted from the topic's per-day settings.
+      const dayStartIso = startOfStudyDay(new Date(), srsConfig.rolloverHour).toISOString();
+      const [newIntroduced, reviewsDone] = await Promise.all([
+        countNewSentencesIntroducedToday(db, topicId, dayStartIso),
+        countSentenceReviewsToday(db, topicId, dayStartIso),
+      ]);
+      sessionLimitsRef.current = {
+        maxCards: record.max_session_cards,
+        learnAheadMinutes: record.learn_ahead_minutes,
+        newRemaining: record.new_cards_per_day - newIntroduced,
+        reviewRemaining: record.max_reviews_per_day - reviewsDone,
+      };
       setTopic(record);
       setPracticeMode(mode);
       setConfig(srsConfig);
       setAllSentences(sentences);
-      setSession(createPracticeSessionState(sentences, new Date()));
+      setSession(createPracticeSessionState(sentences, new Date(), sessionLimitsRef.current));
       setReviewedCount(0);
       setGradeCounts(emptyGradeCounts());
       setPresentationKey(key => key + 1);
@@ -687,6 +711,20 @@ export function SentencePracticeScreen({
           ...outcome.state,
           updated_at: now.toISOString(),
         };
+        // Consume one unit of the matching daily quota (the card's state before
+        // this grade decides which counter it burns, exactly like the log).
+        const limits = sessionLimitsRef.current;
+        if (currentCard.state === 'new') {
+          sessionLimitsRef.current = {
+            ...limits,
+            newRemaining: Math.max(0, (limits.newRemaining ?? 0) - 1),
+          };
+        } else if (currentCard.state === 'review') {
+          sessionLimitsRef.current = {
+            ...limits,
+            reviewRemaining: Math.max(0, (limits.reviewRemaining ?? 0) - 1),
+          };
+        }
         setAllSentences(previous =>
           previous.map(sentence => (sentence.id === updated.id ? updated : sentence)),
         );
@@ -714,9 +752,14 @@ export function SentencePracticeScreen({
   }, [loadSession]);
 
   const nextDueLabel = formatNextDueLabel(allSentences, new Date());
+  // The same limits the session was built with (including the daily quotas
+  // consumed so far) decide whether "Review again" has anything to show.
   const hasRemainingDue =
     allSentences.length > 0 &&
-    createPracticeSessionState(allSentences, new Date(), 1).queue.length > 0;
+    createPracticeSessionState(allSentences, new Date(), {
+      ...sessionLimitsRef.current,
+      maxCards: 1,
+    }).queue.length > 0;
 
   const sessionFinished = !loading && !loadError && currentCard === null;
   const showGradeButtons = currentMode === 'dictation' ? diff !== null : revealed;

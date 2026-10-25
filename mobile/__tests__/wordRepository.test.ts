@@ -13,6 +13,8 @@ import {
   applyWordReviewState,
   countDueWords,
   countDueWordsForTopic,
+  countNewWordsIntroducedToday,
+  countWordReviewsToday,
   createWordTopic,
   deleteWord,
   deleteWordTopic,
@@ -85,8 +87,68 @@ describe('word topics', () => {
     expect(topic.description).toBe("I'm a chef, I often read cooking blogs");
     expect(topic.extra_prompt).toBe('');
     expect(topic.created_at).toBeTruthy();
+    expect(topic.learn_ahead_minutes).toBe(10);
+    expect(topic).toMatchObject({
+      new_cards_per_day: 20,
+      max_reviews_per_day: 200,
+      max_session_cards: 20,
+    });
 
     await expect(createWordTopic(db, { title: '   ' })).rejects.toThrow();
+    await db.close();
+  });
+
+  test('updates the daily limits and clamps them into bounds', async () => {
+    const db = await freshDb();
+    const topic = await createWordTopic(db, { title: 'Cooking' });
+
+    const updated = await updateWordTopic(db, topic.id, {
+      new_cards_per_day: 5,
+      max_reviews_per_day: 60,
+      max_session_cards: 35,
+    });
+    expect(updated).toMatchObject({
+      new_cards_per_day: 5,
+      max_reviews_per_day: 60,
+      max_session_cards: 35,
+    });
+
+    expect(
+      await updateWordTopic(db, topic.id, {
+        new_cards_per_day: 999,
+        max_reviews_per_day: 9999,
+        max_session_cards: 1,
+      }),
+    ).toMatchObject({
+      new_cards_per_day: 50,
+      max_reviews_per_day: 200,
+      max_session_cards: 5,
+    });
+
+    // A zero daily limit (setting the feature off) is a valid value.
+    expect(
+      await updateWordTopic(db, topic.id, { new_cards_per_day: 0, max_reviews_per_day: 0 }),
+    ).toMatchObject({ new_cards_per_day: 0, max_reviews_per_day: 0 });
+
+    await db.close();
+  });
+
+  test('updates the learn-ahead window and clamps it into 0–50', async () => {
+    const db = await freshDb();
+    const topic = await createWordTopic(db, { title: 'Cooking' });
+
+    const updated = await updateWordTopic(db, topic.id, { learn_ahead_minutes: 30 });
+    expect(updated?.learn_ahead_minutes).toBe(30);
+    expect(
+      (await updateWordTopic(db, topic.id, { learn_ahead_minutes: 500 }))?.learn_ahead_minutes,
+    ).toBe(50);
+    expect(
+      (await updateWordTopic(db, topic.id, { learn_ahead_minutes: -3 }))?.learn_ahead_minutes,
+    ).toBe(0);
+    expect(
+      (await createWordTopic(db, { title: 'Travel', learn_ahead_minutes: 0 })).learn_ahead_minutes,
+    ).toBe(0);
+
     await db.close();
   });
 
@@ -311,6 +373,159 @@ describe('due queries', () => {
     const limited = await listDueWords(db, NOW, 2);
     expect(limited.length).toBe(2);
     expect(limited[0].due_at <= limited[1].due_at).toBe(true);
+
+    await db.close();
+  });
+});
+
+describe('learn-ahead due counts', () => {
+  const SOON = '2026-10-24T09:05:00.000Z'; // 5 minutes after NOW
+
+  /** A topic whose single complete word sits in the given state, due at `due_at`. */
+  async function topicWithWord(
+    db: SqlDriver,
+    due_at: string,
+    state: 'learning' | 'relearning' | 'review',
+  ) {
+    const topic = await createWordTopic(db, { title: 'Cooking' });
+    const [word] = await insertWords(db, topic.id, [WORD_A]);
+    await applyWordReviewState(
+      db,
+      word.id,
+      reviewState({ state, due_at, scheduled_days: 0, elapsed_days: 0 }),
+    );
+    return { topic, word };
+  }
+
+  test('a learning word due soon counts while inside the topic window', async () => {
+    const db = await freshDb();
+    const { topic } = await topicWithWord(db, SOON, 'learning');
+
+    expect(await countDueWords(db, NOW)).toBe(1);
+    expect(await countDueWordsForTopic(db, topic.id, NOW)).toBe(1);
+    expect((await listWordTopics(db, NOW))[0]).toMatchObject({ due_count: 1 });
+
+    await updateWordTopic(db, topic.id, { learn_ahead_minutes: 0 });
+    expect(await countDueWords(db, NOW)).toBe(0);
+    expect(await countDueWordsForTopic(db, topic.id, NOW)).toBe(0);
+    expect((await listWordTopics(db, NOW))[0]).toMatchObject({ due_count: 0 });
+
+    await db.close();
+  });
+
+  test('review words and dataless words never count through the window', async () => {
+    const db = await freshDb();
+    const review = await topicWithWord(db, SOON, 'review');
+    const learning = await topicWithWord(db, SOON, 'learning');
+
+    await updateWordTopic(db, review.topic.id, { learn_ahead_minutes: 50 });
+    await updateWordTopic(db, learning.topic.id, { learn_ahead_minutes: 50 });
+    expect(await countDueWords(db, NOW)).toBe(1);
+
+    // A word without dictionary data stays out even inside a wide window.
+    await db.execute("UPDATE words SET data_status = 'missing' WHERE id = ?", [learning.word.id]);
+    expect(await countDueWords(db, NOW)).toBe(0);
+
+    await db.close();
+  });
+});
+
+describe('daily limit due counts', () => {
+  // NOW is 09:00 UTC; the default rollover hour is 4, so the study day started
+  // at 04:00.
+  const DAY_START = '2026-10-24T04:00:00.000Z';
+  const JUST_BEFORE_ROLLOVER = '2026-10-24T03:59:00.000Z';
+
+  /** One log row with the given pre-review state and timestamp. */
+  async function logReview(
+    db: SqlDriver,
+    wordId: number,
+    topicId: number,
+    state: string,
+    reviewedAt: string,
+  ) {
+    await db.execute(
+      `INSERT INTO word_review_log (word_id, topic_id, grade, mode, state, reviewed_at)
+       VALUES (?, ?, 'good', 'dictation', ?, ?)`,
+      [wordId, topicId, state, reviewedAt],
+    );
+  }
+
+  test('caps the new-card badge at what the daily limit has left', async () => {
+    const db = await freshDb();
+    const topic = await createWordTopic(db, { title: 'Cooking', new_cards_per_day: 2 });
+    const words = await insertWords(db, topic.id, [WORD_A, WORD_B]);
+    await insertWords(db, topic.id, [{ text: 'sear', senses_json: SENSES }]);
+    await db.execute('UPDATE words SET due_at = ?', [EARLIER]);
+
+    expect(await countDueWords(db, NOW)).toBe(2);
+    expect((await listWordTopics(db, NOW))[0]).toMatchObject({ due_count: 2 });
+
+    await logReview(db, words[0].id, topic.id, 'new', '2026-10-24T08:00:00.000Z');
+    await logReview(db, words[1].id, topic.id, 'new', '2026-10-24T08:30:00.000Z');
+    expect(await countDueWords(db, NOW)).toBe(0);
+    expect(await countDueWordsForTopic(db, topic.id, NOW)).toBe(0);
+
+    await db.close();
+  });
+
+  test('caps the review badge and never caps learning words', async () => {
+    const db = await freshDb();
+    const topic = await createWordTopic(db, { title: 'Cooking', max_reviews_per_day: 2 });
+    const words = await insertWords(db, topic.id, [
+      WORD_A,
+      WORD_B,
+      { text: 'sear', senses_json: SENSES },
+    ]);
+    for (const word of words) {
+      await applyWordReviewState(db, word.id, reviewState({ due_at: EARLIER }));
+    }
+    await db.execute('UPDATE words SET due_at = ?', [EARLIER]);
+
+    expect(await countDueWords(db, NOW)).toBe(2);
+
+    await logReview(db, words[0].id, topic.id, 'review', '2026-10-24T08:00:00.000Z');
+    expect(await countDueWords(db, NOW)).toBe(1);
+
+    const [learning] = await insertWords(db, topic.id, [{ text: 'whisk', senses_json: SENSES }]);
+    await applyWordReviewState(
+      db,
+      learning.id,
+      reviewState({ state: 'learning', due_at: EARLIER, scheduled_days: 0, elapsed_days: 0 }),
+    );
+    expect(await countDueWords(db, NOW)).toBe(2);
+
+    await db.close();
+  });
+
+  test('the daily counters count only rows since the given day start', async () => {
+    const db = await freshDb();
+    const topic = await createWordTopic(db, { title: 'Cooking' });
+    const [word] = await insertWords(db, topic.id, [WORD_A]);
+
+    await logReview(db, word.id, topic.id, 'new', JUST_BEFORE_ROLLOVER);
+    expect(await countNewWordsIntroducedToday(db, topic.id, DAY_START)).toBe(0);
+    expect(await countWordReviewsToday(db, topic.id, DAY_START)).toBe(0);
+
+    await logReview(db, word.id, topic.id, 'new', DAY_START);
+    await logReview(db, word.id, topic.id, 'review', '2026-10-24T08:00:00.000Z');
+    expect(await countNewWordsIntroducedToday(db, topic.id, DAY_START)).toBe(1);
+    expect(await countWordReviewsToday(db, topic.id, DAY_START)).toBe(1);
+
+    await db.close();
+  });
+
+  test('the badge derives its day start from the srs rollover hour', async () => {
+    const db = await freshDb();
+    const topic = await createWordTopic(db, { title: 'Cooking', new_cards_per_day: 1 });
+    const [word, other] = await insertWords(db, topic.id, [WORD_A, WORD_B]);
+    await db.execute('UPDATE words SET due_at = ?', [EARLIER]);
+
+    await logReview(db, word.id, topic.id, 'new', JUST_BEFORE_ROLLOVER);
+    expect(await countDueWords(db, NOW)).toBe(1);
+
+    await logReview(db, other.id, topic.id, 'new', DAY_START);
+    expect(await countDueWords(db, NOW)).toBe(0);
 
     await db.close();
   });

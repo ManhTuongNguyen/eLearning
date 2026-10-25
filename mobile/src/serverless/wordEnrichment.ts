@@ -10,8 +10,9 @@
  * writing anything. Apply is a deterministic local write performed by the
  * repository.
  */
-import type { SqlDriver } from '../db/driver';
+
 import type { EnglishLevel } from '../api/profile';
+import type { SqlDriver } from '../db/driver';
 import { getLearningProfile } from '../db/profileStore';
 import type { WordRecord, WordSense, WordSenseDefinition, WordTopicRecord } from '../db/types';
 
@@ -25,6 +26,7 @@ function optionalStringList(raw: unknown, limit: number): string[] {
     .map(item => item.trim())
     .slice(0, limit);
 }
+
 import { OpenRouterResponseError } from './errors';
 import type { CompleteFn } from './wordGeneration';
 

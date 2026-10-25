@@ -14,7 +14,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-
+import type { ContextMenuAnchor } from '../components/ContextMenu';
+import { ContextMenu } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
@@ -23,6 +24,7 @@ import {
   getSentenceTopicById,
   insertSentences,
   listSentencesByTopic,
+  updateSentenceTopic,
 } from '../db/sentenceRepository';
 import type { SentenceRecord, SentenceTopicRecord } from '../db/types';
 import type { SentenceTopicScreenProps } from '../navigation/types';
@@ -35,6 +37,11 @@ import { useTheme } from '../theme/ThemeContext';
 import type { TextToSpeechEngine } from '../tts/textToSpeech';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { useSpeechPlayback } from '../tts/useSpeechPlayback';
+import {
+  DEFAULT_TOPIC_PRACTICE_SETTINGS,
+  PracticeSettingsModal,
+  type TopicPracticeSettings,
+} from './PracticeSettingsModal';
 import { SentenceReviewModal } from './SentenceReviewModal';
 
 /** Counts offered by the generation panel. */
@@ -74,6 +81,16 @@ function createStyles(c: ThemeColors) {
       fontSize: 20,
       fontWeight: '700',
       color: c.textPrimary,
+    },
+    // --- Header context menu button; the popover itself is <ContextMenu> ---
+    menuButton: {
+      // Kept text-row height so the back link and title sit at exactly the
+      // same height as the word topic screen's header.
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     descriptionBox: {
       maxHeight: DESCRIPTION_MAX_HEIGHT,
@@ -426,6 +443,13 @@ export function SentenceTopicScreen({
   const topicId = route.params.topicId;
 
   const [topic, setTopic] = useState<SentenceTopicRecord | null>(null);
+
+  // Context menu anchored to the header ⋮: the per-topic practice settings
+  // live behind it so the header stays uncluttered, matching the word screen.
+  const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [sentences, setSentences] = useState<SentenceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -512,6 +536,32 @@ export function SentenceTopicScreen({
       speak(sentence.id, sentence.text);
     },
     [speakingId, speak, stop],
+  );
+
+  /**
+   * Persist the settings drafted in the modal. The local topic record is
+   * patched in place so the header menu reflects the new limits without a
+   * reload; failures keep the dialog open with the message.
+   */
+  const handleSaveSettings = useCallback(
+    async (settings: TopicPracticeSettings) => {
+      if (topic === null || settingsSaving) {
+        return;
+      }
+      setSettingsSaving(true);
+      setSettingsError(null);
+      try {
+        const db = await getLocalDatabase();
+        await updateSentenceTopic(db, topic.id, settings);
+        setTopic({ ...topic, ...settings });
+        setSettingsOpen(false);
+      } catch (err) {
+        setSettingsError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSettingsSaving(false);
+      }
+    },
+    [topic, settingsSaving],
   );
 
   const handleDelete = useCallback(
@@ -650,6 +700,20 @@ export function SentenceTopicScreen({
           <Text style={styles.title} numberOfLines={1} testID="sentence-topic-title">
             {topic?.title ?? 'Topic'}
           </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Topic actions"
+            accessibilityState={{ expanded: menuAnchor !== null }}
+            testID="sentence-topic-more"
+            onPress={event =>
+              setMenuAnchor({
+                x: event.nativeEvent.pageX,
+                y: event.nativeEvent.pageY,
+              })
+            }
+            style={({ pressed }) => [styles.menuButton, pressed && styles.pressedFade]}>
+            <Icon name="more" size={20} color={colors.textPrimary} />
+          </Pressable>
         </View>
         {topic?.description ? (
           <View style={styles.descriptionBox}>
@@ -851,6 +915,45 @@ export function SentenceTopicScreen({
           setCandidates([]);
         }}
         onKeep={handleKeepCandidates}
+      />
+
+      {/* Header context menu (practice settings), anchored to the ⋮. */}
+      <ContextMenu
+        visible={menuAnchor !== null}
+        anchor={menuAnchor}
+        items={[
+          {
+            key: 'practice-settings',
+            label: 'Practice settings',
+            icon: 'settings',
+            onPress: () => {
+              setMenuAnchor(null);
+              setSettingsError(null);
+              setSettingsOpen(true);
+            },
+          },
+        ]}
+        onCancel={() => setMenuAnchor(null)}
+        testID="sentence-topic-menu"
+      />
+
+      {/* Per-topic practice settings. */}
+      <PracticeSettingsModal
+        visible={settingsOpen}
+        topicTitle={topic?.title ?? ''}
+        settings={topic ?? DEFAULT_TOPIC_PRACTICE_SETTINGS}
+        saving={settingsSaving}
+        error={settingsError}
+        onCancel={() => {
+          if (!settingsSaving) {
+            setSettingsOpen(false);
+            setSettingsError(null);
+          }
+        }}
+        onSave={settings => {
+          // handleSaveSettings handles its own errors, so it never rejects.
+          handleSaveSettings(settings);
+        }}
       />
     </Screen>
   );

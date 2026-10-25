@@ -6,27 +6,45 @@
  * a title; the description is optional and may be left blank or filled with a
  * real-life scenario such as "meeting someone new in a new city".
  *
- * A topic row also carries a delete action. Deleting asks for confirmation and
- * then removes the topic together with its sentences and review history (the
- * schema's `ON DELETE CASCADE`).
+ * A topic row carries a ⋮ overflow menu with the per-topic settings (learn
+ * ahead limit) and Delete. Deleting asks for confirmation and then removes the
+ * topic together with its sentences and review history (the schema's
+ * `ON DELETE CASCADE`).
  *
  * The whole feature is serverless-only: until the persisted mode has been
  * restored the screen shows its spinner, and in server mode it replaces the
  * list with an explicit notice instead of touching the local database.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-
+import {
+  ActivityIndicator,
+  type GestureResponderEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import type { ContextMenuAnchor, ContextMenuItem } from '../components/ContextMenu';
+import { ContextMenu } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
 import { SCREEN_GUTTER, Screen, ScreenHeader, ScreenList } from '../components/ScreenLayout';
 import { getLocalDatabase } from '../db/database';
-import { deleteSentenceTopic, listSentenceTopics } from '../db/sentenceRepository';
+import {
+  deleteSentenceTopic,
+  listSentenceTopics,
+  updateSentenceTopic,
+} from '../db/sentenceRepository';
 import type { SentenceTopicSummary } from '../db/types';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { SentenceTopicsScreenProps } from '../navigation/types';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import { DeleteTopicModal } from './DeleteTopicModal';
+import {
+  DEFAULT_TOPIC_PRACTICE_SETTINGS,
+  PracticeSettingsModal,
+  type TopicPracticeSettings,
+} from './PracticeSettingsModal';
 
 const MODE_NOTICE_TEXT =
   'Real-life sentences are saved on this device only. Switch to server mode to ' +
@@ -83,7 +101,7 @@ export function createStyles(c: ThemeColors) {
       alignItems: 'center',
       gap: 14,
     },
-    rowDeleteButton: {
+    rowMenuButton: {
       width: 44,
       height: 44,
       borderRadius: 22,
@@ -174,13 +192,12 @@ export function createStyles(c: ThemeColors) {
 type TopicRowProps = {
   item: SentenceTopicSummary;
   onPress: (item: SentenceTopicSummary) => void;
-  onDelete: (item: SentenceTopicSummary) => void;
-  deleting: boolean;
+  onMenu: (item: SentenceTopicSummary, event: GestureResponderEvent) => void;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 };
 
-function SentenceTopicRow({ item, onPress, onDelete, deleting, colors, styles }: TopicRowProps) {
+function SentenceTopicRow({ item, onPress, onMenu, colors, styles }: TopicRowProps) {
   const dueBadge =
     item.due_count > 0 ? (
       <View style={styles.badge} testID={`topic-${item.id}-due`}>
@@ -223,17 +240,11 @@ function SentenceTopicRow({ item, onPress, onDelete, deleting, colors, styles }:
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Delete topic ${item.title}`}
-        accessibilityState={{ disabled: deleting, busy: deleting }}
-        testID={`topic-delete-${item.id}`}
-        onPress={() => onDelete(item)}
-        disabled={deleting}
-        style={({ pressed }) => [styles.rowDeleteButton, pressed && styles.pressedFade]}>
-        {deleting ? (
-          <ActivityIndicator size="small" color={colors.textMuted} />
-        ) : (
-          <Icon name="trash" size={18} color={colors.danger} />
-        )}
+        accessibilityLabel={`Topic actions for ${item.title}`}
+        testID={`topic-menu-${item.id}`}
+        onPress={event => onMenu(item, event)}
+        style={({ pressed }) => [styles.rowMenuButton, pressed && styles.pressedFade]}>
+        <Icon name="more" size={18} color={colors.textMuted} />
       </Pressable>
     </View>
   );
@@ -251,6 +262,13 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SentenceTopicSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [menuTarget, setMenuTarget] = useState<{
+    item: SentenceTopicSummary;
+    anchor: ContextMenuAnchor;
+  } | null>(null);
+  const [settingsTarget, setSettingsTarget] = useState<SentenceTopicSummary | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   const serverMode = modeStatus === 'ready' && mode === 'server';
   const serverlessMode = modeStatus === 'ready' && mode === 'serverless';
@@ -351,6 +369,63 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
     }
   }, [deletingId, deleteTarget]);
 
+  /** The ⋮ actions of the row that opened the menu. */
+  const menuItems: readonly ContextMenuItem[] = useMemo(() => {
+    const target = menuTarget?.item ?? null;
+    if (target === null) {
+      return [];
+    }
+    return [
+      {
+        key: 'practice-settings',
+        label: 'Practice settings',
+        icon: 'settings',
+        detail: `${target.learn_ahead_minutes}m ahead · ${target.max_session_cards}/session`,
+        onPress: () => {
+          setMenuTarget(null);
+          setSettingsError(null);
+          setSettingsTarget(target);
+        },
+      },
+      {
+        key: 'delete',
+        label: 'Delete topic',
+        icon: 'trash',
+        danger: true,
+        onPress: () => {
+          setMenuTarget(null);
+          handleDeleteTopic(target);
+        },
+      },
+    ];
+  }, [menuTarget, handleDeleteTopic]);
+
+  /**
+   * Persist the settings drafted in the modal. Failures keep the dialog open
+   * with the message; success closes it and reloads the list so the due badges
+   * reflect the new limits immediately.
+   */
+  const handleSaveSettings = useCallback(
+    async (settings: TopicPracticeSettings) => {
+      if (settingsTarget === null || settingsSaving) {
+        return;
+      }
+      setSettingsSaving(true);
+      setSettingsError(null);
+      try {
+        const db = await getLocalDatabase();
+        await updateSentenceTopic(db, settingsTarget.id, settings);
+        setSettingsTarget(null);
+        setReloadKey(key => key + 1);
+      } catch (err) {
+        setSettingsError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSettingsSaving(false);
+      }
+    },
+    [settingsTarget, settingsSaving],
+  );
+
   return (
     <Screen style={styles.container} testID="sentence-topics-screen">
       <ScreenHeader style={styles.header}>
@@ -399,8 +474,15 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
               <SentenceTopicRow
                 item={item}
                 onPress={handleTopicPress}
-                onDelete={handleDeleteTopic}
-                deleting={deletingId === item.id}
+                onMenu={(rowItem, event) =>
+                  setMenuTarget({
+                    item: rowItem,
+                    anchor: {
+                      x: event.nativeEvent.pageX,
+                      y: event.nativeEvent.pageY,
+                    },
+                  })
+                }
                 colors={colors}
                 styles={styles}
               />
@@ -422,6 +504,34 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
         onConfirm={() => {
           // confirmDeleteTopic handles its own errors, so it never rejects.
           confirmDeleteTopic();
+        }}
+      />
+
+      {/* Row context menu (learn ahead / delete), anchored to the ⋮. */}
+      <ContextMenu
+        visible={menuTarget !== null}
+        anchor={menuTarget?.anchor ?? null}
+        items={menuItems}
+        onCancel={() => setMenuTarget(null)}
+        testID="sentence-topic-row-menu"
+      />
+
+      {/* Per-topic practice settings. */}
+      <PracticeSettingsModal
+        visible={settingsTarget !== null}
+        topicTitle={settingsTarget?.title ?? ''}
+        settings={settingsTarget ?? DEFAULT_TOPIC_PRACTICE_SETTINGS}
+        saving={settingsSaving}
+        error={settingsError}
+        onCancel={() => {
+          if (!settingsSaving) {
+            setSettingsTarget(null);
+            setSettingsError(null);
+          }
+        }}
+        onSave={settings => {
+          // handleSaveSettings handles its own errors, so it never rejects.
+          handleSaveSettings(settings);
         }}
       />
     </Screen>

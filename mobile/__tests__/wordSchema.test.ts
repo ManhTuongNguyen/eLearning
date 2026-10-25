@@ -88,12 +88,12 @@ async function countRows(
 }
 
 describe('word bank schema (TASK-WB-001)', () => {
-  test('a fresh database creates the word bank and records version 7', async () => {
+  test('a fresh database creates the word bank and records version 9', async () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
 
-    expect(SCHEMA_VERSION).toBe(7);
-    expect(await userVersion(db)).toBe(7);
+    expect(SCHEMA_VERSION).toBe(9);
+    expect(await userVersion(db)).toBe(9);
 
     const tables = await schemaNames(db, 'table');
     expect(tables).toEqual(expect.arrayContaining(['word_topics', 'words', 'word_review_log']));
@@ -159,6 +159,47 @@ describe('word bank schema (TASK-WB-001)', () => {
       wordTopicId,
     ]);
     expect(topicRow.rows[0]?.extra_prompt).toBe('focus on kitchen verbs');
+
+    await db.close();
+  });
+
+  test('an existing v7 word bank gains the learn-ahead column with the default', async () => {
+    const db = await openSqlJsDriver();
+    await migrateDatabase(db, MIGRATIONS.slice(0, 7));
+    expect(await userVersion(db)).toBe(7);
+
+    const wordTopicId = await insertTopic(db);
+
+    await migrateDatabase(db);
+
+    expect(await userVersion(db)).toBe(SCHEMA_VERSION);
+    const row = await db.execute('SELECT learn_ahead_minutes FROM word_topics WHERE id = ?', [
+      wordTopicId,
+    ]);
+    expect(row.rows[0]?.learn_ahead_minutes).toBe(10);
+
+    await db.close();
+  });
+
+  test('an existing v8 word bank gains the daily limit columns with Anki defaults', async () => {
+    const db = await openSqlJsDriver();
+    await migrateDatabase(db, MIGRATIONS.slice(0, 8));
+    expect(await userVersion(db)).toBe(8);
+
+    const wordTopicId = await insertTopic(db);
+
+    await migrateDatabase(db);
+
+    expect(await userVersion(db)).toBe(SCHEMA_VERSION);
+    const row = await db.execute(
+      'SELECT new_cards_per_day, max_reviews_per_day, max_session_cards FROM word_topics WHERE id = ?',
+      [wordTopicId],
+    );
+    expect(row.rows[0]).toMatchObject({
+      new_cards_per_day: 20,
+      max_reviews_per_day: 200,
+      max_session_cards: 20,
+    });
 
     await db.close();
   });

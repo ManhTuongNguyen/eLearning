@@ -12,6 +12,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
 import {
   createSentenceTopic,
+  getSentenceTopicById,
   insertSentences,
   listSentencesByTopic,
   listSentenceTopics,
@@ -195,7 +196,8 @@ describe('SentenceTopicsScreen — delete topic', () => {
       expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
     });
 
-    await fireEvent.press(view.getByTestId(`topic-delete-${topic.id}`));
+    await fireEvent.press(view.getByTestId(`topic-menu-${topic.id}`));
+    await fireEvent.press(view.getByTestId('sentence-topic-row-menu-delete'));
 
     // The themed dialog replaces the native Android alert.
     expect(view.getByTestId('delete-topic-modal')).toBeTruthy();
@@ -225,7 +227,8 @@ describe('SentenceTopicsScreen — delete topic', () => {
       expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
     });
 
-    await fireEvent.press(view.getByTestId(`topic-delete-${topic.id}`));
+    await fireEvent.press(view.getByTestId(`topic-menu-${topic.id}`));
+    await fireEvent.press(view.getByTestId('sentence-topic-row-menu-delete'));
     database.getLocalDatabase.mockRejectedValueOnce(new Error('disk full'));
     await fireEvent.press(view.getByTestId('delete-topic-confirm'));
 
@@ -246,7 +249,8 @@ describe('SentenceTopicsScreen — delete topic', () => {
       expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
     });
 
-    await fireEvent.press(view.getByTestId(`topic-delete-${topic.id}`));
+    await fireEvent.press(view.getByTestId(`topic-menu-${topic.id}`));
+    await fireEvent.press(view.getByTestId('sentence-topic-row-menu-delete'));
     expect(view.getByTestId('delete-topic-modal')).toBeTruthy();
 
     await fireEvent.press(view.getByTestId('delete-topic-cancel'));
@@ -256,6 +260,85 @@ describe('SentenceTopicsScreen — delete topic', () => {
     });
     expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
     expect(await listSentenceTopics(localDb)).toHaveLength(1);
+  });
+});
+
+describe('SentenceTopicsScreen — practice settings', () => {
+  test('row menu opens the modal with current values and saves new ones', async () => {
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createSentenceTopic(localDb, { title: 'Coffee' });
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId(`topic-menu-${topic.id}`));
+    // The menu shows the current learn-ahead window and session cap.
+    expect(view.getByTestId('sentence-topic-row-menu-practice-settings')).toHaveTextContent(
+      /10m ahead · 20\/session/,
+    );
+
+    await fireEvent.press(view.getByTestId('sentence-topic-row-menu-practice-settings'));
+
+    expect(view.getByTestId('practice-settings-modal')).toBeTruthy();
+    expect(view.getByTestId('practice-settings-topic')).toHaveTextContent('Coffee');
+    expect(view.getByTestId('practice-settings-value-learnAhead')).toHaveTextContent('10 min');
+    expect(view.getByTestId('practice-settings-value-newPerDay')).toHaveTextContent('20');
+    expect(view.getByTestId('practice-settings-value-maxReviews')).toHaveTextContent('200');
+    expect(view.getByTestId('practice-settings-value-sessionCards')).toHaveTextContent('20');
+
+    const learnAhead = view.getByTestId('practice-settings-slider-learnAhead');
+    expect(learnAhead.props.minimumValue).toBe(0);
+    expect(learnAhead.props.maximumValue).toBe(50);
+    expect(learnAhead.props.step).toBe(1);
+
+    const newPerDay = view.getByTestId('practice-settings-slider-newPerDay');
+    await act(async () => {
+      learnAhead.props.onValueChange(25);
+      newPerDay.props.onValueChange(5);
+    });
+    expect(view.getByTestId('practice-settings-value-learnAhead')).toHaveTextContent('25 min');
+    expect(view.getByTestId('practice-settings-value-newPerDay')).toHaveTextContent('5');
+
+    await fireEvent.press(view.getByTestId('practice-settings-save'));
+
+    await waitFor(() => {
+      expect(view.queryByTestId('practice-settings-modal')).toBeFalsy();
+    });
+    const saved = await getSentenceTopicById(localDb, topic.id);
+    expect(saved).toMatchObject({
+      learn_ahead_minutes: 25,
+      new_cards_per_day: 5,
+      max_reviews_per_day: 200,
+      max_session_cards: 20,
+    });
+  });
+
+  test('a zero daily limit reads as Off and cancel leaves the stored values alone', async () => {
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createSentenceTopic(localDb, { title: 'Coffee' });
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByTestId(`topic-${topic.id}`)).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId(`topic-menu-${topic.id}`));
+    await fireEvent.press(view.getByTestId('sentence-topic-row-menu-practice-settings'));
+
+    const newPerDay = view.getByTestId('practice-settings-slider-newPerDay');
+    await act(async () => {
+      newPerDay.props.onValueChange(0);
+    });
+    expect(view.getByTestId('practice-settings-value-newPerDay')).toHaveTextContent('Off');
+
+    await fireEvent.press(view.getByTestId('practice-settings-cancel'));
+
+    await waitFor(() => {
+      expect(view.queryByTestId('practice-settings-modal')).toBeFalsy();
+    });
+    expect((await getSentenceTopicById(localDb, topic.id))?.new_cards_per_day).toBe(20);
   });
 });
 

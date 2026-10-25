@@ -11,6 +11,8 @@ import {
   applyReviewState,
   countDueSentences,
   countDueSentencesForTopic,
+  countNewSentencesIntroducedToday,
+  countSentenceReviewsToday,
   countSentencesInTopic,
   createSentenceTopic,
   deleteSentence,
@@ -140,6 +142,73 @@ describe('sentence topics', () => {
       /needs a title/,
     );
     expect(await updateSentenceTopic(db, 9_999, { title: 'Ghost' })).toBeNull();
+
+    await db.close();
+  });
+
+  test('creates a topic with the default learn-ahead window and clamps updates into 0–50', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
+    expect(topic.learn_ahead_minutes).toBe(10);
+    expect(await getSentenceTopicById(db, topic.id)).toMatchObject({ learn_ahead_minutes: 10 });
+
+    const updated = await updateSentenceTopic(db, topic.id, { learn_ahead_minutes: 30 });
+    expect(updated?.learn_ahead_minutes).toBe(30);
+
+    // Out-of-range values clamp into the bounds rather than throwing.
+    expect(
+      (await updateSentenceTopic(db, topic.id, { learn_ahead_minutes: 500 }))?.learn_ahead_minutes,
+    ).toBe(50);
+    expect(
+      (await updateSentenceTopic(db, topic.id, { learn_ahead_minutes: -3 }))?.learn_ahead_minutes,
+    ).toBe(0);
+
+    // A custom value is honored on creation too.
+    expect(
+      (await createSentenceTopic(db, { title: 'Neighbours', learn_ahead_minutes: 0 }))
+        .learn_ahead_minutes,
+    ).toBe(0);
+
+    await db.close();
+  });
+
+  test('creates a topic with Anki default daily limits and clamps updates into bounds', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
+    expect(topic).toMatchObject({
+      new_cards_per_day: 20,
+      max_reviews_per_day: 200,
+      max_session_cards: 20,
+    });
+
+    const updated = await updateSentenceTopic(db, topic.id, {
+      new_cards_per_day: 5,
+      max_reviews_per_day: 60,
+      max_session_cards: 35,
+    });
+    expect(updated).toMatchObject({
+      new_cards_per_day: 5,
+      max_reviews_per_day: 60,
+      max_session_cards: 35,
+    });
+
+    // Out-of-range values clamp into each setting's bounds.
+    expect(
+      await updateSentenceTopic(db, topic.id, {
+        new_cards_per_day: 999,
+        max_reviews_per_day: 9999,
+        max_session_cards: 1,
+      }),
+    ).toMatchObject({
+      new_cards_per_day: 50,
+      max_reviews_per_day: 200,
+      max_session_cards: 5,
+    });
+
+    // A zero daily limit (setting the feature off) is a valid value.
+    expect(
+      await updateSentenceTopic(db, topic.id, { new_cards_per_day: 0, max_reviews_per_day: 0 }),
+    ).toMatchObject({ new_cards_per_day: 0, max_reviews_per_day: 0 });
 
     await db.close();
   });
@@ -301,6 +370,181 @@ describe('due queries', () => {
     expect(await countDueSentencesForTopic(db, neighbours.id, NOW)).toBe(0);
     expect(await countDueSentences(db, LATER)).toBe(1);
     expect(await countDueSentencesForTopic(db, coffee.id, LATER)).toBe(1);
+
+    await db.close();
+  });
+});
+
+describe('learn-ahead due counts', () => {
+  const SOON = '2026-10-19T09:05:00.000Z'; // 5 minutes after NOW
+  const LATER_SOON = '2026-10-19T09:20:00.000Z'; // 20 minutes after NOW
+
+  /** A topic whose single sentence sits in the given state, due at `due_at`. */
+  async function topicWithCard(
+    db: SqlDriver,
+    due_at: string,
+    state: 'learning' | 'relearning' | 'review',
+  ) {
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
+    const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[0]]);
+    await applyReviewState(
+      db,
+      sentence.id,
+      reviewState({ state, due_at, scheduled_days: 0, elapsed_days: 0 }),
+    );
+    return { topic, sentence };
+  }
+
+  test('a learning card due soon counts while inside the topic window', async () => {
+    const db = await freshDb();
+    const { topic } = await topicWithCard(db, SOON, 'learning');
+
+    // Default window is 10 minutes, so the badge matches what practice serves.
+    expect(await countDueSentences(db, NOW)).toBe(1);
+    expect(await countDueSentencesForTopic(db, topic.id, NOW)).toBe(1);
+    expect((await listSentenceTopics(db, NOW))[0]).toMatchObject({ due_count: 1 });
+
+    // Setting the window to 0 disables it everywhere at once.
+    await updateSentenceTopic(db, topic.id, { learn_ahead_minutes: 0 });
+    expect(await countDueSentences(db, NOW)).toBe(0);
+    expect(await countDueSentencesForTopic(db, topic.id, NOW)).toBe(0);
+    expect((await listSentenceTopics(db, NOW))[0]).toMatchObject({ due_count: 0 });
+
+    await db.close();
+  });
+
+  test('a learning card due beyond the window only counts once the window covers it', async () => {
+    const db = await freshDb();
+    const { topic } = await topicWithCard(db, LATER_SOON, 'relearning');
+
+    expect(await countDueSentences(db, NOW)).toBe(0);
+    await updateSentenceTopic(db, topic.id, { learn_ahead_minutes: 25 });
+    expect(await countDueSentences(db, NOW)).toBe(1);
+
+    await db.close();
+  });
+
+  test('review cards and suspended cards never count through the window', async () => {
+    const db = await freshDb();
+    const review = await topicWithCard(db, SOON, 'review');
+    const learning = await topicWithCard(db, SOON, 'learning');
+
+    await updateSentenceTopic(db, review.topic.id, { learn_ahead_minutes: 50 });
+    await updateSentenceTopic(db, learning.topic.id, { learn_ahead_minutes: 50 });
+    expect(await countDueSentences(db, NOW)).toBe(1);
+
+    await suspend(db, learning.sentence.id);
+    expect(await countDueSentences(db, NOW)).toBe(0);
+
+    await db.close();
+  });
+});
+
+describe('daily limit due counts', () => {
+  // NOW is 09:00 UTC; the default rollover hour is 4, so the study day started
+  // at 04:00.
+  const DAY_START = '2026-10-19T04:00:00.000Z';
+  const JUST_BEFORE_ROLLOVER = '2026-10-19T03:59:00.000Z';
+
+  /** One log row with the given pre-review state and timestamp. */
+  async function logReview(
+    db: SqlDriver,
+    sentenceId: number,
+    topicId: number,
+    state: string,
+    reviewedAt: string,
+  ) {
+    await db.execute(
+      `INSERT INTO sentence_review_log (sentence_id, topic_id, grade, mode, state, reviewed_at)
+       VALUES (?, ?, 'good', 'dictation', ?, ?)`,
+      [sentenceId, topicId, state, reviewedAt],
+    );
+  }
+
+  test('caps the new-card badge at what the daily limit has left', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee', new_cards_per_day: 2 });
+    const sentences = await insertSentences(db, topic.id, CANDIDATES);
+    await insertSentences(db, topic.id, [
+      { text: 'See you tomorrow.', meaning: 'Saying goodbye.', situation: 'Leaving.' },
+    ]);
+    // Pin the insertion stamps to a due time before NOW.
+    await db.execute('UPDATE sentences SET due_at = ?', [EARLIER]);
+
+    expect(await countDueSentences(db, NOW)).toBe(2);
+    expect((await listSentenceTopics(db, NOW))[0]).toMatchObject({ due_count: 2 });
+
+    // Two new cards already introduced today → the daily budget is spent.
+    await logReview(db, sentences[0].id, topic.id, 'new', '2026-10-19T08:00:00.000Z');
+    await logReview(db, sentences[1].id, topic.id, 'new', '2026-10-19T08:30:00.000Z');
+    expect(await countDueSentences(db, NOW)).toBe(0);
+    expect(await countDueSentencesForTopic(db, topic.id, NOW)).toBe(0);
+
+    await db.close();
+  });
+
+  test('caps the review badge at max reviews per day, learning cards never capped', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee', max_reviews_per_day: 2 });
+    const sentences = await insertSentences(db, topic.id, [
+      ...CANDIDATES,
+      { text: 'See you tomorrow.', meaning: 'Saying goodbye.', situation: 'Leaving.' },
+    ]);
+    for (const sentence of sentences) {
+      await applyReviewState(db, sentence.id, reviewState({ due_at: EARLIER }));
+    }
+
+    expect(await countDueSentences(db, NOW)).toBe(2);
+
+    // One review already answered today: one slot left.
+    await logReview(db, sentences[0].id, topic.id, 'review', '2026-10-19T08:00:00.000Z');
+    expect(await countDueSentences(db, NOW)).toBe(1);
+
+    // A learning-step card is never limited.
+    const [learning] = await insertSentences(db, topic.id, [
+      { text: 'Take care.', meaning: 'A farewell.', situation: 'Leaving a friend.' },
+    ]);
+    await applyReviewState(
+      db,
+      learning.id,
+      reviewState({ state: 'learning', due_at: EARLIER, scheduled_days: 0, elapsed_days: 0 }),
+    );
+    expect(await countDueSentences(db, NOW)).toBe(2);
+
+    await db.close();
+  });
+
+  test('the daily counters count only rows since the given day start', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
+    const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[0]]);
+
+    await logReview(db, sentence.id, topic.id, 'new', JUST_BEFORE_ROLLOVER);
+    expect(await countNewSentencesIntroducedToday(db, topic.id, DAY_START)).toBe(0);
+    expect(await countSentenceReviewsToday(db, topic.id, DAY_START)).toBe(0);
+
+    await logReview(db, sentence.id, topic.id, 'new', DAY_START);
+    await logReview(db, sentence.id, topic.id, 'review', '2026-10-19T08:00:00.000Z');
+    expect(await countNewSentencesIntroducedToday(db, topic.id, DAY_START)).toBe(1);
+    expect(await countSentenceReviewsToday(db, topic.id, DAY_START)).toBe(1);
+
+    await db.close();
+  });
+
+  test('the badge derives its day start from the srs rollover hour', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee', new_cards_per_day: 1 });
+    const [sentence, other] = await insertSentences(db, topic.id, CANDIDATES);
+    await db.execute('UPDATE sentences SET due_at = ?', [EARLIER]);
+
+    // One new card already introduced before today's 04:00 rollover: it
+    // belongs to yesterday's study day, so the budget is untouched.
+    await logReview(db, sentence.id, topic.id, 'new', JUST_BEFORE_ROLLOVER);
+    expect(await countDueSentences(db, NOW)).toBe(1);
+
+    // The same row after the rollover spends today's budget.
+    await logReview(db, other.id, topic.id, 'new', DAY_START);
+    expect(await countDueSentences(db, NOW)).toBe(0);
 
     await db.close();
   });

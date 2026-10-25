@@ -404,6 +404,47 @@ const MIGRATION_007: readonly string[] = [
 ];
 
 /**
+ * v8 — per-topic learn-ahead limit (TASK anki-parity). Each topic gains a
+ * `learn_ahead_minutes` column: while a card sits in a `learning`/`relearning`
+ * step, practice may pull it forward when it is due within this many minutes
+ * and nothing else is due (Anki's deck option of the same name). `0` disables.
+ * The `DEFAULT 10` must stay in sync with `DEFAULT_LEARN_AHEAD_MINUTES` in
+ * `src/srs/session.ts`; existing topics pick the default up on migration.
+ */
+const MIGRATION_008: readonly string[] = [
+  `ALTER TABLE sentence_topics
+      ADD COLUMN learn_ahead_minutes INTEGER NOT NULL DEFAULT 10`,
+  `ALTER TABLE word_topics
+      ADD COLUMN learn_ahead_minutes INTEGER NOT NULL DEFAULT 10`,
+];
+
+/**
+ * v9 — per-topic daily practice limits (Anki deck options). Three columns on
+ * each topic table: `new_cards_per_day` caps how many `new`-state cards
+ * practice may introduce per study day, `max_reviews_per_day` caps `review`
+ * cards per study day, and `max_session_cards` is the per-sitting session cap
+ * (replaces the fixed 20). Learning/relearning step cards are never limited
+ * (Anki does not limit intraday learning either). The day rolls over at
+ * `srs_config.rollover_hour`; consumption is counted from the review log
+ * (`state` is the card state before the review). The DEFAULTs must stay in
+ * sync with the DEFAULT_* constants in `src/srs/session.ts`.
+ */
+const MIGRATION_009: readonly string[] = [
+  `ALTER TABLE sentence_topics
+      ADD COLUMN new_cards_per_day INTEGER NOT NULL DEFAULT 20`,
+  `ALTER TABLE sentence_topics
+      ADD COLUMN max_reviews_per_day INTEGER NOT NULL DEFAULT 200`,
+  `ALTER TABLE sentence_topics
+      ADD COLUMN max_session_cards INTEGER NOT NULL DEFAULT 20`,
+  `ALTER TABLE word_topics
+      ADD COLUMN new_cards_per_day INTEGER NOT NULL DEFAULT 20`,
+  `ALTER TABLE word_topics
+      ADD COLUMN max_reviews_per_day INTEGER NOT NULL DEFAULT 200`,
+  `ALTER TABLE word_topics
+      ADD COLUMN max_session_cards INTEGER NOT NULL DEFAULT 20`,
+];
+
+/**
  * Ordered migration list; length is the current schema version. Append new
  * entries — never edit shipped ones.
  */
@@ -415,6 +456,8 @@ export const MIGRATIONS: readonly (readonly string[])[] = [
   MIGRATION_005,
   MIGRATION_006,
   MIGRATION_007,
+  MIGRATION_008,
+  MIGRATION_009,
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS.length;

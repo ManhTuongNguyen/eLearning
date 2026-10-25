@@ -60,12 +60,12 @@ async function countRows(db: SqlDriver, table: string): Promise<number> {
 }
 
 describe('sentence schema (TASK-SENT-003, TASK-SENT-015)', () => {
-  test('a fresh database creates the sentence bank and records version 6', async () => {
+  test('a fresh database creates the sentence bank and records version 9', async () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
 
-    expect(SCHEMA_VERSION).toBe(7);
-    expect(await userVersion(db)).toBe(7);
+    expect(SCHEMA_VERSION).toBe(9);
+    expect(await userVersion(db)).toBe(9);
 
     const tables = await schemaNames(db, 'table');
     expect(tables).toEqual(
@@ -217,6 +217,51 @@ describe('sentence schema (TASK-SENT-003, TASK-SENT-015)', () => {
       state: 'new',
       mode: 'recall',
       reviewed_at: NOW,
+    });
+
+    await db.close();
+  });
+
+  test('an existing v7 sentence bank gains the learn-ahead column with the default', async () => {
+    const db = await openSqlJsDriver();
+    await migrateDatabase(db, MIGRATIONS.slice(0, 7));
+    expect(await userVersion(db)).toBe(7);
+
+    const topicId = await insertTopic(db);
+
+    await migrateDatabase(db);
+
+    expect(await userVersion(db)).toBe(SCHEMA_VERSION);
+    const topicRow = await db.execute(
+      'SELECT learn_ahead_minutes FROM sentence_topics WHERE id = ?',
+      [topicId],
+    );
+    // Existing topics pick up the shipped default (kept in sync with
+    // DEFAULT_LEARN_AHEAD_MINUTES in src/srs/session.ts).
+    expect(topicRow.rows[0]?.learn_ahead_minutes).toBe(10);
+
+    await db.close();
+  });
+
+  test('an existing v8 sentence bank gains the daily limit columns with Anki defaults', async () => {
+    const db = await openSqlJsDriver();
+    await migrateDatabase(db, MIGRATIONS.slice(0, 8));
+    expect(await userVersion(db)).toBe(8);
+
+    const topicId = await insertTopic(db);
+
+    await migrateDatabase(db);
+
+    expect(await userVersion(db)).toBe(SCHEMA_VERSION);
+    const topicRow = await db.execute(
+      'SELECT new_cards_per_day, max_reviews_per_day, max_session_cards FROM sentence_topics WHERE id = ?',
+      [topicId],
+    );
+    // Defaults kept in sync with the DEFAULT_* constants in src/srs/session.ts.
+    expect(topicRow.rows[0]).toMatchObject({
+      new_cards_per_day: 20,
+      max_reviews_per_day: 200,
+      max_session_cards: 20,
     });
 
     await db.close();
