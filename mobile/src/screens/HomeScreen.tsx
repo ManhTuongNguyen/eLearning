@@ -53,6 +53,9 @@ function createStyles(c: ThemeColors) {
       backgroundColor: c.background,
       paddingTop: SCREEN_TOP_SPACING,
     },
+    scrollView: {
+      marginTop: 12,
+    },
     content: {
       gap: 18,
     },
@@ -285,7 +288,10 @@ export function HomeScreen({ navigation }: HomeScreenProps) {
 
   return (
     <Screen style={styles.container} testID="home-screen">
-      <ScreenScrollView bounces={false} showsVerticalScrollIndicator={false}>
+      <ScreenScrollView
+        style={styles.scrollView}
+        bounces={false}
+        showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           <View style={styles.heroCard}>
             <Text style={styles.title}>Home</Text>

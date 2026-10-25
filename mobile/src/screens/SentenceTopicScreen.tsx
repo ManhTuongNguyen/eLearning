@@ -83,6 +83,7 @@ function createStyles(c: ThemeColors) {
       backgroundColor: c.surface,
       paddingHorizontal: 12,
       paddingVertical: 10,
+      marginBottom: 12,
     },
     descriptionScroll: {
       maxHeight: DESCRIPTION_MAX_HEIGHT - 22,
@@ -667,7 +668,7 @@ export function SentenceTopicScreen({
             onPress={event =>
               setMenuAnchor({
                 x: event.nativeEvent.pageX,
-                y: event.nativeEvent.pageY,
+                y: event.nativeEvent.pageY - 25,
               })
             }
             style={({ pressed }) => [styles.menuButton, pressed && styles.pressedFade]}>

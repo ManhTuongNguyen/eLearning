@@ -113,6 +113,7 @@ export function createStyles(c: ThemeColors) {
       backgroundColor: c.surface,
       paddingHorizontal: 12,
       paddingVertical: 10,
+      marginBottom: 12,
     },
     descriptionScroll: {
       maxHeight: DESCRIPTION_MAX_HEIGHT - 22,
@@ -160,7 +161,7 @@ export function createStyles(c: ThemeColors) {
       color: c.textMuted,
       // No top margin: the action row above already carries marginBottom.
       // Bottom spacing separates the hint from the search box below.
-      marginBottom: 10,
+      marginBottom: 12,
     },
     searchInput: {
       backgroundColor: c.surface,
@@ -747,7 +748,7 @@ export function WordTopicScreen({
             onPress={event =>
               setMenuAnchor({
                 x: event.nativeEvent.pageX,
-                y: event.nativeEvent.pageY,
+                y: event.nativeEvent.pageY - 25,
               })
             }
             style={({ pressed }) => [styles.menuButton, pressed && styles.pressedFade]}>

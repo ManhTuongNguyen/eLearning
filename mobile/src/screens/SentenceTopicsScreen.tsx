@@ -63,21 +63,13 @@ export function createStyles(c: ThemeColors) {
       backgroundColor: c.background,
       paddingTop: SCREEN_TOP_SPACING,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      marginBottom: 16,
-    },
     newTopicButton: {
       // Compact 32x32 circle so the header row height matches the title text
       // (a 44x44 button inflated the row and pushed the title down).
       width: 32,
       height: 32,
-      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: c.primary,
     },
     rowGroup: {
       backgroundColor: c.surface,
@@ -324,7 +316,7 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
             onPress={handleNewTopic}
             style={({ pressed }) => [styles.newTopicButton, pressed && styles.pressedFade]}
             disabled={!serverlessMode}>
-            <Icon name="plus" size={20} color={colors.onPrimary} />
+            <Icon name="plus" size={22} color={colors.onPrimary} />
           </Pressable>
         }
       />
@@ -371,7 +363,7 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
                     item,
                     anchor: {
                       x: event.nativeEvent.pageX,
-                      y: event.nativeEvent.pageY,
+                      y: event.nativeEvent.pageY - 25,
                     },
                   })
                 }

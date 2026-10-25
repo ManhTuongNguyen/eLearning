@@ -351,13 +351,12 @@ describe('SentenceTopicsScreen — new topic entry point', () => {
     expect(navigate).toHaveBeenCalledWith('SentenceTopicNew');
   });
 
-  test('the add button is a circle', async () => {
+  test('the add button is a bare icon control', async () => {
     const { view } = await renderInMode();
 
     expect(view.getByTestId('sentence-topics-new')).toHaveStyle({
       width: 32,
       height: 32,
-      borderRadius: 16,
     });
   });
 });
