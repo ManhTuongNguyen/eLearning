@@ -42,7 +42,7 @@ import type {
 import { parseWordPhonetics, parseWordSenses } from './types';
 
 const TOPIC_COLUMNS =
-  'id, title, description, extra_prompt, learn_ahead_minutes, new_cards_per_day, ' +
+  'id, title, description, extra_prompt, is_system, learn_ahead_minutes, new_cards_per_day, ' +
   'max_reviews_per_day, max_session_cards, created_at, updated_at';
 const WORD_COLUMNS =
   'id, topic_id, text, normalized_text, phonetics_json, senses_json, data_source, data_status, ' +
@@ -115,6 +115,7 @@ function mapTopicRow(row: SqlRow): WordTopicRecord {
     title: String(row.title ?? ''),
     description: String(row.description ?? ''),
     extra_prompt: String(row.extra_prompt ?? ''),
+    is_system: Number(row.is_system ?? 0) === 1,
     learn_ahead_minutes: Number(row.learn_ahead_minutes ?? DEFAULT_LEARN_AHEAD_MINUTES),
     new_cards_per_day: Number(row.new_cards_per_day ?? DEFAULT_NEW_CARDS_PER_DAY),
     max_reviews_per_day: Number(row.max_reviews_per_day ?? DEFAULT_MAX_REVIEWS_PER_DAY),
@@ -224,6 +225,7 @@ export async function createWordTopic(
     title,
     description,
     extra_prompt: extraPrompt,
+    is_system: false,
     learn_ahead_minutes: learnAheadMinutes,
     new_cards_per_day: newCardsPerDay,
     max_reviews_per_day: maxReviewsPerDay,
@@ -234,8 +236,9 @@ export async function createWordTopic(
 }
 
 /**
- * List topics newest first, each with its word count and the number of words
- * practice would still show at `now`: new/review words capped by what the
+ * List topics with the seeded collected-words topic pinned first, then
+ * user-created topics newest first, each with its word count and the number of
+ * words practice would still show at `now`: new/review words capped by what the
  * topic's daily limits have left (counted from the review log since the
  * rollover), learning words never capped. Suspended words and
  * `data_status='missing'` words never count.
@@ -245,13 +248,13 @@ export async function listWordTopics(
   now: string = nowIso(),
 ): Promise<WordTopicSummary[]> {
   const result = await db.execute(
-    `SELECT t.id, t.title, t.description, t.extra_prompt, t.learn_ahead_minutes,
+    `SELECT t.id, t.title, t.description, t.extra_prompt, t.is_system, t.learn_ahead_minutes,
             t.new_cards_per_day, t.max_reviews_per_day, t.max_session_cards,
             t.created_at, t.updated_at,
             (SELECT COUNT(*) FROM words w WHERE w.topic_id = t.id) AS word_count,
             ${DUE_COMPONENT_SELECT}
        FROM word_topics t
-      ORDER BY t.created_at DESC, t.id DESC`,
+      ORDER BY t.is_system DESC, t.created_at DESC, t.id DESC`,
     [now, now, now, now, now],
   );
   return result.rows.map(row => ({
@@ -270,7 +273,20 @@ export async function getWordTopicById(
   return row ? mapTopicRow(row) : null;
 }
 
-/** Update the title, description, prompts and/or practice limits of a topic. */
+/** The seeded collected-words topic words captured from text selection land in. */
+export async function getSystemWordTopic(db: SqlExecutor): Promise<WordTopicRecord | null> {
+  const result = await db.execute(
+    `SELECT ${TOPIC_COLUMNS} FROM word_topics WHERE is_system = 1 LIMIT 1`,
+  );
+  const row = result.rows[0];
+  return row ? mapTopicRow(row) : null;
+}
+
+/**
+ * Update the title, description, prompts and/or practice limits of a topic.
+ * The seeded collected-words topic rejects changes to its title, description
+ * and extra prompt — only its practice limits are editable.
+ */
 export async function updateWordTopic(
   db: SqlExecutor,
   id: number,
@@ -284,6 +300,16 @@ export async function updateWordTopic(
     max_session_cards?: number;
   },
 ): Promise<WordTopicRecord | null> {
+  if (
+    patch.title !== undefined ||
+    patch.description !== undefined ||
+    patch.extra_prompt !== undefined
+  ) {
+    const existing = await getWordTopicById(db, id);
+    if (existing?.is_system) {
+      throw new Error('updateWordTopic: the collected-words topic cannot be edited');
+    }
+  }
   const assignments: string[] = [];
   const params: (string | number)[] = [];
   if (patch.title !== undefined) {
@@ -330,6 +356,10 @@ export async function updateWordTopic(
 
 /** Delete a topic; its words and review log cascade away with it. */
 export async function deleteWordTopic(db: SqlExecutor, id: number): Promise<void> {
+  const existing = await getWordTopicById(db, id);
+  if (existing?.is_system) {
+    throw new Error('deleteWordTopic: the collected-words topic cannot be deleted');
+  }
   await db.execute('DELETE FROM word_topics WHERE id = ?', [id]);
 }
 

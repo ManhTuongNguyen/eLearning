@@ -533,22 +533,45 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
 
   const formTitleInvalid = form !== null && form.title.trim() === '';
 
-  /** The ⋮ actions of the row that opened the menu. */
+  /**
+   * The ⋮ actions of the row that opened the menu. The seeded collected-words
+   * topic offers only its practice settings: its title, description and extra
+   * prompt are locked and it cannot be deleted.
+   */
   const menuItems: readonly ContextMenuItem[] = useMemo(() => {
     const target = menuTarget?.item ?? null;
     if (target === null) {
       return [];
     }
+    const editItems: readonly ContextMenuItem[] = target.is_system
+      ? []
+      : [
+          {
+            key: 'edit',
+            label: 'Edit topic',
+            icon: 'edit',
+            onPress: () => {
+              setMenuTarget(null);
+              handleEditTopic(target);
+            },
+          },
+        ];
+    const deleteItems: readonly ContextMenuItem[] = target.is_system
+      ? []
+      : [
+          {
+            key: 'delete',
+            label: 'Delete topic',
+            icon: 'trash',
+            danger: true,
+            onPress: () => {
+              setMenuTarget(null);
+              handleDeleteTopic(target);
+            },
+          },
+        ];
     return [
-      {
-        key: 'edit',
-        label: 'Edit topic',
-        icon: 'edit',
-        onPress: () => {
-          setMenuTarget(null);
-          handleEditTopic(target);
-        },
-      },
+      ...editItems,
       {
         key: 'practice-settings',
         label: 'Practice settings',
@@ -560,16 +583,7 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
           setSettingsTarget(target);
         },
       },
-      {
-        key: 'delete',
-        label: 'Delete topic',
-        icon: 'trash',
-        danger: true,
-        onPress: () => {
-          setMenuTarget(null);
-          handleDeleteTopic(target);
-        },
-      },
+      ...deleteItems,
     ];
   }, [menuTarget, handleEditTopic, handleDeleteTopic]);
 

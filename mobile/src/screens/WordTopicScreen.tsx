@@ -50,6 +50,7 @@ import { createProviderClient } from '../serverless/providerRegistry';
 import { loadServerlessConfig } from '../serverless/settings';
 import {
   addManualWords,
+  generateCollectedWords,
   generateTopicWords,
   MAX_WORD_COUNT,
   MIN_WORD_COUNT,
@@ -694,6 +695,9 @@ export function WordTopicScreen({
   // --- Generate ---------------------------------------------------------------
   const parsedCount = parseGenerationCount(generateCountText);
   const countInvalid = generateCountText.trim() !== '' && parsedCount === null;
+  // The collected-words topic generates from its own words; an empty
+  // collection has nothing to grow from.
+  const collectedEmpty = (topic?.is_system ?? false) && words.length === 0;
 
   const handleGenerate = useCallback(async () => {
     if (generatingRef.current || parsedCount === null) {
@@ -717,16 +721,29 @@ export function WordTopicScreen({
         throw new Error('This topic no longer exists.');
       }
       const existing = await listWordsByTopic(db, topicId);
-      const result = await generateTopicWords(
-        db,
-        request => client.complete(request),
-        word => lookupDictionaryWord(word, fetch),
-        {
-          topic: record,
-          count: parsedCount,
-          existingWords: existing.map(word => word.text),
-        },
-      );
+      // The collected-words topic has no description to prompt from — its own
+      // words are the prompt (WORD_CAPTURE_V1 TASK-WC-005).
+      const result = record.is_system
+        ? await generateCollectedWords(
+            db,
+            request => client.complete(request),
+            word => lookupDictionaryWord(word, fetch),
+            {
+              topicId,
+              count: parsedCount,
+              existingWords: existing.map(word => word.text),
+            },
+          )
+        : await generateTopicWords(
+            db,
+            request => client.complete(request),
+            word => lookupDictionaryWord(word, fetch),
+            {
+              topic: record,
+              count: parsedCount,
+              existingWords: existing.map(word => word.text),
+            },
+          );
       setSummary(result);
       setGenerateOpen(false);
       // Open the review modal over this run's candidates, with the
@@ -1092,7 +1109,7 @@ export function WordTopicScreen({
         items={[
           {
             key: 'generate',
-            label: 'Generate',
+            label: topic?.is_system ? 'Generate similar words' : 'Generate',
             icon: 'generate',
             onPress: () => {
               setMenuAnchor(null);
@@ -1156,10 +1173,12 @@ export function WordTopicScreen({
         <View style={styles.backdrop}>
           <View style={styles.modalCard} accessibilityViewIsModal>
             <Text style={styles.modalTitle} testID="word-generate-title">
-              Generate words
+              {topic?.is_system ? 'Generate similar words' : 'Generate words'}
             </Text>
             <Text style={styles.hint}>
-              The AI picks the words; meanings and IPA come from the Free Dictionary API.
+              {topic?.is_system
+                ? 'The AI picks words in the spirit of your collection; meanings and IPA come from the Free Dictionary API.'
+                : 'The AI picks the words; meanings and IPA come from the Free Dictionary API.'}
             </Text>
             <Text style={styles.inputLabel}>How many words (1–30)?</Text>
             <TextInput
@@ -1173,6 +1192,11 @@ export function WordTopicScreen({
             {countInvalid ? (
               <Text role="alert" style={styles.modalError} testID="word-generate-count-error">
                 Enter a number between 1 and 30.
+              </Text>
+            ) : null}
+            {collectedEmpty ? (
+              <Text role="alert" style={styles.modalError} testID="word-generate-empty-error">
+                Collect or add words first — similar words grow from your collection.
               </Text>
             ) : null}
             <View style={styles.modalFooter}>
@@ -1196,7 +1220,7 @@ export function WordTopicScreen({
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{
-                  disabled: generating || parsedCount === null,
+                  disabled: generating || parsedCount === null || collectedEmpty,
                   busy: generating,
                 }}
                 testID="word-generate-submit"
@@ -1204,11 +1228,11 @@ export function WordTopicScreen({
                   // handleGenerate handles its own errors, so it never rejects.
                   handleGenerate();
                 }}
-                disabled={generating || parsedCount === null}
+                disabled={generating || parsedCount === null || collectedEmpty}
                 style={({ pressed }) => [
                   styles.modalButton,
                   styles.modalPrimaryButton,
-                  (generating || parsedCount === null) && styles.modalDisabled,
+                  (generating || parsedCount === null || collectedEmpty) && styles.modalDisabled,
                   pressed && styles.modalDisabled,
                 ]}>
                 {generating ? (
@@ -1217,7 +1241,9 @@ export function WordTopicScreen({
                     <Text style={styles.modalPrimaryText}>Generating…</Text>
                   </View>
                 ) : (
-                  <Text style={styles.modalPrimaryText}>Generate</Text>
+                  <Text style={styles.modalPrimaryText}>
+                    {topic?.is_system ? 'Generate similar' : 'Generate'}
+                  </Text>
                 )}
               </Pressable>
             </View>

@@ -11,7 +11,7 @@
  * press event carries no page position (unit tests, accessibility tools) the
  * menu falls back to the top-right corner so it always opens.
  */
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
@@ -50,8 +50,9 @@ export interface ContextMenuProps {
 }
 
 const MENU_WIDTH = 208;
-const ITEM_HEIGHT = 48;
-const SHEET_CHROME = 12;
+/** Per-row height estimate for the flip math; also the row's touch-target floor. */
+const ITEM_HEIGHT = 44;
+const SHEET_CHROME = 8;
 const SCREEN_MARGIN = 8;
 
 /**
@@ -97,7 +98,9 @@ function createStyles(c: ThemeColors) {
       borderColor: c.border,
       borderWidth: 1,
       borderRadius: 12,
-      paddingVertical: 6,
+      // The sheet has no height of its own: it hugs the rows it holds, so a
+      // one-item menu is a one-line box.
+      paddingVertical: 4,
       // Float over the row instead of docking to an edge.
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
@@ -106,15 +109,20 @@ function createStyles(c: ThemeColors) {
       elevation: 8,
     },
     item: {
+      // The touch-target floor; the row's own height is its content plus
+      // padding, so single-line items stay snug instead of a fixed 48pt box.
       minHeight: ITEM_HEIGHT,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      paddingVertical: 12,
+      paddingVertical: 10,
       paddingHorizontal: 14,
     },
-    itemText: {
+    itemTextBlock: {
       flex: 1,
+      gap: 1,
+    },
+    itemText: {
       fontSize: 15,
       fontWeight: '600',
       color: c.textPrimary,
@@ -126,6 +134,13 @@ function createStyles(c: ThemeColors) {
       fontSize: 13,
       fontWeight: '500',
       color: c.textMuted,
+    },
+    // Hairline rule between rows, inset to the icon edge. Absent above the
+    // first and below the last row so the sheet reads as one card.
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: c.border,
+      marginHorizontal: 14,
     },
     pressedFade: {
       opacity: 0.7,
@@ -156,24 +171,33 @@ export function ContextMenu({ visible, anchor, items, onCancel, testID }: Contex
           accessibilityViewIsModal
           testID={testID ? `${testID}-sheet` : undefined}>
           <View accessibilityRole="menu">
-            {items.map(item => (
-              <Pressable
-                key={item.key}
-                accessibilityRole="menuitem"
-                accessibilityLabel={item.detail ? `${item.label}, ${item.detail}` : item.label}
-                testID={testID ? `${testID}-${item.key}` : undefined}
-                onPress={item.onPress}
-                style={({ pressed }) => [styles.item, pressed && styles.pressedFade]}>
-                <Icon
-                  name={item.icon}
-                  size={18}
-                  color={item.danger ? colors.danger : colors.accent}
-                />
-                <Text style={[styles.itemText, item.danger && styles.itemTextDanger]}>
-                  {item.label}
-                </Text>
-                {item.detail ? <Text style={styles.itemDetail}>{item.detail}</Text> : null}
-              </Pressable>
+            {items.map((item, index) => (
+              <Fragment key={item.key}>
+                {index > 0 ? (
+                  <View
+                    style={styles.separator}
+                    testID={testID ? `${testID}-divider-${item.key}` : undefined}
+                  />
+                ) : null}
+                <Pressable
+                  accessibilityRole="menuitem"
+                  accessibilityLabel={item.detail ? `${item.label}, ${item.detail}` : item.label}
+                  testID={testID ? `${testID}-${item.key}` : undefined}
+                  onPress={item.onPress}
+                  style={({ pressed }) => [styles.item, pressed && styles.pressedFade]}>
+                  <Icon
+                    name={item.icon}
+                    size={18}
+                    color={item.danger ? colors.danger : colors.accent}
+                  />
+                  <View style={styles.itemTextBlock}>
+                    <Text style={[styles.itemText, item.danger && styles.itemTextDanger]}>
+                      {item.label}
+                    </Text>
+                    {item.detail ? <Text style={styles.itemDetail}>{item.detail}</Text> : null}
+                  </View>
+                </Pressable>
+              </Fragment>
             ))}
           </View>
         </Pressable>

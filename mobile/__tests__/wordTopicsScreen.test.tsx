@@ -116,14 +116,16 @@ describe('WordTopicsScreen — mode gating', () => {
     await waitFor(() => {
       expect(database.getLocalDatabase).toHaveBeenCalled();
     });
+    // The seeded collected-words topic is always present on a fresh database.
     await waitFor(() => {
-      expect(view.getByTestId('word-empty')).toBeTruthy();
+      expect(view.getByTestId('word-topic-1')).toBeTruthy();
+      expect(view.getByText('Collected words')).toBeTruthy();
     });
   });
 });
 
 describe('WordTopicsScreen — topic list', () => {
-  test('lists topics newest first with word and due counts', async () => {
+  test('pins the collected-words topic first, then user topics newest first', async () => {
     const { view, db: localDb } = await renderInMode();
     await createWordTopic(localDb, { title: 'Cooking', description: 'kitchen verbs' });
     await new Promise<void>(resolve => setTimeout(() => resolve(), 5));
@@ -131,11 +133,13 @@ describe('WordTopicsScreen — topic list', () => {
 
     await flushFocus();
     await waitFor(() => {
-      expect(view.getByTestId('word-topic-2')).toBeTruthy();
+      expect(view.getByTestId('word-topic-3')).toBeTruthy();
     });
 
     expect(view.getByText('Travel')).toBeTruthy();
     expect(view.getByText('Cooking')).toBeTruthy();
+    expect(view.getByText('Collected words')).toBeTruthy();
+    // Pinned-first ordering is covered by the repository tests.
   });
 
   test('shows word and due counts read from the repository', async () => {
@@ -156,13 +160,33 @@ describe('WordTopicsScreen — topic list', () => {
 
   test('shows an "all done" badge when nothing is due', async () => {
     const { view, db: localDb } = await renderInMode();
-    await createWordTopic(localDb, { title: 'Cooking', description: '' });
+    const topic = await createWordTopic(localDb, { title: 'Cooking', description: '' });
 
     await flushFocus();
     await waitFor(() => {
+      expect(view.getByTestId(`word-topic-${topic.id}-done`)).toBeTruthy();
+      // The seeded system topic carries the same ghost badge.
       expect(view.getByTestId('word-topic-1-done')).toBeTruthy();
-      expect(view.getByText('all done')).toBeTruthy();
     });
+  });
+
+  test('the system topic menu offers only practice settings', async () => {
+    const { view, db: localDb } = await renderInMode();
+    const topics = await listWordTopics(localDb);
+    const system = topics.find(topic => topic.is_system);
+    if (!system) {
+      throw new Error('expected the seeded system topic');
+    }
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByTestId(`word-topic-${system.id}`)).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId(`word-topic-menu-${system.id}`));
+    expect(view.getByTestId('word-topic-row-menu-practice-settings')).toBeTruthy();
+    expect(view.queryByTestId('word-topic-row-menu-edit')).toBeFalsy();
+    expect(view.queryByTestId('word-topic-row-menu-delete')).toBeFalsy();
   });
 });
 
@@ -191,7 +215,7 @@ describe('WordTopicsScreen — create and edit topic', () => {
     expect(view.getByTestId('word-topic-form-save').props.accessibilityState).toMatchObject({
       disabled: true,
     });
-    expect(await listWordTopics(db)).toEqual([]);
+    expect((await listWordTopics(db)).filter(topic => !topic.is_system)).toEqual([]);
   });
 
   test('creating a topic persists it and navigates to the new topic screen', async () => {
@@ -213,11 +237,12 @@ describe('WordTopicsScreen — create and edit topic', () => {
       expect(navigate).toHaveBeenCalledWith('WordTopic', { topicId: expect.any(Number) });
     });
     const topics = await listWordTopics(localDb);
-    expect(topics).toHaveLength(1);
-    expect(topics[0]).toMatchObject({
+    expect(topics).toHaveLength(2); // the seeded system topic plus "Cooking"
+    expect(topics.find(topic => topic.title === 'Cooking')).toMatchObject({
       title: 'Cooking',
       description: "I'm a chef, I often read cooking blogs",
       extra_prompt: 'focus on kitchen verbs',
+      is_system: false,
     });
   });
 
@@ -241,7 +266,7 @@ describe('WordTopicsScreen — create and edit topic', () => {
       expect(view.queryByTestId('word-topic-form-modal')).toBeFalsy();
     });
     const updated = await listWordTopics(localDb);
-    expect(updated[0]).toMatchObject({
+    expect(updated.find(topic => topic.title === 'Cooking')).toMatchObject({
       title: 'Cooking',
       description: 'blog reading',
       extra_prompt: 'focus on verbs',
@@ -268,7 +293,7 @@ describe('WordTopicsScreen — delete topic', () => {
     expect(view.getByText(/"Cooking" and its words and practice history/)).toBeTruthy();
 
     // Nothing is removed until the learner confirms.
-    expect(await listWordTopics(localDb)).toHaveLength(1);
+    expect((await listWordTopics(localDb)).filter(topic => !topic.is_system)).toHaveLength(1);
 
     await fireEvent.press(view.getByTestId('word-topic-delete-confirm'));
 
@@ -276,7 +301,8 @@ describe('WordTopicsScreen — delete topic', () => {
       expect(view.queryByTestId('word-topic-delete-modal')).toBeFalsy();
       expect(view.queryByTestId(`word-topic-${topic.id}`)).toBeFalsy();
     });
-    expect(await listWordTopics(localDb)).toEqual([]);
+    // Only the seeded system topic survives the delete.
+    expect((await listWordTopics(localDb)).map(row => row.title)).toEqual(['Collected words']);
     expect(await listWordsByTopic(localDb, topic.id)).toEqual([]);
   });
 
@@ -298,7 +324,8 @@ describe('WordTopicsScreen — delete topic', () => {
     await waitFor(() => {
       expect(view.queryByTestId('word-topic-delete-modal')).toBeFalsy();
     });
-    expect(await listWordTopics(localDb)).toHaveLength(1);
+    // The user topic survives alongside the seeded system topic.
+    expect(await listWordTopics(localDb)).toHaveLength(2);
   });
 });
 

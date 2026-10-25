@@ -321,13 +321,19 @@ export interface WordSenseDefinition {
  * A learner-created vocabulary topic. `description` is free-form learner
  * context (domain, habits, self-described level) passed verbatim to the
  * generation and enrichment prompts; `extra_prompt` is an optional additional
- * AI instruction, `''` when absent.
+ * AI instruction, `''` when absent. `is_system` marks the one seeded
+ * "Collected words" topic words captured from Android text selection land in:
+ * its title, description and extra prompt are locked and it cannot be deleted
+ * (only its practice limits are editable). App code never creates system
+ * topics — migration v10 seeds the single row.
  */
 export interface WordTopicRecord {
   id: number;
   title: string;
   description: string;
   extra_prompt: string;
+  /** Whether this is the seeded, undeletable collected-words topic. */
+  is_system: boolean;
   /**
    * Learn-ahead window in minutes (Anki deck option): a `learning`/`relearning`
    * word due within this many minutes may be shown early once nothing else is

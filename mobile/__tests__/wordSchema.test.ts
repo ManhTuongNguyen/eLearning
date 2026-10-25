@@ -88,12 +88,12 @@ async function countRows(
 }
 
 describe('word bank schema (TASK-WB-001)', () => {
-  test('a fresh database creates the word bank and records version 9', async () => {
+  test('a fresh database creates the word bank and records version 10', async () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
 
-    expect(SCHEMA_VERSION).toBe(9);
-    expect(await userVersion(db)).toBe(9);
+    expect(SCHEMA_VERSION).toBe(10);
+    expect(await userVersion(db)).toBe(10);
 
     const tables = await schemaNames(db, 'table');
     expect(tables).toEqual(expect.arrayContaining(['word_topics', 'words', 'word_review_log']));
@@ -109,6 +109,38 @@ describe('word bank schema (TASK-WB-001)', () => {
         'idx_word_review_log_reviewed',
       ]),
     );
+
+    // v10 seeds exactly one collected-words system topic.
+    const systemRow = await db.execute(
+      `SELECT title, description, extra_prompt, is_system FROM word_topics WHERE is_system = 1`,
+    );
+    expect(systemRow.rows).toHaveLength(1);
+    expect(systemRow.rows[0]).toMatchObject({
+      title: 'Collected words',
+      description: 'Words saved from text selection on your phone.',
+      extra_prompt: '',
+      is_system: 1,
+    });
+
+    await db.close();
+  });
+
+  test('an existing v9 word bank gains is_system and the seeded topic', async () => {
+    const db = await openSqlJsDriver();
+    await migrateDatabase(db, MIGRATIONS.slice(0, 9));
+    expect(await userVersion(db)).toBe(9);
+
+    const wordTopicId = await insertTopic(db);
+
+    await migrateDatabase(db);
+
+    expect(await userVersion(db)).toBe(SCHEMA_VERSION);
+    const row = await db.execute('SELECT is_system FROM word_topics WHERE id = ?', [wordTopicId]);
+    expect(row.rows[0]?.is_system).toBe(0);
+    const seeded = await db.execute(
+      'SELECT COUNT(*) AS total FROM word_topics WHERE is_system = 1',
+    );
+    expect(Number(seeded.rows[0]?.total)).toBe(1);
 
     await db.close();
   });
@@ -263,7 +295,8 @@ describe('word bank schema (TASK-WB-001)', () => {
 
     expect(await countRows(db, 'words')).toBe(1);
     expect(await countRows(db, 'word_review_log')).toBe(0);
-    expect(await countRows(db, 'word_topics')).toBe(1);
+    // The other user topic plus the seeded system topic.
+    expect(await countRows(db, 'word_topics')).toBe(2);
 
     await db.close();
   });
@@ -284,7 +317,8 @@ describe('word bank schema (TASK-WB-001)', () => {
 
     expect(await countRows(db, 'words')).toBe(0);
     expect(await countRows(db, 'word_review_log')).toBe(0);
-    expect(await countRows(db, 'word_topics')).toBe(1);
+    // The topic itself plus the seeded system topic.
+    expect(await countRows(db, 'word_topics')).toBe(2);
 
     await db.close();
   });

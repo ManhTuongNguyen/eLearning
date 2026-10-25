@@ -19,6 +19,7 @@ import {
   deleteWord,
   deleteWordTopic,
   fillWordDictionaryData,
+  getSystemWordTopic,
   getWordById,
   getWordByText,
   getWordTopicById,
@@ -152,7 +153,7 @@ describe('word topics', () => {
     await db.close();
   });
 
-  test('lists topics newest first with word and due counts', async () => {
+  test('lists topics with the collected-words system topic pinned first', async () => {
     const db = await freshDb();
     const first = await createWordTopic(db, { title: 'Cooking' });
     await createWordTopic(db, { title: 'Travel' });
@@ -163,10 +164,11 @@ describe('word topics', () => {
     await db.execute('UPDATE words SET due_at = ?', [EARLIER]);
 
     const topics = await listWordTopics(db, NOW);
-    expect(topics.map(item => item.title)).toEqual(['Travel', 'Cooking']);
-    expect(topics[1].word_count).toBe(1);
-    expect(topics[1].due_count).toBe(1);
-    expect(topics[0].word_count).toBe(0);
+    expect(topics.map(item => item.title)).toEqual(['Collected words', 'Travel', 'Cooking']);
+    expect(topics[0]).toMatchObject({ is_system: true, word_count: 0 });
+    expect(topics[2].word_count).toBe(1);
+    expect(topics[2].due_count).toBe(1);
+    expect(topics[1].word_count).toBe(0);
 
     await db.close();
   });
@@ -177,6 +179,7 @@ describe('word topics', () => {
 
     const fetched = await getWordTopicById(db, topic.id);
     expect(fetched?.title).toBe('Cooking');
+    expect(fetched?.is_system).toBe(false);
     expect(await getWordTopicById(db, 999)).toBeNull();
 
     const updated = await updateWordTopic(db, topic.id, {
@@ -196,6 +199,33 @@ describe('word topics', () => {
 
     await deleteWordTopic(db, topic.id);
     expect(await getWordTopicById(db, topic.id)).toBeNull();
+
+    await db.close();
+  });
+
+  test('the system topic rejects edits to its locked fields and deletion', async () => {
+    const db = await freshDb();
+    const system = await getSystemWordTopic(db);
+    if (!system) {
+      throw new Error('expected the seeded system topic');
+    }
+    expect(system).toMatchObject({ title: 'Collected words', is_system: true });
+
+    await expect(updateWordTopic(db, system.id, { title: 'Renamed' })).rejects.toThrow(
+      'cannot be edited',
+    );
+    await expect(updateWordTopic(db, system.id, { description: 'x' })).rejects.toThrow(
+      'cannot be edited',
+    );
+    await expect(updateWordTopic(db, system.id, { extra_prompt: 'x' })).rejects.toThrow(
+      'cannot be edited',
+    );
+    // Practice limits stay editable on the system topic.
+    const updated = await updateWordTopic(db, system.id, { learn_ahead_minutes: 25 });
+    expect(updated?.learn_ahead_minutes).toBe(25);
+
+    await expect(deleteWordTopic(db, system.id)).rejects.toThrow('cannot be deleted');
+    expect(await getSystemWordTopic(db)).not.toBeNull();
 
     await db.close();
   });
@@ -403,12 +433,13 @@ describe('learn-ahead due counts', () => {
 
     expect(await countDueWords(db, NOW)).toBe(1);
     expect(await countDueWordsForTopic(db, topic.id, NOW)).toBe(1);
-    expect((await listWordTopics(db, NOW))[0]).toMatchObject({ due_count: 1 });
+    const badgeOf = async () => (await listWordTopics(db, NOW)).find(item => item.id === topic.id);
+    expect(await badgeOf()).toMatchObject({ due_count: 1 });
 
     await updateWordTopic(db, topic.id, { learn_ahead_minutes: 0 });
     expect(await countDueWords(db, NOW)).toBe(0);
     expect(await countDueWordsForTopic(db, topic.id, NOW)).toBe(0);
-    expect((await listWordTopics(db, NOW))[0]).toMatchObject({ due_count: 0 });
+    expect(await badgeOf()).toMatchObject({ due_count: 0 });
 
     await db.close();
   });
@@ -459,7 +490,9 @@ describe('daily limit due counts', () => {
     await db.execute('UPDATE words SET due_at = ?', [EARLIER]);
 
     expect(await countDueWords(db, NOW)).toBe(2);
-    expect((await listWordTopics(db, NOW))[0]).toMatchObject({ due_count: 2 });
+    expect((await listWordTopics(db, NOW)).find(item => item.id === topic.id)).toMatchObject({
+      due_count: 2,
+    });
 
     await logReview(db, words[0].id, topic.id, 'new', '2026-10-24T08:00:00.000Z');
     await logReview(db, words[1].id, topic.id, 'new', '2026-10-24T08:30:00.000Z');

@@ -101,6 +101,16 @@ describe('ContextMenu', () => {
     await view.unmount();
   });
 
+  it('draws a divider between rows but none around the first and last', async () => {
+    const view = await renderMenu();
+
+    expect(view.getByTestId('probe-menu-divider-learn-ahead')).toBeTruthy();
+    expect(view.getByTestId('probe-menu-divider-delete')).toBeTruthy();
+    expect(view.queryByTestId('probe-menu-divider-edit')).toBeFalsy();
+
+    await view.unmount();
+  });
+
   it('fires the item action and the backdrop cancels without acting', async () => {
     const onCancel = jest.fn();
     const view = await renderMenu({ onCancel });

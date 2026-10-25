@@ -14,11 +14,15 @@ import type { DictionaryLookupResult } from '../src/serverless/dictionaryApi';
 import { OpenRouterResponseError } from '../src/serverless/errors';
 import type { CompletionRequest, CompletionResult } from '../src/serverless/types';
 import {
+  addManualWords,
+  buildCollectedWordsUserPrompt,
   buildWordSystemPrompt,
   buildWordUserPrompt,
+  COLLECTED_WORD_GENERATION_SYSTEM_PROMPT,
   type CompleteFn,
   clampWordCount,
   type DictionaryLookupFn,
+  generateCollectedWords,
   generateTopicWords,
   MAX_WORD_COUNT,
   MIN_WORD_COUNT,
@@ -292,6 +296,108 @@ describe('generateTopicWords pipeline', () => {
       }),
     ).rejects.toThrow(OpenRouterResponseError);
     expect(await listWordsByTopic(db, topic.id)).toEqual([]);
+
+    await db.close();
+  });
+
+  test('every entry path stores the canonical form of a cased word', async () => {
+    const { db, topic } = await freshTopic();
+    const lookedUp: string[] = [];
+    const lookup: DictionaryLookupFn = async word => {
+      // The dictionary seam receives the word as chosen/typed...
+      lookedUp.push(word);
+      return found();
+    };
+
+    // ...from the AI response with casing...
+    await generateTopicWords(db, completion('["Bank", "EVERYTHING"]'), lookup, {
+      topic,
+      count: 2,
+      existingWords: [],
+    });
+    // ...and from manual input with sentence case and punctuation.
+    await addManualWords(db, lookup, {
+      topic,
+      raw: 'Everything, "whisk"',
+      existingWords: [],
+    });
+
+    expect(lookedUp).toEqual(['Bank', 'EVERYTHING', 'Everything', '"whisk"']);
+    const rows = await listWordsByTopic(db, topic.id);
+    expect(rows.map(row => row.text).sort()).toEqual(['bank', 'everything', 'whisk']);
+    for (const row of rows) {
+      expect(row.normalized_text).toBe(row.text);
+      expect(row.data_status).toBe('complete');
+    }
+
+    await db.close();
+  });
+});
+
+describe('generateCollectedWords pipeline (WORD_CAPTURE_V1 TASK-WC-005)', () => {
+  test('the prompt wraps the sample words in the untrusted block and excludes them', () => {
+    const prompt = buildCollectedWordsUserPrompt(['serendipity', 'ephemeral'], 5);
+    expect(prompt).toContain('Choose 5 English words');
+    expect(prompt).toContain('<learner_context>\nserendipity\nephemeral\n</learner_context>');
+    expect(prompt).toContain('untrusted data');
+    expect(prompt).toContain('Do NOT repeat any of the sample words');
+    expect(prompt).toContain('infer it from the samples');
+  });
+
+  test('carries the CEFR level when the profile is set', () => {
+    const prompt = buildCollectedWordsUserPrompt(['bank'], 3, 'B2');
+    expect(prompt).toContain("The learner's English level is B2 (CEFR)");
+  });
+
+  test('the system prompt keeps the words-only JSON contract', () => {
+    expect(COLLECTED_WORD_GENERATION_SYSTEM_PROMPT).toContain('JSON array of strings');
+    expect(COLLECTED_WORD_GENERATION_SYSTEM_PROMPT).toContain('base dictionary form');
+    expect(COLLECTED_WORD_GENERATION_SYSTEM_PROMPT).toContain('untrusted');
+  });
+
+  test('an empty collection is a caller error and inserts nothing', async () => {
+    const db = await openSqlJsDriver();
+    await migrateDatabase(db);
+    await expect(
+      generateCollectedWords(db, completion('["bank"]'), async () => found(), {
+        topicId: 1,
+        existingWords: [],
+        count: 3,
+      }),
+    ).rejects.toThrow('collection is empty');
+    await db.close();
+  });
+
+  test('persists chosen words into the collected-words topic and skips repeats', async () => {
+    const db = await openSqlJsDriver();
+    await migrateDatabase(db);
+    const system = await db.execute('SELECT id FROM word_topics WHERE is_system = 1');
+    const topicId = Number(system.rows[0]?.id);
+
+    const complete = jest.fn(
+      async (): Promise<CompletionResult> => ({
+        text: '["serendipity", "luminous"]',
+        model: 'test-model',
+        finishReason: 'stop',
+        requestId: null,
+      }),
+    );
+    const result = await generateCollectedWords(db, complete, async () => found(), {
+      topicId,
+      existingWords: ['serendipity', 'ephemeral'],
+      count: 2,
+    });
+
+    // `serendipity` is a sample and was filtered at parse time.
+    expect(result.words.map(word => word.text)).toEqual(['luminous']);
+    const request = (complete.mock.calls as unknown as Array<[CompletionRequest]>)[0]?.[0];
+    const systemPrompt = request?.messages.find(m => m.role === 'system')?.content;
+    expect(systemPrompt).toBe(COLLECTED_WORD_GENERATION_SYSTEM_PROMPT);
+    const userPrompt = request?.messages.find(m => m.role === 'user')?.content;
+    expect(userPrompt).toContain('serendipity');
+
+    const rows = await listWordsByTopic(db, topicId);
+    expect(rows.map(row => row.text)).toEqual(['luminous']);
 
     await db.close();
   });

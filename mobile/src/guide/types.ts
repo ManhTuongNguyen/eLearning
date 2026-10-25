@@ -18,6 +18,7 @@ export const GUIDE_IDS = [
   'speaking',
   'sentences',
   'wordBank',
+  'collectedWords',
   'aiUsage',
   'level',
   'provider',

@@ -30,5 +30,29 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+      <!-- Transparent text-selection capture (WORD_CAPTURE_V1 TASK-WC-002):
+           appears in the system selection menu and the share sheet, queues the
+           word without starting React Native, and finishes back to the caller.
+           taskAffinity="" keeps it in the caller's task so the main app task is
+           never pulled forward. -->
+      <activity
+        android:name=".CaptureActivity"
+        android:label="@string/capture_menu_label"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar"
+        android:excludeFromRecents="true"
+        android:noHistory="true"
+        android:taskAffinity=""
+        android:exported="true">
+        <intent-filter android:label="@string/capture_menu_label">
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <data android:mimeType="text/plain" />
+        </intent-filter>
+        <intent-filter android:label="@string/capture_menu_label">
+            <action android:name="android.intent.action.SEND" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <data android:mimeType="text/plain" />
+        </intent-filter>
+      </activity>
     </application>
 </manifest>

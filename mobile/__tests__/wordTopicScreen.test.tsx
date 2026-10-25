@@ -13,7 +13,12 @@
 import { act, fireEvent, type RenderResult, render, waitFor } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
 import { migrateDatabase } from '../src/db/migrations';
-import { createWordTopic, insertWords, listWordsByTopic } from '../src/db/wordRepository';
+import {
+  createWordTopic,
+  getSystemWordTopic,
+  insertWords,
+  listWordsByTopic,
+} from '../src/db/wordRepository';
 import { ModeProvider } from '../src/mode/ModeContext';
 import { saveApplicationMode } from '../src/mode/modeStorage';
 import type { WordTopicScreenProps } from '../src/navigation/types';
@@ -155,6 +160,15 @@ async function createTopicWithWords(count: number, title = 'Cooking') {
 }
 
 let complete: jest.Mock;
+
+/** The seeded collected-words topic, with the null check the linter wants. */
+async function requireSystemTopic() {
+  const system = await getSystemWordTopic(db);
+  if (!system) {
+    throw new Error('expected the seeded system topic');
+  }
+  return system;
+}
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -461,5 +475,61 @@ describe('WordTopicScreen — generation', () => {
       'Add your provider API key in Settings',
     );
     expect(await listWordsByTopic(db, topic.id)).toEqual([]);
+  });
+});
+
+describe('WordTopicScreen — collected-words topic (WORD_CAPTURE_V1)', () => {
+  test('offers "Generate similar words" and blocks generation on an empty collection', async () => {
+    const system = await requireSystemTopic();
+
+    const view = await renderScreen(system.id);
+    expect(view.getByTestId('word-topic-title')).toHaveTextContent('Collected words');
+
+    await fireEvent.press(view.getByTestId('word-topic-more'));
+    expect(view.getByTestId('word-topic-menu-generate')).toHaveTextContent(
+      'Generate similar words',
+    );
+    await fireEvent.press(view.getByTestId('word-topic-menu-generate'));
+    expect(view.getByTestId('word-generate-title')).toHaveTextContent('Generate similar words');
+    // Nothing to grow from: the submit stays disabled with the hint visible.
+    expect(view.getByTestId('word-generate-empty-error')).toHaveTextContent(
+      'Collect or add words first — similar words grow from your collection.',
+    );
+    expect(view.getByTestId('word-generate-submit').props.accessibilityState).toMatchObject({
+      disabled: true,
+    });
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  test('grows the collection from its own words through the collected prompt', async () => {
+    const system = await requireSystemTopic();
+    await insertWords(db, system.id, [{ text: 'serendipity', senses_json: [] }]);
+    complete.mockResolvedValue({
+      text: '["luminous"]',
+      model: 'test-model',
+      finishReason: 'stop',
+      requestId: null,
+    });
+
+    const view = await renderScreen(system.id);
+    await openGenerate(view);
+    await fireEvent.press(view.getByTestId('word-generate-submit'));
+
+    await waitFor(() => {
+      expect(view.queryByTestId('word-topic-summary')).toBeTruthy();
+    });
+    expect(complete).toHaveBeenCalledTimes(1);
+    const request = complete.mock.calls[0][0];
+    const systemPrompt = request.messages.find(
+      (m: { role: string }) => m.role === 'system',
+    ).content;
+    const userPrompt = request.messages.find((m: { role: string }) => m.role === 'user').content;
+    expect(systemPrompt).toContain('collected');
+    expect(userPrompt).toContain('serendipity');
+    expect(userPrompt).toContain('<learner_context>');
+
+    // The generated word lands in the system topic itself.
+    const words = await listWordsByTopic(db, system.id);
+    expect(words.map(word => word.text).sort()).toEqual(['luminous', 'serendipity']);
   });
 });

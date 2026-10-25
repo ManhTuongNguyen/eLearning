@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">eLearning</string>
+    <!-- Text-selection capture (WORD_CAPTURE_V1): the label shown in the
+         Android selection menu and share sheet, and the toasts the
+         transparent CaptureActivity shows. -->
+    <string name="capture_menu_label">Save to Word Bank</string>
+    <string name="capture_saved">\"%1$s\" saved to Word Bank</string>
+    <string name="capture_rejected">Single words only</string>
 </resources>

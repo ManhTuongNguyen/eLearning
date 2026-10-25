@@ -60,12 +60,12 @@ async function countRows(db: SqlDriver, table: string): Promise<number> {
 }
 
 describe('sentence schema (TASK-SENT-003, TASK-SENT-015)', () => {
-  test('a fresh database creates the sentence bank and records version 9', async () => {
+  test('a fresh database creates the sentence bank and records version 10', async () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
 
-    expect(SCHEMA_VERSION).toBe(9);
-    expect(await userVersion(db)).toBe(9);
+    expect(SCHEMA_VERSION).toBe(10);
+    expect(await userVersion(db)).toBe(10);
 
     const tables = await schemaNames(db, 'table');
     expect(tables).toEqual(

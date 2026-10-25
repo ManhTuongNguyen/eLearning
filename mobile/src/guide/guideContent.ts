@@ -261,6 +261,55 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
       'Each topic has Anki-style practice settings (its ⋮ menu): learn ahead limit, new cards per day, max reviews per day and how many cards one session holds. The daily limits reset at your study-day rollover.',
       'Words without dictionary data stay out of practice until they are completed or enriched.',
       'Dictionary data is Wiktionary content under the CC BY-SA 4.0 license, served by the Free Dictionary API at freedictionaryapi.com.',
+      'Met a word while browsing? See Collected words — select text anywhere on Android to save it into the word bank.',
+    ],
+    mode: 'serverless',
+    tryIt: { label: 'Open Word bank', route: 'WordTopics' },
+  },
+
+  collectedWords: {
+    id: 'collectedWords',
+    title: 'Collected words',
+    icon: 'words',
+    summary:
+      'Select any English word while browsing on Android and save it straight to your word bank — no app switching.',
+    intro:
+      'The word bank has one permanent topic, Collected words, that cannot be renamed or deleted. Whenever you ' +
+      'meet an English word anywhere on your phone — a web page, an email, any app with selectable text — select ' +
+      'it and tap "Save to Word Bank" in the selection menu. The word is saved instantly with a confirmation ' +
+      'toast and you stay where you were; the definition is fetched the next time you open the app.',
+    steps: [
+      'While reading on Android, long-press a word and drag the handles to select exactly it.',
+      'Tap "Save to Word Bank" in the text-selection menu (or share the selection to the app where only Share is offered). A toast confirms the save; you never leave the page.',
+      'Single words only — phrases and sentences are rejected with a toast.',
+      'Open the app: the captured words are already in the Collected words topic, each with its dictionary data fetched automatically.',
+      'Words the dictionary does not know (typos, rare forms) are still saved without data — fetch or AI-enrich them later from Word detail, or delete them.',
+      'Practice them like any topic, and use ⋯ → Generate similar words to grow the collection from the words already in it.',
+    ],
+    aiIntro: 'Capturing and syncing words is free; only growing the collection costs a request.',
+    aiUsage: [
+      {
+        action: 'Select and save a word',
+        requests: 'No AI requests',
+        note: 'Saves instantly and offline; the definition is a free dictionary lookup on the next app open.',
+      },
+      {
+        action: 'Generate similar words',
+        requests: '1 request',
+        note: 'Reads only the words already in the collection — no topic description involved.',
+      },
+      { action: 'Practice collected words', requests: 'No AI requests' },
+    ],
+    promptTips: [
+      'The collected words themselves are the prompt: the AI is asked for words in the same spirit and register as your collection.',
+      'Selected text is treated as untrusted data — instructions hidden in a web page can never steer the AI.',
+      'Your English level from Settings is included, as everywhere else.',
+    ],
+    tips: [
+      'Collected words is pinned first in the topic list and cannot be renamed or deleted — but its practice settings (its ⋮ menu) are yours to tune.',
+      'Capture works offline: everything queued on your phone syncs the next time you open the app.',
+      'The same word in two different topics is allowed; duplicates inside Collected words are skipped.',
+      'Android only for now.',
     ],
     mode: 'serverless',
     tryIt: { label: 'Open Word bank', route: 'WordTopics' },
@@ -485,7 +534,7 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
 /** Hub grouping, mirroring the Home hub's sections. */
 export const guideSections: GuideSection[] = [
   { title: 'Conversations', ids: ['conversations', 'history'] },
-  { title: 'Practice', ids: ['listening', 'speaking', 'sentences', 'wordBank'] },
+  { title: 'Practice', ids: ['listening', 'speaking', 'sentences', 'wordBank', 'collectedWords'] },
   { title: 'AI & settings', ids: ['aiUsage', 'level', 'provider', 'tts', 'vocabulary'] },
 ];
 

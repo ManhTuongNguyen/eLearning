@@ -445,6 +445,23 @@ const MIGRATION_009: readonly string[] = [
 ];
 
 /**
+ * v10 — the collected-words system topic (WORD_CAPTURE_V1 TASK-WC-001).
+ * `word_topics.is_system` marks the one seeded topic words captured from
+ * Android text selection land in; app code never creates or edits it. The
+ * seed mirrors `createWordTopic` defaults for the practice-limit columns
+ * (their migration DEFAULTs) and pins the topic first in
+ * `listWordTopics`'s ordering.
+ */
+const MIGRATION_010: readonly string[] = [
+  `ALTER TABLE word_topics
+      ADD COLUMN is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1))`,
+  `INSERT INTO word_topics
+      (title, description, extra_prompt, is_system, created_at, updated_at)
+   VALUES ('Collected words', 'Words saved from text selection on your phone.', '', 1,
+           strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+];
+
+/**
  * Ordered migration list; length is the current schema version. Append new
  * entries — never edit shipped ones.
  */
@@ -458,6 +475,7 @@ export const MIGRATIONS: readonly (readonly string[])[] = [
   MIGRATION_007,
   MIGRATION_008,
   MIGRATION_009,
+  MIGRATION_010,
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS.length;

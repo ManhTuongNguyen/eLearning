@@ -229,11 +229,31 @@ export function mapDictionaryResponse(json: unknown): {
 /**
  * Look one word up. Never throws: every transport-level failure collapses
  * into `'unavailable'`, every data-level failure into `'not-found'`.
+ *
+ * The API is case-sensitive while learners are not: a selection or manual
+ * input often carries sentence casing (`Everything`), so a miss retries once
+ * with the lowercase form before the word is declared absent.
  */
 export async function lookupDictionaryWord(
   word: string,
   fetchFn: FetchFn,
   options: { timeoutMs?: number } = {},
+): Promise<DictionaryLookupResult> {
+  const outcome = await fetchDictionaryEntry(word, fetchFn, options);
+  if (outcome.outcome === 'not-found') {
+    const lower = word.toLowerCase();
+    if (lower !== word) {
+      return fetchDictionaryEntry(lower, fetchFn, options);
+    }
+  }
+  return outcome;
+}
+
+/** One dictionary request for exactly the given spelling. */
+async function fetchDictionaryEntry(
+  word: string,
+  fetchFn: FetchFn,
+  options: { timeoutMs?: number },
 ): Promise<DictionaryLookupResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_DICTIONARY_TIMEOUT_MS;
   const controller = new AbortController();

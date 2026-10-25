@@ -234,6 +234,38 @@ describe('lookupDictionaryWord', () => {
     });
   });
 
+  test('a sentence-cased miss retries once with the lowercase form', async () => {
+    const requested: string[] = [];
+    const fetchFn: FetchFn = async url => {
+      requested.push(url);
+      if (url.endsWith('/Everything')) {
+        return jsonResponse(404, { title: 'No Definitions Found' });
+      }
+      return jsonResponse(200, {
+        word: 'everything',
+        entries: [{ partOfSpeech: 'pronoun', senses: [{ definition: 'All things.' }] }],
+      });
+    };
+
+    const result = await lookupDictionaryWord('Everything', fetchFn);
+    expect(requested).toEqual([
+      `${DICTIONARY_API_BASE}/Everything`,
+      `${DICTIONARY_API_BASE}/everything`,
+    ]);
+    expect(result).toEqual({
+      outcome: 'found',
+      senses: [{ partOfSpeech: 'pronoun', definitions: [{ definition: 'All things.' }] }],
+      phonetics: [],
+    });
+
+    // An already-lowercase miss is not fetched twice.
+    requested.length = 0;
+    const lowerMiss: FetchFn = async () => jsonResponse(404, {});
+    await expect(lookupDictionaryWord('xyzzy', lowerMiss)).resolves.toEqual({
+      outcome: 'not-found',
+    });
+  });
+
   test('429, 5xx, network errors and timeouts map to unavailable', async () => {
     const rateLimited: FetchFn = async () => jsonResponse(429, {});
     await expect(lookupDictionaryWord('bank', rateLimited)).resolves.toEqual({

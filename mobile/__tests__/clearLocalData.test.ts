@@ -249,14 +249,18 @@ describe('clearLocalData (TASK-094)', () => {
 
     await clearServerlessLocalData(() => Promise.resolve(db));
 
-    for (const table of ['word_topics', 'words', 'word_review_log']) {
+    for (const table of ['words', 'word_review_log']) {
       const result = await db.execute(`SELECT COUNT(*) AS n FROM ${table}`);
       expect(Number(result.rows[0]?.n)).toBe(0);
     }
+    // The seeded collected-words topic survives the clear (its words are gone).
+    const topics = await db.execute('SELECT title FROM word_topics');
+    expect(topics.rows.map(row => String(row.title))).toEqual(['Collected words']);
 
-    // Auto-increment counters restart so the next topic/word starts at 1.
+    // Auto-increment counters restart; the surviving system topic keeps id 1,
+    // so the next learner-created topic starts at 2.
     const nextTopic = await createWordTopic(db, { title: 'After clear' });
-    expect(nextTopic.id).toBe(1);
+    expect(nextTopic.id).toBe(2);
     const nextWords = await insertWords(db, nextTopic.id, [{ text: 'whisk' }]);
     expect(nextWords[0]?.id).toBe(1);
 

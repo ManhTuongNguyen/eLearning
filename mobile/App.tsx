@@ -22,6 +22,7 @@ import { StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AuthProvider } from './src/auth/AuthContext';
+import { CapturedWordSync } from './src/hooks/CapturedWordSync';
 import { ModeProvider } from './src/mode/ModeContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { navigationThemeFor } from './src/theme/navigationTheme';
@@ -65,6 +66,9 @@ function App() {
           <ThemeProvider>
             <AuthProvider>
               <ThemedChrome>
+                {/* Drains Android text-selection captures into the word bank
+                    whenever the app becomes active (WORD_CAPTURE_V1). */}
+                <CapturedWordSync />
                 <RootNavigator />
               </ThemedChrome>
             </AuthProvider>
