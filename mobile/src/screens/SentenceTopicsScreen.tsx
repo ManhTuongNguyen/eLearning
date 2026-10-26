@@ -369,6 +369,7 @@ export function SentenceTopicsScreen({ navigation }: SentenceTopicsScreenProps) 
                 }
                 testID={`topic-${item.id}`}
                 menuTestID={`topic-menu-${item.id}`}
+                index={index}
               />
             </>
           )}

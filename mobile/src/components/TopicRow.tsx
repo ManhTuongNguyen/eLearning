@@ -28,6 +28,7 @@ export interface TopicRowProps {
   onMenuPress: (event: GestureResponderEvent) => void;
   testID: string;
   menuTestID: string;
+  index: number;
 }
 
 export function TopicRow({
@@ -40,6 +41,7 @@ export function TopicRow({
   onMenuPress,
   testID,
   menuTestID,
+  index,
 }: TopicRowProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -56,7 +58,7 @@ export function TopicRow({
     );
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, index > 0 && styles.rowGap]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${title} — ${countLabel}, ${dueCount} due`}
@@ -99,17 +101,15 @@ function createStyles(c: ThemeColors) {
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 14,
-      // No horizontal padding: the ScreenList gutter already insets the rows,
-      // so the topic titles align with the screen title instead of sitting
-      // 16px further in (a double inset that read as a redundant margin).
-      paddingRight: 6,
+    },
+    rowGap: {
+      marginTop: 6,
     },
     rowMain: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 14,
+      gap: 6,
     },
     rowIcon: {
       width: 40,
@@ -161,7 +161,7 @@ function createStyles(c: ThemeColors) {
       fontWeight: '600',
     },
     rowMenuButton: {
-      width: 44,
+      width: 30,
       height: 44,
       borderRadius: 22,
       alignItems: 'center',

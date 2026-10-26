@@ -18,9 +18,9 @@ import {
   SCREEN_GUTTER,
   SCREEN_TOP_SPACING,
   Screen,
-  ScreenHeader,
   ScreenScrollView,
 } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { getLocalDatabase } from '../db/database';
 import { createSentenceTopic } from '../db/sentenceRepository';
 import { useApplicationMode } from '../mode/ModeContext';
@@ -36,29 +36,12 @@ export function createStyles(c: ThemeColors) {
       backgroundColor: c.background,
       paddingTop: SCREEN_TOP_SPACING,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      marginBottom: 16,
-    },
-    backLinkButton: {
-      paddingVertical: 4,
-    },
-    backLinkText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.accent,
-    },
-    title: {
-      flex: 1,
-      fontSize: 20,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
     form: {
-      gap: 14,
+      gap: 12,
       paddingBottom: 24,
+    },
+    block: {
+      gap: 4,
     },
     inputLabel: {
       fontSize: 13,
@@ -103,7 +86,6 @@ export function createStyles(c: ThemeColors) {
     },
     advancedText: {
       flex: 1,
-      gap: 2,
     },
     advancedLabel: {
       fontSize: 15,
@@ -210,20 +192,11 @@ export function SentenceTopicNewScreen({ navigation }: SentenceTopicNewScreenPro
 
   return (
     <Screen style={styles.container} testID="sentence-new-topic-screen">
-      <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to topics"
-          testID="sentence-new-topic-back"
-          onPress={() => navigation.goBack()}
-          style={styles.backLinkButton}
-          disabled={saving}>
-          <Text style={styles.backLinkText}>‹ Topics</Text>
-        </Pressable>
-        <Text style={styles.title} numberOfLines={1}>
-          New topic
-        </Text>
-      </ScreenHeader>
+      <ScreenTitleBar
+        title="New topic"
+        onBack={() => navigation.goBack()}
+        backTestID="sentence-new-topic-back"
+      />
 
       {modeStatus !== 'ready' ? (
         <View style={styles.centered} testID="sentence-new-topic-loading">
@@ -237,26 +210,29 @@ export function SentenceTopicNewScreen({ navigation }: SentenceTopicNewScreenPro
         </View>
       ) : (
         <ScreenScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
-          <Text style={styles.inputLabel}>Topic</Text>
-          <TextInput
-            placeholder="e.g. Meeting someone new"
-            value={title}
-            onChangeText={setTitle}
-            style={styles.input}
-            testID="sentence-topic-title"
-            autoFocus
-          />
-
-          <Text style={styles.inputLabel}>Description (optional)</Text>
-          <TextInput
-            placeholder="A short real-life situation, or leave blank"
-            value={description}
-            onChangeText={setDescription}
-            style={[styles.input, styles.descriptionInput]}
-            testID="sentence-topic-description"
-            multiline
-            scrollEnabled
-          />
+          <View style={styles.block}>
+            <Text style={styles.inputLabel}>Topic</Text>
+            <TextInput
+              placeholder="e.g. Meeting someone new"
+              value={title}
+              onChangeText={setTitle}
+              style={styles.input}
+              testID="sentence-topic-title"
+              autoFocus
+            />
+          </View>
+          <View style={styles.block}>
+            <Text style={styles.inputLabel}>Description (optional)</Text>
+            <TextInput
+              placeholder="A short real-life situation, or leave blank"
+              value={description}
+              onChangeText={setDescription}
+              style={[styles.input, styles.descriptionInput]}
+              testID="sentence-topic-description"
+              multiline
+              scrollEnabled
+            />
+          </View>
 
           <Pressable
             accessibilityRole="checkbox"
@@ -277,7 +253,7 @@ export function SentenceTopicNewScreen({ navigation }: SentenceTopicNewScreenPro
           </Pressable>
 
           {advancedOpen ? (
-            <>
+            <View style={styles.block}>
               <Text style={styles.inputLabel}>Generation instructions (optional)</Text>
               <TextInput
                 placeholder="e.g. Use British spelling and focus on phone calls"
@@ -293,7 +269,7 @@ export function SentenceTopicNewScreen({ navigation }: SentenceTopicNewScreenPro
                 This is sent as background context only. It is never treated as an instruction that
                 can change the app's prompt or output format.
               </Text>
-            </>
+            </View>
           ) : null}
 
           {saveError ? (

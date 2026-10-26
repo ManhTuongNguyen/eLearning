@@ -37,6 +37,7 @@ import {
 import { createSession } from '../api/sessions';
 import { toErrorMessage, useAuth } from '../auth/AuthContext';
 import { SCREEN_GUTTER, SCREEN_TOP_SPACING } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { getLocalDatabase } from '../db/database';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { NewConversationScreenProps } from '../navigation/types';
@@ -57,27 +58,10 @@ function createStyles(c: ThemeColors) {
       paddingHorizontal: SCREEN_GUTTER,
       paddingBottom: 24,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 24,
-    },
-    backLink: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: c.accent,
-      paddingVertical: 4,
-    },
-    title: {
-      fontSize: 26,
-      fontWeight: '700',
-      color: c.textPrimary,
-    },
     subtitle: {
       fontSize: 14,
       color: c.textSecondary,
-      marginBottom: 20,
+      marginBottom: 16,
     },
     input: {
       borderWidth: 1,
@@ -207,12 +191,12 @@ export function NewConversationScreen({ navigation }: NewConversationScreenProps
       style={styles.container}
       behavior={Platform.OS === 'android' ? undefined : 'padding'}
       testID="new-conversation-screen">
-      <View style={styles.header}>
-        <Text style={styles.title}>New conversation</Text>
-        <Pressable onPress={() => navigation.goBack()} testID="new-conversation-back">
-          <Text style={styles.backLink}>Cancel</Text>
-        </Pressable>
-      </View>
+      <ScreenTitleBar
+        title="New conversation"
+        onBack={() => navigation.goBack()}
+        backTestID="new-conversation-back"
+        gutterInset={false}
+      />
 
       <Text style={styles.subtitle}>
         What would you like to talk about? Enter a topic or a list of questions — one per line — or

@@ -129,8 +129,6 @@ interface TopicFormState {
   extraPrompt: string;
 }
 
-const _EMPTY_FORM: TopicFormState = { topicId: null, title: '', description: '', extraPrompt: '' };
-
 export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
   const { status: modeStatus, mode } = useApplicationMode();
   const { colors } = useTheme();
@@ -441,6 +439,7 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
                 }
                 testID={`word-topic-${item.id}`}
                 menuTestID={`word-topic-menu-${item.id}`}
+                index={index}
               />
             </>
           )}

@@ -929,6 +929,7 @@ export function SpeakingPracticeScreen({ navigation, route }: SpeakingPracticeSc
           title={listenMode ? 'Listening practice' : 'Speaking practice'}
           onBack={() => navigation.goBack()}
           backTestID="speaking-back"
+          gutterInset={false}
         />
 
         <View style={styles.statusBar} testID="speaking-status">

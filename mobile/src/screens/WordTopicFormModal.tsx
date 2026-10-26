@@ -89,44 +89,50 @@ export function WordTopicFormModal({
 
           <ScrollView
             style={styles.formScroll}
+            contentContainerStyle={styles.contentContainer}
             nestedScrollEnabled
             showsVerticalScrollIndicator
             testID="word-topic-form-scroll">
-            <Text style={styles.inputLabel}>Topic</Text>
-            <TextInput
-              placeholder="e.g. Cooking"
-              value={form?.title ?? ''}
-              onChangeText={title => onChangeField({ title })}
-              style={styles.input}
-              testID="word-topic-form-title-input"
-              autoFocus
-            />
+            <View style={styles.block}>
+              <Text style={styles.inputLabel}>Topic</Text>
+              <TextInput
+                placeholder="e.g. Cooking"
+                value={form?.title ?? ''}
+                onChangeText={title => onChangeField({ title })}
+                style={styles.input}
+                testID="word-topic-form-title-input"
+                autoFocus
+              />
+            </View>
 
-            <Text style={styles.inputLabel}>Learner context (recommended)</Text>
-            <TextInput
-              placeholder={LEARNER_CONTEXT_PLACEHOLDER}
-              value={form?.description ?? ''}
-              onChangeText={description => onChangeField({ description })}
-              style={[styles.input, styles.descriptionInput]}
-              testID="word-topic-form-description"
-              multiline
-              scrollEnabled
-            />
-            <Text style={styles.hint}>
-              Describe your domain, habits and level — this shapes which words the AI picks.
-            </Text>
-
-            <Text style={styles.inputLabel}>Additional prompt (optional)</Text>
-            <TextInput
-              placeholder="e.g. focus on words about cooking"
-              value={form?.extraPrompt ?? ''}
-              onChangeText={extraPrompt => onChangeField({ extraPrompt })}
-              style={[styles.input, styles.descriptionInput]}
-              testID="word-topic-form-extra-prompt"
-              multiline
-              scrollEnabled
-              maxLength={MAX_GENERATION_PROMPT_LENGTH}
-            />
+            <View style={styles.block}>
+              <Text style={styles.inputLabel}>Learner context (recommended)</Text>
+              <TextInput
+                placeholder={LEARNER_CONTEXT_PLACEHOLDER}
+                value={form?.description ?? ''}
+                onChangeText={description => onChangeField({ description })}
+                style={[styles.input, styles.descriptionInput]}
+                testID="word-topic-form-description"
+                multiline
+                scrollEnabled
+              />
+              <Text style={styles.hint}>
+                Describe your domain, habits and level — this shapes which words the AI picks.
+              </Text>
+            </View>
+            <View style={styles.block}>
+              <Text style={styles.inputLabel}>Additional prompt (optional)</Text>
+              <TextInput
+                placeholder="e.g. focus on words about cooking"
+                value={form?.extraPrompt ?? ''}
+                onChangeText={extraPrompt => onChangeField({ extraPrompt })}
+                style={[styles.input, styles.descriptionInput]}
+                testID="word-topic-form-extra-prompt"
+                multiline
+                scrollEnabled
+                maxLength={MAX_GENERATION_PROMPT_LENGTH}
+              />
+            </View>
 
             {saveError ? (
               <Text role="alert" style={styles.modalError} testID="word-topic-form-error">
@@ -192,6 +198,12 @@ function createStyles(c: ThemeColors) {
       marginLeft: -20,
       marginRight: -20,
       paddingHorizontal: 20,
+    },
+    contentContainer: {
+      gap: 16,
+    },
+    block: {
+      gap: 4,
     },
     descriptionInput: {
       minHeight: 84,
