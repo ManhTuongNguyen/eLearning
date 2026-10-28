@@ -10,7 +10,7 @@ A mobile application for learning English through natural AI conversation, built
 
 ## Download
 
-📦 **Download the APK:** [eLearning-v1.1-arm64-v8a.apk](https://github.com/ManhTuongNguyen/eLearning/releases/download/v1.1/eLearning-release.apk)
+📦 **Download the APK:** [eLearning-v1.2-arm64-v8a.apk](https://github.com/ManhTuongNguyen/eLearning/releases/download/v1.2/eLearning-release.apk)
 
 > ⚠️ **Device compatibility warning:** this APK is built for **arm64-v8a devices only**. It will not install on 32-bit ARM (`armeabi-v7a`), `x86` or `x86_64` devices/emulators. Most modern Android phones (2016 and later) use arm64-v8a — check your device's CPU architecture before downloading. If your device has a different architecture, you need to [build the app yourself](#running-mobile).
 

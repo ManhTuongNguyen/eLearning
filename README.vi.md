@@ -10,7 +10,7 @@
 
 ## Tải xuống (Download)
 
-📦 **Tải file APK:** [eLearning-v1.1-arm64-v8a.apk](https://github.com/ManhTuongNguyen/eLearning/releases/download/v1.1/eLearning-release.apk)
+📦 **Tải file APK:** [eLearning-v1.2-arm64-v8a.apk](https://github.com/ManhTuongNguyen/eLearning/releases/download/v1.2/eLearning-release.apk)
 
 > ⚠️ **Cảnh báo tương thích thiết bị:** file APK này chỉ dành cho thiết bị **arm64-v8a**. Nó sẽ không cài đặt được trên thiết bị/giả lập ARM 32-bit (`armeabi-v7a`), `x86` hoặc `x86_64`. Hầu hết điện thoại Android hiện đại (từ 2016 trở đi) đều dùng arm64-v8a — hãy kiểm tra kiến trúc CPU của thiết bị trước khi tải. Nếu thiết bị của bạn dùng kiến trúc khác, bạn cần [tự build ứng dụng](#chạy-mobile).
 
