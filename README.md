@@ -417,7 +417,7 @@ system prompt confines each reply to the conversation message itself.
 - Listening practice trainer: hear numbers, letters and UK phone numbers, then pick what you heard from acoustically confusable options (on-device, no AI calls)
 - Speaking practice (karaoke-style): the AI writes a reading-aloud text sized to your session length, shown as a teleprompter that scrolls at an adjustable speed
 - Listen mode: the device TTS reads the text aloud while the scroll follows the speech in real time, with pause/resume and the screen kept awake
-- Speaking history: completed speaking sessions are saved locally, reviewable and replayable in listen mode
+- Speaking history: completed speaking sessions are saved locally, reviewable, editable and replayable in listen mode; the header + creates a custom topic from your own title and text (no AI)
 - Real-life sentences (serverless only): collect everyday English per topic, generate new sentences through your own provider, and drill them with FSRS spaced repetition (Again / Hard / Good / Easy, 4 a.m. study day), dictation and situation recall
 - Word bank (serverless only): collect vocabulary for any domain per topic — the AI picks the words, the Free Dictionary API fills in all meanings and IPA — then drill them with the same FSRS schedule, hear-and-type dictation and masked-context recall, with per-word AI enrichment behind an approval modal
 - Adjustable teleprompter scroll speed in Settings

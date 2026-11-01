@@ -133,26 +133,35 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
     id: 'speaking',
     title: 'Speaking practice',
     icon: 'speaking',
-    summary: 'Karaoke read-aloud trainer with AI-generated material.',
+    summary: 'Karaoke read-aloud trainer with AI-generated or your own custom text.',
     intro:
       'You give the AI a topic, a list of questions or your own text plus a session length; it returns a ' +
-      'read-aloud text sized to the minutes. The text then scrolls like a teleprompter while you read it aloud — ' +
-      'finished sessions are saved to Speaking history, where they can be re-read or listened to.',
+      'read-aloud text sized to the minutes. You can also skip the AI entirely: create a custom topic from ' +
+      'Speaking history with your own title and text. The text then scrolls like a teleprompter while you read ' +
+      'it aloud — finished sessions are saved to Speaking history, where they can be re-read, edited, deleted or listened to.',
     steps: [
       'Open Speaking practice from Home.',
       'Enter a topic, a list of questions, or paste your own text.',
       'Pick the session length in minutes.',
       'Tap Generate practice text — one AI request returns the material.',
+      'To use your own text without AI, open Speaking history and tap +. Enter a title and the content, then Save: it is saved to history and opens in the practice screen immediately.',
       'Read aloud while the text auto-scrolls; adjust the speed slider, pause, restart or end early.',
       'Reaching the end (or pressing End) shows a summary with your elapsed time and word count.',
       'In Speaking history, tap a row to read it again, or its Listen button to have the voice read it aloud.',
+      "Use the row's ⋮ menu to edit the title/content or delete the entry.",
     ],
-    aiIntro: 'One AI request generates the material; the practice itself runs on-device.',
+    aiIntro:
+      'One AI request generates the material; custom topics and the practice itself run on-device.',
     aiUsage: [
       {
         action: 'Generate practice text',
         requests: '1 request',
         note: 'Longer sessions produce longer texts — the prompt uses a word budget of about 140 words per minute.',
+      },
+      {
+        action: 'Create or edit a custom topic',
+        requests: 'No AI requests',
+        note: 'Your title and text are saved as-is; the session length is estimated from the word count, rounded up.',
       },
       {
         action: 'Re-read or listen to a saved session',
@@ -164,10 +173,12 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
       'Your English level shapes the difficulty of the generated text.',
       'Questions you type are woven into the material; pasted text is used as-is.',
       'Minutes set the word budget: roughly 140 words per minute of practice.',
+      'Custom topics never build a prompt — the text you write is used exactly as entered.',
     ],
     tips: [
       'Serverless mode only — add your provider API key in Settings first.',
       "Use Speaking history's Listen mode to turn any saved text into listening practice.",
+      'A custom topic is saved to history before practice starts, so you can replay or edit it later.',
     ],
     mode: 'serverless',
     tryIt: { label: 'Open Speaking practice', route: 'SpeakingPractice' },
@@ -358,6 +369,11 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
       { action: 'Word bank: generate / enrich', requests: '1 request each' },
       { action: 'Sentences: generate', requests: '1 request per batch' },
       { action: 'Speaking: generate', requests: '1 request per session' },
+      {
+        action: 'Speaking: custom topic / edit',
+        requests: 'No AI requests',
+        note: 'Your own title and text are saved and practiced as-is.',
+      },
       {
         action: 'Practice, review, speech, dictionary',
         requests: 'No AI requests',

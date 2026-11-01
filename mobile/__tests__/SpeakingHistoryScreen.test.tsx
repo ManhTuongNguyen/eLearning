@@ -5,8 +5,12 @@
  * stored text/material/minutes so the practice screen can reopen directly
  * in the reading phase. Each such record additionally offers a "Listen"
  * button at the row bottom that pushes the same text in TTS listen mode
- * (mode: 'listen'). Records without text expose neither affordance. The
- * nested Delete button keeps its own tap target on every row.
+ * (mode: 'listen'). Records without text expose neither affordance.
+ *
+ * Every row carries a ⋮ menu with Edit and Delete. Edit reuses the custom-topic
+ * form to change the title/content, Delete keeps its immediate behaviour, and
+ * the header + creates a user-written topic (no AI) that is saved to history
+ * and opened in the practice screen.
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
@@ -24,9 +28,14 @@ jest.mock('../src/db/database', () => ({
 
 const mockList = jest.fn();
 const mockDelete = jest.fn();
+const mockCreate = jest.fn();
+const mockUpdate = jest.fn();
 jest.mock('../src/db/speakingPracticeRepository', () => ({
   listSpeakingPracticeRecords: (...args: unknown[]) => mockList(...args),
   deleteSpeakingPracticeRecord: (...args: unknown[]) => mockDelete(...args),
+  createSpeakingPracticeRecord: (...args: unknown[]) => mockCreate(...args),
+  updateSpeakingPracticeRecord: (...args: unknown[]) => mockUpdate(...args),
+  estimateSpeakingMinutes: (wordCount: number) => Math.max(1, Math.ceil(wordCount / 140)),
 }));
 
 const mockNavigate = jest.fn();
@@ -100,8 +109,8 @@ describe('SpeakingHistoryScreen', () => {
     expect(screen.queryByTestId('history-practice-again')).toBeNull();
     // The TTS listen button is text-bound as well.
     expect(screen.queryByTestId('history-listen')).toBeNull();
-    // Deletion is still available on every row.
-    expect(screen.getByTestId('history-delete')).toBeOnTheScreen();
+    // The ⋮ actions are still available on every row.
+    expect(screen.getByTestId('history-menu')).toBeOnTheScreen();
   });
 
   it('opens the practice screen in TTS listen mode when the Listen button is pressed', async () => {
@@ -117,15 +126,120 @@ describe('SpeakingHistoryScreen', () => {
     });
   });
 
-  it('keeps delete working alongside the practice action', async () => {
+  it('keeps delete working through the row context menu', async () => {
     await renderHistory([makeRecord({})]);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('history-menu'));
+    });
+    expect(screen.getByTestId('speaking-history-row-menu')).toBeOnTheScreen();
 
     // act wraps the async handler so its setState lands inside act(...).
     await act(async () => {
-      fireEvent.press(screen.getByTestId('history-delete'));
+      fireEvent.press(screen.getByTestId('speaking-history-row-menu-delete'));
     });
 
     await waitFor(() => expect(mockDelete).toHaveBeenCalledTimes(1));
+    expect(mockDelete).toHaveBeenCalledWith({}, 1);
     expect(mockNavigate).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByText('Morning routine')).toBeNull());
+  });
+
+  it('edits a saved entry through the row context menu', async () => {
+    await renderHistory([makeRecord({})]);
+    mockUpdate.mockResolvedValue(
+      makeRecord({
+        id: 1,
+        title: 'Updated routine',
+        text: 'I wake up later now.',
+        minutes: 1,
+        word_count: 5,
+      }),
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('history-menu'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('speaking-history-row-menu-edit'));
+    });
+
+    expect(screen.getByTestId('speaking-form-heading')).toHaveTextContent('Edit practice');
+    expect(screen.getByTestId('speaking-form-title-input')).toHaveDisplayValue('Morning routine');
+    expect(screen.getByTestId('speaking-form-content-input')).toHaveDisplayValue(
+      'I wake up early.\n\nThen I drink coffee.',
+    );
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId('speaking-form-title-input'), 'Updated routine');
+      fireEvent.changeText(
+        screen.getByTestId('speaking-form-content-input'),
+        'I wake up later now.',
+      );
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('speaking-form-save'));
+    });
+
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith({}, 1, {
+        title: 'Updated routine',
+        text: 'I wake up later now.',
+        minutes: 1,
+        wordCount: 5,
+      }),
+    );
+    expect(screen.getByText('Updated routine')).toBeOnTheScreen();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('creates a custom topic from the header and opens it for practice', async () => {
+    await renderHistory([makeRecord({})]);
+    mockCreate.mockResolvedValue(
+      makeRecord({
+        id: 9,
+        title: 'My custom topic',
+        text: 'Hello world. This is my own text.',
+        minutes: 1,
+        word_count: 6,
+      }),
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('speaking-history-new'));
+    });
+
+    expect(screen.getByTestId('speaking-form-heading')).toHaveTextContent('New custom topic');
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId('speaking-form-title-input'), 'My custom topic');
+      fireEvent.changeText(
+        screen.getByTestId('speaking-form-content-input'),
+        'Hello world. This is my own text.',
+      );
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('speaking-form-save'));
+    });
+
+    await waitFor(() =>
+      expect(mockCreate).toHaveBeenCalledWith(
+        {},
+        {
+          userId: 0,
+          title: 'My custom topic',
+          description: '',
+          rawPrompt: '',
+          englishLevel: 'AUTO',
+          text: 'Hello world. This is my own text.',
+          minutes: 1,
+          wordCount: 7,
+        },
+      ),
+    );
+    expect(mockNavigate).toHaveBeenCalledWith('SpeakingPractice', {
+      text: 'Hello world. This is my own text.',
+      material: 'My custom topic',
+      minutes: 1,
+    });
   });
 });

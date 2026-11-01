@@ -418,7 +418,7 @@ chỉ trong nội dung tin nhắn hội thoại.
 - Luyện nghe (Listening practice): nghe số, chữ cái và số điện thoại UK, sau đó chọn đáp án đúng từ các lựa chọn dễ nhầm lẫn về âm (chạy trên thiết bị, không gọi AI)
 - Luyện nói (Speaking practice, kiểu karaoke): AI tạo đoạn văn để đọc to theo độ dài buổi luyện, hiển thị dạng teleprompter cuộn với tốc độ điều chỉnh được
 - Chế độ nghe (Listen mode): TTS của thiết bị đọc đoạn văn trong khi màn hình cuộn theo giọng đọc theo thời gian thực, hỗ trợ tạm dừng/tiếp tục và giữ màn hình luôn sáng
-- Lịch sử luyện nói: các buổi luyện đã hoàn thành được lưu cục bộ, xem lại và phát lại ở chế độ nghe
+- Lịch sử luyện nói: các buổi luyện đã hoàn thành được lưu cục bộ, xem lại, chỉnh sửa và phát lại ở chế độ nghe; nút + trên header tạo chủ đề tùy chỉnh từ tiêu đề và nội dung của bạn (không dùng AI)
 - Câu thực tế (Real-life sentences, chỉ serverless): thu thập câu tiếng Anh thường ngày theo chủ đề, tạo câu mới qua provider của bạn và luyện theo spaced repetition FSRS (Again / Hard / Good / Easy, ngày học mới bắt đầu lúc 4 giờ sáng), gồm dictation và recall theo tình huống
 - Ngân hàng từ (Word bank, chỉ serverless): thu thập vocabulary cho bất kỳ domain nào theo từng chủ đề — AI chọn từ, Free Dictionary API điền toàn bộ nghĩa (mọi senses) và phiên âm IPA — sau đó luyện cùng lịch FSRS, dictation nghe-gõ và recall với từ được che trong ngữ cảnh, kèm enrichment AI cho từng từ qua modal phê duyệt
 - Điều chỉnh tốc độ cuộn teleprompter trong Settings
