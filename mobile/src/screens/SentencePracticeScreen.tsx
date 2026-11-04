@@ -34,9 +34,9 @@ import {
   SCREEN_GUTTER,
   SCREEN_TOP_SPACING,
   Screen,
-  ScreenHeader,
   ScreenScrollView,
 } from '../components/ScreenLayout';
+import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { getLocalDatabase } from '../db/database';
 import {
   countNewSentencesIntroducedToday,
@@ -630,19 +630,12 @@ export function SentencePracticeScreen({
 
   return (
     <Screen style={styles.container} testID="sentence-practice-screen">
-      <ScreenHeader style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to topic"
-          testID="sentence-practice-back"
-          onPress={() => navigation.goBack()}
-          style={styles.backLinkButton}>
-          <Text style={styles.backLinkText}>‹ Topic</Text>
-        </Pressable>
-        <Text style={styles.title} numberOfLines={1} testID="sentence-practice-title">
-          {topic ? topic.title : 'Practice'}
-        </Text>
-      </ScreenHeader>
+      <ScreenTitleBar
+        title={topic ? topic.title : 'Practice'}
+        titleTestID="sentence-practice-title"
+        onBack={() => navigation.goBack()}
+        backTestID="sentence-practice-back"
+      />
 
       {loading ? (
         <View style={styles.centered} testID="sentence-practice-loading">
