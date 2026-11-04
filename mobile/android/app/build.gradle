@@ -86,11 +86,11 @@ def enableProguardInReleaseBuilds = true
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
-    ndkVersion rootProject.ext.ndkVersion
-    buildToolsVersion rootProject.ext.buildToolsVersion
-    compileSdk rootProject.ext.compileSdkVersion
+    ndkVersion = rootProject.ext.ndkVersion
+    buildToolsVersion = rootProject.ext.buildToolsVersion
+    compileSdk = rootProject.ext.compileSdkVersion
 
-    namespace "com.elearningmobile"
+    namespace = "com.elearningmobile"
     defaultConfig {
         applicationId "com.elearningmobile"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -116,20 +116,20 @@ android {
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            signingConfig = signingConfigs.debug
         }
         release {
             if (keystorePropertiesFile.exists()) {
-                signingConfig signingConfigs.release
+                signingConfig = signingConfigs.release
             } else {
                 // Fallback for checkouts without keystore.properties: the APK
                 // installs on devices, but is signed with the debug key.
-                signingConfig signingConfigs.debug
+                signingConfig = signingConfigs.debug
             }
-            minifyEnabled enableProguardInReleaseBuilds
+            minifyEnabled = enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-            shrinkResources true
-            debuggable false
+            shrinkResources = true
+            debuggable = false
         }
     }
 }
