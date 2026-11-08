@@ -10,6 +10,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SCREEN_TOP_SPACING } from '../src/components/ScreenLayout';
+import { DEFAULT_DEBOUNCE_DELAY_MS } from '../src/hooks/useDebouncedCallback';
 import type { TTSSettingsScreenProps } from '../src/navigation/types';
 import { createStyles, TTSSettingsScreen } from '../src/screens/TTSSettingsScreen';
 import { lightColors } from '../src/theme/colors';
@@ -94,8 +95,11 @@ describe('TTSSettingsScreen', () => {
     });
 
     await waitFor(() => expect(screen.getByTestId('tts-rate-value')).toHaveTextContent('1.30×'));
-    const stored = await loadSpeechPreferences();
-    expect(stored.rate).toBe(1.3);
+    // The store is written only once the debounce period elapses, not on the
+    // slider tick itself.
+    await waitFor(async () => expect((await loadSpeechPreferences()).rate).toBe(1.3), {
+      timeout: DEFAULT_DEBOUNCE_DELAY_MS * 3,
+    });
   });
 
   it('keeps the pitch slider inside its bounds and persists changes', async () => {
@@ -111,7 +115,60 @@ describe('TTSSettingsScreen', () => {
     });
 
     await waitFor(() => expect(screen.getByTestId('tts-pitch-value')).toHaveTextContent('0.75×'));
-    expect((await loadSpeechPreferences()).pitch).toBe(0.75);
+    await waitFor(async () => expect((await loadSpeechPreferences()).pitch).toBe(0.75), {
+      timeout: DEFAULT_DEBOUNCE_DELAY_MS * 3,
+    });
+  });
+
+  it('keeps both changes when rate and pitch move within the debounce window', async () => {
+    await renderTts();
+    await waitForReady();
+
+    const rate = screen.getByTestId('tts-rate-slider');
+    const pitch = screen.getByTestId('tts-pitch-slider');
+    // A burst across two different controls, all inside the 400ms quiet
+    // period: only the last debounced call fires, but it carries the complete
+    // merged preferences, so neither change is lost.
+    await act(async () => {
+      rate.props.onValueChange(1.4);
+      pitch.props.onValueChange(0.8);
+      rate.props.onValueChange(1.6);
+    });
+
+    expect(screen.getByTestId('tts-rate-value')).toHaveTextContent('1.60×');
+    expect(screen.getByTestId('tts-pitch-value')).toHaveTextContent('0.80×');
+
+    await waitFor(
+      async () => {
+        const stored = await loadSpeechPreferences();
+        expect(stored.rate).toBe(1.6);
+        expect(stored.pitch).toBe(0.8);
+      },
+      { timeout: DEFAULT_DEBOUNCE_DELAY_MS * 3 },
+    );
+  });
+
+  it('does not let a pending slider save resurrect values after reset', async () => {
+    await renderTts();
+    await waitForReady();
+
+    // Change the rate, then reset before the debounce period elapses.
+    await act(async () => {
+      screen.getByTestId('tts-rate-slider').props.onValueChange(1.7);
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('tts-reset'));
+    });
+    await waitFor(() => expect(screen.getByTestId('tts-rate-value')).toHaveTextContent('1.00×'));
+
+    // The pending write must have been cancelled: after it would have fired,
+    // storage still holds the defaults rather than the pre-reset 1.7.
+    await act(async () => {
+      await new Promise<void>(resolve => {
+        setTimeout(() => resolve(), DEFAULT_DEBOUNCE_DELAY_MS * 2);
+      });
+    });
+    expect((await loadSpeechPreferences()).rate).toBe(DEFAULT_SPEECH_PREFERENCES.rate);
   });
 
   it('has no inline instant-voices switch — it lives on the voice manager', async () => {

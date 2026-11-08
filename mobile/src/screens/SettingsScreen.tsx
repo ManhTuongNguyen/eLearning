@@ -46,6 +46,7 @@ import {
 } from '../components/ScreenLayout';
 import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { Toast } from '../components/Toast';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { ApplicationMode } from '../mode/types';
 import type { SettingsScreenProps } from '../navigation/types';
@@ -157,13 +158,6 @@ const WORD_PRACTICE_MODE_OPTIONS: Array<{
 
 /** How long the configuration-saved toast stays visible (TASK-IMPROVEMENT-005). */
 export const CONFIG_SAVED_TOAST_DURATION_MS = 2500;
-
-/**
- * How long the scroll-speed slider waits after the last change before the
- * value is persisted: dragging updates the display live, but the store
- * write happens once, after the user stops for this period — not per tick.
- */
-export const SCROLL_SPEED_SAVE_DELAY_MS = 600;
 
 /** Row shape shared by both mode-specific sections. */
 interface SettingsRow {
@@ -568,13 +562,11 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
 
   /**
    * Speaking-practice karaoke scroll speed (px/s). The slider updates the
-   * displayed value live while dragging; persistence is debounced by
-   * SCROLL_SPEED_SAVE_DELAY_MS so the store is written once after the user
+   * displayed value live while dragging; persistence is debounced (see
+   * `useDebouncedCallback`) so the store is written once after the user
    * stops, not on every tick.
    */
   const [scrollSpeed, setScrollSpeed] = useState<number | null>(null);
-  const scrollSpeedSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingScrollSpeedRef = useRef<number | null>(null);
 
   const persistScrollSpeed = useCallback((value: number) => {
     saveSpeakingScrollSpeed(value).catch(() => {
@@ -583,6 +575,10 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
       loadSpeakingScrollSpeed().then(stored => setScrollSpeed(stored));
     });
   }, []);
+
+  // The save waits out the shared quiet period; a value still pending when
+  // the screen unmounts is flushed by the hook, so leaving never drops it.
+  const debouncedPersistScrollSpeed = useDebouncedCallback(persistScrollSpeed);
 
   useEffect(() => {
     let cancelled = false;
@@ -596,43 +592,12 @@ export function SettingsScreen({ navigation, route }: SettingsScreenProps) {
     };
   }, []);
 
-  // Leaving Settings while a debounced save is still waiting out its period
-  // must not drop the user's choice: flush the pending value on unmount.
-  useEffect(() => {
-    return () => {
-      if (scrollSpeedSaveTimerRef.current !== null) {
-        clearTimeout(scrollSpeedSaveTimerRef.current);
-        scrollSpeedSaveTimerRef.current = null;
-      }
-      const pending = pendingScrollSpeedRef.current;
-      pendingScrollSpeedRef.current = null;
-      if (pending !== null) {
-        saveSpeakingScrollSpeed(pending).catch(() => {
-          // Best-effort flush on unmount: there is no UI left to revert.
-        });
-      }
-    };
-  }, []);
-
   const handleScrollSpeedChange = useCallback(
     (value: number) => {
       setScrollSpeed(value);
-      pendingScrollSpeedRef.current = value;
-      if (scrollSpeedSaveTimerRef.current !== null) {
-        clearTimeout(scrollSpeedSaveTimerRef.current);
-      }
-      // Debounced: the change is saved only after this period elapses with
-      // no further movement — never immediately on the slider tick.
-      scrollSpeedSaveTimerRef.current = setTimeout(() => {
-        scrollSpeedSaveTimerRef.current = null;
-        const pending = pendingScrollSpeedRef.current;
-        pendingScrollSpeedRef.current = null;
-        if (pending !== null) {
-          persistScrollSpeed(pending);
-        }
-      }, SCROLL_SPEED_SAVE_DELAY_MS);
+      debouncedPersistScrollSpeed(value);
     },
-    [persistScrollSpeed],
+    [debouncedPersistScrollSpeed],
   );
 
   /**

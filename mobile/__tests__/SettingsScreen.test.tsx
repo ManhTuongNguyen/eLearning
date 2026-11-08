@@ -17,6 +17,7 @@ import type React from 'react';
 
 import { useAuth } from '../src/auth/AuthContext';
 import { SCREEN_GUTTER } from '../src/components/ScreenLayout';
+import { DEFAULT_DEBOUNCE_DELAY_MS } from '../src/hooks/useDebouncedCallback';
 import { ModeProvider } from '../src/mode/ModeContext';
 import { saveApplicationMode } from '../src/mode/modeStorage';
 import { setRuntimeApplicationMode } from '../src/mode/runtime';
@@ -27,7 +28,6 @@ import { loadPracticeMode } from '../src/preferences/practiceMode';
 import {
   CONFIG_SAVED_TOAST_DURATION_MS,
   createStyles,
-  SCROLL_SPEED_SAVE_DELAY_MS,
   SettingsScreen,
 } from '../src/screens/SettingsScreen';
 import * as serverlessSettings from '../src/serverless/settings';
@@ -555,7 +555,7 @@ describe('speaking practice scroll speed', () => {
     await waitFor(
       () =>
         expect(asyncStorage.setItem).toHaveBeenCalledWith('app.speakingScrollSpeedPxPerS', '55'),
-      { timeout: SCROLL_SPEED_SAVE_DELAY_MS * 3 },
+      { timeout: DEFAULT_DEBOUNCE_DELAY_MS * 3 },
     );
   });
 

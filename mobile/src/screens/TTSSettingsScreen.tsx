@@ -11,7 +11,7 @@
  */
 
 import Slider from '@react-native-community/slider';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   SCREEN_GUTTER,
@@ -21,6 +21,7 @@ import {
 } from '../components/ScreenLayout';
 import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { Toast } from '../components/Toast';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import type { TTSSettingsScreenProps } from '../navigation/types';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
@@ -38,6 +39,7 @@ import {
   SPEECH_RATE_MAX,
   SPEECH_RATE_MIN,
   SPEECH_RATE_STEP,
+  type SpeechPreferences,
 } from '../tts/types';
 
 /** Sentence spoken by the preview control. */
@@ -222,11 +224,17 @@ export function TTSSettingsScreen({ navigation }: TTSSettingsScreenProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [preferences, setPreferences] = useState<import('../tts/types').SpeechPreferences | null>(
-    null,
-  );
+  const [preferences, setPreferences] = useState<SpeechPreferences | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [resetToastVisible, setResetToastVisible] = useState(false);
+
+  // Mirror of the latest preferences for the debounced persister below: the
+  // update callback reads it synchronously so a burst of slider ticks always
+  // builds on the previous tick's value instead of a stale render's.
+  const preferencesRef = useRef(preferences);
+  useEffect(() => {
+    preferencesRef.current = preferences;
+  }, [preferences]);
 
   // The reset confirmation dismisses itself after a fixed delay, matching the
   // transient success toast used by the other settings screens.
@@ -240,21 +248,32 @@ export function TTSSettingsScreen({ navigation }: TTSSettingsScreenProps) {
 
   /**
    * Single mutation seam: every control flows through here so persistence
-   * and the live system adapter can never drift apart.
+   * and the live system adapter can never drift apart. The UI follows the
+   * control immediately; the store write and the adapter update are debounced
+   * (see `useDebouncedCallback`) so dragging a slider commits once, after the
+   * user stops, instead of on every tick.
    */
+  const persistPreferences = useCallback((updated: SpeechPreferences) => {
+    saveSpeechPreferences(updated);
+    applySpeechPreferences(updated);
+  }, []);
+
+  const debouncedPersistPreferences = useDebouncedCallback(persistPreferences);
+
   const updatePreferences = useCallback(
-    (patch: Partial<import('../tts/types').SpeechPreferences>) => {
-      setPreferences(prev => {
-        if (!prev) {
-          return prev;
-        }
-        const updated = { ...prev, ...patch };
-        saveSpeechPreferences(updated);
-        applySpeechPreferences(updated);
-        return updated;
-      });
+    (patch: Partial<SpeechPreferences>) => {
+      const prev = preferencesRef.current;
+      if (!prev) {
+        return;
+      }
+      const updated = { ...prev, ...patch };
+      // Advance the mirror synchronously so ticks that arrive before the next
+      // render still compose from the newest value.
+      preferencesRef.current = updated;
+      setPreferences(updated);
+      debouncedPersistPreferences(updated);
     },
-    [],
+    [debouncedPersistPreferences],
   );
 
   // Restore persisted preferences on mount — and re-read on focus, so a
@@ -283,6 +302,9 @@ export function TTSSettingsScreen({ navigation }: TTSSettingsScreenProps) {
     if (!preferences) {
       return;
     }
+    // Commit any change still inside the debounce window first, so the
+    // adapter speaks the settings currently shown — not the previous ones.
+    debouncedPersistPreferences.flush();
     setPreviewPlaying(true);
     // The preview runs through the shared engine registry (the adapter
     // already applies the preferences) so what the user hears is exactly
@@ -293,16 +315,19 @@ export function TTSSettingsScreen({ navigation }: TTSSettingsScreenProps) {
         // Preview failures are non-fatal; the state simply clears.
       })
       .finally(() => setPreviewPlaying(false));
-  }, [preferences]);
+  }, [debouncedPersistPreferences, preferences]);
 
   /** Restores the pre-TTS-settings behavior (system default voice). */
   const resetPreferences = useCallback(() => {
+    // Drop any debounced save still in flight; otherwise it would fire after
+    // the reset and re-persist the values we are about to clear.
+    debouncedPersistPreferences.cancel();
     clearSpeechPreferences().then(() => {
       setPreferences(DEFAULT_SPEECH_PREFERENCES);
       applySpeechPreferences(DEFAULT_SPEECH_PREFERENCES);
       setResetToastVisible(true);
     });
-  }, []);
+  }, [debouncedPersistPreferences]);
 
   if (!preferences) {
     return (
