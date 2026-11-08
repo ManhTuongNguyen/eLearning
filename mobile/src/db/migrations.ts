@@ -462,6 +462,22 @@ const MIGRATION_010: readonly string[] = [
 ];
 
 /**
+ * v11 — rich sentence content (MANUAL_SENTENCES). A sentence may now carry
+ * several meanings and situations plus extra learning notes, stored as JSON
+ * arrays in their own columns. The original scalar `meaning`/`situation`
+ * columns are kept (SQLite cannot safely drop them on every supported device)
+ * and remain the mirror of each list's first entry, so the practice screen and
+ * pre-v11 rows keep working through the repository's map/fill fallback.
+ */
+const MIGRATION_011: readonly string[] = [
+  `ALTER TABLE sentences ADD COLUMN meanings_json TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE sentences ADD COLUMN situations_json TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE sentences ADD COLUMN alternatives_json TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE sentences ADD COLUMN registers_json TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE sentences ADD COLUMN grammar_notes_json TEXT NOT NULL DEFAULT '[]'`,
+];
+
+/**
  * Ordered migration list; length is the current schema version. Append new
  * entries — never edit shipped ones.
  */
@@ -476,6 +492,7 @@ export const MIGRATIONS: readonly (readonly string[])[] = [
   MIGRATION_008,
   MIGRATION_009,
   MIGRATION_010,
+  MIGRATION_011,
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS.length;

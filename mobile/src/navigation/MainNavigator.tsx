@@ -18,6 +18,8 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { LevelScreen } from '../screens/LevelScreen';
 import { NewConversationScreen } from '../screens/NewConversationScreen';
 import { PracticeScreen } from '../screens/PracticeScreen';
+import { SentenceDetailScreen } from '../screens/SentenceDetailScreen';
+import { SentenceEditScreen } from '../screens/SentenceEditScreen';
 import { SentencePracticeScreen } from '../screens/SentencePracticeScreen';
 import { SentenceTopicNewScreen } from '../screens/SentenceTopicNewScreen';
 import { SentenceTopicScreen } from '../screens/SentenceTopicScreen';
@@ -56,6 +58,8 @@ export function MainNavigator() {
       <Stack.Screen name="SentenceTopics" component={SentenceTopicsScreen} />
       <Stack.Screen name="SentenceTopicNew" component={SentenceTopicNewScreen} />
       <Stack.Screen name="SentenceTopic" component={SentenceTopicScreen} />
+      <Stack.Screen name="SentenceDetail" component={SentenceDetailScreen} />
+      <Stack.Screen name="SentenceEdit" component={SentenceEditScreen} />
       <Stack.Screen name="SentencePractice" component={SentencePracticeScreen} />
       <Stack.Screen name="WordTopics" component={WordTopicsScreen} />
       <Stack.Screen name="WordTopic" component={WordTopicScreen} />

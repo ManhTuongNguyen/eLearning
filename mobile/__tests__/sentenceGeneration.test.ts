@@ -15,6 +15,7 @@ import {
   generateSentences,
   generateTopicSentences,
   parseGeneratedSentences,
+  SENTENCE_GENERATION_EXAMPLE_JSON,
   SENTENCE_GENERATION_SYSTEM_PROMPT,
 } from '../src/serverless/sentenceGeneration';
 import { openSqlJsDriver } from '../testing/sqlJsDriver';
@@ -40,8 +41,11 @@ describe('parseGeneratedSentences', () => {
     expect(candidates).toHaveLength(2);
     expect(candidates[0]).toEqual({
       sentence: 'Nice to meet you.',
-      meaning: 'A greeting when you meet someone.',
-      situation: 'Meeting a neighbour.',
+      meanings: ['A greeting when you meet someone.'],
+      situations: ['Meeting a neighbour.'],
+      alternatives: [],
+      registers: [],
+      grammar_notes: [],
     });
   });
 
@@ -61,12 +65,36 @@ describe('parseGeneratedSentences', () => {
     expect(parseGeneratedSentences(withProse)).toHaveLength(2);
   });
 
-  test('defaults a missing situation to an empty string', () => {
+  test('defaults a missing situation to an empty list', () => {
     const noSituation = JSON.stringify({
       sentences: [{ sentence: 'See you tomorrow.', meaning: 'Saying goodbye.' }],
     });
     const parsed = parseGeneratedSentences(noSituation);
-    expect(parsed[0].situation).toBe('');
+    expect(parsed[0].situations).toEqual([]);
+  });
+
+  test('parses the array shape with extras and drops blank/duplicate entries', () => {
+    const batch = JSON.stringify({
+      sentences: [
+        {
+          sentence: 'No worries at all.',
+          meanings: ['It is fine.', '  ', 'Do not mention it.', 'It is fine.'],
+          situations: ['After someone apologises.', ''],
+          alternatives: ['Not a problem.', 'No worries.'],
+          registers: ['casual, between friends'],
+          grammarNotes: ['Fixed phrase, present tense.'],
+        },
+      ],
+    });
+    const parsed = parseGeneratedSentences(batch);
+    expect(parsed[0]).toEqual({
+      sentence: 'No worries at all.',
+      meanings: ['It is fine.', 'Do not mention it.'],
+      situations: ['After someone apologises.'],
+      alternatives: ['Not a problem.', 'No worries.'],
+      registers: ['casual, between friends'],
+      grammar_notes: ['Fixed phrase, present tense.'],
+    });
   });
 
   test('drops entries with an empty sentence or meaning', () => {
@@ -200,7 +228,7 @@ describe('buildSentenceGenerationUserPrompt', () => {
       existingSentences: [],
     });
     expect(prompt).toContain('Write 1 everyday English sentence');
-    expect(prompt).not.toContain('sentences');
+    expect(prompt).not.toContain('Write 1 everyday English sentences');
   });
 
   test('asks for real spoken English, slang/abbreviations and a detailed explanation', () => {
@@ -213,7 +241,7 @@ describe('buildSentenceGenerationUserPrompt', () => {
 
     expect(prompt).toContain('common slang and abbreviations');
     expect(prompt).toContain('instead of textbook wording');
-    expect(prompt).toContain('explain it fully in "meaning"');
+    expect(prompt).toContain('explain it fully in the first "meanings" entry');
     expect(prompt).toContain('said "ay-sap"');
     expect(prompt).toContain('said "eff-why-eye"');
     expect(prompt).toContain('not letter by letter');
@@ -225,6 +253,10 @@ describe('buildSentenceGenerationUserPrompt', () => {
     );
     expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('said "eff-why-eye"');
     expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain('read letter by letter');
+    // The concrete example is what makes weaker/free models emit the right shape.
+    expect(SENTENCE_GENERATION_SYSTEM_PROMPT).toContain(SENTENCE_GENERATION_EXAMPLE_JSON);
+    expect(prompt).toContain(SENTENCE_GENERATION_EXAMPLE_JSON);
+    expect(SENTENCE_GENERATION_EXAMPLE_JSON).toContain('"sentences":[');
   });
 });
 

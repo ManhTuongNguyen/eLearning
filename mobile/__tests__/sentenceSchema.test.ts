@@ -60,12 +60,12 @@ async function countRows(db: SqlDriver, table: string): Promise<number> {
 }
 
 describe('sentence schema (TASK-SENT-003, TASK-SENT-015)', () => {
-  test('a fresh database creates the sentence bank and records version 10', async () => {
+  test('a fresh database creates the sentence bank and records version 11', async () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
 
-    expect(SCHEMA_VERSION).toBe(10);
-    expect(await userVersion(db)).toBe(10);
+    expect(SCHEMA_VERSION).toBe(11);
+    expect(await userVersion(db)).toBe(11);
 
     const tables = await schemaNames(db, 'table');
     expect(tables).toEqual(
@@ -262,6 +262,38 @@ describe('sentence schema (TASK-SENT-003, TASK-SENT-015)', () => {
       new_cards_per_day: 20,
       max_reviews_per_day: 200,
       max_session_cards: 20,
+    });
+
+    await db.close();
+  });
+
+  test('an existing v10 sentence bank gains the rich-content JSON columns defaulting to empty lists', async () => {
+    const db = await openSqlJsDriver();
+    await migrateDatabase(db, MIGRATIONS.slice(0, 10));
+    expect(await userVersion(db)).toBe(10);
+
+    const topicId = await insertTopic(db);
+    const sentenceId = await insertSentence(db, topicId, 'Nice to meet you.', 'nice to meet you');
+
+    await migrateDatabase(db);
+
+    expect(await userVersion(db)).toBe(SCHEMA_VERSION);
+    const row = await db.execute(
+      `SELECT meaning, situation, meanings_json, situations_json, alternatives_json,
+              registers_json, grammar_notes_json
+         FROM sentences WHERE id = ?`,
+      [sentenceId],
+    );
+    // The legacy scalars survive and the new columns start empty, so the
+    // repository's map fallback can read the pre-v11 value as the first entry.
+    expect(row.rows[0]).toMatchObject({
+      meaning: 'say hello',
+      situation: 'meeting a neighbour',
+      meanings_json: '[]',
+      situations_json: '[]',
+      alternatives_json: '[]',
+      registers_json: '[]',
+      grammar_notes_json: '[]',
     });
 
     await db.close();

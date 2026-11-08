@@ -165,8 +165,28 @@ export interface SentenceRecord {
   topic_id: number;
   text: string;
   normalized_text: string;
+  /**
+   * The primary meaning — the first entry of {@link SentenceRecord.meanings}.
+   * Kept as its own field so the practice screen and older callers can keep
+   * reading a single value while the full list lives in `meanings`.
+   */
   meaning: string;
+  /** The primary situation — the first entry of {@link SentenceRecord.situations}. */
   situation: string;
+  /**
+   * Every stored meaning of the sentence (the first is mirrored in `meaning`).
+   * A sentence may carry more than one sense, so the detail/edit screens show
+   * them as an editable list.
+   */
+  meanings?: string[];
+  /** Every stored situation (the first is mirrored in `situation`). */
+  situations?: string[];
+  /** Other natural phrasings with the same meaning. */
+  alternatives?: string[];
+  /** Register/nuance notes (formal, casual, slang, who says it to whom). */
+  registers?: string[];
+  /** Grammar/structure notes for the sentence's pattern. */
+  grammar_notes?: string[];
   state: SentenceState;
   suspended: boolean;
   reps: number;
@@ -229,11 +249,64 @@ export interface NewSentenceTopic {
   max_session_cards?: number;
 }
 
-/** One generated (or hand-written) sentence before it has an id. */
+/**
+ * One generated (or hand-written) sentence before it has an id. `meaning` and
+ * `situation` are the single-value shorthand older callers pass; `meanings` and
+ * `situations` carry the full lists (preferred when present). The remaining
+ * fields are optional learning extras.
+ */
 export interface NewSentence {
   text: string;
-  meaning: string;
+  /** Primary meaning; use `meanings` to store more than one. */
+  meaning?: string;
+  /** Primary situation; use `situations` to store more than one. */
   situation?: string;
+  meanings?: string[];
+  situations?: string[];
+  /** Other natural phrasings with the same meaning. */
+  alternatives?: string[];
+  /** Register/nuance notes. */
+  registers?: string[];
+  /** Grammar/structure notes. */
+  grammar_notes?: string[];
+}
+
+/**
+ * Parse a stored JSON-array column (or an already-parsed array) into an ordered
+ * list of non-empty, de-duplicated trimmed strings. Malformed input yields `[]`
+ * instead of throwing, so a corrupted row never crashes the list or the detail
+ * screen.
+ */
+export function parseSentenceContentList(raw: unknown): string[] {
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') {
+      continue;
+    }
+    const text = item.trim();
+    if (!text || seen.has(text)) {
+      continue;
+    }
+    seen.add(text);
+    result.push(text);
+  }
+  return result;
+}
+
+/** Serialise a content list into the JSON text form stored on the row. */
+export function serializeSentenceContentList(list: readonly string[] | undefined): string {
+  return JSON.stringify(parseSentenceContentList(list ?? []));
 }
 
 /** A topic row plus the counts the topic list shows. */

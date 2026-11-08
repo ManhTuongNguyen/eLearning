@@ -38,9 +38,10 @@ describe('ScreenTitleBar', () => {
     // The row holding the bar children is horizontal — otherwise the three
     // items wrap onto separate lines.
     const bar = view.getByTestId('probe-back').parent;
-    const barStyle = Array.isArray(bar?.props.style)
-      ? Object.assign({}, ...bar?.props.style.filter(Boolean))
-      : bar?.props.style;
+    const barStyleProp = bar?.props.style;
+    const barStyle = Array.isArray(barStyleProp)
+      ? Object.assign({}, ...barStyleProp.filter(Boolean))
+      : barStyleProp;
     expect(barStyle.flexDirection).toBe('row');
 
     await view.unmount();
@@ -56,9 +57,10 @@ describe('ScreenTitleBar', () => {
     });
 
     const titleWrap = view.getByTestId('probe-title').parent;
-    const wrapStyle = Array.isArray(titleWrap?.props.style)
-      ? Object.assign({}, ...titleWrap?.props.style.filter(Boolean))
-      : titleWrap?.props.style;
+    const wrapStyleProp = titleWrap?.props.style;
+    const wrapStyle = Array.isArray(wrapStyleProp)
+      ? Object.assign({}, ...wrapStyleProp.filter(Boolean))
+      : wrapStyleProp;
 
     // Absolute fill = centered over the bar, independent of the back button
     // and the right action widths.

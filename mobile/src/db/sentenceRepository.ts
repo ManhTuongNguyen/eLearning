@@ -34,12 +34,14 @@ import type {
   SentenceTopicRecord,
   SentenceTopicSummary,
 } from './types';
+import { parseSentenceContentList, serializeSentenceContentList } from './types';
 
 const TOPIC_COLUMNS =
   'id, title, description, generation_prompt, english_level, learn_ahead_minutes, ' +
   'new_cards_per_day, max_reviews_per_day, max_session_cards, created_at, updated_at';
 const SENTENCE_COLUMNS =
-  'id, topic_id, text, normalized_text, meaning, situation, state, suspended, reps, lapses, ' +
+  'id, topic_id, text, normalized_text, meaning, situation, meanings_json, situations_json, ' +
+  'alternatives_json, registers_json, grammar_notes_json, state, suspended, reps, lapses, ' +
   'stability, difficulty, elapsed_days, scheduled_days, learning_steps, due_at, last_grade, ' +
   'last_reviewed_at, created_at, updated_at';
 const REVIEW_LOG_COLUMNS =
@@ -116,13 +118,28 @@ function mapTopicRow(row: SqlRow): SentenceTopicRecord {
 }
 
 function mapSentenceRow(row: SqlRow): SentenceRecord {
+  // Prefer the JSON lists; a pre-v11 row (or one never re-saved) falls back to
+  // the scalar columns, so the legacy value is never lost.
+  const legacyMeaning = String(row.meaning ?? '').trim();
+  const legacySituation = String(row.situation ?? '').trim();
+  const storedMeanings = parseSentenceContentList(row.meanings_json);
+  const storedSituations = parseSentenceContentList(row.situations_json);
+  const meanings =
+    storedMeanings.length > 0 ? storedMeanings : legacyMeaning ? [legacyMeaning] : [];
+  const situations =
+    storedSituations.length > 0 ? storedSituations : legacySituation ? [legacySituation] : [];
   return {
     id: Number(row.id),
     topic_id: Number(row.topic_id),
     text: String(row.text ?? ''),
     normalized_text: String(row.normalized_text ?? ''),
-    meaning: String(row.meaning ?? ''),
-    situation: String(row.situation ?? ''),
+    meaning: meanings[0] ?? '',
+    situation: situations[0] ?? '',
+    meanings,
+    situations,
+    alternatives: parseSentenceContentList(row.alternatives_json),
+    registers: parseSentenceContentList(row.registers_json),
+    grammar_notes: parseSentenceContentList(row.grammar_notes_json),
     state: String(row.state ?? 'new') as SentenceRecord['state'],
     suspended: Number(row.suspended ?? 0) === 1,
     reps: Number(row.reps ?? 0),
@@ -335,6 +352,137 @@ export async function countSentencesInTopic(db: SqlExecutor, topicId: number): P
 // --- Sentences --------------------------------------------------------------
 
 /**
+ * Resolve a content list from the array form when it carries anything, else
+ * from the single-value shorthand. Blank/duplicate entries are dropped.
+ */
+function resolveContentList(list: readonly string[] | undefined, single?: string): string[] {
+  const fromList = parseSentenceContentList(list);
+  if (fromList.length > 0) {
+    return fromList;
+  }
+  return parseSentenceContentList(single ? [single] : []);
+}
+
+/** Content-only patch accepted by {@link updateSentence}. */
+export interface SentenceContentPatch {
+  /** New sentence text; when its normal form changes the schedule resets. */
+  text?: string;
+  meanings?: string[];
+  situations?: string[];
+  alternatives?: string[];
+  registers?: string[];
+  grammar_notes?: string[];
+}
+
+/**
+ * Update a sentence's content. Changing the text (by its normalised duplicate
+ * key) resets the card to a fresh `new` card so the learner does not keep a
+ * schedule earned for different words; editing only the meaning/situation/notes
+ * leaves the FSRS schedule untouched. Rejects a text that duplicates another
+ * sentence in the same topic.
+ */
+export async function updateSentence(
+  db: SqlExecutor,
+  id: number,
+  patch: SentenceContentPatch,
+): Promise<SentenceRecord | null> {
+  const existing = await getSentenceById(db, id);
+  if (existing === null) {
+    return null;
+  }
+
+  const assignments: string[] = [];
+  const params: (string | number)[] = [];
+  let resetSchedule = false;
+
+  if (patch.text !== undefined) {
+    const text = patch.text.trim();
+    const normalized = normalizeSentenceText(text);
+    if (!text || !normalized) {
+      throw new Error('updateSentence: a sentence needs its text');
+    }
+    if (normalized !== existing.normalized_text) {
+      const conflict = await db.execute(
+        'SELECT id FROM sentences WHERE topic_id = ? AND normalized_text = ? AND id <> ?',
+        [existing.topic_id, normalized, id],
+      );
+      if (conflict.rows.length > 0) {
+        throw new Error('This sentence already exists in this topic.');
+      }
+      resetSchedule = true;
+    }
+    assignments.push('text = ?', 'normalized_text = ?');
+    params.push(text, normalized);
+  }
+
+  if (patch.meanings !== undefined) {
+    const meanings = parseSentenceContentList(patch.meanings);
+    assignments.push('meanings_json = ?', 'meaning = ?');
+    params.push(serializeSentenceContentList(meanings), meanings[0] ?? '');
+  }
+  if (patch.situations !== undefined) {
+    const situations = parseSentenceContentList(patch.situations);
+    assignments.push('situations_json = ?', 'situation = ?');
+    params.push(serializeSentenceContentList(situations), situations[0] ?? '');
+  }
+  if (patch.alternatives !== undefined) {
+    assignments.push('alternatives_json = ?');
+    params.push(serializeSentenceContentList(patch.alternatives));
+  }
+  if (patch.registers !== undefined) {
+    assignments.push('registers_json = ?');
+    params.push(serializeSentenceContentList(patch.registers));
+  }
+  if (patch.grammar_notes !== undefined) {
+    assignments.push('grammar_notes_json = ?');
+    params.push(serializeSentenceContentList(patch.grammar_notes));
+  }
+
+  if (assignments.length === 0) {
+    return existing;
+  }
+
+  const timestamp = nowIso();
+  if (resetSchedule) {
+    // Back to a fresh card: due now, no memory state, no grade.
+    assignments.push(
+      "state = 'new'",
+      'suspended = 0',
+      'reps = 0',
+      'lapses = 0',
+      'stability = 0',
+      'difficulty = 0',
+      'elapsed_days = 0',
+      'scheduled_days = 0',
+      'learning_steps = 0',
+      'due_at = ?',
+      "last_grade = ''",
+      "last_reviewed_at = ''",
+    );
+    params.push(timestamp);
+  }
+  assignments.push('updated_at = ?');
+  params.push(timestamp, id);
+  await db.execute(`UPDATE sentences SET ${assignments.join(', ')} WHERE id = ?`, params);
+  return getSentenceById(db, id);
+}
+
+/** Apply only the learning content of a sentence (enrichment), keeping schedule. */
+export async function applySentenceContent(
+  db: SqlExecutor,
+  id: number,
+  content: {
+    meanings: string[];
+    situations: string[];
+    alternatives: string[];
+    registers: string[];
+    grammar_notes: string[];
+  },
+): Promise<SentenceRecord | null> {
+  return updateSentence(db, id, content);
+}
+
+/**
  * Insert a batch of candidates in ONE transaction, skipping anything that
  * duplicates an existing sentence of the topic (or an earlier candidate in the
  * same batch) after normalisation. Returns the rows actually inserted, so the
@@ -371,15 +519,36 @@ export async function insertSentencesWith(
       continue;
     }
     seen.add(normalized);
-    const meaning = candidate.meaning.trim();
-    const situation = candidate.situation?.trim() ?? '';
+    const meanings = resolveContentList(candidate.meanings, candidate.meaning);
+    const situations = resolveContentList(candidate.situations, candidate.situation);
+    const alternatives = parseSentenceContentList(candidate.alternatives);
+    const registers = parseSentenceContentList(candidate.registers);
+    const grammarNotes = parseSentenceContentList(candidate.grammar_notes);
+    const meaning = meanings[0] ?? '';
+    const situation = situations[0] ?? '';
     const result = await tx.execute(
       `INSERT INTO sentences
-         (topic_id, text, normalized_text, meaning, situation, state, suspended,
-          reps, lapses, stability, difficulty, elapsed_days, scheduled_days,
-          learning_steps, due_at, last_grade, last_reviewed_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'new', 0, 0, 0, 0, 0, 0, 0, 0, ?, '', '', ?, ?)`,
-      [topicId, text, normalized, meaning, situation, timestamp, timestamp, timestamp],
+         (topic_id, text, normalized_text, meaning, situation, meanings_json,
+          situations_json, alternatives_json, registers_json, grammar_notes_json,
+          state, suspended, reps, lapses, stability, difficulty, elapsed_days,
+          scheduled_days, learning_steps, due_at, last_grade, last_reviewed_at,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', 0, 0, 0, 0, 0, 0, 0, 0, ?, '', '', ?, ?)`,
+      [
+        topicId,
+        text,
+        normalized,
+        meaning,
+        situation,
+        serializeSentenceContentList(meanings),
+        serializeSentenceContentList(situations),
+        serializeSentenceContentList(alternatives),
+        serializeSentenceContentList(registers),
+        serializeSentenceContentList(grammarNotes),
+        timestamp,
+        timestamp,
+        timestamp,
+      ],
     );
     const id = result.insertId;
     if (id === null || id === undefined) {
@@ -392,6 +561,11 @@ export async function insertSentencesWith(
       normalized_text: normalized,
       meaning,
       situation,
+      meanings,
+      situations,
+      alternatives,
+      registers,
+      grammar_notes: grammarNotes,
       state: 'new',
       suspended: false,
       reps: 0,

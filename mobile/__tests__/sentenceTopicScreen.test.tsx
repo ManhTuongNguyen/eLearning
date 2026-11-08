@@ -613,3 +613,74 @@ describe('SentenceTopicScreen — TTS', () => {
     });
   });
 });
+
+describe('SentenceTopicScreen — detail navigation and manual add', () => {
+  test('opens the sentence detail screen when a row is tapped', async () => {
+    const topic = await createTopicWithSentences(1);
+    const view = await renderScreen(topic.id);
+    const sentenceId = (await listSentencesByTopic(db, topic.id))[0].id;
+
+    await fireEvent.press(view.getByTestId(`sentence-open-${sentenceId}`));
+    expect(navigate).toHaveBeenCalledWith('SentenceDetail', { sentenceId });
+  });
+
+  test('adds a hand-written sentence through the header menu and refreshes the list', async () => {
+    const topic = await createTopicWithSentences(0);
+    const view = await renderScreen(topic.id);
+
+    await fireEvent.press(view.getByTestId('sentence-topic-more'));
+    await fireEvent.press(view.getByTestId('sentence-topic-menu-add-sentence'));
+    expect(view.getByTestId('add-sentence-modal')).toBeTruthy();
+
+    await fireEvent.changeText(
+      view.getByTestId('add-sentence-text'),
+      'Could I get a flat white, please?',
+    );
+    await fireEvent.changeText(view.getByTestId('add-sentence-meaning'), 'Order coffee politely.');
+    await fireEvent.changeText(
+      view.getByTestId('add-sentence-situation'),
+      'At a café in the morning.',
+    );
+    await fireEvent.press(view.getByTestId('add-sentence-submit'));
+
+    await waitFor(() => {
+      expect(view.getByTestId('sentence-success')).toHaveTextContent('Sentence added.');
+    });
+    expect(view.queryByTestId('add-sentence-modal')).toBeFalsy();
+
+    const stored = await listSentencesByTopic(db, topic.id);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      text: 'Could I get a flat white, please?',
+      meaning: 'Order coffee politely.',
+      situation: 'At a café in the morning.',
+      meanings: ['Order coffee politely.'],
+      situations: ['At a café in the morning.'],
+    });
+    expect(view.getByText('Could I get a flat white, please?')).toBeTruthy();
+  });
+
+  test('refuses a hand-written duplicate with an inline message and keeps the dialog open', async () => {
+    const topic = await createTopicWithSentences(0);
+    await insertSentences(db, topic.id, [
+      { text: 'Could I get a flat white, please?', meaning: 'Order coffee politely.' },
+    ]);
+
+    const view = await renderScreen(topic.id);
+    await fireEvent.press(view.getByTestId('sentence-topic-more'));
+    await fireEvent.press(view.getByTestId('sentence-topic-menu-add-sentence'));
+    await fireEvent.changeText(
+      view.getByTestId('add-sentence-text'),
+      'could i get a flat white please',
+    );
+    await fireEvent.press(view.getByTestId('add-sentence-submit'));
+
+    await waitFor(() => {
+      expect(view.getByTestId('add-sentence-error')).toHaveTextContent(
+        'That sentence already exists in this topic.',
+      );
+    });
+    expect(view.getByTestId('add-sentence-modal')).toBeTruthy();
+    expect(await listSentencesByTopic(db, topic.id)).toHaveLength(1);
+  });
+});

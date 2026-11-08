@@ -17,13 +17,19 @@ import { ThemeProvider } from '../src/theme/ThemeContext';
 const CANDIDATES: SentenceCandidate[] = [
   {
     sentence: 'Could I get a flat white, please?',
-    meaning: 'Order coffee politely.',
-    situation: 'At a café in the morning.',
+    meanings: ['Order coffee politely.'],
+    situations: ['At a café in the morning.'],
+    alternatives: ['A flat white, please.'],
+    registers: ['polite, to a barista'],
+    grammar_notes: [],
   },
   {
     sentence: 'I will have the same, thanks.',
-    meaning: 'Order what they ordered.',
-    situation: 'At a restaurant with a friend.',
+    meanings: ['Order what they ordered.'],
+    situations: ['At a restaurant with a friend.'],
+    alternatives: [],
+    registers: [],
+    grammar_notes: ['Present simple for ordering.'],
   },
 ];
 
@@ -57,8 +63,8 @@ describe('SentenceReviewModal', () => {
     CANDIDATES.forEach((candidate, index) => {
       expect(view.getByTestId(`sentence-candidate-${index}`)).toBeTruthy();
       expect(view.getByText(candidate.sentence)).toBeTruthy();
-      expect(view.getByText(candidate.meaning)).toBeTruthy();
-      expect(view.getByText(candidate.situation)).toBeTruthy();
+      expect(view.getByText(candidate.meanings[0])).toBeTruthy();
+      expect(view.getByText(candidate.situations[0])).toBeTruthy();
       expect(view.getByTestId(`sentence-toggle-${index}`).props.accessibilityState).toEqual({
         checked: true,
       });

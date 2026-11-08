@@ -188,24 +188,41 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
     id: 'sentences',
     title: 'Real-life sentences',
     icon: 'sentences',
-    summary: 'Collect everyday English per topic and drill it with spaced repetition.',
+    summary:
+      'Collect everyday English per topic — generate or add your own, enrich and edit each one, then drill with spaced repetition.',
     intro:
-      'Each topic holds a bank of real-life sentences generated around a scenario you describe. Review a batch ' +
-      'before it is saved, play any sentence aloud, and once a topic has at least five sentences, spaced-repetition ' +
-      'practice unlocks — Anki-style, with intervals shown on every grade button.',
+      'Each topic holds a bank of real-life sentences generated around a scenario you describe — or ones you add ' +
+      'yourself. Every sentence carries one or more meanings, the real-life situations it fits, and optional ' +
+      'extras: other ways to say it, a register/nuance note and a grammar note. Tap any sentence to open its ' +
+      'detail screen, where you can play it, let the AI enrich it, edit it or delete it. Once a topic has at ' +
+      'least five sentences, spaced-repetition practice unlocks — Anki-style, with intervals shown on every grade button.',
     steps: [
       'Open Real-life sentences from Home and create a topic — a title is required, the description is where you describe the scenario ("meeting someone new in a new city").',
       'Open the topic and tap Generate to fetch a batch; review the candidates before they are saved.',
-      "Tap a sentence's speaker button to hear it; delete the ones you do not want.",
+      'Add a sentence yourself any time: tap the ⋮ menu and choose Add sentence, then type the sentence (a meaning and a situation are optional). It is saved on the spot, with no AI request.',
+      'Tap a sentence row to open its detail screen: read every meaning and situation, the alternatives, the register/nuance note and the grammar note.',
+      'On the detail screen, tap Enrich to have the AI draft fuller content — review the old-versus-new proposal and keep or discard each field before it is saved.',
+      'Use Edit to change the text or any of the content lists; use Delete to remove the sentence after a confirmation.',
       'At 5+ sentences, Practice unlocks: new and relearning sentences are dictated for you to type, review sentences are recalled from their situation.',
       'Grade each card (Again / Hard / Good / Easy) — each button shows the interval it schedules, like Anki.',
     ],
-    aiIntro: 'Only generation talks to the AI; review, grading and playback are on-device.',
+    aiIntro:
+      'Generation and enrichment talk to the AI; manual add, editing, review and playback are on-device.',
     aiUsage: [
       {
         action: 'Generate a batch of sentences',
         requests: '1 request',
         note: 'Batch size is yours to choose; your existing sentences are sent along so the AI avoids repeats.',
+      },
+      {
+        action: 'Enrich a sentence (detail screen)',
+        requests: '1 request',
+        note: 'Produces a proposal only — nothing is saved until you approve it in the review modal.',
+      },
+      {
+        action: 'Add, edit or delete a sentence manually',
+        requests: 'No AI requests',
+        note: 'Manual content is stored exactly as you type it.',
       },
       {
         action: 'Practice and grading',
@@ -217,11 +234,15 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
       'Your English level controls the difficulty and vocabulary of generated sentences.',
       'The topic title and description shape the situation the sentences come from — write the scenario you want to master.',
       'An optional learner note steers the register (slang, workplace English, travel...).',
+      'Every generated sentence gets at least one meaning and one situation, plus optional alternatives, register notes and grammar notes. Extra meanings or situations appear only when the sentence genuinely has more senses — the AI is told not to pad.',
+      'Enrichment receives the sentence and its current content as context and returns a full replacement; you decide field by field in the review modal.',
     ],
     tips: [
       'The due badges on Home and in the topic list show how many sentences practice can still show today.',
       'Each topic has Anki-style practice settings (its ⋮ menu): learn ahead limit, new cards per day, max reviews per day and how many cards one session holds. The daily limits reset at your study-day rollover.',
       'A forced practice mode in Settings overrides the automatic dictation/recall mix.',
+      "Editing a sentence's text resets its spaced-repetition schedule — it is treated as a new card. Editing only the meanings or the other content keeps the schedule.",
+      'Manual add, editing and enrichment are per-sentence: only Generate and Enrich cost an AI request.',
     ],
     mode: 'serverless',
     tryIt: { label: 'Open Real-life sentences', route: 'SentenceTopics' },
@@ -368,6 +389,11 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
       },
       { action: 'Word bank: generate / enrich', requests: '1 request each' },
       { action: 'Sentences: generate', requests: '1 request per batch' },
+      {
+        action: 'Sentences: enrich',
+        requests: '1 request per sentence',
+        note: 'Produces a proposal only — nothing is saved until you approve it.',
+      },
       { action: 'Speaking: generate', requests: '1 request per session' },
       {
         action: 'Speaking: custom topic / edit',

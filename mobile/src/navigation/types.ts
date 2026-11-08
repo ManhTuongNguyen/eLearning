@@ -72,6 +72,10 @@ export type MainStackParamList = {
   SentenceTopicNew: undefined;
   /** A topic's sentence bank (TASK-SENT-009). */
   SentenceTopic: { topicId: number };
+  /** One sentence's full content and actions (MANUAL_SENTENCES). */
+  SentenceDetail: { sentenceId: number };
+  /** Edit one sentence's text and content lists (MANUAL_SENTENCES). */
+  SentenceEdit: { sentenceId: number };
   /** Spaced-repetition practice for one topic (TASK-SENT-012). */
   SentencePractice: { topicId: number };
   /**
@@ -141,6 +145,13 @@ export type SentenceTopicNewScreenProps = NativeStackScreenProps<
 >;
 
 export type SentenceTopicScreenProps = NativeStackScreenProps<MainStackParamList, 'SentenceTopic'>;
+
+export type SentenceDetailScreenProps = NativeStackScreenProps<
+  MainStackParamList,
+  'SentenceDetail'
+>;
+
+export type SentenceEditScreenProps = NativeStackScreenProps<MainStackParamList, 'SentenceEdit'>;
 
 export type SentencePracticeScreenProps = NativeStackScreenProps<
   MainStackParamList,

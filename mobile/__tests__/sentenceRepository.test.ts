@@ -9,6 +9,7 @@ import type { SqlDriver } from '../src/db/driver';
 import { migrateDatabase } from '../src/db/migrations';
 import {
   applyReviewState,
+  applySentenceContent,
   countDueSentences,
   countDueSentencesForTopic,
   countNewSentencesIntroducedToday,
@@ -26,6 +27,7 @@ import {
   listSentenceTopics,
   logSentenceReview,
   recordSentenceReview,
+  updateSentence,
   updateSentenceTopic,
 } from '../src/db/sentenceRepository';
 import type { SentenceReviewState } from '../src/db/types';
@@ -656,6 +658,145 @@ describe('review state and log', () => {
       scheduled_days: 4,
       review_duration_ms: 4_800,
       reviewed_at: EARLIER,
+    });
+
+    await db.close();
+  });
+});
+
+describe('updateSentence and applySentenceContent', () => {
+  test('editing content only keeps the FSRS schedule and mirrors the first entry', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
+    const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[0]]);
+    await applyReviewState(
+      db,
+      sentence.id,
+      reviewState({ reps: 3, stability: 6.1, due_at: LATER }),
+    );
+
+    const updated = await updateSentence(db, sentence.id, {
+      meanings: ['A greeting when you meet someone.', 'Used on first meeting.'],
+      situations: ['Meeting a neighbour.', 'First day at a new job.'],
+      alternatives: ['Good to meet you.'],
+      registers: ['neutral'],
+      grammar_notes: ['Present simple.'],
+    });
+
+    expect(updated).toMatchObject({
+      meaning: 'A greeting when you meet someone.',
+      situation: 'Meeting a neighbour.',
+      meanings: ['A greeting when you meet someone.', 'Used on first meeting.'],
+      situations: ['Meeting a neighbour.', 'First day at a new job.'],
+      alternatives: ['Good to meet you.'],
+      registers: ['neutral'],
+      grammar_notes: ['Present simple.'],
+      // The schedule is untouched: no text change.
+      state: 'review',
+      reps: 3,
+      stability: 6.1,
+      due_at: LATER,
+    });
+
+    await db.close();
+  });
+
+  test('changing the text by its normal form resets the schedule but keeps the history', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
+    const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[0]]);
+    await applyReviewState(db, sentence.id, reviewState({ reps: 4, due_at: LATER }));
+    await logSentenceReview(db, {
+      sentence_id: sentence.id,
+      topic_id: topic.id,
+      grade: 'good',
+      mode: 'dictation',
+    });
+
+    const updated = await updateSentence(db, sentence.id, { text: 'Good to meet you.' });
+
+    expect(updated).toMatchObject({
+      text: 'Good to meet you.',
+      normalized_text: 'good to meet you',
+      state: 'new',
+      suspended: false,
+      reps: 0,
+      lapses: 0,
+      stability: 0,
+      scheduled_days: 0,
+      due_at: updated?.updated_at,
+    });
+    // The review history survives the reset.
+    expect(await listReviewLogForSentence(db, sentence.id)).toHaveLength(1);
+
+    await db.close();
+  });
+
+  test('a punctuation-only text edit does not reset the schedule', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
+    const [sentence] = await insertSentences(db, topic.id, [
+      { text: 'Nice to meet you', meaning: 'A greeting.' },
+    ]);
+    await applyReviewState(db, sentence.id, reviewState({ reps: 2, due_at: LATER }));
+
+    const updated = await updateSentence(db, sentence.id, { text: 'Nice to meet you!!' });
+
+    expect(updated?.text).toBe('Nice to meet you!!');
+    expect(updated).toMatchObject({ state: 'review', reps: 2, due_at: LATER });
+
+    await db.close();
+  });
+
+  test('refuses a text that duplicates another sentence in the topic', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
+    const [first, second] = await insertSentences(db, topic.id, CANDIDATES);
+
+    await expect(updateSentence(db, second.id, { text: first.text })).rejects.toThrow(
+      /already exists in this topic/,
+    );
+    // The row is unchanged.
+    expect(await getSentenceById(db, second.id)).toMatchObject({ text: second.text });
+
+    await db.close();
+  });
+
+  test('a blank text is refused and a missing sentence returns null', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
+    const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[0]]);
+
+    await expect(updateSentence(db, sentence.id, { text: '   ' })).rejects.toThrow(
+      /needs its text/,
+    );
+    expect(await updateSentence(db, 9_999, { meanings: ['Ghost'] })).toBeNull();
+
+    await db.close();
+  });
+
+  test('applySentenceContent writes content only (enrichment path)', async () => {
+    const db = await freshDb();
+    const topic = await createSentenceTopic(db, { title: 'Coffee' });
+    const [sentence] = await insertSentences(db, topic.id, [CANDIDATES[0]]);
+    await applyReviewState(db, sentence.id, reviewState({ reps: 5, due_at: LATER }));
+
+    const updated = await applySentenceContent(db, sentence.id, {
+      meanings: ['Order coffee politely.'],
+      situations: ['At a café counter.'],
+      alternatives: ['A flat white, please.'],
+      registers: [],
+      grammar_notes: ['Polite modal request.'],
+    });
+
+    expect(updated).toMatchObject({
+      meaning: 'Order coffee politely.',
+      alternatives: ['A flat white, please.'],
+      grammar_notes: ['Polite modal request.'],
+      text: CANDIDATES[0].text,
+      state: 'review',
+      reps: 5,
+      due_at: LATER,
     });
 
     await db.close();

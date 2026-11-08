@@ -240,12 +240,22 @@ export function SentenceReviewModal({
                   <View style={styles.candidateText}>
                     <Text style={styles.candidateIndex}>{index + 1}</Text>
                     <Text style={styles.sentence}>{candidate.sentence}</Text>
-                    {candidate.meaning ? (
-                      <Text style={styles.meaning}>{candidate.meaning}</Text>
-                    ) : null}
-                    {candidate.situation ? (
-                      <Text style={styles.situation}>{candidate.situation}</Text>
-                    ) : null}
+                    {candidate.meanings.map((meaning, meaningIndex) => (
+                      <Text
+                        // biome-ignore lint/suspicious/noArrayIndexKey: meanings are positional display rows
+                        key={`meaning-${meaningIndex}`}
+                        style={styles.meaning}>
+                        {candidate.meanings.length > 1 ? `• ${meaning}` : meaning}
+                      </Text>
+                    ))}
+                    {candidate.situations.map((situation, situationIndex) => (
+                      <Text
+                        // biome-ignore lint/suspicious/noArrayIndexKey: situations are positional display rows
+                        key={`situation-${situationIndex}`}
+                        style={styles.situation}>
+                        {situation}
+                      </Text>
+                    ))}
                   </View>
                 </View>
               );

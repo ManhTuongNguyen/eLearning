@@ -39,6 +39,7 @@ import type { TextToSpeechEngine } from '../tts/textToSpeech';
 import { getSpeechEngine } from '../tts/textToSpeech';
 import { useSpeechPlayback } from '../tts/useSpeechPlayback';
 import { describeError } from '../utils/describeError';
+import { AddSentenceModal, type ManualSentenceDraft } from './AddSentenceModal';
 import {
   DEFAULT_TOPIC_PRACTICE_SETTINGS,
   PracticeSettingsModal,
@@ -326,6 +327,7 @@ interface SentenceRowProps {
   nowMs: number;
   speaking: boolean;
   deleting: boolean;
+  onOpen: (sentence: SentenceRecord) => void;
   onSpeak: (sentence: SentenceRecord) => void;
   onDelete: (sentence: SentenceRecord) => void;
   colors: ThemeColors;
@@ -337,6 +339,7 @@ function SentenceRow({
   nowMs,
   speaking,
   deleting,
+  onOpen,
   onSpeak,
   onDelete,
   colors,
@@ -344,23 +347,33 @@ function SentenceRow({
 }: SentenceRowProps) {
   return (
     <View style={styles.row} testID={`sentence-row-${sentence.id}`}>
-      <View style={styles.rowTop}>
-        <View style={styles.rowText}>
-          <Text style={styles.sentenceText} selectable testID={`sentence-text-${sentence.id}`}>
-            {sentence.text}
-          </Text>
-          {sentence.meaning ? (
-            <Text style={styles.meaning} selectable testID={`sentence-meaning-${sentence.id}`}>
-              {sentence.meaning}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open sentence ${sentence.text}`}
+        testID={`sentence-open-${sentence.id}`}
+        onPress={() => onOpen(sentence)}
+        style={({ pressed }) => [pressed && styles.pressedFade]}>
+        <View style={styles.rowTop}>
+          <View style={styles.rowText}>
+            <Text style={styles.sentenceText} selectable testID={`sentence-text-${sentence.id}`}>
+              {sentence.text}
             </Text>
-          ) : null}
-          {sentence.situation ? (
-            <Text style={styles.situation} selectable testID={`sentence-situation-${sentence.id}`}>
-              {sentence.situation}
-            </Text>
-          ) : null}
+            {sentence.meaning ? (
+              <Text style={styles.meaning} selectable testID={`sentence-meaning-${sentence.id}`}>
+                {sentence.meaning}
+              </Text>
+            ) : null}
+            {sentence.situation ? (
+              <Text
+                style={styles.situation}
+                selectable
+                testID={`sentence-situation-${sentence.id}`}>
+                {sentence.situation}
+              </Text>
+            ) : null}
+          </View>
         </View>
-      </View>
+      </Pressable>
 
       <View style={styles.rowBottom}>
         <Text style={styles.dueHint} testID={`sentence-hint-${sentence.id}`}>
@@ -434,6 +447,12 @@ export function SentenceTopicScreen({
   const [candidates, setCandidates] = useState<SentenceCandidate[]>([]);
   const [reviewVisible, setReviewVisible] = useState(false);
 
+  // Manual "Add sentence" dialog (MANUAL_SENTENCES): one hand-written
+  // sentence through the same repository path as generation.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
+
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -503,6 +522,14 @@ export function SentenceTopicScreen({
       speak(sentence.id, sentence.text);
     },
     [speakingId, speak, stop],
+  );
+
+  const handleOpenSentence = useCallback(
+    (sentence: SentenceRecord) => {
+      stop();
+      navigation.navigate('SentenceDetail', { sentenceId: sentence.id });
+    },
+    [navigation, stop],
   );
 
   /**
@@ -606,8 +633,11 @@ export function SentenceTopicScreen({
           topicId,
           kept.map(candidate => ({
             text: candidate.sentence,
-            meaning: candidate.meaning,
-            situation: candidate.situation,
+            meanings: candidate.meanings,
+            situations: candidate.situations,
+            alternatives: candidate.alternatives,
+            registers: candidate.registers,
+            grammar_notes: candidate.grammar_notes,
           })),
         );
         setSuccessMessage(
@@ -626,6 +656,45 @@ export function SentenceTopicScreen({
     [topicId, loadTopic],
   );
 
+  /**
+   * Persist one hand-written sentence. The dialog stays open with a message
+   * when the sentence duplicates one already in the topic; otherwise it closes
+   * and the list reloads from the repository.
+   */
+  const handleManualSubmit = useCallback(
+    async (draft: ManualSentenceDraft) => {
+      if (manualBusy) {
+        return;
+      }
+      setManualBusy(true);
+      setManualError(null);
+      setActionError(null);
+      setSuccessMessage(null);
+      try {
+        const db = await getLocalDatabase();
+        const inserted = await insertSentences(db, topicId, [
+          {
+            text: draft.text,
+            meaning: draft.meaning,
+            situation: draft.situation,
+          },
+        ]);
+        if (inserted.length === 0) {
+          setManualError('That sentence already exists in this topic.');
+          return;
+        }
+        setManualOpen(false);
+        setSuccessMessage('Sentence added.');
+        await loadTopic(false);
+      } catch (err) {
+        setManualError(`Could not add the sentence: ${describeError(err)}`);
+      } finally {
+        setManualBusy(false);
+      }
+    },
+    [manualBusy, topicId, loadTopic],
+  );
+
   const handlePractice = useCallback(() => {
     navigation.navigate('SentencePractice', { topicId });
   }, [navigation, topicId]);
@@ -642,6 +711,7 @@ export function SentenceTopicScreen({
           nowMs={nowMs}
           speaking={speakingId === item.id}
           deleting={deletingId === item.id}
+          onOpen={handleOpenSentence}
           onSpeak={handleSpeak}
           onDelete={handleDelete}
           colors={colors}
@@ -649,7 +719,7 @@ export function SentenceTopicScreen({
         />
       </>
     ),
-    [nowMs, speakingId, deletingId, handleSpeak, handleDelete, colors, styles],
+    [nowMs, speakingId, deletingId, handleOpenSentence, handleSpeak, handleDelete, colors, styles],
   );
 
   return (
@@ -885,6 +955,16 @@ export function SentenceTopicScreen({
         anchor={menuAnchor}
         items={[
           {
+            key: 'add-sentence',
+            label: 'Add sentence',
+            icon: 'plus',
+            onPress: () => {
+              setMenuAnchor(null);
+              setManualError(null);
+              setManualOpen(true);
+            },
+          },
+          {
             key: 'practice-settings',
             label: 'Practice settings',
             icon: 'settings',
@@ -915,6 +995,23 @@ export function SentenceTopicScreen({
         onSave={settings => {
           // handleSaveSettings handles its own errors, so it never rejects.
           handleSaveSettings(settings);
+        }}
+      />
+
+      {/* Manual "Add sentence" dialog (MANUAL_SENTENCES). */}
+      <AddSentenceModal
+        visible={manualOpen}
+        busy={manualBusy}
+        error={manualError}
+        onCancel={() => {
+          if (!manualBusy) {
+            setManualOpen(false);
+            setManualError(null);
+          }
+        }}
+        onSubmit={draft => {
+          // handleManualSubmit handles its own errors, so it never rejects.
+          handleManualSubmit(draft);
         }}
       />
     </Screen>
