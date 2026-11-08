@@ -76,8 +76,12 @@ export type MainStackParamList = {
   SentenceDetail: { sentenceId: number };
   /** Edit one sentence's text and content lists (MANUAL_SENTENCES). */
   SentenceEdit: { sentenceId: number };
-  /** Spaced-repetition practice for one topic (TASK-SENT-012). */
-  SentencePractice: { topicId: number };
+  /**
+   * Spaced-repetition practice for one topic (TASK-SENT-012). Omit `topicId`
+   * to practise every sentence topic together (the mixed cross-topic session
+   * configured by the "all topics" practice settings).
+   */
+  SentencePractice: { topicId?: number } | undefined;
   /**
    * Word bank: topic list (WORD_BANK_V1 TASK-WB-008). Serverless-only; the
    * Home row that opens it is hidden in server mode.
@@ -87,8 +91,12 @@ export type MainStackParamList = {
   WordTopic: { topicId: number };
   /** One word's data and schedule (WORD_BANK_V1 TASK-WB-013). */
   WordDetail: { wordId: number };
-  /** Spaced-repetition practice for one word topic (WORD_BANK_V1 TASK-WB-012). */
-  WordPractice: { topicId: number };
+  /**
+   * Spaced-repetition practice for one word topic (WORD_BANK_V1 TASK-WB-012).
+   * Omit `topicId` to practise every word topic together (the mixed
+   * cross-topic session configured by the "all topics" practice settings).
+   */
+  WordPractice: { topicId?: number } | undefined;
   /**
    * Guide hub: explains every feature, the AI requests each action makes and
    * how prompts use the learner profile. Pushed from the Home row.

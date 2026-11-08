@@ -10,6 +10,7 @@
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
+import { getPracticeAllSettings } from '../src/db/practiceAllStore';
 import {
   createWordTopic,
   getWordTopicById,
@@ -194,7 +195,8 @@ describe('WordTopicsScreen — create and edit topic', () => {
   test('the form fields scroll inside the modal so Save stays reachable', async () => {
     const { view } = await renderInMode();
 
-    await fireEvent.press(view.getByTestId('word-topics-new'));
+    await fireEvent.press(view.getByTestId('word-topics-menu'));
+    await fireEvent.press(view.getByTestId('word-topics-header-menu-add'));
     expect(view.getByTestId('word-topic-form-modal')).toBeTruthy();
     expect(view.getByTestId('word-topic-form-scroll').props.nestedScrollEnabled).toBe(true);
     // Save and Cancel live outside the scroll view.
@@ -205,7 +207,8 @@ describe('WordTopicsScreen — create and edit topic', () => {
   test('a blank title cannot be submitted', async () => {
     const { view } = await renderInMode();
 
-    await fireEvent.press(view.getByTestId('word-topics-new'));
+    await fireEvent.press(view.getByTestId('word-topics-menu'));
+    await fireEvent.press(view.getByTestId('word-topics-header-menu-add'));
     expect(view.getByTestId('word-topic-form-modal')).toBeTruthy();
 
     const save = view.getByTestId('word-topic-form-save');
@@ -221,7 +224,8 @@ describe('WordTopicsScreen — create and edit topic', () => {
   test('creating a topic persists it and navigates to the new topic screen', async () => {
     const { view, db: localDb } = await renderInMode();
 
-    await fireEvent.press(view.getByTestId('word-topics-new'));
+    await fireEvent.press(view.getByTestId('word-topics-menu'));
+    await fireEvent.press(view.getByTestId('word-topics-header-menu-add'));
     await fireEvent.changeText(view.getByTestId('word-topic-form-title-input'), 'Cooking');
     await fireEvent.changeText(
       view.getByTestId('word-topic-form-description'),
@@ -374,5 +378,85 @@ describe('WordTopicsScreen — practice settings', () => {
       max_reviews_per_day: 100,
       max_session_cards: 40,
     });
+  });
+});
+
+describe('WordTopicsScreen — header menu', () => {
+  test('hides the cross-topic items until the bank holds 10 words', async () => {
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createWordTopic(localDb, { title: 'Cooking' });
+    await insertWords(
+      localDb,
+      topic.id,
+      Array.from({ length: 9 }, (_, index) => ({ text: `word${index + 1}` })),
+    );
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByText('9 words')).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId('word-topics-menu'));
+    // Add stays available; both mixed-session items are gated together.
+    expect(view.getByTestId('word-topics-header-menu-add')).toBeTruthy();
+    expect(view.queryByTestId('word-topics-header-menu-practice-all')).toBeFalsy();
+    expect(view.queryByTestId('word-topics-header-menu-practice-settings')).toBeFalsy();
+  });
+
+  test('the ⋮ menu practises every topic together at 10+ words', async () => {
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createWordTopic(localDb, { title: 'Cooking' });
+    await insertWords(
+      localDb,
+      topic.id,
+      Array.from({ length: 10 }, (_, index) => ({ text: `word${index + 1}` })),
+    );
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByText('10 words')).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId('word-topics-menu'));
+    expect(view.getByTestId('word-topics-header-menu-practice-all')).toBeTruthy();
+    expect(view.getByTestId('word-topics-header-menu-practice-settings')).toBeTruthy();
+
+    await fireEvent.press(view.getByTestId('word-topics-header-menu-practice-all'));
+    // No topicId: the screen runs the cross-topic session.
+    expect(navigate).toHaveBeenCalledWith('WordPractice');
+  });
+
+  test('the ⋮ menu edits and persists the cross-topic practice settings', async () => {
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createWordTopic(localDb, { title: 'Cooking' });
+    await insertWords(
+      localDb,
+      topic.id,
+      Array.from({ length: 10 }, (_, index) => ({ text: `word${index + 1}` })),
+    );
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByText('10 words')).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId('word-topics-menu'));
+    await fireEvent.press(view.getByTestId('word-topics-header-menu-practice-settings'));
+
+    expect(view.getByTestId('practice-settings-modal')).toBeTruthy();
+    expect(view.getByTestId('practice-settings-topic')).toHaveTextContent('All topics');
+
+    const sessionCards = view.getByTestId('practice-settings-slider-sessionCards');
+    await act(async () => {
+      sessionCards.props.onValueChange(35);
+    });
+    await fireEvent.press(view.getByTestId('practice-settings-save'));
+
+    await waitFor(() => {
+      expect(view.queryByTestId('practice-settings-modal')).toBeFalsy();
+    });
+    const saved = await getPracticeAllSettings(localDb, 'word');
+    expect(saved.max_session_cards).toBe(35);
+    expect(saved.new_cards_per_day).toBe(20);
   });
 });

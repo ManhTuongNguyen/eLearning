@@ -599,6 +599,18 @@ export async function listSentencesByTopic(
   return result.rows.map(mapSentenceRow);
 }
 
+/**
+ * List every sentence across all topics (the cross-topic session pool), newest
+ * first. The session builder re-orders by due date.
+ */
+export async function listAllSentences(db: SqlExecutor): Promise<SentenceRecord[]> {
+  const result = await db.execute(
+    `SELECT ${SENTENCE_COLUMNS} FROM sentences
+      ORDER BY created_at DESC, id DESC`,
+  );
+  return result.rows.map(mapSentenceRow);
+}
+
 export async function getSentenceById(db: SqlExecutor, id: number): Promise<SentenceRecord | null> {
   const result = await db.execute(`SELECT ${SENTENCE_COLUMNS} FROM sentences WHERE id = ?`, [id]);
   const row = result.rows[0];
@@ -660,16 +672,21 @@ export async function countDueSentencesForTopic(
  * started — review-log rows whose pre-review state is `new` (a new card
  * regraded within its learning steps logs `learning`, so it counts once).
  * `dayStartIso` is `startOfStudyDay(now, rolloverHour).toISOString()`.
+ *
+ * `topicId` is `null` for the cross-topic ("all topics") session: the count
+ * then covers every topic together.
  */
 export async function countNewSentencesIntroducedToday(
   db: SqlExecutor,
-  topicId: number,
+  topicId: number | null,
   dayStartIso: string,
 ): Promise<number> {
+  const topicFilter = topicId === null ? '' : 'topic_id = ? AND ';
+  const params = topicId === null ? [dayStartIso] : [topicId, dayStartIso];
   const result = await db.execute(
     `SELECT COUNT(*) AS total FROM sentence_review_log
-      WHERE topic_id = ? AND state = 'new' AND reviewed_at >= ?`,
-    [topicId, dayStartIso],
+      WHERE ${topicFilter}state = 'new' AND reviewed_at >= ?`,
+    params,
   );
   return Number(result.rows[0]?.total ?? 0);
 }
@@ -678,16 +695,19 @@ export async function countNewSentencesIntroducedToday(
  * How many `review` cards this topic already answered since the study day
  * started — review-log rows whose pre-review state is `review` (a lapsed
  * card's intraday relearning steps log `relearning` and do not burn quota).
+ * `topicId` is `null` for the cross-topic session, counting every topic.
  */
 export async function countSentenceReviewsToday(
   db: SqlExecutor,
-  topicId: number,
+  topicId: number | null,
   dayStartIso: string,
 ): Promise<number> {
+  const topicFilter = topicId === null ? '' : 'topic_id = ? AND ';
+  const params = topicId === null ? [dayStartIso] : [topicId, dayStartIso];
   const result = await db.execute(
     `SELECT COUNT(*) AS total FROM sentence_review_log
-      WHERE topic_id = ? AND state = 'review' AND reviewed_at >= ?`,
-    [topicId, dayStartIso],
+      WHERE ${topicFilter}state = 'review' AND reviewed_at >= ?`,
+    params,
   );
   return Number(result.rows[0]?.total ?? 0);
 }

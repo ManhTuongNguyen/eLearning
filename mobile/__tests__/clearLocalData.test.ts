@@ -12,6 +12,11 @@ import * as Keychain from 'react-native-keychain';
 import { clearServerlessLocalData, resetLocalDatabaseForTests } from '../src/db/clearLocalData';
 import { openLocalDatabase, resetLocalDatabase } from '../src/db/database';
 import { insertMessage, listMessages } from '../src/db/messageStore';
+import {
+  DEFAULT_PRACTICE_ALL_SETTINGS,
+  getPracticeAllSettings,
+  savePracticeAllSettings,
+} from '../src/db/practiceAllStore';
 import { getLearningProfile, saveLearningProfile } from '../src/db/profileStore';
 import {
   createSentenceTopic,
@@ -20,9 +25,11 @@ import {
 } from '../src/db/sentenceRepository';
 import { insertSession, listSessions } from '../src/db/sessionStore';
 import { getSetting, setSetting } from '../src/db/settingsStore';
+import { getSrsConfig, saveSrsConfig } from '../src/db/srsConfigStore';
 import { saveSummary } from '../src/db/summaryStore';
 import { createWordTopic, insertWords, logWordReview } from '../src/db/wordRepository';
 import { loadServerlessApiKey, saveServerlessApiKey } from '../src/serverless/secureApiKey';
+import { DEFAULT_FSRS_CONFIG } from '../src/srs/config';
 import { openSqlJsDriver } from '../testing/sqlJsDriver';
 
 const mockAsyncStorageStore = new Map<string, string>();
@@ -263,6 +270,80 @@ describe('clearLocalData (TASK-094)', () => {
     expect(nextTopic.id).toBe(2);
     const nextWords = await insertWords(db, nextTopic.id, [{ text: 'whisk' }]);
     expect(nextWords[0]?.id).toBe(1);
+
+    await db.close();
+  });
+
+  it('clears every practice setting: per-topic, cross-topic and the FSRS config', async () => {
+    const db = await openLocalDatabase(() => openSqlJsDriver());
+
+    // Non-default per-topic settings on both banks.
+    await createWordTopic(db, {
+      title: 'Cooking',
+      learn_ahead_minutes: 30,
+      new_cards_per_day: 5,
+      max_reviews_per_day: 50,
+      max_session_cards: 40,
+    });
+    await createSentenceTopic(db, {
+      title: 'Coffee',
+      learn_ahead_minutes: 25,
+      new_cards_per_day: 5,
+      max_reviews_per_day: 150,
+      max_session_cards: 35,
+    });
+
+    // Non-default cross-topic settings for both banks.
+    const allSettings = {
+      learn_ahead_minutes: 25,
+      new_cards_per_day: 5,
+      max_reviews_per_day: 120,
+      max_session_cards: 35,
+    };
+    await savePracticeAllSettings(db, 'word', allSettings);
+    await savePracticeAllSettings(db, 'sentence', allSettings);
+
+    // Non-default collection FSRS config.
+    await saveSrsConfig(db, { desiredRetention: 0.85, maximumInterval: 1000, rolloverHour: 3 });
+
+    await clearServerlessLocalData(() => Promise.resolve(db));
+
+    // Cross-topic settings: the rows are gone and reads fall back to defaults.
+    const allRows = await db.execute('SELECT COUNT(*) AS n FROM practice_all_settings');
+    expect(Number(allRows.rows[0]?.n)).toBe(0);
+    await expect(getPracticeAllSettings(db, 'word')).resolves.toEqual(
+      DEFAULT_PRACTICE_ALL_SETTINGS,
+    );
+    await expect(getPracticeAllSettings(db, 'sentence')).resolves.toEqual(
+      DEFAULT_PRACTICE_ALL_SETTINGS,
+    );
+
+    // Collection FSRS config: the row is gone and reads fall back to defaults.
+    const srsRows = await db.execute('SELECT COUNT(*) AS n FROM srs_config');
+    expect(Number(srsRows.rows[0]?.n)).toBe(0);
+    await expect(getSrsConfig(db)).resolves.toMatchObject({
+      ...DEFAULT_FSRS_CONFIG,
+      modelVersion: 'FSRS-6',
+    });
+
+    // Per-topic settings: both learner topics are gone; the seeded system
+    // topic survives with the schema defaults.
+    const wordTopics = await db.execute(
+      `SELECT title, is_system, learn_ahead_minutes, new_cards_per_day,
+              max_reviews_per_day, max_session_cards
+         FROM word_topics`,
+    );
+    expect(wordTopics.rows).toHaveLength(1);
+    expect(wordTopics.rows[0]).toMatchObject({
+      title: 'Collected words',
+      is_system: 1,
+      learn_ahead_minutes: 10,
+      new_cards_per_day: 20,
+      max_reviews_per_day: 200,
+      max_session_cards: 20,
+    });
+    const sentenceTopics = await db.execute('SELECT COUNT(*) AS n FROM sentence_topics');
+    expect(Number(sentenceTopics.rows[0]?.n)).toBe(0);
 
     await db.close();
   });

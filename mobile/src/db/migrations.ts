@@ -478,6 +478,26 @@ const MIGRATION_011: readonly string[] = [
 ];
 
 /**
+ * v12 — cross-topic ("all topics") practice settings (WORD_BANK_V1 /
+ * SENTENCE_LIVE_V1). One row per bank kind (`'word'` / `'sentence'`) holds the
+ * Anki-style deck options used when a learner practises every topic together
+ * instead of a single topic: the learn-ahead window, the daily new/review caps
+ * and the per-sitting session cap. A missing row means the app defaults
+ * ({@link DEFAULT_PRACTICE_ALL_SETTINGS}); the row is written on the first save.
+ * The per-topic columns on `word_topics`/`sentence_topics` stay untouched.
+ */
+const MIGRATION_012: readonly string[] = [
+  `CREATE TABLE practice_all_settings (
+      kind TEXT PRIMARY KEY CHECK (kind IN ('word', 'sentence')),
+      learn_ahead_minutes INTEGER NOT NULL DEFAULT 10,
+      new_cards_per_day INTEGER NOT NULL DEFAULT 20,
+      max_reviews_per_day INTEGER NOT NULL DEFAULT 200,
+      max_session_cards INTEGER NOT NULL DEFAULT 20,
+      updated_at TEXT NOT NULL
+   )`,
+];
+
+/**
  * Ordered migration list; length is the current schema version. Append new
  * entries — never edit shipped ones.
  */
@@ -493,6 +513,7 @@ export const MIGRATIONS: readonly (readonly string[])[] = [
   MIGRATION_009,
   MIGRATION_010,
   MIGRATION_011,
+  MIGRATION_012,
 ];
 
 export const SCHEMA_VERSION: number = MIGRATIONS.length;

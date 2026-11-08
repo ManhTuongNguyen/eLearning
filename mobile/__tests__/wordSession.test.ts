@@ -12,8 +12,10 @@ import {
   applyPracticeGrade,
   buildPracticeSession,
   canPractice,
+  canPracticeAll,
   createPracticeSessionState,
   MAX_PRACTICE_SESSION_CARDS,
+  MIN_PRACTICE_ALL_ITEMS,
   MIN_PRACTICE_ITEMS,
 } from '../src/srs/session';
 
@@ -53,15 +55,28 @@ function wordFixture(overrides: Partial<WordRecord> = {}): WordRecord {
 }
 
 describe('word session queue (TASK-WB-006)', () => {
-  test('selects due-only words, oldest due first, ties by id', () => {
+  test('selects due-only words, oldest due first (equal due times shuffle)', () => {
     const words = [
       wordFixture({ due_at: '2026-10-24T08:30:00.000Z' }),
       wordFixture({ due_at: '2026-10-24T08:00:00.000Z' }),
       wordFixture({ due_at: '2026-10-24T09:30:00.000Z' }), // future, excluded
       wordFixture({ due_at: '2026-10-24T08:00:00.000Z' }),
     ];
-    const session = buildPracticeSession(words, NOW);
+    // A fixed `random` keeps the equal-due pair in input order, pinning the
+    // due-time order independently of the tie shuffle.
+    const session = buildPracticeSession(words, NOW, { random: () => 0 });
     expect(session.map(word => word.id)).toEqual([words[1].id, words[3].id, words[0].id]);
+  });
+
+  test('shuffles words that share the same due time (no id tie-break)', () => {
+    const words = [wordFixture(), wordFixture(), wordFixture()];
+    const sequence = [0.9, 0.1, 0.5];
+
+    const ordered = buildPracticeSession(words, NOW, {
+      random: () => sequence.shift() ?? 0,
+    }).map(word => word.id);
+
+    expect(ordered).toEqual([words[1].id, words[2].id, words[0].id]);
   });
 
   test('caps the session at 20 cards', () => {
@@ -94,7 +109,7 @@ describe('word session queue (TASK-WB-006)', () => {
   test('a learning/relearning word requeues until FSRS graduates it', () => {
     const first = wordFixture();
     const second = wordFixture();
-    let state = createPracticeSessionState([first, second], NOW);
+    let state = createPracticeSessionState([first, second], NOW, { random: () => 0 });
     expect(state.queue.map(word => word.id)).toEqual([first.id, second.id]);
 
     // First `Good` on a new card advances to the 10-minute learning step:
@@ -118,5 +133,11 @@ describe('word session queue (TASK-WB-006)', () => {
     expect(MIN_PRACTICE_ITEMS).toBe(5);
     expect(canPractice(4)).toBe(false);
     expect(canPractice(5)).toBe(true);
+  });
+
+  test('canPracticeAll doubles the threshold for the mixed cross-topic session', () => {
+    expect(MIN_PRACTICE_ALL_ITEMS).toBe(10);
+    expect(canPracticeAll(9)).toBe(false);
+    expect(canPracticeAll(10)).toBe(true);
   });
 });

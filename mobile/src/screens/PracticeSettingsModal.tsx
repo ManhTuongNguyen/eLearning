@@ -57,6 +57,12 @@ export const DEFAULT_TOPIC_PRACTICE_SETTINGS: TopicPracticeSettings = {
   max_reviews_per_day: DEFAULT_MAX_REVIEWS_PER_DAY,
   max_session_cards: DEFAULT_MAX_SESSION_CARDS,
 };
+
+/** Default body copy: the per-topic (single deck) explanation. */
+const DEFAULT_EXPLANATION =
+  'Anki-style deck options for this topic. The daily limits reset at your study-day ' +
+  'rollover; cards still in a learning step are never limited.';
+
 export interface PracticeSettingsModalProps {
   /** Whether the dialog is presented. */
   visible: boolean;
@@ -68,6 +74,11 @@ export interface PracticeSettingsModalProps {
   saving: boolean;
   /** Message shown when the save failed; the dialog stays open. */
   error: string | null;
+  /**
+   * Optional body copy. Defaults to the per-topic explanation; the cross-topic
+   * ("all topics") settings pass their own wording.
+   */
+  explanation?: string;
   /** Dismiss without saving (Cancel button or Android back). */
   onCancel: () => void;
   /** Persist the drafted settings. */
@@ -238,6 +249,7 @@ export function PracticeSettingsModal({
   settings,
   saving,
   error,
+  explanation = DEFAULT_EXPLANATION,
   onCancel,
   onSave,
 }: PracticeSettingsModalProps) {
@@ -288,8 +300,7 @@ export function PracticeSettingsModal({
 
             <View style={styles.body}>
               <Text style={styles.explanation} testID="practice-settings-explanation">
-                Anki-style deck options for this topic. The daily limits reset at your study-day
-                rollover; cards still in a learning step are never limited.
+                {explanation}
               </Text>
 
               <SettingRow

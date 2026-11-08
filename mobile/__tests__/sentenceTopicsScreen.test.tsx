@@ -10,6 +10,7 @@
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
+import { getPracticeAllSettings } from '../src/db/practiceAllStore';
 import {
   createSentenceTopic,
   getSentenceTopicById,
@@ -342,21 +343,96 @@ describe('SentenceTopicsScreen — practice settings', () => {
   });
 });
 
-describe('SentenceTopicsScreen — new topic entry point', () => {
-  test('the add button opens the separate create-topic screen', async () => {
+describe('SentenceTopicsScreen — header menu', () => {
+  test('the ⋮ menu opens and its Add item goes to the create-topic screen', async () => {
     const { view } = await renderInMode();
 
-    await fireEvent.press(view.getByTestId('sentence-topics-new'));
+    await fireEvent.press(view.getByTestId('sentence-topics-menu'));
+
+    expect(view.getByTestId('sentence-topics-header-menu')).toBeTruthy();
+    expect(view.getByTestId('sentence-topics-header-menu-add')).toBeTruthy();
+
+    await fireEvent.press(view.getByTestId('sentence-topics-header-menu-add'));
 
     expect(navigate).toHaveBeenCalledWith('SentenceTopicNew');
   });
 
-  test('the add button is a bare icon control', async () => {
-    const { view } = await renderInMode();
+  test('hides the cross-topic items until the bank holds 10 sentences', async () => {
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createSentenceTopic(localDb, { title: 'Coffee', description: '' });
+    await insertSentences(
+      localDb,
+      topic.id,
+      Array.from({ length: 9 }, (_, index) => ({ text: `Sentence ${index + 1}.` })),
+    );
 
-    expect(view.getByTestId('sentence-topics-new')).toHaveStyle({
-      width: 32,
-      height: 32,
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByText('9 sentences')).toBeTruthy();
     });
+
+    await fireEvent.press(view.getByTestId('sentence-topics-menu'));
+    // Add stays available; both mixed-session items are gated together.
+    expect(view.getByTestId('sentence-topics-header-menu-add')).toBeTruthy();
+    expect(view.queryByTestId('sentence-topics-header-menu-practice-all')).toBeFalsy();
+    expect(view.queryByTestId('sentence-topics-header-menu-practice-settings')).toBeFalsy();
+  });
+
+  test('the ⋮ menu practises every topic together at 10+ sentences', async () => {
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createSentenceTopic(localDb, { title: 'Coffee', description: '' });
+    await insertSentences(
+      localDb,
+      topic.id,
+      Array.from({ length: 10 }, (_, index) => ({ text: `Sentence ${index + 1}.` })),
+    );
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByText('10 sentences')).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId('sentence-topics-menu'));
+    expect(view.getByTestId('sentence-topics-header-menu-practice-all')).toBeTruthy();
+    expect(view.getByTestId('sentence-topics-header-menu-practice-settings')).toBeTruthy();
+
+    await fireEvent.press(view.getByTestId('sentence-topics-header-menu-practice-all'));
+
+    // No topicId: the screen runs the cross-topic session.
+    expect(navigate).toHaveBeenCalledWith('SentencePractice');
+  });
+
+  test('the ⋮ menu edits and persists the cross-topic practice settings', async () => {
+    const { view, db: localDb } = await renderInMode();
+    const topic = await createSentenceTopic(localDb, { title: 'Coffee', description: '' });
+    await insertSentences(
+      localDb,
+      topic.id,
+      Array.from({ length: 10 }, (_, index) => ({ text: `Sentence ${index + 1}.` })),
+    );
+
+    await flushFocus();
+    await waitFor(() => {
+      expect(view.getByText('10 sentences')).toBeTruthy();
+    });
+
+    await fireEvent.press(view.getByTestId('sentence-topics-menu'));
+    await fireEvent.press(view.getByTestId('sentence-topics-header-menu-practice-settings'));
+
+    expect(view.getByTestId('practice-settings-modal')).toBeTruthy();
+    expect(view.getByTestId('practice-settings-topic')).toHaveTextContent('All topics');
+
+    const sessionCards = view.getByTestId('practice-settings-slider-sessionCards');
+    await act(async () => {
+      sessionCards.props.onValueChange(35);
+    });
+    await fireEvent.press(view.getByTestId('practice-settings-save'));
+
+    await waitFor(() => {
+      expect(view.queryByTestId('practice-settings-modal')).toBeFalsy();
+    });
+    const saved = await getPracticeAllSettings(localDb, 'sentence');
+    expect(saved.max_session_cards).toBe(35);
+    expect(saved.new_cards_per_day).toBe(20);
   });
 });

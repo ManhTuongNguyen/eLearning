@@ -53,7 +53,7 @@ function sentence(id: number, overrides: Partial<SentenceRecord> = {}): Sentence
 }
 
 describe('buildPracticeSession', () => {
-  test('keeps only due, non-suspended sentences in due order then id order', () => {
+  test('keeps only due, non-suspended sentences in due order', () => {
     const cards = [
       sentence(1, { due_at: '2026-10-19T08:30:00.000Z' }),
       sentence(2, { due_at: '2026-10-19T08:00:00.000Z' }),
@@ -62,7 +62,24 @@ describe('buildPracticeSession', () => {
       sentence(5, { suspended: true, due_at: '2026-10-19T07:00:00.000Z' }),
     ];
 
-    expect(buildPracticeSession(cards, NOW).map(card => card.id)).toEqual([2, 3, 1]);
+    // A fixed `random` (all ties equal) keeps the equal-due pair in input order,
+    // so this pins the due-time order independently of the tie shuffle.
+    expect(buildPracticeSession(cards, NOW, { random: () => 0 }).map(card => card.id)).toEqual([
+      2, 3, 1,
+    ]);
+  });
+
+  test('shuffles cards that share the same due time (no id tie-break)', () => {
+    const cards = [sentence(1), sentence(2), sentence(3)];
+    // A controlled RNG makes the tied order deterministic: the first card gets
+    // the largest tiebreaker, so it sorts last; the second sorts first.
+    const sequence = [0.9, 0.1, 0.5];
+
+    const ordered = buildPracticeSession(cards, NOW, {
+      random: () => sequence.shift() ?? 0,
+    }).map(card => card.id);
+
+    expect(ordered).toEqual([2, 3, 1]);
   });
 
   test('caps the session at 20 cards by default and honours a custom cap', () => {
@@ -71,9 +88,9 @@ describe('buildPracticeSession', () => {
     expect(MAX_PRACTICE_SESSION_CARDS).toBe(20);
     expect(DEFAULT_MAX_SESSION_CARDS).toBe(20);
     expect(buildPracticeSession(cards, NOW)).toHaveLength(20);
-    expect(buildPracticeSession(cards, NOW, { maxCards: 3 }).map(card => card.id)).toEqual([
-      1, 2, 3,
-    ]);
+    expect(
+      buildPracticeSession(cards, NOW, { maxCards: 3, random: () => 0 }).map(card => card.id),
+    ).toEqual([1, 2, 3]);
   });
 
   test('never mutates the input array', () => {
@@ -269,7 +286,7 @@ describe('applyPracticeGrade', () => {
   test('requeues an Again card that is still relearning', () => {
     const first = sentence(1);
     const second = sentence(2);
-    const state = createPracticeSessionState([first, second], NOW);
+    const state = createPracticeSessionState([first, second], NOW, { random: () => 0 });
 
     const afterAgain = applyPracticeGrade(state, 'again', {
       ...first,
@@ -300,7 +317,7 @@ describe('applyPracticeGrade', () => {
   test('keeps a learning card after Good (the 10-minute step) and drops graduated cards', () => {
     const first = sentence(1);
     const second = sentence(2);
-    const state = createPracticeSessionState([first, second], NOW);
+    const state = createPracticeSessionState([first, second], NOW, { random: () => 0 });
 
     // FSRS keeps a new card in Learning after the first Good.
     const afterLearningGood = applyPracticeGrade(state, 'good', { ...first, state: 'learning' });

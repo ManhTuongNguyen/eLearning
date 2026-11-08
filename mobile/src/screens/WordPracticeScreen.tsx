@@ -2,9 +2,14 @@
  * Word practice screen (WORD_BANK_V1 §2.7, TASK-WB-012).
  *
  * Mirrors the sentence practice screen's structure and quality bar: the shared
- * queue selects the due cards (oldest due first, capped at 20, suspended and
- * dataless words excluded), a dictation card for `new`/`learning`/`relearning`
- * words and a meaning-recall card for `review` words.
+ * queue selects the due cards (oldest due first, equal-due cards shuffled,
+ * capped at the session setting, suspended and dataless words excluded), a
+ * dictation card for `new`/`learning`/`relearning` words and a meaning-recall
+ * card for `review` words.
+ *
+ * With no `topicId` parameter the screen practises every topic together: the
+ * pool is the union of all words and the cross-topic ("all topics") practice
+ * settings supply the session cap and daily limits.
  *
  * Dictation: the word is spoken once automatically on card open (device TTS)
  * with a replay button; the learner types it; `Check` locks the input and
@@ -49,12 +54,14 @@ import {
 import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { WordSenseList } from '../components/WordSenseList';
 import { getLocalDatabase } from '../db/database';
+import { DEFAULT_PRACTICE_ALL_SETTINGS, getPracticeAllSettings } from '../db/practiceAllStore';
 import { getSrsConfig } from '../db/srsConfigStore';
 import type { ReviewCardMode, ReviewGrade, WordRecord, WordTopicRecord } from '../db/types';
 import {
   countNewWordsIntroducedToday,
   countWordReviewsToday,
   getWordTopicById,
+  listAllWords,
   listWordsByTopic,
   recordWordReview,
 } from '../db/wordRepository';
@@ -251,7 +258,8 @@ export function WordPracticeScreen({
   const { status: modeStatus, mode } = useApplicationMode();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const topicId = route.params.topicId;
+  // `null` = the cross-topic ("all topics") session.
+  const topicId = route.params?.topicId ?? null;
 
   const [topic, setTopic] = useState<WordTopicRecord | null>(null);
   const [allWords, setAllWords] = useState<WordRecord[]>([]);
@@ -298,27 +306,33 @@ export function WordPracticeScreen({
     setLoadError(null);
     try {
       const db = await getLocalDatabase();
-      const [topicRecord, words, storedMode, srsConfig] = await Promise.all([
-        getWordTopicById(db, topicId),
-        listWordsByTopic(db, topicId),
+      // `topicId === null` is the cross-topic session: every word of every
+      // topic enters the pool and the dedicated "all topics" limits apply.
+      const allTopics = topicId === null;
+      const [topicRecord, words, storedMode, srsConfig, allSettings] = await Promise.all([
+        allTopics ? Promise.resolve(null) : getWordTopicById(db, topicId),
+        allTopics ? listAllWords(db) : listWordsByTopic(db, topicId),
         loadWordPracticeMode(),
         getSrsConfig(db),
+        allTopics ? getPracticeAllSettings(db, 'word') : Promise.resolve(null),
       ]);
-      if (!topicRecord) {
+      if (!allTopics && !topicRecord) {
         throw new Error('This topic no longer exists.');
       }
       // Anki's daily deck limits: what the review log consumed since the study
-      // day started is subtracted from the topic's per-day settings.
+      // day started is subtracted from the settings in force (the topic's, or
+      // the cross-topic ones).
       const dayStartIso = startOfStudyDay(new Date(), srsConfig.rolloverHour).toISOString();
       const [newIntroduced, reviewsDone] = await Promise.all([
         countNewWordsIntroducedToday(db, topicId, dayStartIso),
         countWordReviewsToday(db, topicId, dayStartIso),
       ]);
+      const limits = allSettings ?? topicRecord ?? DEFAULT_PRACTICE_ALL_SETTINGS;
       sessionLimitsRef.current = {
-        maxCards: topicRecord.max_session_cards,
-        learnAheadMinutes: topicRecord.learn_ahead_minutes,
-        newRemaining: topicRecord.new_cards_per_day - newIntroduced,
-        reviewRemaining: topicRecord.max_reviews_per_day - reviewsDone,
+        maxCards: limits.max_session_cards,
+        learnAheadMinutes: limits.learn_ahead_minutes,
+        newRemaining: limits.new_cards_per_day - newIntroduced,
+        reviewRemaining: limits.max_reviews_per_day - reviewsDone,
       };
       setTopic(topicRecord);
       setAllWords(words);
@@ -515,7 +529,7 @@ export function WordPracticeScreen({
   return (
     <Screen style={styles.container} testID="word-practice-screen">
       <ScreenTitleBar
-        title={topic ? topic.title : 'Practice'}
+        title={topic ? topic.title : topicId === null ? 'All topics' : 'Practice'}
         titleTestID="word-practice-title"
         onBack={() => navigation.goBack()}
         backTestID="word-practice-back"

@@ -12,6 +12,7 @@
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import type { SqlDriver } from '../src/db/driver';
 import { migrateDatabase } from '../src/db/migrations';
+import { savePracticeAllSettings } from '../src/db/practiceAllStore';
 import type { WordRecord } from '../src/db/types';
 import {
   applyWordReviewState,
@@ -55,7 +56,7 @@ const navigate = jest.fn();
 const goBack = jest.fn();
 let listeners: Record<string, (() => void)[]> = {};
 
-function screenProps(topicId: number): WordPracticeScreenProps {
+function screenProps(topicId?: number): WordPracticeScreenProps {
   return {
     navigation: {
       navigate,
@@ -69,7 +70,11 @@ function screenProps(topicId: number): WordPracticeScreenProps {
         };
       },
     },
-    route: { key: 'word-practice-test', name: 'WordPractice', params: { topicId } },
+    route: {
+      key: 'word-practice-test',
+      name: 'WordPractice',
+      params: topicId === undefined ? undefined : { topicId },
+    },
   } as unknown as WordPracticeScreenProps;
 }
 
@@ -115,7 +120,7 @@ async function createTopicWithWords(count: number, title = 'Cooking'): Promise<n
   return topic.id;
 }
 
-async function renderPractice(topicId: number, speech?: TextToSpeechEngine) {
+async function renderPractice(topicId?: number, speech?: TextToSpeechEngine) {
   await saveApplicationMode('serverless');
   const view = await render(
     <ModeProvider>
@@ -368,5 +373,24 @@ describe('WordPracticeScreen — recall card', () => {
     });
     const log = await listWordReviewLog(db, words[0].id);
     expect(log[0]).toMatchObject({ grade: 'easy', mode: 'recall', rating: 4 });
+  });
+});
+
+describe('WordPracticeScreen — all topics', () => {
+  test('pools words from every topic and applies the cross-topic session cap', async () => {
+    await createTopicWithWords(3, 'Cooking');
+    await createTopicWithWords(3, 'Travel');
+    await savePracticeAllSettings(db, 'word', {
+      learn_ahead_minutes: 10,
+      new_cards_per_day: 20,
+      max_reviews_per_day: 200,
+      max_session_cards: 5,
+    });
+
+    const view = await renderPractice(undefined);
+
+    expect(view.getByTestId('word-practice-title')).toHaveTextContent('All topics');
+    // Six words are due, but the cross-topic cap limits the session to five.
+    expect(view.getByTestId('word-practice-progress')).toHaveTextContent('1 / 5');
   });
 });

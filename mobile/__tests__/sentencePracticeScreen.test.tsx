@@ -15,6 +15,7 @@ import { Keyboard } from 'react-native';
 
 import type { SqlDriver } from '../src/db/driver';
 import { migrateDatabase } from '../src/db/migrations';
+import { savePracticeAllSettings } from '../src/db/practiceAllStore';
 import {
   createSentenceTopic,
   getSentenceById,
@@ -55,7 +56,7 @@ const goBack = jest.fn();
 const navigate = jest.fn();
 let listeners: Record<string, (() => void)[]> = {};
 
-function screenProps(topicId: number): SentencePracticeScreenProps {
+function screenProps(topicId?: number): SentencePracticeScreenProps {
   return {
     navigation: {
       navigate,
@@ -72,7 +73,7 @@ function screenProps(topicId: number): SentencePracticeScreenProps {
     route: {
       key: 'sentence-practice-test',
       name: 'SentencePractice',
-      params: { topicId },
+      params: topicId === undefined ? undefined : { topicId },
     },
   } as unknown as SentencePracticeScreenProps;
 }
@@ -121,7 +122,7 @@ function makeDeferredEngine(): DeferredEngineDouble {
   };
 }
 
-async function renderPractice(topicId: number, speech?: TextToSpeechEngine) {
+async function renderPractice(topicId?: number, speech?: TextToSpeechEngine) {
   const view = await render(
     <ThemeProvider>
       <SentencePracticeScreen {...screenProps(topicId)} speech={speech} />
@@ -226,7 +227,10 @@ describe('SentencePracticeScreen — session build', () => {
 
 describe('SentencePracticeScreen — dictation card', () => {
   test('auto-plays once, replays without dismissing the keyboard and silences on card change', async () => {
-    const { topic } = await seedTopic(['First sentence', 'Second sentence']);
+    const { topic, ids } = await seedTopic(['First sentence', 'Second sentence']);
+    // Distinct due times pin the card order (equal due times shuffle now).
+    await setDue(ids[0], minutesAgo(2));
+    await setDue(ids[1], minutesAgo(1));
     const { engine, spoken, stopMock } = makeDeferredEngine();
     const view = await renderPractice(topic.id, engine);
     const texts = () => spoken.map(item => item.text);
@@ -420,6 +424,9 @@ describe('SentencePracticeScreen — recall card', () => {
 describe('SentencePracticeScreen — requeue and empty state', () => {
   test('keeps learning cards in the session until FSRS graduates them', async () => {
     const { topic, ids } = await seedTopic(['First sentence', 'Second sentence']);
+    // Distinct due times pin the card order (equal due times shuffle now).
+    await setDue(ids[0], minutesAgo(2));
+    await setDue(ids[1], minutesAgo(1));
     const { engine, spoken } = makeEngine();
     const view = await renderPractice(topic.id, engine);
 
@@ -503,5 +510,24 @@ describe('SentencePracticeScreen — requeue and empty state', () => {
     expect(view.getByText('All caught up')).toBeTruthy();
     expect(view.getByTestId('sentence-practice-next-due')).toHaveTextContent(/Next due in 2 days/);
     expect(view.queryByTestId('sentence-dictation-input')).toBeFalsy();
+  });
+});
+
+describe('SentencePracticeScreen — all topics', () => {
+  test('pools sentences from every topic and applies the cross-topic session cap', async () => {
+    await seedTopic(['First cafe sentence.', 'Second cafe sentence.', 'Third cafe sentence.']);
+    await seedTopic(['First station sentence.', 'Second station sentence.', 'Third sentence.']);
+    await savePracticeAllSettings(db, 'sentence', {
+      learn_ahead_minutes: 10,
+      new_cards_per_day: 20,
+      max_reviews_per_day: 200,
+      max_session_cards: 5,
+    });
+
+    const view = await renderPractice(undefined);
+
+    expect(view.getByTestId('sentence-practice-title')).toHaveTextContent('All topics');
+    // Six sentences are due, but the cross-topic cap limits the session to five.
+    expect(view.getByTestId('sentence-practice-progress')).toHaveTextContent('1 / 5');
   });
 });

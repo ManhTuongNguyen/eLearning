@@ -88,15 +88,17 @@ async function countRows(
 }
 
 describe('word bank schema (TASK-WB-001)', () => {
-  test('a fresh database creates the word bank and records version 11', async () => {
+  test('a fresh database creates the word bank and records version 12', async () => {
     const db = await openSqlJsDriver();
     await migrateDatabase(db);
 
-    expect(SCHEMA_VERSION).toBe(11);
-    expect(await userVersion(db)).toBe(11);
+    expect(SCHEMA_VERSION).toBe(12);
+    expect(await userVersion(db)).toBe(12);
 
     const tables = await schemaNames(db, 'table');
-    expect(tables).toEqual(expect.arrayContaining(['word_topics', 'words', 'word_review_log']));
+    expect(tables).toEqual(
+      expect.arrayContaining(['word_topics', 'words', 'word_review_log', 'practice_all_settings']),
+    );
 
     const indexes = await schemaNames(db, 'index');
     expect(indexes).toEqual(

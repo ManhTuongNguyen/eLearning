@@ -2,11 +2,15 @@
  * Spaced-repetition practice for one real-life sentence topic (TASK-SENT-012,
  * TASK-SENT-015, SENTENCE_LIVE_V1 §2.3/§2.6).
  *
- * The screen turns the topic's due sentences into a finite session (at most 20
- * cards, oldest due first) and picks each card's shape from the FSRS state:
- * `new`/`learning`/`relearning` sentences are dictated, `review` sentences are
- * recalled from their situation. A forced practice mode from Settings overrides
- * that mix.
+ * The screen turns the topic's due sentences into a finite session (at most the
+ * configured number of cards, oldest due first with equal-due cards shuffled)
+ * and picks each card's shape from the FSRS state: `new`/`learning`/`relearning`
+ * sentences are dictated, `review` sentences are recalled from their situation.
+ * A forced practice mode from Settings overrides that mix.
+ *
+ * With no `topicId` parameter the screen practises every topic together: the
+ * pool is the union of all sentences and the cross-topic ("all topics")
+ * practice settings supply the session cap and daily limits.
  *
  * Every grade goes through the FSRS scheduler and is persisted with its
  * Anki-shaped review-log row (memory state, elapsed days, duration) in one
@@ -38,10 +42,12 @@ import {
 } from '../components/ScreenLayout';
 import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { getLocalDatabase } from '../db/database';
+import { DEFAULT_PRACTICE_ALL_SETTINGS, getPracticeAllSettings } from '../db/practiceAllStore';
 import {
   countNewSentencesIntroducedToday,
   countSentenceReviewsToday,
   getSentenceTopicById,
+  listAllSentences,
   listSentencesByTopic,
   recordSentenceReview,
 } from '../db/sentenceRepository';
@@ -377,7 +383,8 @@ export function SentencePracticeScreen({
 }: SentencePracticeScreenInternalProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const topicId = route.params.topicId;
+  // `null` = the cross-topic ("all topics") session.
+  const topicId = route.params?.topicId ?? null;
 
   const [topic, setTopic] = useState<SentenceTopicRecord | null>(null);
   const [allSentences, setAllSentences] = useState<SentenceRecord[]>([]);
@@ -418,27 +425,33 @@ export function SentencePracticeScreen({
     setActionError(null);
     try {
       const db = await getLocalDatabase();
-      const [mode, record, sentences, srsConfig] = await Promise.all([
+      // `topicId === null` is the cross-topic session: every sentence of every
+      // topic enters the pool and the dedicated "all topics" limits apply.
+      const allTopics = topicId === null;
+      const [mode, record, sentences, srsConfig, allSettings] = await Promise.all([
         loadPracticeMode(),
-        getSentenceTopicById(db, topicId),
-        listSentencesByTopic(db, topicId),
+        allTopics ? Promise.resolve(null) : getSentenceTopicById(db, topicId),
+        allTopics ? listAllSentences(db) : listSentencesByTopic(db, topicId),
         getSrsConfig(db),
+        allTopics ? getPracticeAllSettings(db, 'sentence') : Promise.resolve(null),
       ]);
-      if (!record) {
+      if (!allTopics && !record) {
         throw new Error('This topic no longer exists.');
       }
       // Anki's daily deck limits: what the review log consumed since the study
-      // day started is subtracted from the topic's per-day settings.
+      // day started is subtracted from the settings in force (the topic's, or
+      // the cross-topic ones).
       const dayStartIso = startOfStudyDay(new Date(), srsConfig.rolloverHour).toISOString();
       const [newIntroduced, reviewsDone] = await Promise.all([
         countNewSentencesIntroducedToday(db, topicId, dayStartIso),
         countSentenceReviewsToday(db, topicId, dayStartIso),
       ]);
+      const limits = allSettings ?? record ?? DEFAULT_PRACTICE_ALL_SETTINGS;
       sessionLimitsRef.current = {
-        maxCards: record.max_session_cards,
-        learnAheadMinutes: record.learn_ahead_minutes,
-        newRemaining: record.new_cards_per_day - newIntroduced,
-        reviewRemaining: record.max_reviews_per_day - reviewsDone,
+        maxCards: limits.max_session_cards,
+        learnAheadMinutes: limits.learn_ahead_minutes,
+        newRemaining: limits.new_cards_per_day - newIntroduced,
+        reviewRemaining: limits.max_reviews_per_day - reviewsDone,
       };
       setTopic(record);
       setPracticeMode(mode);
@@ -631,7 +644,7 @@ export function SentencePracticeScreen({
   return (
     <Screen style={styles.container} testID="sentence-practice-screen">
       <ScreenTitleBar
-        title={topic ? topic.title : 'Practice'}
+        title={topic ? topic.title : topicId === null ? 'All topics' : 'Practice'}
         titleTestID="sentence-practice-title"
         onBack={() => navigation.goBack()}
         backTestID="sentence-practice-back"

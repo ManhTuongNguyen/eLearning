@@ -205,6 +205,7 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
       'Use Edit to change the text or any of the content lists; use Delete to remove the sentence after a confirmation.',
       'At 5+ sentences, Practice unlocks: new and relearning sentences are dictated for you to type, review sentences are recalled from their situation.',
       'Grade each card (Again / Hard / Good / Easy) — each button shows the interval it schedules, like Anki.',
+      'Want everything in one drill? On the topics list, open the header ⋮ menu and choose Practice all topics — every topic is pooled into a single session. Practice settings in that same menu tunes the combined session (learn-ahead window, daily limits and cards per session). Both items appear once the whole bank holds at least 10 sentences.',
     ],
     aiIntro:
       'Generation and enrichment talk to the AI; manual add, editing, review and playback are on-device.',
@@ -240,6 +241,7 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
     tips: [
       'The due badges on Home and in the topic list show how many sentences practice can still show today.',
       'Each topic has Anki-style practice settings (its ⋮ menu): learn ahead limit, new cards per day, max reviews per day and how many cards one session holds. The daily limits reset at your study-day rollover.',
+      "The topics list's header ⋮ menu has Practice all topics (one mixed session across every topic) with its own Practice settings — separate from each topic's limits and used only for that combined session. Both appear at 10 sentences across all topics (a single topic unlocks at 5).",
       'A forced practice mode in Settings overrides the automatic dictation/recall mix.',
       "Editing a sentence's text resets its spaced-repetition schedule — it is treated as a new card. Editing only the meanings or the other content keeps the schedule.",
       'Manual add, editing and enrichment are per-sentence: only Generate and Enrich cost an AI request.',
@@ -266,6 +268,7 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
       'Search the list, play pronunciations, tap a word for its full data, or add words manually through the ⋯ menu.',
       "On a word's detail screen, Fetch dictionary data fills missing senses; Enrich asks the AI to draft the learning data — you approve the proposal in a modal before anything is saved.",
       'Practice unlocks at 5+ words: type dictations, or recall the masked word from its meanings and examples. Checking highlights the exact characters you got wrong — missing letters underlined, extra letters struck out.',
+      'Prefer a mixed drill? On the topics list, open the header ⋮ menu and choose Practice all topics — every topic is pooled into one session; Practice settings in that same menu tunes the combined session (learn-ahead window, daily limits and cards per session). Both items appear once the whole bank holds at least 10 words.',
     ],
     aiIntro:
       'Generation and enrichment each cost one request; dictionary data comes from the Free Dictionary API, not the AI.',
@@ -291,6 +294,7 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
     tips: [
       'The due badges on Home and in the topic list show how many words practice can still show today.',
       'Each topic has Anki-style practice settings (its ⋮ menu): learn ahead limit, new cards per day, max reviews per day and how many cards one session holds. The daily limits reset at your study-day rollover.',
+      "The topics list's header ⋮ menu has Practice all topics (one mixed session across every topic) with its own Practice settings — separate from each topic's limits and used only for that combined session. Both appear at 10 words across all topics (a single topic unlocks at 5).",
       'Words without dictionary data stay out of practice until they are completed or enriched.',
       'Dictionary data is Wiktionary content under the CC BY-SA 4.0 license, served by the Free Dictionary API at freedictionaryapi.com.',
       'Met a word while browsing? See Collected words — select text anywhere on Android to save it into the word bank.',
@@ -339,6 +343,7 @@ export const guideEntries: Record<GuideId, GuideEntry> = {
     ],
     tips: [
       'Collected words is pinned first in the topic list and cannot be renamed or deleted — but its practice settings (its ⋮ menu) are yours to tune.',
+      "The topics list's header ⋮ menu's Practice all topics includes the collection in the mixed session (once the whole bank holds 10 words); the collection's own limits still apply when you practise it alone.",
       'Capture works offline: everything queued on your phone syncs the next time you open the app.',
       'The same word in two different topics is allowed; duplicates inside Collected words are skipped.',
       'Android only for now.',

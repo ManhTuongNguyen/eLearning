@@ -22,6 +22,7 @@ import type { SqlDriver, SqlExecutor } from './driver';
  *   except the seeded collected-words topic, which survives empty
  * - The FSRS collection config: weights, retention, steps, rollover hour
  *   (TASK-SENT-015)
+ * - The cross-topic ("all topics") practice settings for both banks (v12)
  * - Learning profile row
  * - Serverless settings (model selections)
  * - Secure provider API keys from the keychain, for every supported
@@ -58,6 +59,8 @@ export async function clearServerlessLocalData(
     await tx.execute('DELETE FROM word_topics WHERE is_system = 0');
     // Collection-level FSRS config (weights, retention, rollover hour).
     await tx.execute('DELETE FROM srs_config');
+    // Cross-topic ("all topics") practice settings (migration v12).
+    await tx.execute('DELETE FROM practice_all_settings');
 
     // Reset the auto-increment counters so new sessions start from 1.
     // SQLite keeps counters in sqlite_sequence; deleting from that table

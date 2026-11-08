@@ -9,9 +9,10 @@
  * (empty) topic screen; editing reuses the same form pre-filled.
  *
  * A topic row carries a ⋮ overflow menu with Edit, the per-topic settings
- * (learn ahead limit) and Delete. Deleting asks for confirmation and then
- * removes the topic together with its words and review history (the schema's
- * `ON DELETE CASCADE`).
+ * (learn ahead limit) and Delete. The header ⋮ menu offers Add topic, Practice
+ * all topics (a single mixed session) and the cross-topic practice settings.
+ * Deleting asks for confirmation and then removes the topic together with its
+ * words and review history (the schema's `ON DELETE CASCADE`).
  *
  * The whole feature is serverless-only: until the persisted mode has been
  * restored the screen shows its spinner, and in server mode it replaces the
@@ -27,6 +28,12 @@ import { SCREEN_GUTTER, SCREEN_TOP_SPACING, Screen, ScreenList } from '../compon
 import { ScreenTitleBar } from '../components/ScreenTitleBar';
 import { TopicRow } from '../components/TopicRow';
 import { getLocalDatabase } from '../db/database';
+import {
+  DEFAULT_PRACTICE_ALL_SETTINGS,
+  getPracticeAllSettings,
+  type PracticeAllSettings,
+  savePracticeAllSettings,
+} from '../db/practiceAllStore';
 import type { WordTopicSummary } from '../db/types';
 import {
   createWordTopic,
@@ -36,6 +43,7 @@ import {
 } from '../db/wordRepository';
 import { useApplicationMode } from '../mode/ModeContext';
 import type { WordTopicsScreenProps } from '../navigation/types';
+import { canPracticeAll } from '../srs/session';
 import type { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import { describeError } from '../utils/describeError';
@@ -151,6 +159,14 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
   const [form, setForm] = useState<TopicFormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Header (⋮) menu: add / practise all / cross-topic settings.
+  const [headerMenuAnchor, setHeaderMenuAnchor] = useState<ContextMenuAnchor | null>(null);
+  const [allSettings, setAllSettings] = useState<PracticeAllSettings>(
+    DEFAULT_PRACTICE_ALL_SETTINGS,
+  );
+  const [allSettingsOpen, setAllSettingsOpen] = useState(false);
+  const [allSettingsSaving, setAllSettingsSaving] = useState(false);
+  const [allSettingsError, setAllSettingsError] = useState<string | null>(null);
 
   const serverMode = modeStatus === 'ready' && mode === 'server';
   const serverlessMode = modeStatus === 'ready' && mode === 'serverless';
@@ -163,8 +179,12 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
     setError(null);
     try {
       const db = await getLocalDatabase();
-      const items = await listWordTopics(db);
+      const [items, settings] = await Promise.all([
+        listWordTopics(db),
+        getPracticeAllSettings(db, 'word'),
+      ]);
       setTopics(items);
+      setAllSettings(settings);
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -346,6 +366,60 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
     ];
   }, [menuTarget, handleEditTopic, handleDeleteTopic]);
 
+  const totalWords = useMemo(
+    () => topics.reduce((sum, topic) => sum + topic.word_count, 0),
+    [topics],
+  );
+  // One mixed drill spans every topic, so it unlocks at twice the single-topic
+  // threshold (10 words across the whole bank) rather than 5.
+  const practiceAllUnlocked = canPracticeAll(totalWords);
+
+  /**
+   * The header ⋮ menu: create a topic plus the cross-topic ("all topics")
+   * mixed-session items. Both the practice shortcut and its settings are
+   * hidden until the whole bank holds 10 words (`canPracticeAll`); adding
+   * topics is always available so the bank can grow past the threshold.
+   */
+  const headerMenuItems: readonly ContextMenuItem[] = useMemo(() => {
+    const items: ContextMenuItem[] = [
+      {
+        key: 'add',
+        label: 'Add topic',
+        icon: 'plus',
+        onPress: () => {
+          setHeaderMenuAnchor(null);
+          handleNewTopic();
+        },
+      },
+    ];
+    if (practiceAllUnlocked) {
+      items.push(
+        {
+          key: 'practice-all',
+          label: 'Practice all topics',
+          icon: 'target',
+          detail: `${totalWords} word${totalWords === 1 ? '' : 's'}`,
+          onPress: () => {
+            setHeaderMenuAnchor(null);
+            navigation.navigate('WordPractice');
+          },
+        },
+        {
+          key: 'practice-settings',
+          label: 'Practice settings',
+          icon: 'settings',
+          detail: `${allSettings.learn_ahead_minutes}m ahead · ${allSettings.max_session_cards}/session`,
+          onPress: () => {
+            setHeaderMenuAnchor(null);
+            setAllSettingsError(null);
+            setAllSettingsOpen(true);
+          },
+        },
+      );
+    }
+    return items;
+  }, [handleNewTopic, navigation, totalWords, allSettings, practiceAllUnlocked]);
+
   /**
    * Persist the settings drafted in the modal. Failures keep the dialog open
    * with the message; success closes it and reloads the list so the due badges
@@ -372,6 +446,28 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
     [settingsTarget, settingsSaving],
   );
 
+  /** Persist the cross-topic practice settings drafted in the modal. */
+  const handleSaveAllSettings = useCallback(
+    async (settings: PracticeAllSettings) => {
+      if (allSettingsSaving) {
+        return;
+      }
+      setAllSettingsSaving(true);
+      setAllSettingsError(null);
+      try {
+        const db = await getLocalDatabase();
+        const saved = await savePracticeAllSettings(db, 'word', settings);
+        setAllSettings(saved);
+        setAllSettingsOpen(false);
+      } catch (err) {
+        setAllSettingsError(describeError(err));
+      } finally {
+        setAllSettingsSaving(false);
+      }
+    },
+    [allSettingsSaving],
+  );
+
   return (
     <Screen style={styles.container} testID="word-topics-screen">
       <ScreenTitleBar
@@ -381,12 +477,17 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
         right={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="New topic"
-            testID="word-topics-new"
-            onPress={handleNewTopic}
+            accessibilityLabel="Word bank menu"
+            testID="word-topics-menu"
+            onPress={event =>
+              setHeaderMenuAnchor({
+                x: event.nativeEvent.pageX,
+                y: event.nativeEvent.pageY - 25,
+              })
+            }
             style={({ pressed }) => [styles.newTopicButton, pressed && styles.pressedFade]}
             disabled={!serverlessMode}>
-            <Icon name="plus" size={22} color={colors.onPrimary} />
+            <Icon name="more" size={22} color={colors.onPrimary} />
           </Pressable>
         }
       />
@@ -412,7 +513,7 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
 
       {serverMode ? null : topics.length === 0 ? (
         <View style={styles.centered} testID="word-empty">
-          <Text style={styles.stateText}>No topics yet. Tap the + above to create one.</Text>
+          <Text style={styles.stateText}>No topics yet. Tap the ⋮ above and choose Add topic.</Text>
         </View>
       ) : (
         <ScreenList
@@ -505,6 +606,35 @@ export function WordTopicsScreen({ navigation }: WordTopicsScreenProps) {
         onSave={settings => {
           // handleSaveSettings handles its own errors, so it never rejects.
           handleSaveSettings(settings);
+        }}
+      />
+
+      {/* Header ⋮ menu (add / practise all / cross-topic settings). */}
+      <ContextMenu
+        visible={headerMenuAnchor !== null}
+        anchor={headerMenuAnchor}
+        items={headerMenuItems}
+        onCancel={() => setHeaderMenuAnchor(null)}
+        testID="word-topics-header-menu"
+      />
+
+      {/* Cross-topic ("all topics") practice settings. */}
+      <PracticeSettingsModal
+        visible={allSettingsOpen}
+        topicTitle="All topics"
+        settings={allSettings}
+        saving={allSettingsSaving}
+        error={allSettingsError}
+        explanation="Anki-style deck options for practising every topic together. The daily limits reset at your study-day rollover; cards still in a learning step are never limited."
+        onCancel={() => {
+          if (!allSettingsSaving) {
+            setAllSettingsOpen(false);
+            setAllSettingsError(null);
+          }
+        }}
+        onSave={settings => {
+          // handleSaveAllSettings handles its own errors, so it never rejects.
+          handleSaveAllSettings(settings);
         }}
       />
     </Screen>

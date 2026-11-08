@@ -142,6 +142,22 @@ export function canPractice(itemCount: number): boolean {
 }
 
 /**
+ * Items the combined ("all topics") pool must hold before the mixed session
+ * unlocks. Deliberately twice the single-topic threshold: one drill spans every
+ * topic, so it should be a real review rather than a thinner version of the
+ * per-topic practice.
+ */
+export const MIN_PRACTICE_ALL_ITEMS = 10;
+
+/**
+ * True when the union of every topic holds enough items for the mixed
+ * ("all topics") session. `itemCount` is the sum of every topic's item count.
+ */
+export function canPracticeAll(itemCount: number): boolean {
+  return itemCount >= MIN_PRACTICE_ALL_ITEMS;
+}
+
+/**
  * How a session may be composed. All fields optional; the defaults restore the
  * pre-settings behaviour for plain callers (20-card cap, no learn-ahead,
  * unlimited daily quotas).
@@ -162,6 +178,14 @@ export interface SessionBuildOptions {
    * remaining review card until the next study day.
    */
   reviewRemaining?: number;
+  /**
+   * Source of randomness for the tie-break among cards sharing the same
+   * `due_at` (defaults to `Math.random`). Equal-due cards — a freshly added
+   * batch all carry the same timestamp — are shown in a random order each
+   * session instead of by ascending id. Tests inject a fixed function to keep
+   * the order deterministic.
+   */
+  random?: () => number;
 }
 
 /**
@@ -174,8 +198,8 @@ export interface SessionBuildOptions {
  * 2. Daily quotas: at most `newRemaining` new-state and `reviewRemaining`
  *    review-state items pass; short-term learning items are never limited
  *    (Anki does not limit intraday learning either).
- * 3. The result is oldest-due first, ties by ascending id, capped at
- *    `maxCards`.
+ * 3. The result is oldest-due first; cards sharing the same `due_at` come in a
+ *    random order (no id tie-break), capped at `maxCards`.
  *
  * The input array is never mutated.
  */
@@ -188,13 +212,14 @@ export function buildPracticeSession<T extends SchedulableItem>(
   const learnAheadMinutes = options.learnAheadMinutes ?? MIN_LEARN_AHEAD_MINUTES;
   const newRemaining = options.newRemaining ?? Number.POSITIVE_INFINITY;
   const reviewRemaining = options.reviewRemaining ?? Number.POSITIVE_INFINITY;
+  const random = options.random ?? Math.random;
 
   const nowMs = now.getTime();
   const aheadMs = nowMs + learnAheadMinutes * 60_000;
   const byDueOrder = (
-    first: { dueMs: number; item: SchedulableItem },
-    second: { dueMs: number; item: SchedulableItem },
-  ) => first.dueMs - second.dueMs || first.item.id - second.item.id;
+    first: { dueMs: number; tie: number },
+    second: { dueMs: number; tie: number },
+  ) => first.dueMs - second.dueMs || first.tie - second.tie;
 
   const eligible = items
     .map(item => ({ item, dueMs: Date.parse(item.due_at) }))
@@ -207,6 +232,10 @@ export function buildPracticeSession<T extends SchedulableItem>(
           ((entry.item.state === 'learning' || entry.item.state === 'relearning') &&
             entry.dueMs <= aheadMs)),
     )
+    // One random tiebreaker per eligible card: equal-due cards shuffle, while
+    // the due-time order is preserved. Assigned after filtering so a fixed
+    // `random` in tests lines up with the eligible cards only.
+    .map(entry => ({ ...entry, tie: random() }))
     .sort(byDueOrder);
 
   const newCards = eligible
