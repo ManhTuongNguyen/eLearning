@@ -8,6 +8,114 @@ React Native (TypeScript) application for the English Learning Chat project.
 - No Expo dependency
 - Android module name: `com.elearningmobile`, display name: `eLearning`
 
+## Feature index (where to find it)
+
+A map of every feature to the screen or control that opens it. Behavior — how a
+feature works and what it costs — lives in the dedicated sections below; where
+one exists, the entry links to it instead of repeating it. In-app, **Home → App
+guide** carries the same list per feature plus each action's AI-request cost.
+Entries marked *server-only* / *serverless-only* are hidden in the other
+application mode (see [Application modes](#application-modes)).
+
+### Before sign-in (onboarding)
+
+| Feature | Where to find it |
+| --- | --- |
+| Sign in | `Login` screen (server-mode landing) |
+| Create an account | `Register`, reached from Login |
+| Use the app without an account | Login → serverless entry point |
+| Session + mode restore | `Splash` → `RootNavigator` |
+
+### Home hub (`Home`)
+
+**Continue learning**
+
+| Feature | Where to find it |
+| --- | --- |
+| Conversations | Continue learning → Conversations (`Chat`) |
+| History | Continue learning → History (`History`) |
+
+**Practice**
+
+| Feature | Where to find it |
+| --- | --- |
+| Listening practice | Practice → Listening practice (`Practice`) |
+| Speaking practice | Practice → Speaking practice (`SpeakingPractice`) |
+| Speaking history | Practice → Speaking history (`SpeakingHistory`) |
+| Real-life sentences *(serverless-only, due badge)* | Practice → Real-life sentences — see [Real-life sentences](#real-life-sentences-serverless) |
+| Word bank *(serverless-only, due badge)* | Practice → Word bank — see [Word bank](#word-bank-serverless) |
+
+**Account and app**
+
+| Feature | Where to find it |
+| --- | --- |
+| Settings | Account and app → Settings (`Settings`) |
+| App guide | Account and app → App guide — see [App guide](#app-guide-in-app-help) |
+
+### Chat (`Chat`)
+
+| Feature | Where to find it |
+| --- | --- |
+| Send / stream a message | Chat composer |
+| New conversation | Chat header → **New** (`NewConversation`) |
+| Example dialogue | Chat → **Show me an example** |
+| Topic details | Chat → topic bar |
+| Retry a reply | Chat → **Try again** on the failed message |
+| Suggested replies | Chat → long-press the latest tutor message → **Suggest replies** |
+| Improve my English | Chat → long-press your message → **Improve my English** (`ImprovementSheet`) |
+| Copy / Read aloud | Chat → long-press a message |
+| Save a word to Vocabulary *(server-only)* | Chat → long-press → **Select text** → **Save word** → Settings → Vocabulary |
+| Grammar badges *(opt-in)* | Chat badges, enabled in Settings → Grammar — see [Grammar auto-check](#grammar-auto-check-opt-in) |
+| Jump to latest | Chat → jump-to-latest pill |
+| Open Settings | Chat header → Settings |
+
+### Practice screens
+
+| Feature | Where to find it |
+| --- | --- |
+| Listening drills | Home → Listening practice (`Practice`) |
+| Speaking text generation / teleprompter | Home → Speaking practice (`SpeakingPractice`) |
+| Speaking Listen mode | `SpeakingHistory` row → **Listen** |
+| Custom speaking topic | `SpeakingHistory` → **+** (`SpeakingPracticeFormModal`) |
+| Speaking history | Home → Speaking history (`SpeakingHistory`) |
+
+### Real-life sentences & Word bank *(serverless-only)*
+
+Both features are documented in full below — this index only points at them.
+
+| Feature | Where to find it |
+| --- | --- |
+| Real-life sentences | Home → Real-life sentences — see [Real-life sentences](#real-life-sentences-serverless) |
+| Word bank | Home → Word bank — see [Word bank](#word-bank-serverless) |
+| Collected words | Word bank → **Collected words** topic (captured via the Android text-selection menu) |
+
+### Settings (`Settings`)
+
+| Feature | Where to find it |
+| --- | --- |
+| Account identity *(server-only)* | Settings → account card |
+| AI provider *(serverless-only)* | Settings → AI provider card (`AIProviderSettings`) |
+| Learning level | Settings → Learning → Learning level (`Level`) |
+| Vocabulary *(server-only)* | Settings → Learning → Vocabulary (`Vocabulary`) |
+| Grammar auto-check | Settings → Grammar — see [Grammar auto-check](#grammar-auto-check-opt-in) |
+| Sentence practice mode *(serverless-only)* | Settings → Sentence practice |
+| Word practice mode *(serverless-only)* | Settings → Word practice |
+| Dictionary attribution *(serverless-only)* | Settings → Word bank |
+| Text to speech | Settings → Speech → Text to speech (`TTSSettings`) |
+| Voice manager | `TTSSettings` → Voice manager (`VoiceManager`) |
+| Reading scroll speed | Settings → Speaking practice |
+| Theme | Settings → Theme |
+| Application mode | Settings → Application mode — see [Application modes](#application-modes) |
+| Clear local data *(serverless-only)* | Settings → Local data — see [Local database](#local-database-serverless) |
+| Log out *(server-only)* | Settings → Log out |
+
+### App guide (in-app help)
+
+| Feature | Where to find it |
+| --- | --- |
+| Guide hub | Home → App guide (`Guide`) — see [App guide](#app-guide-in-app-help) |
+| Guide detail page | `Guide` hub → any entry (`GuideDetail`) |
+
 ## Requirements
 
 - Node.js >= 20 and pnpm
